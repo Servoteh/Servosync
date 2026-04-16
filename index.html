@@ -792,8 +792,8 @@ const LOCAL_KEY='plan_montaze_v5_cache';
 const AUTH_STORAGE_KEY='plan_montaze_v51_auth';
 const SAVE_DEBOUNCE_MS=700;
 const SUPABASE_CONFIG={
-  url:'https://YOUR_PROJECT.supabase.co',
-  anonKey:'YOUR_SUPABASE_ANON_KEY',
+  url:'https://fniruhsuotwsrjsbhrxd.supabase.co',
+  anonKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZuaXJ1aHN1b3R3c3Jqc2JocnhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMjg5NTYsImV4cCI6MjA5MTkwNDk1Nn0.5BE3a3L11JOT22vAcuxPEcUBM_QtFEPopaHdshtOir8',
   reminderEndpoint:'/functions/v1/send-reminders'
 };
 
@@ -820,7 +820,7 @@ function getProject(){return allData.projects.find(p=>p.id===activeProjectId)||n
 function getWP(){const p=getProject();return p?p.workPackages.find(w=>w.id===activeWpId):null;}
 function getPhases(){const wp=getWP();return wp?wp.phases:[];}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
-function hasSupabaseConfig(){return !!(supaUrl&&supaKey&&supaUrl!=='https://YOUR_PROJECT.supabase.co'&&supaKey!=='YOUR_SUPABASE_ANON_KEY');}
+function hasSupabaseConfig(){return !!(supaUrl&&supaKey);}
 function persistAuthSession(session){try{localStorage.setItem(AUTH_STORAGE_KEY,JSON.stringify(session));}catch(e){}}
 function getStoredAuthSession(){try{const raw=localStorage.getItem(AUTH_STORAGE_KEY);return raw?JSON.parse(raw):null;}catch(e){return null;}}
 function clearStoredAuthSession(){try{localStorage.removeItem(AUTH_STORAGE_KEY);}catch(e){}}
@@ -912,7 +912,8 @@ async function loadAllProjectData(projectId){
 }
 async function loadUserRoleFromDb(){
   if(!currentUser)return 'viewer';
-  const email=encodeURIComponent(currentUser.email);
+  // Role lookup always uses lowercase email so Auth and user_roles stay aligned.
+  const email=encodeURIComponent((currentUser.email || '').toLowerCase());
   let data=await sbReq(`user_roles?email=eq.${email}&project_id=is.null&is_active=eq.true&select=role&limit=1`);
   if(data&&data[0])return data[0].role;
   if(activeProjectId){
@@ -979,7 +980,7 @@ function queueCurrentWpSync(){
    AUTH
    ═══════════════════════════════════════════════════════════ */
 async function doLogin(){
-  const email=document.getElementById('loginEmail').value.trim();
+  const email=document.getElementById('loginEmail').value.trim().toLowerCase();
   const pass=document.getElementById('loginPassword').value.trim();
   const msg=document.getElementById('authMsg');
   if(!hasSupabaseConfig()){msg.innerHTML='<span class="auth-err">Supabase konfiguracija nije upisana u kodu</span>';return;}
@@ -989,7 +990,7 @@ async function doLogin(){
     const r=await fetch(supaUrl+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json','apikey':supaKey},body:JSON.stringify({email,password:pass})});
     const d=await r.json();
     if(d.error){msg.innerHTML='<span class="auth-err">'+escHtml(d.error_description||d.error)+'</span>';return;}
-    currentUser={email:d.user.email,id:d.user.id,_token:d.access_token};
+    currentUser={email:(d.user.email||email).toLowerCase(),id:d.user.id,_token:d.access_token};
     isOnline=true;
     persistAuthSession({access_token:d.access_token,refresh_token:d.refresh_token,user:d.user});
     await initAfterAuth();
@@ -1030,7 +1031,7 @@ async function restoreSession(){
       user=await userRes.json();
     }
     if(!user?.email||!accessToken)throw new Error('invalid_session');
-    currentUser={email:user.email,id:user.id,_token:accessToken};
+    currentUser={email:(user.email||'').toLowerCase(),id:user.id,_token:accessToken};
     isOnline=true;
     await initAfterAuth();
     return true;
