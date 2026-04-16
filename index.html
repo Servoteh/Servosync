@@ -814,7 +814,7 @@ function formatDate(d){if(!d)return'';const dt=new Date(d);if(isNaN(dt))return''
 function toIsoDate(d){if(!d)return null;const dt=new Date(d);return isNaN(dt)?null:dt.toISOString().split('T')[0];}
 function calcDuration(s,e){if(!s||!e)return null;const a=new Date(s),b=new Date(e);if(isNaN(a)||isNaN(b))return null;const d=Math.round((b-a)/864e5);return d<0?-1:d+1;}
 function statusClass(s){return['st-0','st-1','st-2','st-3'][s]||'st-0';}
-function canEdit(){return true;}
+function canEdit(){return currentRole==='pm'||currentRole==='leadpm';}
 function disabledAttr(){return canEdit()?'':'disabled';}
 function getProject(){return allData.projects.find(p=>p.id===activeProjectId)||null;}
 function getWP(){const p=getProject();return p?p.workPackages.find(w=>w.id===activeWpId):null;}
@@ -1091,6 +1091,14 @@ function updateAuthUI(){
   document.getElementById('roleLabel').className='role-indicator '+(currentRole==='viewer'?'role-viewer':'role-pm');
   document.getElementById('connBadge').className=isOnline?'online-badge':'offline-badge';
   document.getElementById('connBadge').textContent=isOnline?'ONLINE':'OFFLINE';
+  const edit=canEdit();
+  const pb=document.getElementById('projectBar');
+  if(pb)pb.querySelectorAll('button.btn-sm').forEach(b=>{b.disabled=!edit;b.style.opacity=edit?'1':'0.5';b.style.cursor=edit?'pointer':'not-allowed';});
+  const ap=document.querySelector('.add-phase-bar');
+  if(ap){ap.querySelectorAll('input,button').forEach(el=>{el.disabled=!edit;el.style.opacity=edit?'1':'0.5';});}
+  const imp=document.querySelector('.btn-load');const rst=document.querySelector('.btn-reset');
+  if(imp){imp.disabled=!edit;imp.style.opacity=edit?'1':'0.5';imp.style.cursor=edit?'pointer':'not-allowed';}
+  if(rst){rst.disabled=!edit;rst.style.opacity=edit?'1':'0.5';rst.style.cursor=edit?'pointer':'not-allowed';}
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1136,6 +1144,7 @@ function buildReminderPayload(){
   });return alerts;
 }
 async function callReminderEndpoint(){
+  if(!canEdit()){showToast('⚠ Samo PM / LeadPM šalju podsetnike');return;}
   const p=buildReminderPayload();if(p.length===0){showToast('✅ Nema podsetnika');return;}
   if(!isOnline){console.log('Reminder payload:',p);showToast('📧 '+p.length+' podsetnika (offline)');return;}
   try{const r=await fetch(supaUrl+'/functions/v1/send-reminders',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(currentUser?._token||supaKey)},body:JSON.stringify({alerts:p})});const d=await r.json();showToast('📧 Poslato: '+(d.sent||0));}catch(e){showToast('❌ Greška');}
@@ -1145,12 +1154,14 @@ async function callReminderEndpoint(){
    PROJECT/WP MANAGEMENT
    ═══════════════════════════════════════════════════════════ */
 async function addProject(){
+  if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}
   const code=prompt('Kod projekta:','');if(!code)return;const name=prompt('Naziv:','');if(!name)return;
   const p=createBlankProject(code,name);allData.projects.push(p);activeProjectId=p.id;activeWpId=p.workPackages[0]?.id;
   if(isOnline){await saveProjectToDb(p);for(const wp of p.workPackages)await saveWorkPackageToDb(wp,p.id);}
   cacheToLocal();buildProjectSelector();buildWpTabs();render();showToast('✅ Projekat kreiran');
 }
 async function addWorkPackage(){
+  if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}
   const p=getProject();if(!p)return;const name=prompt('Naziv pozicije:','');if(!name)return;
   const o=p.workPackages.length+1;const wp=createBlankWP(name,p.code+'/'+o,o);
   p.workPackages.push(wp);activeWpId=wp.id;
@@ -1167,6 +1178,7 @@ function switchProject(id){
 }
 function switchWP(id){activeWpId=id;filteredIndices=null;render();}
 function editProjectMeta(){
+  if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}
   const p=getProject();if(!p)return;const _d=disabledAttr();
   document.getElementById('metaForm').innerHTML=`
     <label style="font-size:10px;color:var(--text3)">Kod</label><input type="text" value="${escHtml(p.code)}" onchange="getProject().code=this.value;saveProjectState();render()" ${_d}>
@@ -1193,29 +1205,29 @@ function resetFilters(){['fSearch','fLoc','fStatus','fPerson','fReady','fDates',
 function buildPersonFilter(){const sel=document.getElementById('fPerson');if(!sel)return;const v=sel.value;sel.innerHTML='<option value="">Svi</option><option value="__none__">— Bez vođe —</option>'+VODJA.filter(v=>v).map(v=>`<option value="${v}">${v}</option>`).join('');sel.value=v;}
 
 let calTarget=null,calYear,calMonth;
-function openCalendar(ri,field){calTarget={ri,field};const d=getPhases()[ri][field]?new Date(getPhases()[ri][field]):new Date(today);calYear=d.getFullYear();calMonth=d.getMonth();renderCalendar();document.getElementById('calOverlay').classList.add('open');}
+function openCalendar(ri,field){if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}calTarget={ri,field};const d=getPhases()[ri][field]?new Date(getPhases()[ri][field]):new Date(today);calYear=d.getFullYear();calMonth=d.getMonth();renderCalendar();document.getElementById('calOverlay').classList.add('open');}
 function closeCalendar(){document.getElementById('calOverlay').classList.remove('open');calTarget=null;}
 function closeCalIfOutside(e){if(e.target===document.getElementById('calOverlay'))closeCalendar();}
-function clearDate(){if(!calTarget)return;const ri=calTarget.ri;getPhases()[ri][calTarget.field]=null;saveDateState(ri);render();closeCalendar();}
+function clearDate(){if(!canEdit())return;if(!calTarget)return;const ri=calTarget.ri;getPhases()[ri][calTarget.field]=null;saveDateState(ri);render();closeCalendar();}
 function calNav(dir){calMonth+=dir;if(calMonth<0){calMonth=11;calYear--;}if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
-function selectDay(y,m,d){if(!calTarget)return;const row=getPhases()[calTarget.ri],f=calTarget.field,ri=calTarget.ri;row[f]=new Date(y,m,d).toISOString().split('T')[0];if(row.start&&row.end&&new Date(row.end)<new Date(row.start)){row.end=row.start;showToast('📅 Kraj pomeren');}else showToast(`📅 ${d}.${m+1}.${y}`);applyBusinessRules(row);saveDateState(ri);render();closeCalendar();}
+function selectDay(y,m,d){if(!canEdit())return;if(!calTarget)return;const row=getPhases()[calTarget.ri],f=calTarget.field,ri=calTarget.ri;row[f]=new Date(y,m,d).toISOString().split('T')[0];if(row.start&&row.end&&new Date(row.end)<new Date(row.start)){row.end=row.start;showToast('📅 Kraj pomeren');}else showToast(`📅 ${d}.${m+1}.${y}`);applyBusinessRules(row);saveDateState(ri);render();closeCalendar();}
 function renderCalendar(){document.getElementById('calTitle').textContent=`${MONTHS_SR[calMonth]} ${calYear}`;const grid=document.getElementById('calGrid');grid.innerHTML='';const fd=new Date(calYear,calMonth,1),ld=new Date(calYear,calMonth+1,0),off=(fd.getDay()+6)%7;const sel=calTarget&&getPhases()[calTarget.ri][calTarget.field]?new Date(getPhases()[calTarget.ri][calTarget.field]):null;for(let i=0;i<off;i++){const el=document.createElement('div');el.className='cal-day empty';grid.appendChild(el);}for(let d=1;d<=ld.getDate();d++){const dt=new Date(calYear,calMonth,d),dow=(dt.getDay()+6)%7,el=document.createElement('div');el.className='cal-day';el.textContent=d;if(dow>=5)el.classList.add('weekend');if(dt.getTime()===today.getTime())el.classList.add('today');if(sel&&dt.getTime()===sel.getTime())el.classList.add('selected');el.onclick=()=>selectDay(calYear,calMonth,d);grid.appendChild(el);}}
 
 /* ═══════════════════════════════════════════════════════════
    UPDATE + PHASE MGMT
    ═══════════════════════════════════════════════════════════ */
-function update(i,field,value){const row=getPhases()[i];if(field==='status'&&value===3&&!row.blocker.trim()){showToast('⚠ Upiši blokator pre "Na čekanju"');render();return;}row[field]=value;applyBusinessRules(row);savePhaseState(i);render();}
-function updateCheck(i,ci,value){getPhases()[i].checks[ci]=value;saveCheckState(i);render();}
-function addPhase(){const inp=document.getElementById('newPhaseInput'),n=inp.value.trim();if(!n){showToast('⚠ Unesi naziv');inp.focus();return;}getPhases().push(createBlankPhase(n));saveWpStructureState();render();inp.value='';showToast('✅ Dodano');}
-function deleteRow(i){const s=getPhases(),n=s[i].name,deletedId=s[i]?.id;if(!confirm('Obriši "'+n+'"?'))return;s.splice(i,1);filteredIndices=null;saveAfterDelete(deletedId);render();}
-function moveRow(i,dir){const s=getPhases(),j=i+dir;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];filteredIndices=null;saveWpStructureState();render();}
+function update(i,field,value){if(!canEdit())return;const row=getPhases()[i];if(field==='status'&&value===3&&!row.blocker.trim()){showToast('⚠ Upiši blokator pre "Na čekanju"');render();return;}row[field]=value;applyBusinessRules(row);savePhaseState(i);render();}
+function updateCheck(i,ci,value){if(!canEdit())return;getPhases()[i].checks[ci]=value;saveCheckState(i);render();}
+function addPhase(){if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}const inp=document.getElementById('newPhaseInput'),n=inp.value.trim();if(!n){showToast('⚠ Unesi naziv');inp.focus();return;}getPhases().push(createBlankPhase(n));saveWpStructureState();render();inp.value='';showToast('✅ Dodano');}
+function deleteRow(i){if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}const s=getPhases(),n=s[i].name,deletedId=s[i]?.id;if(!confirm('Obriši "'+n+'"?'))return;s.splice(i,1);filteredIndices=null;saveAfterDelete(deletedId);render();}
+function moveRow(i,dir){if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}const s=getPhases(),j=i+dir;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];filteredIndices=null;saveWpStructureState();render();}
 
 /* ═══════════════════════════════════════════════════════════
    RENDER: Mobile Cards (same pattern as V5.0)
    ═══════════════════════════════════════════════════════════ */
 function renderMobileCards(){
   const c=document.getElementById('mobileCards');if(!c)return;c.innerHTML='';
-  const state=getPhases(),indices=filteredIndices!==null?filteredIndices:state.map((_,i)=>i),_dis=disabledAttr();
+  const state=getPhases(),indices=filteredIndices!==null?filteredIndices:state.map((_,i)=>i),_dis=disabledAttr(),_edit=canEdit(),mobAct=_edit?'':' disabled';
   indices.forEach(i=>{
     const row=state[i],dur=calcDuration(row.start,row.end),rd=calcReadiness(row),rk=calcRisk(row);
     const eN=escHtml(row.name),eNo=escHtml(row.note),eBl=escHtml(row.blocker);
@@ -1224,7 +1236,7 @@ function renderMobileCards(){
     let rB;if(rd.done)rB='<span class="badge-ready badge-done">DONE</span>';else if(rd.ready)rB='<span class="badge-ready badge-yes">✔</span>';else rB='<span class="badge-ready badge-no">✘</span>';
     const stC=['st-0','st-1','st-2','st-3'][row.status],rkC=rk.level!=='none'?`m-risk-${rk.level}`:'',mF=row.status===2?' m-finished':'';
     const pC=row.status===2?'pct-fill-done':row.status===3?'pct-fill-hold':'pct-fill-normal';
-    const chH=row.checks.map((c,ci)=>`<span class="m-card-check ${c?'ck-y':'ck-n'}" onclick="updateCheck(${i},${ci},${!c});event.stopPropagation()" style="cursor:pointer;user-select:none;padding:4px 8px;font-size:10px">${CHECK_SHORT[ci]}${c?' ✔':' ✘'}</span>`).join('');
+    const chH=row.checks.map((c,ci)=>`<span class="m-card-check ${c?'ck-y':'ck-n'}" ${_edit?`onclick="updateCheck(${i},${ci},${!c});event.stopPropagation()" style="cursor:pointer;user-select:none;padding:4px 8px;font-size:10px"`:'style="cursor:default;opacity:0.75;user-select:none;padding:4px 8px;font-size:10px"'}>${CHECK_SHORT[ci]}${c?' ✔':' ✘'}</span>`).join('');
     const cId='mc-'+i,card=document.createElement('div');card.className=`m-card ${rkC}${mF}`;
     card.innerHTML=`<div class="m-card-top" onclick="document.getElementById('${cId}').classList.toggle('open')"><div><div class="m-card-name">${eN}</div><div style="font-size:10px;color:var(--text3);margin-top:2px"><span class="${row.loc==='Dobanovci'?'loc-dob':'loc-kru'}" style="background:none;border:none;padding:0;width:auto;font-size:10px">${row.loc}</span> · ${STATUSES[row.status]} · ${row.pct}%</div></div><div class="m-card-badges">${rI} ${rB}</div></div>
     <div class="m-card-row"><div class="m-card-field"><span class="m-lbl">Poč:</span> ${formatDate(row.start)||'—'}</div><div class="m-card-field"><span class="m-lbl">Kraj:</span> ${formatDate(row.end)||'—'}</div><div class="m-card-field"><span class="m-lbl">Ing:</span> ${row.engineer||'—'}</div><div class="m-card-field"><span class="m-lbl">Vođa:</span> ${row.person||'—'}</div></div>
@@ -1233,7 +1245,7 @@ function renderMobileCards(){
     <div class="m-card-detail-grid"><div class="m-card-detail-item"><span class="m-lbl">Status</span><select class="${stC}" onchange="update(${i},'status',parseInt(this.value))" style="font-size:13px;padding:6px 8px" ${_dis}>${STATUSES.map((s,si)=>`<option value="${si}" ${row.status===si?'selected':''}>${s}</option>`).join('')}</select></div><div class="m-card-detail-item"><span class="m-lbl">Ing.</span><select onchange="update(${i},'engineer',this.value)" style="font-size:13px;padding:6px 8px" ${_dis}>${ENGINEERS.map(v=>`<option value="${v}" ${row.engineer===v?'selected':''}>${v||'—'}</option>`).join('')}</select></div><div class="m-card-detail-item"><span class="m-lbl">Vođa</span><select onchange="update(${i},'person',this.value)" style="font-size:13px;padding:6px 8px" ${_dis}>${VODJA.map(v=>`<option value="${v}" ${row.person===v?'selected':''}>${v||'—'}</option>`).join('')}</select></div><div class="m-card-detail-item"><span class="m-lbl">%</span><input type="range" min="0" max="100" step="5" value="${row.pct}" style="width:100%;accent-color:var(--accent)" oninput="update(${i},'pct',parseInt(this.value))" ${_dis}></div></div>
     ${row.blocker||row.status===3?`<div class="m-card-detail-item" style="margin-top:6px"><span class="m-lbl">Blokator</span><textarea class="note-area" rows="2" style="font-size:13px;padding:8px" onchange="update(${i},'blocker',this.value)" ${_dis}>${eBl}</textarea></div>`:''}
     <div class="m-card-detail-item" style="margin-top:6px"><span class="m-lbl">Napomena</span><textarea class="note-area" rows="2" style="font-size:13px;padding:8px" onchange="update(${i},'note',this.value)" ${_dis}>${eNo}</textarea></div>
-    <div style="display:flex;gap:6px;margin-top:8px;padding-top:6px;border-top:1px solid var(--border)"><button class="row-btn" onclick="openCalendar(${i},'start')" style="padding:6px 10px;font-size:12px">📅 Poč</button><button class="row-btn" onclick="openCalendar(${i},'end')" style="padding:6px 10px;font-size:12px">📅 Kraj</button><button class="row-btn btn-up" onclick="moveRow(${i},-1)" style="padding:6px 10px">▲</button><button class="row-btn btn-dn" onclick="moveRow(${i},1)" style="padding:6px 10px">▼</button><button class="row-btn btn-del" onclick="deleteRow(${i})" style="padding:6px 10px">✕</button></div></div>`;
+    <div style="display:flex;gap:6px;margin-top:8px;padding-top:6px;border-top:1px solid var(--border)"><button class="row-btn"${mobAct} onclick="openCalendar(${i},'start')" style="padding:6px 10px;font-size:12px">📅 Poč</button><button class="row-btn"${mobAct} onclick="openCalendar(${i},'end')" style="padding:6px 10px;font-size:12px">📅 Kraj</button><button class="row-btn btn-up"${mobAct} onclick="moveRow(${i},-1)" style="padding:6px 10px">▲</button><button class="row-btn btn-dn"${mobAct} onclick="moveRow(${i},1)" style="padding:6px 10px">▼</button><button class="row-btn btn-del"${mobAct} onclick="deleteRow(${i})" style="padding:6px 10px">✕</button></div></div>`;
     c.appendChild(card);
   });
 }
@@ -1282,8 +1294,8 @@ function renderReminders(){const z=document.getElementById('reminderZone');if(!z
    EXPORT/IMPORT/RESET
    ═══════════════════════════════════════════════════════════ */
 function exportData(){const blob=new Blob([JSON.stringify(allData,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`plan_${getProject()?.code||'export'}_${new Date().toISOString().slice(0,10)}.json`;a.click();showToast('💾 Exported');}
-function importData(event){const file=event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const d=JSON.parse(e.target.result);if(d.projects&&Array.isArray(d.projects)){allData=d;activeProjectId=allData.projects[0]?.id;activeWpId=allData.projects[0]?.workPackages?.[0]?.id;cacheToLocal();buildProjectSelector();buildWpTabs();render();queueCurrentWpSync();showToast('📂 Imported');}else showToast('❌ Format');}catch{showToast('❌ JSON err');}};reader.readAsText(file);event.target.value='';}
-function resetData(){if(!confirm('Reset?'))return;allData={projects:[createBlankProject('RN 9000','Kovačka linija')]};activeProjectId=allData.projects[0].id;activeWpId=allData.projects[0].workPackages[0].id;filteredIndices=null;cacheToLocal();buildProjectSelector();buildWpTabs();render();showToast('🗑 Reset');}
+function importData(event){if(!canEdit()){showToast('⚠ Pregled — nema izmena');event.target.value='';return;}const file=event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const d=JSON.parse(e.target.result);if(d.projects&&Array.isArray(d.projects)){allData=d;activeProjectId=allData.projects[0]?.id;activeWpId=allData.projects[0]?.workPackages?.[0]?.id;cacheToLocal();buildProjectSelector();buildWpTabs();render();queueCurrentWpSync();showToast('📂 Imported');}else showToast('❌ Format');}catch{showToast('❌ JSON err');}};reader.readAsText(file);event.target.value='';}
+function resetData(){if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}if(!confirm('Reset?'))return;allData={projects:[createBlankProject('RN 9000','Kovačka linija')]};activeProjectId=allData.projects[0].id;activeWpId=allData.projects[0].workPackages[0].id;filteredIndices=null;cacheToLocal();buildProjectSelector();buildWpTabs();render();showToast('🗑 Reset');}
 
 /* ═══════════════════════════════════════════════════════════
    MASTER RENDER + INIT
