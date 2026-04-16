@@ -912,13 +912,19 @@ async function loadAllProjectData(projectId){
 }
 async function loadUserRoleFromDb(){
   if(!currentUser)return 'viewer';
-  // Role lookup always uses lowercase email so Auth and user_roles stay aligned.
-  const email=encodeURIComponent((currentUser.email || '').toLowerCase());
-  let data=await sbReq(`user_roles?email=eq.${email}&project_id=is.null&is_active=eq.true&select=role&limit=1`);
-  if(data&&data[0])return data[0].role;
+  // Role lookup always uses lowercase trimmed email so Auth and user_roles stay aligned.
+  const email=((currentUser.email || '').trim().toLowerCase());
+  let data=await sbReq('user_roles?project_id=is.null&is_active=eq.true&select=email,role');
+  if(data&&data.length){
+    const match=data.find(row=>String(row.email||'').trim().toLowerCase()===email);
+    if(match?.role)return match.role;
+  }
   if(activeProjectId){
-    data=await sbReq(`user_roles?email=eq.${email}&project_id=eq.${activeProjectId}&is_active=eq.true&select=role&limit=1`);
-    if(data&&data[0])return data[0].role;
+    data=await sbReq(`user_roles?project_id=eq.${activeProjectId}&is_active=eq.true&select=email,role`);
+    if(data&&data.length){
+      const match=data.find(row=>String(row.email||'').trim().toLowerCase()===email);
+      if(match?.role)return match.role;
+    }
   }
   return 'viewer';
 }
