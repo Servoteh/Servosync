@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Plan Montaže Kovačke Linije v5.1</title>
+<title>Plan Montaže</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
 
@@ -213,8 +213,8 @@ select:focus, input[type="text"]:focus { border-color: var(--accent); box-shadow
 .date-input-wrap input.empty { background: var(--surface3); border-color: var(--border2); color: var(--text3); }
 .date-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 12px; color: var(--green-light); opacity: 0.5; transition: opacity 0.15s; padding: 0; }
 .date-btn:hover { opacity: 1; }
-.loc-dob { background: var(--blue-bg); border-color: #1e3a5c; color: #6aafff; font-weight: 600; }
-.loc-kru { background: var(--green-bg); border-color: #1e3a22; color: #7ee787; font-weight: 600; }
+.loc-select,
+.loc-pill { background: var(--surface3); border-color: var(--border2); color: var(--text); font-weight: 500; }
 select.st-0 { background: #141200; border-color: #3a3200; color: var(--yellow); }
 select.st-1 { background: #001428; border-color: #003366; color: var(--blue-bar); }
 select.st-2 { background: var(--green-bg); border-color: #1e4a26; color: var(--green-light); }
@@ -253,8 +253,7 @@ textarea.note-area:focus { border-color: var(--accent); box-shadow: 0 0 0 2px va
 .gantt-label { padding: 2px 10px; white-space: nowrap; min-width: 200px; }
 .gantt-label-name { color: var(--text); font-weight: 500; font-size: 11px; }
 .gantt-label-sub { font-size: 9px; font-family: var(--mono); margin-top: 1px; }
-.gantt-label-sub.dob { color: var(--blue-bar); }
-.gantt-label-sub.kru { color: var(--green-light); }
+.gantt-label-sub { color: var(--text3); }
 .gantt-label-status { font-size: 8px; font-family: var(--mono); display: inline; }
 .gantt-label-status.gs-0 { color: var(--yellow); }
 .gantt-label-status.gs-1 { color: var(--blue-bar); }
@@ -267,10 +266,8 @@ textarea.note-area:focus { border-color: var(--accent); box-shadow: 0 0 0 2px va
 .gantt-cell { width: 22px; min-width: 22px; max-width: 22px; }
 .gantt-cell.wknd { background: rgba(229,83,75,0.025); }
 .gantt-cell.today-col { background: rgba(77,163,255,0.06); }
-.gantt-cell.bar-dob,.gantt-cell.bar-start-dob,.gantt-cell.bar-end-dob { background: var(--blue-light); }
-.gantt-cell.bar-kru,.gantt-cell.bar-start-kru,.gantt-cell.bar-end-kru { background: var(--green); }
-.gantt-row:hover .bar-dob,.gantt-row:hover .bar-start-dob,.gantt-row:hover .bar-end-dob { background: #3a8acc !important; }
-.gantt-row:hover .bar-kru,.gantt-row:hover .bar-start-kru,.gantt-row:hover .bar-end-kru { background: #3a6e28 !important; }
+.gantt-cell.bar-phase,.gantt-cell.bar-phase-start,.gantt-cell.bar-phase-end { background: var(--accent); }
+.gantt-row:hover .bar-phase,.gantt-row:hover .bar-phase-start,.gantt-row:hover .bar-phase-end { background: #3a8acc !important; }
 .gantt-row:hover td { background: rgba(77,163,255,0.03); }
 .gantt-row-risk td.gantt-label { border-left: 3px solid var(--orange); }
 .gantt-machine-hdr td { background: #0c1628; color: var(--blue-bar); font-weight: 700; font-size: 11px; padding: 6px 12px; letter-spacing: 0.5px; border-top: 2px solid var(--blue-light); border-bottom: 1px solid var(--border); }
@@ -597,6 +594,111 @@ tr.row-finished td { color: var(--text3); }
 .offline-badge { font-size:9px; padding:2px 8px; border-radius:10px; font-family:var(--mono); background:var(--yellow-bg); color:var(--yellow); border:1px solid var(--yellow); letter-spacing:0.3px; }
 .online-badge { font-size:9px; padding:2px 8px; border-radius:10px; font-family:var(--mono); background:#0e2216; color:var(--green-light); border:1px solid #1e4a26; letter-spacing:0.3px; }
 
+/* ═══ PRINT HEADER (samo za štampu) ═══ */
+.print-only { display: none; }
+.print-header { padding: 12px 16px; border-bottom: 1px solid #ccc; }
+.print-header h1 { font-size: 20px; font-weight: 700; color: #000; margin-bottom: 4px; }
+.print-header .print-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: #333; }
+
+/* ═══ PRINT ═══ */
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+  body.print-gantt,
+  body.print-total { }
+  body.print-gantt + style + *, body.print-total { }
+  html, body { background: #fff !important; color: #000 !important; }
+  body { font-size: 10px !important; }
+  .print-only { display: block !important; }
+  .print-header h1 { color: #000 !important; }
+  /* Skrivanje UI-a nevezanog za sadržaj */
+  .header-top, .kpi-zone, .project-bar, .wp-tabs, .view-tabs, .filter-bar, .filter-toggle-btn,
+  .auth-overlay, .cal-overlay, .toast, .reminder-zone, .legend, .add-phase-bar,
+  .td-actions, .m-card-actions, #printOverlay, .user-bar, .online-badge, .offline-badge,
+  .role-indicator, .mobile-cards, .gantt-machine-filter .filter-toggle-btn { display: none !important; }
+  /* Prikazuj samo aktivni view */
+  body:not(.print-plan) #view-plan { display: none !important; }
+  body:not(.print-gantt) #view-gantt { display: none !important; }
+  body:not(.print-total) #view-total { display: none !important; }
+  body.print-plan #view-plan,
+  body.print-gantt #view-gantt,
+  body.print-total #view-total { display: block !important; }
+  /* Sticky off */
+  thead tr th,
+  thead tr th:first-child,
+  thead tr th:nth-child(2),
+  tbody tr .td-num,
+  tbody tr .td-name { position: static !important; background: #fff !important; color: #000 !important; box-shadow: none !important; }
+  .table-wrap, .gantt-wrap { overflow: visible !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; }
+  table { width: 100% !important; border-collapse: collapse !important; background: #fff !important; color: #000 !important; font-size: 9px !important; }
+  thead tr th { background: #f0f0f0 !important; color: #000 !important; border: 1px solid #888 !important; padding: 4px 5px !important; }
+  thead tr.grp-hdr th { background: #e4e4e4 !important; color: #333 !important; }
+  .th-plan, .th-check, .th-loc, .th-risk { background: #e4e4e4 !important; color: #000 !important; }
+  tbody td { background: #fff !important; color: #000 !important; border: 1px solid #bbb !important; padding: 3px 5px !important; vertical-align: top !important; }
+  tbody tr { page-break-inside: avoid; }
+  tbody tr:nth-child(even) td { background: #fafafa !important; }
+  tr.row-risk-high, tr.row-risk-med, tr.row-risk-low, tr.row-risk-none { border-left: none !important; }
+  tr.row-finished td { color: #333 !important; }
+  /* Polja -> čist tekst */
+  input[type="text"], input[type="number"], input[type="email"], input[type="password"], input[type="range"], textarea, select, button { all: revert; }
+  .phase-name-input, .date-input-wrap input, textarea.note-area, td input, td select { background: transparent !important; border: none !important; color: #000 !important; box-shadow: none !important; padding: 0 !important; font-size: 9px !important; }
+  td input[type="range"], .date-btn, .row-btn, select.ck-da + *, textarea.note-area { }
+  td input[type="range"], .date-btn { display: none !important; }
+  select { background: transparent !important; border: none !important; color: #000 !important; -webkit-appearance: none; appearance: none; padding: 0 !important; }
+  select.ck-da::after { content: "DA"; }
+  /* Badges */
+  .badge-ready { border: 1px solid #666 !important; background: #fff !important; color: #000 !important; }
+  /* Pct bar */
+  .pct-bar { background: #eee !important; height: 4px !important; }
+  .pct-bar-fill { background: #666 !important; }
+  /* Gant */
+  body.print-gantt, body.print-total { }
+  .gantt-table { font-size: 8px !important; }
+  .gantt-table th, .gantt-table td { border: 1px solid #bbb !important; background: #fff !important; color: #000 !important; }
+  .gantt-month-hdr { background: #e4e4e4 !important; color: #000 !important; }
+  .gantt-day-hdr { background: #f0f0f0 !important; color: #000 !important; }
+  .gantt-day-hdr.today-col, .gantt-cell.today-col { background: #ddecff !important; color: #000 !important; }
+  .gantt-day-hdr.wknd, .gantt-cell.wknd { background: #f5f5f5 !important; color: #555 !important; }
+  .gantt-cell.bar-phase, .gantt-cell.bar-phase-start, .gantt-cell.bar-phase-end { background: #444 !important; }
+  .gantt-row { page-break-inside: avoid; }
+  .gantt-label-sub, .gantt-label-status, .gantt-label-name { color: #000 !important; }
+  .gantt-machine-hdr td { background: #e4e4e4 !important; color: #000 !important; border-top: 2px solid #888 !important; }
+  /* Reminder dot */
+  .reminder-dot { display: none !important; }
+}
+/* Landscape za gant prikaze */
+@media print {
+  @page print-landscape { size: A4 landscape; margin: 10mm; }
+}
+body.print-gantt, body.print-total { }
+@media print {
+  body.print-gantt, body.print-total { page: print-landscape; }
+}
+
+/* Print button style */
+.btn-print { background: #1a2d4a; border-color: var(--blue-light); color: #79c0ff; }
+.btn-print:hover { background: #142e50; }
+
+/* Print modal */
+.print-overlay { display: none; position: fixed; inset: 0; z-index: 2500; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+.print-overlay.open { display: flex; }
+.print-box { background: var(--surface); border: 1px solid var(--border3); border-radius: var(--radius-lg); width: 360px; padding: 18px; box-shadow: var(--shadow-lg); }
+.print-box h3 { font-size: 14px; color: var(--text); margin-bottom: 10px; font-weight: 600; }
+.print-box .print-opt { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.print-box button.print-choice { background: var(--surface3); border: 1px solid var(--border2); color: var(--text); padding: 10px 14px; border-radius: var(--radius); cursor: pointer; font-family: var(--font); font-size: 12px; text-align: left; transition: all 0.15s; }
+.print-box button.print-choice:hover { background: var(--surface4); border-color: var(--accent); color: var(--text); }
+.print-box .print-close { width: 100%; background: transparent; border: 1px solid var(--border2); color: var(--text3); padding: 8px; border-radius: var(--radius); cursor: pointer; font-family: var(--font); font-size: 11px; margin-top: 6px; }
+.print-box .print-close:hover { color: var(--text); }
+
+/* Meta modal dodatak za lokacije */
+.loc-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; padding: 4px 0; }
+.loc-list .loc-row { display: flex; align-items: center; gap: 4px; background: var(--surface3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 4px 6px; }
+.loc-list .loc-row input { flex: 1; background: transparent; border: none; color: var(--text); font-size: 11px; outline: none; }
+.loc-list .loc-row .loc-del { background: transparent; border: 1px solid transparent; color: var(--text3); border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 11px; }
+.loc-list .loc-row .loc-del:hover { color: var(--red); border-color: var(--red); }
+.loc-add-row { display: flex; gap: 4px; margin-top: 6px; }
+.loc-add-row input { flex: 1; background: var(--surface3); border: 1px solid var(--border2); color: var(--text); border-radius: var(--radius); padding: 5px 8px; font-size: 11px; outline: none; }
+.loc-add-row button { background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent); border-radius: var(--radius); padding: 5px 10px; font-size: 11px; cursor: pointer; }
+
 </style>
 </head>
 <body>
@@ -604,15 +706,12 @@ tr.row-finished td { color: var(--text3); }
 <div class="header">
   <div class="header-top">
     <div>
-      <h1>⚙ Plan Montaže <span class="tag">v5.1</span></h1>
-      <div class="header-sub">
-        <span><span class="dot dot-blue"></span> Dobanovci</span>
-        <span><span class="dot dot-green"></span> Kruševac</span>
-      </div>
+      <h1>⚙ Plan Montaže</h1>
     </div>
     <div class="toolbar">
       <button class="btn btn-save" onclick="exportData()">💾 Export</button>
       <button class="btn btn-load" onclick="document.getElementById('fileInput').click()">📂 Import</button>
+      <button class="btn btn-print" onclick="openPrintDialog()">🖨 Print / PDF</button>
       <button class="btn btn-reset" onclick="resetData()">🗑 Reset</button>
       <input type="file" id="fileInput" accept=".json" style="display:none" onchange="importData(event)">
       <span class="role-indicator role-pm" id="roleLabel">—</span>
@@ -641,6 +740,11 @@ tr.row-finished td { color: var(--text3); }
 <!-- Work package tabs -->
 <div class="wp-tabs" id="wpTabs"></div>
 
+<div class="print-only print-header" id="printHeader">
+  <h1>Plan Montaže</h1>
+  <div class="print-meta" id="printHeaderMeta"></div>
+</div>
+
 <div class="main">
   <div class="view-tabs">
     <div class="view-tab active" onclick="switchView('plan')">📋 Plan montaže</div>
@@ -655,7 +759,7 @@ tr.row-finished td { color: var(--text3); }
 
   <div class="filter-bar" id="filterBar">
     <div class="filter-group"><label>Pretraga</label><input type="text" id="fSearch" placeholder="Naziv faze..." oninput="applyFilters()"></div>
-    <div class="filter-group"><label>Lokacija</label><select id="fLoc" onchange="applyFilters()"><option value="">Sve</option><option value="Dobanovci">Dobanovci</option><option value="Kruševac">Kruševac</option></select></div>
+    <div class="filter-group"><label>Lokacija</label><select id="fLoc" onchange="applyFilters()"><option value="">Sve</option></select></div>
     <div class="filter-group"><label>Status</label><select id="fStatus" onchange="applyFilters()"><option value="">Svi</option><option value="0">Nije počelo</option><option value="1">U toku</option><option value="2">Završeno</option><option value="3">Na čekanju</option></select></div>
     <div class="filter-group"><label>Vođa</label><select id="fPerson" onchange="applyFilters()"></select></div>
     <div class="filter-group"><label>Spremnost</label><select id="fReady" onchange="applyFilters()"><option value="">Sve</option><option value="ready">Samo spremne</option><option value="notready">Samo nespremne</option></select></div>
@@ -705,8 +809,6 @@ tr.row-finished td { color: var(--text3); }
     </div>
     <div class="mobile-cards" id="mobileCards"></div>
     <div class="legend">
-      <div class="legend-item"><div class="legend-box" style="background:#1f4e79"></div> Dobanovci</div>
-      <div class="legend-item"><div class="legend-box" style="background:#375623"></div> Kruševac</div>
       <div class="legend-item"><div class="legend-box" style="background:#1a1a00;border:1px solid #d29922"></div> Nije počelo</div>
       <div class="legend-item"><div class="legend-box" style="background:#001a2e;border:1px solid #004488"></div> U toku</div>
       <div class="legend-item"><div class="legend-box" style="background:#0d2117;border:1px solid #2ea043"></div> Završeno</div>
@@ -761,10 +863,25 @@ tr.row-finished td { color: var(--text3); }
   </div>
 </div>
 
+<!-- Print dialog -->
+<div class="print-overlay" id="printOverlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="print-box">
+    <h3>🖨 Print / PDF</h3>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Izaberi sadržaj za štampu. U dijalogu štampača podesi A4 (Gant koristi landscape).</div>
+    <div class="print-opt">
+      <button class="print-choice" onclick="printView('plan')">📋 Plan aktivnosti (A4 portrait)</button>
+      <button class="print-choice" onclick="printView('gantt')">📊 Gant dijagram — trenutna pozicija (A4 landscape)</button>
+      <button class="print-choice" onclick="printView('total')">🗓 Ukupan Gant — svi WP (A4 landscape)</button>
+    </div>
+    <button class="print-close" onclick="document.getElementById('printOverlay').classList.remove('open')">Zatvori</button>
+  </div>
+</div>
+
 <!-- Auth login overlay -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-box">
     <h2>⚙ Plan Montaže — Prijava</h2>
+
     <input type="email" id="loginEmail" placeholder="Email adresa">
     <input type="password" id="loginPassword" placeholder="Lozinka">
     <button class="auth-btn" onclick="doLogin()">Prijavi se</button>
@@ -788,12 +905,13 @@ const CHECK_LABELS=["Montažni crteži","Mašinske komponente","Gotova roba","Vi
 const CHECK_SHORT=['Crteži','Mašin.','Got.rob','Vijci','Elektro','Alati','Termin','Ekipa'];
 const NUM_CHECKS=CHECK_LABELS.length;
 const MONTHS_SR=["Januar","Februar","Mart","April","Maj","Jun","Jul","Avgust","Septembar","Oktobar","Novembar","Decembar"];
+const DEFAULT_LOCATIONS=["Dobanovci","Kruševac"]; // početne lokacije za novi projekat; projekat drži svoju listu u p.locations
 const LOCAL_KEY='plan_montaze_v5_cache';
 const AUTH_STORAGE_KEY='plan_montaze_v51_auth';
 const SAVE_DEBOUNCE_MS=700;
 const SUPABASE_CONFIG={
-  url:'https://YOUR_PROJECT.supabase.co',
-  anonKey:'YOUR_SUPABASE_ANON_KEY',
+  url:'https://fniruhsuotwsrjsbhrxd.supabase.co',
+  anonKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZuaXJ1aHN1b3R3c3Jqc2JocnhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMjg5NTYsImV4cCI6MjA5MTkwNDk1Nn0.5BE3a3L11JOT22vAcuxPEcUBM_QtFEPopaHdshtOir8',
   reminderEndpoint:'/functions/v1/send-reminders'
 };
 
@@ -807,6 +925,8 @@ let activeProjectId=null,activeWpId=null,activeView='plan',filteredIndices=null;
 let projectSaveTimer=null;
 let wpSyncTimer=null;
 const phaseSaveTimers=new Map();
+/** Set by loadUserRoleMatchesFromDb: true when sbReq returned null (HTTP/parse failure), false when response was read successfully. */
+let lastUserRolesQueryFailed=false;
 
 /* ── HELPERS ── */
 function escHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
@@ -819,8 +939,52 @@ function disabledAttr(){return canEdit()?'':'disabled';}
 function getProject(){return allData.projects.find(p=>p.id===activeProjectId)||null;}
 function getWP(){const p=getProject();return p?p.workPackages.find(w=>w.id===activeWpId):null;}
 function getPhases(){const wp=getWP();return wp?wp.phases:[];}
+/* ── LOCATIONS ── */
+function getProjectLocations(project){
+  const p=project||getProject();
+  if(!p)return DEFAULT_LOCATIONS.slice();
+  if(!Array.isArray(p.locations)||!p.locations.length)p.locations=DEFAULT_LOCATIONS.slice();
+  return p.locations.slice();
+}
+function ensureProjectLocations(project){
+  if(!project)return;
+  if(!Array.isArray(project.locations)||!project.locations.length)project.locations=DEFAULT_LOCATIONS.slice();
+  const seen=new Set(project.locations.map(x=>String(x).trim()));
+  (project.workPackages||[]).forEach(wp=>{
+    if(wp.location&&!seen.has(String(wp.location).trim())){project.locations.push(wp.location);seen.add(String(wp.location).trim());}
+    (wp.phases||[]).forEach(ph=>{
+      if(ph.loc&&!seen.has(String(ph.loc).trim())){project.locations.push(ph.loc);seen.add(String(ph.loc).trim());}
+    });
+  });
+}
+function locationOptionsHtml(currentValue){
+  const list=getProjectLocations();
+  let has=false;
+  const opts=list.map(l=>{const sel=(l===currentValue);if(sel)has=true;return `<option value="${escHtml(l)}" ${sel?'selected':''}>${escHtml(l)}</option>`;}).join('');
+  if(currentValue&&!has)return `<option value="${escHtml(currentValue)}" selected>${escHtml(currentValue)}</option>`+opts;
+  return opts;
+}
+function defaultLocation(){const list=getProjectLocations();return list[0]||'Dobanovci';}
+function buildLocationFilter(){
+  const sel=document.getElementById('fLoc');if(!sel)return;
+  const cur=sel.value;
+  const list=getProjectLocations();
+  sel.innerHTML='<option value="">Sve</option>'+list.map(l=>`<option value="${escHtml(l)}">${escHtml(l)}</option>`).join('');
+  if(list.includes(cur))sel.value=cur;else sel.value='';
+}
+function isLocationInUse(project,locName){
+  if(!project)return false;
+  return (project.workPackages||[]).some(wp=>wp.location===locName||(wp.phases||[]).some(p=>p.loc===locName));
+}
+function renameLocationEverywhere(project,oldName,newName){
+  if(!project||oldName===newName)return;
+  (project.workPackages||[]).forEach(wp=>{
+    if(wp.location===oldName)wp.location=newName;
+    (wp.phases||[]).forEach(p=>{if(p.loc===oldName)p.loc=newName;});
+  });
+}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
-function hasSupabaseConfig(){return !!(supaUrl&&supaKey&&supaUrl!=='https://YOUR_PROJECT.supabase.co'&&supaKey!=='YOUR_SUPABASE_ANON_KEY');}
+function hasSupabaseConfig(){return !!(supaUrl&&supaKey);}
 function persistAuthSession(session){try{localStorage.setItem(AUTH_STORAGE_KEY,JSON.stringify(session));}catch(e){}}
 function getStoredAuthSession(){try{const raw=localStorage.getItem(AUTH_STORAGE_KEY);return raw?JSON.parse(raw):null;}catch(e){return null;}}
 function clearStoredAuthSession(){try{localStorage.removeItem(AUTH_STORAGE_KEY);}catch(e){}}
@@ -859,16 +1023,24 @@ async function sbReq(path,method='GET',body=null){
     if(method==='POST')headers['Prefer']='return=representation,resolution=merge-duplicates';
     if(method==='PATCH')headers['Prefer']='return=representation';
     const r=await fetch(supaUrl+'/rest/v1/'+path,{method,headers,body:body?JSON.stringify(body):undefined});
-    if(!r.ok){console.error('SB err:',r.status);return null;}
-    const txt=await r.text();return txt?JSON.parse(txt):null;
-  }catch(e){console.error('SB:',e);return null;}
+    const txt=await r.text();
+    if(!r.ok){
+      console.error('SB err',{path,method,status:r.status,body:txt});
+      return null;
+    }
+    if(!txt)return null;
+    try{return JSON.parse(txt);}catch(parseErr){
+      console.error('SB JSON parse err',{path,method,status:r.status,body:txt,parseErr});
+      return null;
+    }
+  }catch(e){console.error('SB fetch failed',{path,method,error:e});return null;}
 }
 
 /* ═══════════════════════════════════════════════════════════
    DB ↔ STATE MAPPERS
    ═══════════════════════════════════════════════════════════ */
 function mapDbProject(d){
-  return{id:d.id,code:d.project_code||'',name:d.project_name||'',projectM:d.projectm||'',deadline:d.project_deadline||'',pmEmail:d.pm_email||'',leadPmEmail:d.leadpm_email||'',reminderEnabled:!!d.reminder_enabled,status:d.status||'active',workPackages:[]};
+  return{id:d.id,code:d.project_code||'',name:d.project_name||'',projectM:d.projectm||'',deadline:d.project_deadline||'',pmEmail:d.pm_email||'',leadPmEmail:d.leadpm_email||'',reminderEnabled:!!d.reminder_enabled,status:d.status||'active',locations:Array.isArray(d.locations)&&d.locations.length?d.locations.slice():DEFAULT_LOCATIONS.slice(),workPackages:[]};
 }
 function mapDbWP(d){
   return{id:d.id,projectId:d.project_id,rnCode:d.rn_code||'',rnOrder:d.rn_order||1,name:d.name||'',location:d.location||'Dobanovci',defaultEngineer:d.responsible_engineer_default||'',defaultLead:d.montage_lead_default||'',deadline:d.deadline||'',isActive:d.is_active!==false,phases:[]};
@@ -910,16 +1082,78 @@ async function loadAllProjectData(projectId){
   }
   return wps;
 }
-async function loadUserRoleFromDb(){
-  if(!currentUser)return 'viewer';
-  const email=encodeURIComponent(currentUser.email);
-  let data=await sbReq(`user_roles?email=eq.${email}&project_id=is.null&is_active=eq.true&select=role&limit=1`);
-  if(data&&data[0])return data[0].role;
-  if(activeProjectId){
-    data=await sbReq(`user_roles?email=eq.${email}&project_id=eq.${activeProjectId}&is_active=eq.true&select=role&limit=1`);
-    if(data&&data[0])return data[0].role;
+async function loadUserRoleMatchesFromDb(){
+  if(!currentUser){lastUserRolesQueryFailed=false;return[];}
+  lastUserRolesQueryFailed=false;
+  const emailNorm=String(currentUser.email||'').trim().toLowerCase();
+  const emailRaw=String(currentUser.emailRaw||'').trim();
+  /* Build list of distinct filter strategies. Order matters — most likely match first.
+     PostgREST quirks:
+       - ilike WITHOUT '*' wildcards behaves like case-sensitive eq
+       - to get real case-insensitive match we need ilike.*EMAIL* OR proper LOWER() index
+       - safest is: try eq with lowercase, then eq with raw, then ilike with wildcards */
+  const filters=[];
+  filters.push('email=eq.'+encodeURIComponent(emailNorm));
+  if(emailRaw&&emailRaw!==emailNorm)filters.push('email=eq.'+encodeURIComponent(emailRaw));
+  /* Case-insensitive fallback using PostgREST ilike with explicit wildcards.
+     Note: '*' is the PostgREST wildcard, not '%'. */
+  filters.push('email=ilike.'+encodeURIComponent('*'+emailNorm+'*'));
+  let collected=[];
+  let anyQuerySucceeded=false;
+  for(let fi=0;fi<filters.length;fi++){
+    const path='user_roles?is_active=eq.true&'+filters[fi]+'&select=email,role,project_id';
+    console.log('[user_roles] QUERY',{filterIndex:fi,path,emailNorm,emailRaw});
+    const data=await sbReq(path);
+    if(data===null){
+      console.error('[user_roles] Filter '+fi+' failed (HTTP/parse error). Trying next filter.',{path});
+      continue;
+    }
+    anyQuerySucceeded=true;
+    if(!Array.isArray(data)){
+      console.error('[user_roles] Filter '+fi+' returned non-array:',{data});
+      continue;
+    }
+    console.log('[user_roles] Filter '+fi+' returned '+data.length+' rows:',data);
+    collected=collected.concat(data);
+    if(collected.length>0)break;
   }
+  if(!anyQuerySucceeded){
+    lastUserRolesQueryFailed=true;
+    console.error('[user_roles] ALL queries failed. Likely causes: (1) RLS on user_roles blocks SELECT for authenticated role; (2) network/CORS issue; (3) Supabase key/URL wrong.');
+    return[];
+  }
+  const normRow=r=>({...r,email:String(r.email||'').trim().toLowerCase(),role:String(r.role||'').trim().toLowerCase()});
+  const seen=new Set();
+  const result=collected.map(normRow).filter(r=>{
+    const k=r.email+'|'+r.role+'|'+String(r.project_id??'');
+    if(seen.has(k))return false;
+    seen.add(k);
+    return true;
+  });
+  /* Final filter: keep ONLY rows that match the logged-in user's email exactly (case-insensitive).
+     The ilike fallback could pick up nenad@... if you also have nenad-test@... in DB. */
+  const filtered=result.filter(r=>r.email===emailNorm);
+  if(filtered.length===0&&result.length>0){
+    console.warn('[user_roles] ilike fallback returned rows but none matched email exactly. Check email spelling in user_roles table.',{emailNorm,returnedEmails:result.map(r=>r.email)});
+  }
+  return filtered;
+}
+/** PM ili LeadPM na bilo kom redu = ista prava na sve projekte; inače viewer. */
+function effectiveRoleFromMatches(matches){
+  if(!matches||matches.length===0)return 'viewer';
+  const normalized=matches.map(r=>({...r,role:String(r.role||'').trim().toLowerCase()}));
+  if(normalized.some(r=>r.role==='pm'))return 'pm';
+  if(normalized.some(r=>r.role==='leadpm'))return 'leadpm';
+  if(normalized.some(r=>r.role==='viewer'))return 'viewer';
+  console.warn('Unknown roles found in user_roles:',normalized);
   return 'viewer';
+}
+
+/** TEMP DEBUG: bez email filtera — proverava da li JWT korisnik uopšte vidi `user_roles` (RLS). Ukloni posle dijagnostike. */
+async function debugLoadAllUserRoles(){
+  const data=await sbReq('user_roles?select=email,role,project_id,is_active');
+  console.log('DEBUG ALL USER ROLES',data);
+  return data;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -979,7 +1213,7 @@ function queueCurrentWpSync(){
    AUTH
    ═══════════════════════════════════════════════════════════ */
 async function doLogin(){
-  const email=document.getElementById('loginEmail').value.trim();
+  const email=document.getElementById('loginEmail').value.trim().toLowerCase();
   const pass=document.getElementById('loginPassword').value.trim();
   const msg=document.getElementById('authMsg');
   if(!hasSupabaseConfig()){msg.innerHTML='<span class="auth-err">Supabase konfiguracija nije upisana u kodu</span>';return;}
@@ -989,7 +1223,7 @@ async function doLogin(){
     const r=await fetch(supaUrl+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json','apikey':supaKey},body:JSON.stringify({email,password:pass})});
     const d=await r.json();
     if(d.error){msg.innerHTML='<span class="auth-err">'+escHtml(d.error_description||d.error)+'</span>';return;}
-    currentUser={email:d.user.email,id:d.user.id,_token:d.access_token};
+    currentUser={email:(d.user.email||email).toLowerCase(),emailRaw:String(d.user?.email||email||'').trim(),id:d.user.id,_token:d.access_token};
     isOnline=true;
     persistAuthSession({access_token:d.access_token,refresh_token:d.refresh_token,user:d.user});
     await initAfterAuth();
@@ -1030,7 +1264,7 @@ async function restoreSession(){
       user=await userRes.json();
     }
     if(!user?.email||!accessToken)throw new Error('invalid_session');
-    currentUser={email:user.email,id:user.id,_token:accessToken};
+    currentUser={email:(user.email||'').toLowerCase(),emailRaw:String(user?.email||'').trim(),id:user.id,_token:accessToken};
     isOnline=true;
     await initAfterAuth();
     return true;
@@ -1044,10 +1278,23 @@ async function restoreSession(){
 }
 async function initAfterAuth(){
   document.getElementById('authOverlay').classList.add('hidden');
-  /* Load role */
-  currentRole=await loadUserRoleFromDb();
+  console.log('[auth] currentUser raw:',currentUser);
+  console.log('[auth] email normalized:',String(currentUser?.email||'').trim().toLowerCase());
+  /* STEP 1: resolve role FIRST, before any data load — RLS may depend on role */
+  const roleMatches=await loadUserRoleMatchesFromDb();
+  await debugLoadAllUserRoles();
+  if(currentUser){
+    if(lastUserRolesQueryFailed){
+      console.error('[user_roles] Request did not succeed; effective role may be viewer until the API works. This is not the same as "no row in DB".');
+    }else if(roleMatches.length===0){
+      console.warn('[user_roles] No rows visible for logged-in user. Either no row for this email in the table, or Supabase RLS is hiding them (check SELECT policies on user_roles).',{emailNorm:String(currentUser.email||'').trim().toLowerCase(),emailRaw:currentUser.emailRaw});
+    }
+  }
+  currentRole=effectiveRoleFromMatches(roleMatches);
+  console.log('[auth] RESOLVED ROLE',{email:currentUser?.email,emailRaw:currentUser?.emailRaw,roleMatches,effectiveRole:currentRole});
+  /* Update UI immediately so the badge shows real role even if data load is slow */
   updateAuthUI();
-  /* Load projects */
+  /* STEP 2: now load project data with role already known */
   const projects=await loadProjectsFromDb();
   if(projects&&projects.length>0){
     allData.projects=projects;
@@ -1056,21 +1303,34 @@ async function initAfterAuth(){
     if(wps)projects[0].workPackages=wps;
     activeWpId=projects[0].workPackages[0]?.id||null;
   }else{
-    /* No projects in DB - create sample */
     allData={projects:[createBlankProject('RN 9000','Kovačka linija')]};
     activeProjectId=allData.projects[0].id;activeWpId=allData.projects[0].workPackages[0].id;
-    if(canEdit()){await saveProjectToDb(allData.projects[0]);for(const wp of allData.projects[0].workPackages)await saveWorkPackageToDb(wp,allData.projects[0].id);}
   }
+  if(!(projects&&projects.length>0)&&canEdit()){
+    await saveProjectToDb(allData.projects[0]);for(const wp of allData.projects[0].workPackages)await saveWorkPackageToDb(wp,allData.projects[0].id);
+  }
+  allData.projects.forEach(ensureProjectLocations);
+  updateAuthUI();
   cacheToLocal();buildProjectSelector();buildWpTabs();render();
-  showToast('🌐 Online — '+currentUser.email);
+  showToast('🌐 Online — '+currentUser.email+' ['+currentRole.toUpperCase()+']');
 }
 function updateAuthUI(){
   document.getElementById('userEmail').textContent=currentUser?currentUser.email:'';
   document.getElementById('userBar').style.display=currentUser?'flex':'none';
-  document.getElementById('roleLabel').textContent=currentRole.toUpperCase();
-  document.getElementById('roleLabel').className='role-indicator '+(currentRole==='viewer'?'role-viewer':'role-pm');
+  const roleLabel=document.getElementById('roleLabel');
+  roleLabel.textContent=currentRole.toUpperCase();
+  /* role badge: pm/leadpm = blue (editor), viewer = grey */
+  roleLabel.className='role-indicator '+(canEdit()?'role-pm':'role-viewer');
   document.getElementById('connBadge').className=isOnline?'online-badge':'offline-badge';
   document.getElementById('connBadge').textContent=isOnline?'ONLINE':'OFFLINE';
+  const edit=canEdit();
+  const pb=document.getElementById('projectBar');
+  if(pb)pb.querySelectorAll('button.btn-sm').forEach(b=>{b.disabled=!edit;b.style.opacity=edit?'1':'0.5';b.style.cursor=edit?'pointer':'not-allowed';});
+  const ap=document.querySelector('.add-phase-bar');
+  if(ap){ap.querySelectorAll('input,button').forEach(el=>{el.disabled=!edit;el.style.opacity=edit?'1':'0.5';});}
+  const imp=document.querySelector('.btn-load');const rst=document.querySelector('.btn-reset');
+  if(imp){imp.disabled=!edit;imp.style.opacity=edit?'1':'0.5';imp.style.cursor=edit?'pointer':'not-allowed';}
+  if(rst){rst.disabled=!edit;rst.style.opacity=edit?'1':'0.5';rst.style.cursor=edit?'pointer':'not-allowed';}
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1078,9 +1338,9 @@ function updateAuthUI(){
    ═══════════════════════════════════════════════════════════ */
 function cacheToLocal(){try{localStorage.setItem(LOCAL_KEY,JSON.stringify(allData));}catch(e){}}
 function loadLocalFallback(){
-  try{const s=localStorage.getItem(LOCAL_KEY);if(s){allData=JSON.parse(s);if(allData.projects?.length>0){activeProjectId=allData.projects[0].id;activeWpId=allData.projects[0].workPackages?.[0]?.id;return;}}}catch(e){}
+  try{const s=localStorage.getItem(LOCAL_KEY);if(s){allData=JSON.parse(s);if(allData.projects?.length>0){activeProjectId=allData.projects[0].id;activeWpId=allData.projects[0].workPackages?.[0]?.id;allData.projects.forEach(ensureProjectLocations);return;}}}catch(e){}
   /* Migrate from v5 key */
-  try{const s=localStorage.getItem('plan_montaze_v5');if(s){allData=JSON.parse(s);if(allData.projects?.length>0){activeProjectId=allData.projects[0].id;activeWpId=allData.projects[0].workPackages?.[0]?.id;return;}}}catch(e){}
+  try{const s=localStorage.getItem('plan_montaze_v5');if(s){allData=JSON.parse(s);if(allData.projects?.length>0){activeProjectId=allData.projects[0].id;activeWpId=allData.projects[0].workPackages?.[0]?.id;allData.projects.forEach(ensureProjectLocations);return;}}}catch(e){}
   /* Brand new */
   allData={projects:[createBlankProject('RN 9000','Kovačka linija')]};
   activeProjectId=allData.projects[0].id;activeWpId=allData.projects[0].workPackages[0].id;
@@ -1098,9 +1358,9 @@ function saveAfterDelete(deletedPhaseId){saveState();if(deletedPhaseId)deletePha
 /* ═══════════════════════════════════════════════════════════
    DATA MODEL
    ═══════════════════════════════════════════════════════════ */
-function createBlankPhase(name){return{id:crypto.randomUUID(),name:name||'',loc:'Dobanovci',start:null,end:null,engineer:'',person:'',status:0,pct:0,checks:new Array(NUM_CHECKS).fill(false),note:'',blocker:''};}
-function createBlankWP(name,rnCode,order){return{id:crypto.randomUUID(),rnCode:rnCode||'',rnOrder:order||1,name:name||'Nova pozicija',location:'Dobanovci',defaultEngineer:'',defaultLead:'',deadline:'',isActive:true,phases:DEFAULT_PHASES.map(n=>createBlankPhase(n))};}
-function createBlankProject(code,name){return{id:crypto.randomUUID(),code:code||'',name:name||'Novi projekat',projectM:'',deadline:'',pmEmail:'',leadPmEmail:'',reminderEnabled:false,status:'active',workPackages:[createBlankWP('Presa 350t',code?code+'/1':'',1)]};}
+function createBlankPhase(name){return{id:crypto.randomUUID(),name:name||'',loc:defaultLocation(),start:null,end:null,engineer:'',person:'',status:0,pct:0,checks:new Array(NUM_CHECKS).fill(false),note:'',blocker:''};}
+function createBlankWP(name,rnCode,order){return{id:crypto.randomUUID(),rnCode:rnCode||'',rnOrder:order||1,name:name||'Nova pozicija',location:defaultLocation(),defaultEngineer:'',defaultLead:'',deadline:'',isActive:true,phases:DEFAULT_PHASES.map(n=>createBlankPhase(n))};}
+function createBlankProject(code,name){return{id:crypto.randomUUID(),code:code||'',name:name||'Novi projekat',projectM:'',deadline:'',pmEmail:'',leadPmEmail:'',reminderEnabled:false,status:'active',locations:DEFAULT_LOCATIONS.slice(),workPackages:[createBlankWP('Presa 350t',code?code+'/1':'',1)]};}
 
 /* ═══════════════════════════════════════════════════════════
    REMINDER
@@ -1116,6 +1376,7 @@ function buildReminderPayload(){
   });return alerts;
 }
 async function callReminderEndpoint(){
+  if(!canEdit()){showToast('⚠ Samo PM / LeadPM šalju podsetnike');return;}
   const p=buildReminderPayload();if(p.length===0){showToast('✅ Nema podsetnika');return;}
   if(!isOnline){console.log('Reminder payload:',p);showToast('📧 '+p.length+' podsetnika (offline)');return;}
   try{const r=await fetch(supaUrl+'/functions/v1/send-reminders',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(currentUser?._token||supaKey)},body:JSON.stringify({alerts:p})});const d=await r.json();showToast('📧 Poslato: '+(d.sent||0));}catch(e){showToast('❌ Greška');}
@@ -1125,12 +1386,14 @@ async function callReminderEndpoint(){
    PROJECT/WP MANAGEMENT
    ═══════════════════════════════════════════════════════════ */
 async function addProject(){
+  if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}
   const code=prompt('Kod projekta:','');if(!code)return;const name=prompt('Naziv:','');if(!name)return;
   const p=createBlankProject(code,name);allData.projects.push(p);activeProjectId=p.id;activeWpId=p.workPackages[0]?.id;
   if(isOnline){await saveProjectToDb(p);for(const wp of p.workPackages)await saveWorkPackageToDb(wp,p.id);}
   cacheToLocal();buildProjectSelector();buildWpTabs();render();showToast('✅ Projekat kreiran');
 }
 async function addWorkPackage(){
+  if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}
   const p=getProject();if(!p)return;const name=prompt('Naziv pozicije:','');if(!name)return;
   const o=p.workPackages.length+1;const wp=createBlankWP(name,p.code+'/'+o,o);
   p.workPackages.push(wp);activeWpId=wp.id;
@@ -1139,15 +1402,17 @@ async function addWorkPackage(){
 }
 function switchProject(id){
   activeProjectId=id;const p=getProject();activeWpId=p?.workPackages?.[0]?.id||null;filteredIndices=null;
+  ensureProjectLocations(p);buildLocationFilter();
   /* If online, load WPs from DB */
-  if(isOnline&&p){loadAllProjectData(p.id).then(wps=>{if(wps){p.workPackages=wps;activeWpId=wps[0]?.id||null;cacheToLocal();buildWpTabs();render();}});}
+  if(isOnline&&p){loadAllProjectData(p.id).then(wps=>{if(wps){p.workPackages=wps;activeWpId=wps[0]?.id||null;ensureProjectLocations(p);buildLocationFilter();cacheToLocal();buildWpTabs();render();}});}
   else{buildWpTabs();render();}
-  /* Reload role for this project */
-  if(isOnline)loadUserRoleFromDb().then(r=>{currentRole=r;updateAuthUI();render();});
 }
 function switchWP(id){activeWpId=id;filteredIndices=null;render();}
 function editProjectMeta(){
-  const p=getProject();if(!p)return;const _d=disabledAttr();
+  if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}
+  const p=getProject();if(!p)return;ensureProjectLocations(p);const _d=disabledAttr();
+  const locs=getProjectLocations(p);
+  const locsHtml=locs.map((l,idx)=>`<div class="loc-row"><input type="text" value="${escHtml(l)}" ${_d} onchange="renameLocation(${idx},this.value)"><button class="loc-del" ${_d} title="Obriši" onclick="deleteLocation(${idx})">✕</button></div>`).join('');
   document.getElementById('metaForm').innerHTML=`
     <label style="font-size:10px;color:var(--text3)">Kod</label><input type="text" value="${escHtml(p.code)}" onchange="getProject().code=this.value;saveProjectState();render()" ${_d}>
     <label style="font-size:10px;color:var(--text3)">Naziv</label><input type="text" value="${escHtml(p.name)}" onchange="getProject().name=this.value;saveProjectState();render()" ${_d}>
@@ -1155,8 +1420,40 @@ function editProjectMeta(){
     <label style="font-size:10px;color:var(--text3)">Rok (YYYY-MM-DD)</label><input type="date" value="${p.deadline||''}" onchange="getProject().deadline=this.value;saveProjectState();render()" ${_d}>
     <label style="font-size:10px;color:var(--text3)">PM Email</label><input type="text" value="${escHtml(p.pmEmail)}" onchange="getProject().pmEmail=this.value;saveProjectState()" ${_d}>
     <label style="font-size:10px;color:var(--text3)">LeadPM Email</label><input type="text" value="${escHtml(p.leadPmEmail)}" onchange="getProject().leadPmEmail=this.value;saveProjectState()" ${_d}>
-    <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" ${p.reminderEnabled?'checked':''} onchange="getProject().reminderEnabled=this.checked;saveProjectState()" ${_d} style="accent-color:var(--accent)"> <span style="font-size:11px;color:var(--text2)">Reminder</span></label>`;
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" ${p.reminderEnabled?'checked':''} onchange="getProject().reminderEnabled=this.checked;saveProjectState()" ${_d} style="accent-color:var(--accent)"> <span style="font-size:11px;color:var(--text2)">Reminder</span></label>
+    <hr style="border:none;border-top:1px solid var(--border);margin:6px 0">
+    <label style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Lokacije projekta</label>
+    <div class="loc-list" id="locList">${locsHtml||'<div style="font-size:11px;color:var(--text3);padding:4px 0">Nema lokacija</div>'}</div>
+    <div class="loc-add-row"><input type="text" id="newLocInput" placeholder="Nova lokacija..." ${_d}><button ${_d} onclick="addLocationFromInput()">+ Dodaj</button></div>`;
   document.getElementById('metaOverlay').classList.add('open');
+}
+function addLocationFromInput(){
+  if(!canEdit())return;
+  const inp=document.getElementById('newLocInput');if(!inp)return;
+  const v=String(inp.value||'').trim();if(!v){inp.focus();return;}
+  const p=getProject();if(!p)return;ensureProjectLocations(p);
+  if(p.locations.some(x=>String(x).trim().toLowerCase()===v.toLowerCase())){showToast('⚠ Lokacija već postoji');return;}
+  p.locations.push(v);saveProjectState();editProjectMeta();buildLocationFilter();render();showToast('✅ Lokacija dodata');
+}
+function deleteLocation(idx){
+  if(!canEdit())return;
+  const p=getProject();if(!p)return;ensureProjectLocations(p);
+  const loc=p.locations[idx];if(loc==null)return;
+  if(isLocationInUse(p,loc)){if(!confirm(`Lokacija "${loc}" je u upotrebi u nekim fazama/pozicijama. Sigurno je ukloniti? Postojeće faze će zadržati vrednost.`))return;}
+  else{if(!confirm(`Ukloniti lokaciju "${loc}"?`))return;}
+  p.locations.splice(idx,1);
+  if(!p.locations.length)p.locations=DEFAULT_LOCATIONS.slice();
+  saveProjectState();editProjectMeta();buildLocationFilter();render();showToast('🗑 Uklonjena');
+}
+function renameLocation(idx,newValue){
+  if(!canEdit())return;
+  const p=getProject();if(!p)return;ensureProjectLocations(p);
+  const newName=String(newValue||'').trim();if(!newName){showToast('⚠ Naziv ne može biti prazan');editProjectMeta();return;}
+  const oldName=p.locations[idx];if(oldName==null||oldName===newName)return;
+  if(p.locations.some((x,i)=>i!==idx&&String(x).trim().toLowerCase()===newName.toLowerCase())){showToast('⚠ Ime već postoji');editProjectMeta();return;}
+  p.locations[idx]=newName;
+  renameLocationEverywhere(p,oldName,newName);
+  saveProjectState();queueCurrentWpSync();buildLocationFilter();render();showToast('✏️ Preimenovano');
 }
 function buildProjectSelector(){const s=document.getElementById('projectSelect');s.innerHTML=allData.projects.map(p=>`<option value="${p.id}" ${p.id===activeProjectId?'selected':''}>${escHtml(p.code)} — ${escHtml(p.name)}</option>`).join('');}
 function buildWpTabs(){const p=getProject();if(!p){document.getElementById('wpTabs').innerHTML='';return;}document.getElementById('wpTabs').innerHTML=p.workPackages.map(w=>`<div class="wp-tab ${w.id===activeWpId?'active':''}" onclick="switchWP('${w.id}')">${escHtml(w.name)} <span class="wp-code">${escHtml(w.rnCode)}</span></div>`).join('');}
@@ -1173,29 +1470,29 @@ function resetFilters(){['fSearch','fLoc','fStatus','fPerson','fReady','fDates',
 function buildPersonFilter(){const sel=document.getElementById('fPerson');if(!sel)return;const v=sel.value;sel.innerHTML='<option value="">Svi</option><option value="__none__">— Bez vođe —</option>'+VODJA.filter(v=>v).map(v=>`<option value="${v}">${v}</option>`).join('');sel.value=v;}
 
 let calTarget=null,calYear,calMonth;
-function openCalendar(ri,field){calTarget={ri,field};const d=getPhases()[ri][field]?new Date(getPhases()[ri][field]):new Date(today);calYear=d.getFullYear();calMonth=d.getMonth();renderCalendar();document.getElementById('calOverlay').classList.add('open');}
+function openCalendar(ri,field){if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}calTarget={ri,field};const d=getPhases()[ri][field]?new Date(getPhases()[ri][field]):new Date(today);calYear=d.getFullYear();calMonth=d.getMonth();renderCalendar();document.getElementById('calOverlay').classList.add('open');}
 function closeCalendar(){document.getElementById('calOverlay').classList.remove('open');calTarget=null;}
 function closeCalIfOutside(e){if(e.target===document.getElementById('calOverlay'))closeCalendar();}
-function clearDate(){if(!calTarget)return;const ri=calTarget.ri;getPhases()[ri][calTarget.field]=null;saveDateState(ri);render();closeCalendar();}
+function clearDate(){if(!canEdit())return;if(!calTarget)return;const ri=calTarget.ri;getPhases()[ri][calTarget.field]=null;saveDateState(ri);render();closeCalendar();}
 function calNav(dir){calMonth+=dir;if(calMonth<0){calMonth=11;calYear--;}if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
-function selectDay(y,m,d){if(!calTarget)return;const row=getPhases()[calTarget.ri],f=calTarget.field,ri=calTarget.ri;row[f]=new Date(y,m,d).toISOString().split('T')[0];if(row.start&&row.end&&new Date(row.end)<new Date(row.start)){row.end=row.start;showToast('📅 Kraj pomeren');}else showToast(`📅 ${d}.${m+1}.${y}`);applyBusinessRules(row);saveDateState(ri);render();closeCalendar();}
+function selectDay(y,m,d){if(!canEdit())return;if(!calTarget)return;const row=getPhases()[calTarget.ri],f=calTarget.field,ri=calTarget.ri;row[f]=new Date(y,m,d).toISOString().split('T')[0];if(row.start&&row.end&&new Date(row.end)<new Date(row.start)){row.end=row.start;showToast('📅 Kraj pomeren');}else showToast(`📅 ${d}.${m+1}.${y}`);applyBusinessRules(row);saveDateState(ri);render();closeCalendar();}
 function renderCalendar(){document.getElementById('calTitle').textContent=`${MONTHS_SR[calMonth]} ${calYear}`;const grid=document.getElementById('calGrid');grid.innerHTML='';const fd=new Date(calYear,calMonth,1),ld=new Date(calYear,calMonth+1,0),off=(fd.getDay()+6)%7;const sel=calTarget&&getPhases()[calTarget.ri][calTarget.field]?new Date(getPhases()[calTarget.ri][calTarget.field]):null;for(let i=0;i<off;i++){const el=document.createElement('div');el.className='cal-day empty';grid.appendChild(el);}for(let d=1;d<=ld.getDate();d++){const dt=new Date(calYear,calMonth,d),dow=(dt.getDay()+6)%7,el=document.createElement('div');el.className='cal-day';el.textContent=d;if(dow>=5)el.classList.add('weekend');if(dt.getTime()===today.getTime())el.classList.add('today');if(sel&&dt.getTime()===sel.getTime())el.classList.add('selected');el.onclick=()=>selectDay(calYear,calMonth,d);grid.appendChild(el);}}
 
 /* ═══════════════════════════════════════════════════════════
    UPDATE + PHASE MGMT
    ═══════════════════════════════════════════════════════════ */
-function update(i,field,value){const row=getPhases()[i];if(field==='status'&&value===3&&!row.blocker.trim()){showToast('⚠ Upiši blokator pre "Na čekanju"');render();return;}row[field]=value;applyBusinessRules(row);savePhaseState(i);render();}
-function updateCheck(i,ci,value){getPhases()[i].checks[ci]=value;saveCheckState(i);render();}
-function addPhase(){const inp=document.getElementById('newPhaseInput'),n=inp.value.trim();if(!n){showToast('⚠ Unesi naziv');inp.focus();return;}getPhases().push(createBlankPhase(n));saveWpStructureState();render();inp.value='';showToast('✅ Dodano');}
-function deleteRow(i){const s=getPhases(),n=s[i].name,deletedId=s[i]?.id;if(!confirm('Obriši "'+n+'"?'))return;s.splice(i,1);filteredIndices=null;saveAfterDelete(deletedId);render();}
-function moveRow(i,dir){const s=getPhases(),j=i+dir;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];filteredIndices=null;saveWpStructureState();render();}
+function update(i,field,value){if(!canEdit())return;const row=getPhases()[i];if(field==='status'&&value===3&&!row.blocker.trim()){showToast('⚠ Upiši blokator pre "Na čekanju"');render();return;}row[field]=value;applyBusinessRules(row);savePhaseState(i);render();}
+function updateCheck(i,ci,value){if(!canEdit())return;getPhases()[i].checks[ci]=value;saveCheckState(i);render();}
+function addPhase(){if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}const inp=document.getElementById('newPhaseInput'),n=inp.value.trim();if(!n){showToast('⚠ Unesi naziv');inp.focus();return;}getPhases().push(createBlankPhase(n));saveWpStructureState();render();inp.value='';showToast('✅ Dodano');}
+function deleteRow(i){if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}const s=getPhases(),n=s[i].name,deletedId=s[i]?.id;if(!confirm('Obriši "'+n+'"?'))return;s.splice(i,1);filteredIndices=null;saveAfterDelete(deletedId);render();}
+function moveRow(i,dir){if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}const s=getPhases(),j=i+dir;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];filteredIndices=null;saveWpStructureState();render();}
 
 /* ═══════════════════════════════════════════════════════════
    RENDER: Mobile Cards (same pattern as V5.0)
    ═══════════════════════════════════════════════════════════ */
 function renderMobileCards(){
   const c=document.getElementById('mobileCards');if(!c)return;c.innerHTML='';
-  const state=getPhases(),indices=filteredIndices!==null?filteredIndices:state.map((_,i)=>i),_dis=disabledAttr();
+  const state=getPhases(),indices=filteredIndices!==null?filteredIndices:state.map((_,i)=>i),_dis=disabledAttr(),_edit=canEdit(),mobAct=_edit?'':' disabled';
   indices.forEach(i=>{
     const row=state[i],dur=calcDuration(row.start,row.end),rd=calcReadiness(row),rk=calcRisk(row);
     const eN=escHtml(row.name),eNo=escHtml(row.note),eBl=escHtml(row.blocker);
@@ -1204,16 +1501,16 @@ function renderMobileCards(){
     let rB;if(rd.done)rB='<span class="badge-ready badge-done">DONE</span>';else if(rd.ready)rB='<span class="badge-ready badge-yes">✔</span>';else rB='<span class="badge-ready badge-no">✘</span>';
     const stC=['st-0','st-1','st-2','st-3'][row.status],rkC=rk.level!=='none'?`m-risk-${rk.level}`:'',mF=row.status===2?' m-finished':'';
     const pC=row.status===2?'pct-fill-done':row.status===3?'pct-fill-hold':'pct-fill-normal';
-    const chH=row.checks.map((c,ci)=>`<span class="m-card-check ${c?'ck-y':'ck-n'}" onclick="updateCheck(${i},${ci},${!c});event.stopPropagation()" style="cursor:pointer;user-select:none;padding:4px 8px;font-size:10px">${CHECK_SHORT[ci]}${c?' ✔':' ✘'}</span>`).join('');
+    const chH=row.checks.map((c,ci)=>`<span class="m-card-check ${c?'ck-y':'ck-n'}" ${_edit?`onclick="updateCheck(${i},${ci},${!c});event.stopPropagation()" style="cursor:pointer;user-select:none;padding:4px 8px;font-size:10px"`:'style="cursor:default;opacity:0.75;user-select:none;padding:4px 8px;font-size:10px"'}>${CHECK_SHORT[ci]}${c?' ✔':' ✘'}</span>`).join('');
     const cId='mc-'+i,card=document.createElement('div');card.className=`m-card ${rkC}${mF}`;
-    card.innerHTML=`<div class="m-card-top" onclick="document.getElementById('${cId}').classList.toggle('open')"><div><div class="m-card-name">${eN}</div><div style="font-size:10px;color:var(--text3);margin-top:2px"><span class="${row.loc==='Dobanovci'?'loc-dob':'loc-kru'}" style="background:none;border:none;padding:0;width:auto;font-size:10px">${row.loc}</span> · ${STATUSES[row.status]} · ${row.pct}%</div></div><div class="m-card-badges">${rI} ${rB}</div></div>
+    card.innerHTML=`<div class="m-card-top" onclick="document.getElementById('${cId}').classList.toggle('open')"><div><div class="m-card-name">${eN}</div><div style="font-size:10px;color:var(--text3);margin-top:2px"><span class="loc-pill" style="background:none;border:none;padding:0;width:auto;font-size:10px">${escHtml(row.loc||'')}</span> · ${STATUSES[row.status]} · ${row.pct}%</div></div><div class="m-card-badges">${rI} ${rB}</div></div>
     <div class="m-card-row"><div class="m-card-field"><span class="m-lbl">Poč:</span> ${formatDate(row.start)||'—'}</div><div class="m-card-field"><span class="m-lbl">Kraj:</span> ${formatDate(row.end)||'—'}</div><div class="m-card-field"><span class="m-lbl">Ing:</span> ${row.engineer||'—'}</div><div class="m-card-field"><span class="m-lbl">Vođa:</span> ${row.person||'—'}</div></div>
     <div class="m-card-pct"><div class="pct-bar"><div class="pct-bar-fill ${pC}" style="width:${row.pct}%"></div></div><span>${row.pct}%</span></div>
     <div class="m-card-details" id="${cId}"><div style="margin-bottom:6px;font-weight:600;color:var(--text3);font-size:9px;text-transform:uppercase">Spremnost</div><div class="m-card-checks">${chH}</div>
     <div class="m-card-detail-grid"><div class="m-card-detail-item"><span class="m-lbl">Status</span><select class="${stC}" onchange="update(${i},'status',parseInt(this.value))" style="font-size:13px;padding:6px 8px" ${_dis}>${STATUSES.map((s,si)=>`<option value="${si}" ${row.status===si?'selected':''}>${s}</option>`).join('')}</select></div><div class="m-card-detail-item"><span class="m-lbl">Ing.</span><select onchange="update(${i},'engineer',this.value)" style="font-size:13px;padding:6px 8px" ${_dis}>${ENGINEERS.map(v=>`<option value="${v}" ${row.engineer===v?'selected':''}>${v||'—'}</option>`).join('')}</select></div><div class="m-card-detail-item"><span class="m-lbl">Vođa</span><select onchange="update(${i},'person',this.value)" style="font-size:13px;padding:6px 8px" ${_dis}>${VODJA.map(v=>`<option value="${v}" ${row.person===v?'selected':''}>${v||'—'}</option>`).join('')}</select></div><div class="m-card-detail-item"><span class="m-lbl">%</span><input type="range" min="0" max="100" step="5" value="${row.pct}" style="width:100%;accent-color:var(--accent)" oninput="update(${i},'pct',parseInt(this.value))" ${_dis}></div></div>
     ${row.blocker||row.status===3?`<div class="m-card-detail-item" style="margin-top:6px"><span class="m-lbl">Blokator</span><textarea class="note-area" rows="2" style="font-size:13px;padding:8px" onchange="update(${i},'blocker',this.value)" ${_dis}>${eBl}</textarea></div>`:''}
     <div class="m-card-detail-item" style="margin-top:6px"><span class="m-lbl">Napomena</span><textarea class="note-area" rows="2" style="font-size:13px;padding:8px" onchange="update(${i},'note',this.value)" ${_dis}>${eNo}</textarea></div>
-    <div style="display:flex;gap:6px;margin-top:8px;padding-top:6px;border-top:1px solid var(--border)"><button class="row-btn" onclick="openCalendar(${i},'start')" style="padding:6px 10px;font-size:12px">📅 Poč</button><button class="row-btn" onclick="openCalendar(${i},'end')" style="padding:6px 10px;font-size:12px">📅 Kraj</button><button class="row-btn btn-up" onclick="moveRow(${i},-1)" style="padding:6px 10px">▲</button><button class="row-btn btn-dn" onclick="moveRow(${i},1)" style="padding:6px 10px">▼</button><button class="row-btn btn-del" onclick="deleteRow(${i})" style="padding:6px 10px">✕</button></div></div>`;
+    <div style="display:flex;gap:6px;margin-top:8px;padding-top:6px;border-top:1px solid var(--border)"><button class="row-btn"${mobAct} onclick="openCalendar(${i},'start')" style="padding:6px 10px;font-size:12px">📅 Poč</button><button class="row-btn"${mobAct} onclick="openCalendar(${i},'end')" style="padding:6px 10px;font-size:12px">📅 Kraj</button><button class="row-btn btn-up"${mobAct} onclick="moveRow(${i},-1)" style="padding:6px 10px">▲</button><button class="row-btn btn-dn"${mobAct} onclick="moveRow(${i},1)" style="padding:6px 10px">▼</button><button class="row-btn btn-del"${mobAct} onclick="deleteRow(${i})" style="padding:6px 10px">✕</button></div></div>`;
     c.appendChild(card);
   });
 }
@@ -1235,7 +1532,7 @@ function renderPlan(){
     let remDot='';if(row.start&&row.status!==2){const _du=Math.round((new Date(row.start)-today)/864e5);if(_du>=0&&_du<=3&&!rd.ready)remDot='<span class="reminder-dot rd-red"></span>';else if(_du>=4&&_du<=7&&!rd.ready)remDot='<span class="reminder-dot rd-yellow"></span>';}
     const eN=escHtml(row.name),eNo=escHtml(row.note),eBl=escHtml(row.blocker);
     const tr=document.createElement('tr');tr.className=rkC+finC;
-    tr.innerHTML=`<td class="td-num">${i+1}</td><td class="td-name">${remDot}<input class="phase-name-input" type="text" value="${eN}" onchange="update(${i},'name',this.value)" ${_dis}></td><td class="td-loc"><select onchange="update(${i},'loc',this.value)" class="${row.loc==='Dobanovci'?'loc-dob':'loc-kru'}" ${_dis}><option ${row.loc==='Dobanovci'?'selected':''}>Dobanovci</option><option ${row.loc==='Kruševac'?'selected':''}>Kruševac</option></select></td><td class="td-date ${dateErr?'date-error':''}"><div class="date-input-wrap"><input type="text" readonly value="${formatDate(row.start)}" placeholder="—" class="${row.start?'':'empty'}" onclick="openCalendar(${i},'start')"><button class="date-btn" onclick="openCalendar(${i},'start')">📅</button></div></td><td class="td-date ${dateErr?'date-error':''}"><div class="date-input-wrap"><input type="text" readonly value="${formatDate(row.end)}" placeholder="—" class="${row.end?'':'empty'}" onclick="openCalendar(${i},'end')"><button class="date-btn" onclick="openCalendar(${i},'end')">📅</button></div></td><td class="${durC}">${durT}</td><td class="td-eng"><select onchange="update(${i},'engineer',this.value)" ${_dis}>${ENGINEERS.map(v=>`<option value="${v}" ${row.engineer===v?'selected':''}>${v||'—'}</option>`).join('')}</select></td><td class="td-person"><select onchange="update(${i},'person',this.value)" ${_dis}>${VODJA.map(v=>`<option value="${v}" ${row.person===v?'selected':''}>${v||'—'}</option>`).join('')}</select></td><td class="td-status"><select class="${statusClass(row.status)}" onchange="update(${i},'status',parseInt(this.value))" ${_dis}>${STATUSES.map((s,si)=>`<option value="${si}" ${row.status===si?'selected':''}>${s}</option>`).join('')}</select></td><td class="td-pct"><div class="pct-bar-wrap"><div class="pct-bar"><div class="pct-bar-fill ${pctC}" style="width:${row.pct}%"></div></div><span style="font-family:var(--mono);font-size:10px;color:var(--text2);min-width:26px">${row.pct}%</span></div><input type="range" min="0" max="100" step="5" value="${row.pct}" style="width:100%;margin-top:2px;accent-color:var(--accent)" oninput="update(${i},'pct',parseInt(this.value))" ${_dis}></td>${row.checks.map((c,ci)=>`<td class="td-check"><select class="${c?'ck-da':'ck-ne'}" onchange="updateCheck(${i},${ci},this.value==='DA')" title="${CHECK_LABELS[ci]}" ${_dis}><option ${!c?'selected':''}>NE</option><option ${c?'selected':''}>DA</option></select></td>`).join('')}<td class="td-ready">${rdH}</td><td class="td-risk">${rkH}</td><td class="td-blocker ${blkH}"><textarea class="note-area" rows="2" placeholder="${row.status===3?'⚠!':''}" onchange="update(${i},'blocker',this.value)" ${_dis}>${eBl}</textarea></td><td class="td-note"><textarea class="note-area" rows="2" onchange="update(${i},'note',this.value)" ${_dis}>${eNo}</textarea></td><td class="td-actions"><button class="row-btn btn-up" onclick="moveRow(${i},-1)">▲</button><button class="row-btn btn-dn" onclick="moveRow(${i},1)">▼</button><button class="row-btn btn-del" onclick="deleteRow(${i})">✕</button></td>`;
+    tr.innerHTML=`<td class="td-num">${i+1}</td><td class="td-name">${remDot}<input class="phase-name-input" type="text" value="${eN}" onchange="update(${i},'name',this.value)" ${_dis}></td><td class="td-loc"><select onchange="update(${i},'loc',this.value)" class="loc-select" ${_dis}>${locationOptionsHtml(row.loc)}</select></td><td class="td-date ${dateErr?'date-error':''}"><div class="date-input-wrap"><input type="text" readonly value="${formatDate(row.start)}" placeholder="—" class="${row.start?'':'empty'}" onclick="openCalendar(${i},'start')"><button class="date-btn" onclick="openCalendar(${i},'start')">📅</button></div></td><td class="td-date ${dateErr?'date-error':''}"><div class="date-input-wrap"><input type="text" readonly value="${formatDate(row.end)}" placeholder="—" class="${row.end?'':'empty'}" onclick="openCalendar(${i},'end')"><button class="date-btn" onclick="openCalendar(${i},'end')">📅</button></div></td><td class="${durC}">${durT}</td><td class="td-eng"><select onchange="update(${i},'engineer',this.value)" ${_dis}>${ENGINEERS.map(v=>`<option value="${v}" ${row.engineer===v?'selected':''}>${v||'—'}</option>`).join('')}</select></td><td class="td-person"><select onchange="update(${i},'person',this.value)" ${_dis}>${VODJA.map(v=>`<option value="${v}" ${row.person===v?'selected':''}>${v||'—'}</option>`).join('')}</select></td><td class="td-status"><select class="${statusClass(row.status)}" onchange="update(${i},'status',parseInt(this.value))" ${_dis}>${STATUSES.map((s,si)=>`<option value="${si}" ${row.status===si?'selected':''}>${s}</option>`).join('')}</select></td><td class="td-pct"><div class="pct-bar-wrap"><div class="pct-bar"><div class="pct-bar-fill ${pctC}" style="width:${row.pct}%"></div></div><span style="font-family:var(--mono);font-size:10px;color:var(--text2);min-width:26px">${row.pct}%</span></div><input type="range" min="0" max="100" step="5" value="${row.pct}" style="width:100%;margin-top:2px;accent-color:var(--accent)" oninput="update(${i},'pct',parseInt(this.value))" ${_dis}></td>${row.checks.map((c,ci)=>`<td class="td-check"><select class="${c?'ck-da':'ck-ne'}" onchange="updateCheck(${i},${ci},this.value==='DA')" title="${CHECK_LABELS[ci]}" ${_dis}><option ${!c?'selected':''}>NE</option><option ${c?'selected':''}>DA</option></select></td>`).join('')}<td class="td-ready">${rdH}</td><td class="td-risk">${rkH}</td><td class="td-blocker ${blkH}"><textarea class="note-area" rows="2" placeholder="${row.status===3?'⚠!':''}" onchange="update(${i},'blocker',this.value)" ${_dis}>${eBl}</textarea></td><td class="td-note"><textarea class="note-area" rows="2" onchange="update(${i},'note',this.value)" ${_dis}>${eNo}</textarea></td><td class="td-actions"><button class="row-btn btn-up" onclick="moveRow(${i},-1)">▲</button><button class="row-btn btn-dn" onclick="moveRow(${i},1)">▼</button><button class="row-btn btn-del" onclick="deleteRow(${i})">✕</button></td>`;
     tb.appendChild(tr);
   });
 }
@@ -1243,14 +1540,14 @@ function renderPlan(){
 /* ═══════════════════════════════════════════════════════════
    RENDER: Gantt (single WP, skip finished)
    ═══════════════════════════════════════════════════════════ */
-function renderGantt(){const wrap=document.getElementById('ganttWrap'),state=getPhases().filter(r=>r.status!==2);let min=new Date(today),max=new Date(today);max.setDate(max.getDate()+60);state.forEach(r=>{if(r.start){const d=new Date(r.start);if(d<min)min=d;}if(r.end){const d=new Date(r.end);if(d>max)max=d;}});min.setDate(min.getDate()-3);max.setDate(max.getDate()+5);const days=[];let cur=new Date(min);while(cur<=max){days.push(new Date(cur));cur.setDate(cur.getDate()+1);}const months={};days.forEach(d=>{const k=d.getFullYear()+'-'+d.getMonth();if(!months[k])months[k]={label:MONTHS_SR[d.getMonth()]+' '+d.getFullYear(),count:0};months[k].count++;});let h=`<table class="gantt-table"><thead><tr><th class="gantt-label" rowspan="2">Faza</th>${Object.values(months).map(m=>`<th class="gantt-month-hdr" colspan="${m.count}">${m.label}</th>`).join('')}</tr><tr>${days.map(d=>{const isT=d.getTime()===today.getTime(),isW=d.getDay()===0||d.getDay()===6;return`<th class="gantt-day-hdr ${isT?'today-col':''} ${isW?'wknd':''}">${d.getDate()}</th>`;}).join('')}</tr></thead><tbody>`;state.forEach(row=>{const sMs=row.start?new Date(row.start).setHours(0,0,0,0):null,eMs=row.end?new Date(row.end).setHours(0,0,0,0):null,lc=row.loc==='Dobanovci'?'dob':'kru',rk=calcRisk(row),rkC=rk.level!=='none'?' gantt-row-risk':'',eng=row.engineer?row.engineer.split(' ').pop():'',ld=row.person?row.person.split(' ').pop():'';h+=`<tr class="gantt-row${rkC}"><td class="gantt-label" style="background:var(--surface2);border-right:2px solid var(--border2)"><div class="gantt-label-name">${escHtml(row.name)}</div><div class="gantt-label-sub ${lc}">${row.loc} ${eng?'· '+eng:''} ${ld?'· '+ld:''} · <span class="gantt-label-status gs-${row.status}">${STATUSES[row.status]} ${row.pct}%</span></div></td>`;days.forEach(d=>{const dMs=d.getTime(),isT=dMs===today.getTime(),isW=d.getDay()===0||d.getDay()===6,inB=sMs!==null&&eMs!==null&&dMs>=sMs&&dMs<=eMs,isS=sMs!==null&&dMs===sMs,isE=eMs!==null&&dMs===eMs;let cls='gantt-cell';if(isW)cls+=' wknd';if(isT)cls+=' today-col';if(inB){if(isS&&isE)cls+=` bar-${lc} bar-start-${lc} bar-end-${lc}`;else if(isS)cls+=` bar-start-${lc}`;else if(isE)cls+=` bar-end-${lc}`;else cls+=` bar-${lc}`;}h+=`<td class="${cls}"></td>`;});h+=`</tr>`;});h+=`</tbody></table>`;wrap.innerHTML=h;}
+function renderGantt(){const wrap=document.getElementById('ganttWrap'),state=getPhases().filter(r=>r.status!==2);let min=new Date(today),max=new Date(today);max.setDate(max.getDate()+60);state.forEach(r=>{if(r.start){const d=new Date(r.start);if(d<min)min=d;}if(r.end){const d=new Date(r.end);if(d>max)max=d;}});min.setDate(min.getDate()-3);max.setDate(max.getDate()+5);const days=[];let cur=new Date(min);while(cur<=max){days.push(new Date(cur));cur.setDate(cur.getDate()+1);}const months={};days.forEach(d=>{const k=d.getFullYear()+'-'+d.getMonth();if(!months[k])months[k]={label:MONTHS_SR[d.getMonth()]+' '+d.getFullYear(),count:0};months[k].count++;});let h=`<table class="gantt-table"><thead><tr><th class="gantt-label" rowspan="2">Faza</th>${Object.values(months).map(m=>`<th class="gantt-month-hdr" colspan="${m.count}">${m.label}</th>`).join('')}</tr><tr>${days.map(d=>{const isT=d.getTime()===today.getTime(),isW=d.getDay()===0||d.getDay()===6;return`<th class="gantt-day-hdr ${isT?'today-col':''} ${isW?'wknd':''}">${d.getDate()}</th>`;}).join('')}</tr></thead><tbody>`;state.forEach(row=>{const sMs=row.start?new Date(row.start).setHours(0,0,0,0):null,eMs=row.end?new Date(row.end).setHours(0,0,0,0):null,rk=calcRisk(row),rkC=rk.level!=='none'?' gantt-row-risk':'',eng=row.engineer?row.engineer.split(' ').pop():'',ld=row.person?row.person.split(' ').pop():'';h+=`<tr class="gantt-row${rkC}"><td class="gantt-label" style="background:var(--surface2);border-right:2px solid var(--border2)"><div class="gantt-label-name">${escHtml(row.name)}</div><div class="gantt-label-sub">${escHtml(row.loc||'')} ${eng?'· '+eng:''} ${ld?'· '+ld:''} · <span class="gantt-label-status gs-${row.status}">${STATUSES[row.status]} ${row.pct}%</span></div></td>`;days.forEach(d=>{const dMs=d.getTime(),isT=dMs===today.getTime(),isW=d.getDay()===0||d.getDay()===6,inB=sMs!==null&&eMs!==null&&dMs>=sMs&&dMs<=eMs,isS=sMs!==null&&dMs===sMs,isE=eMs!==null&&dMs===eMs;let cls='gantt-cell';if(isW)cls+=' wknd';if(isT)cls+=' today-col';if(inB){if(isS&&isE)cls+=' bar-phase bar-phase-start bar-phase-end';else if(isS)cls+=' bar-phase-start';else if(isE)cls+=' bar-phase-end';else cls+=' bar-phase';}h+=`<td class="${cls}"></td>`;});h+=`</tr>`;});h+=`</tbody></table>`;wrap.innerHTML=h;}
 
 /* ═══════════════════════════════════════════════════════════
    RENDER: Total Gantt (all WPs of project, skip finished)
    ═══════════════════════════════════════════════════════════ */
 let totalGanttWPs={};function toggleGanttWP(id){totalGanttWPs[id]=!totalGanttWPs[id];renderTotalGantt();}
 function renderGanttWpFilter(){const p=getProject();if(!p)return;p.workPackages.forEach(w=>{if(totalGanttWPs[w.id]===undefined)totalGanttWPs[w.id]=true;});document.getElementById('ganttWpFilter').innerHTML='<span style="font-size:9px;color:var(--text3);font-weight:600;text-transform:uppercase;margin-right:6px">Pozicije:</span>'+p.workPackages.map(w=>`<label><input type="checkbox" ${totalGanttWPs[w.id]?'checked':''} onchange="toggleGanttWP('${w.id}')">${escHtml(w.name)}</label>`).join('');}
-function renderTotalGantt(){const p=getProject();if(!p){document.getElementById('totalGanttWrap').innerHTML='';return;}let min=new Date(today),max=new Date(today);max.setDate(max.getDate()+60);p.workPackages.forEach(w=>{if(!totalGanttWPs[w.id])return;w.phases.forEach(r=>{if(r.start){const d=new Date(r.start);if(d<min)min=d;}if(r.end){const d=new Date(r.end);if(d>max)max=d;}});});min.setDate(min.getDate()-3);max.setDate(max.getDate()+5);const days=[];let cur=new Date(min);while(cur<=max){days.push(new Date(cur));cur.setDate(cur.getDate()+1);}const months={};days.forEach(d=>{const k=d.getFullYear()+'-'+d.getMonth();if(!months[k])months[k]={label:MONTHS_SR[d.getMonth()]+' '+d.getFullYear(),count:0};months[k].count++;});const MC=['#1f3a6e','#1a3a1a','#3a2800','#2a0a2a','#002a2a'];let h=`<table class="gantt-table"><thead><tr><th class="gantt-label" rowspan="2" style="min-width:220px">Pozicija / Faza</th>${Object.values(months).map(m=>`<th class="gantt-month-hdr" colspan="${m.count}">${m.label}</th>`).join('')}</tr><tr>${days.map(d=>{const isT=d.getTime()===today.getTime(),isW=d.getDay()===0||d.getDay()===6;return`<th class="gantt-day-hdr ${isT?'today-col':''} ${isW?'wknd':''}">${d.getDate()}</th>`;}).join('')}</tr></thead><tbody>`;p.workPackages.forEach((wp,wi)=>{if(!totalGanttWPs[wp.id])return;const active=wp.phases.filter(r=>r.status!==2),tc=days.length;h+=`<tr class="gantt-machine-hdr"><td colspan="${tc+1}" style="background:${MC[wi%5]};color:#aac8ff;font-weight:700;font-size:11px;padding:5px 10px;border-top:2px solid #2e75b6">⚙ ${escHtml(wp.name)} <span style="font-size:9px;opacity:0.7">${escHtml(wp.rnCode)}</span></td></tr>`;if(active.length===0){h+=`<tr><td colspan="${tc+1}" style="color:var(--text3);font-style:italic;padding:6px 10px;font-size:11px">Nema aktivnih faza</td></tr>`;}else active.forEach(row=>{const sMs=row.start?new Date(row.start).setHours(0,0,0,0):null,eMs=row.end?new Date(row.end).setHours(0,0,0,0):null,lc=row.loc==='Dobanovci'?'dob':'kru',rk=calcRisk(row),rkC=rk.level!=='none'?' gantt-row-risk':'',eng=row.engineer?row.engineer.split(' ').pop():'',ld=row.person?row.person.split(' ').pop():'';h+=`<tr class="gantt-row${rkC}"><td class="gantt-label" style="background:var(--surface2);border-right:2px solid var(--border2);padding-left:18px"><div class="gantt-label-name">${escHtml(row.name)}</div><div class="gantt-label-sub ${lc}">${row.loc} ${eng?'· '+eng:''} ${ld?'· '+ld:''} · <span class="gantt-label-status gs-${row.status}">${STATUSES[row.status]} ${row.pct}%</span></div></td>`;days.forEach(d=>{const dMs=d.getTime(),isT=dMs===today.getTime(),isW=d.getDay()===0||d.getDay()===6,inB=sMs!==null&&eMs!==null&&dMs>=sMs&&dMs<=eMs,isS=sMs!==null&&dMs===sMs,isE=eMs!==null&&dMs===eMs;let cls='gantt-cell';if(isW)cls+=' wknd';if(isT)cls+=' today-col';if(inB){if(isS&&isE)cls+=` bar-${lc} bar-start-${lc} bar-end-${lc}`;else if(isS)cls+=` bar-start-${lc}`;else if(isE)cls+=` bar-end-${lc}`;else cls+=` bar-${lc}`;}h+=`<td class="${cls}"></td>`;});h+=`</tr>`;});});h+=`</tbody></table>`;document.getElementById('totalGanttWrap').innerHTML=h;}
+function renderTotalGantt(){const p=getProject();if(!p){document.getElementById('totalGanttWrap').innerHTML='';return;}let min=new Date(today),max=new Date(today);max.setDate(max.getDate()+60);p.workPackages.forEach(w=>{if(!totalGanttWPs[w.id])return;w.phases.forEach(r=>{if(r.start){const d=new Date(r.start);if(d<min)min=d;}if(r.end){const d=new Date(r.end);if(d>max)max=d;}});});min.setDate(min.getDate()-3);max.setDate(max.getDate()+5);const days=[];let cur=new Date(min);while(cur<=max){days.push(new Date(cur));cur.setDate(cur.getDate()+1);}const months={};days.forEach(d=>{const k=d.getFullYear()+'-'+d.getMonth();if(!months[k])months[k]={label:MONTHS_SR[d.getMonth()]+' '+d.getFullYear(),count:0};months[k].count++;});const MC=['#1f3a6e','#1a3a1a','#3a2800','#2a0a2a','#002a2a'];let h=`<table class="gantt-table"><thead><tr><th class="gantt-label" rowspan="2" style="min-width:220px">Pozicija / Faza</th>${Object.values(months).map(m=>`<th class="gantt-month-hdr" colspan="${m.count}">${m.label}</th>`).join('')}</tr><tr>${days.map(d=>{const isT=d.getTime()===today.getTime(),isW=d.getDay()===0||d.getDay()===6;return`<th class="gantt-day-hdr ${isT?'today-col':''} ${isW?'wknd':''}">${d.getDate()}</th>`;}).join('')}</tr></thead><tbody>`;p.workPackages.forEach((wp,wi)=>{if(!totalGanttWPs[wp.id])return;const active=wp.phases.filter(r=>r.status!==2),tc=days.length;h+=`<tr class="gantt-machine-hdr"><td colspan="${tc+1}" style="background:${MC[wi%5]};color:#aac8ff;font-weight:700;font-size:11px;padding:5px 10px;border-top:2px solid #2e75b6">⚙ ${escHtml(wp.name)} <span style="font-size:9px;opacity:0.7">${escHtml(wp.rnCode)}</span></td></tr>`;if(active.length===0){h+=`<tr><td colspan="${tc+1}" style="color:var(--text3);font-style:italic;padding:6px 10px;font-size:11px">Nema aktivnih faza</td></tr>`;}else active.forEach(row=>{const sMs=row.start?new Date(row.start).setHours(0,0,0,0):null,eMs=row.end?new Date(row.end).setHours(0,0,0,0):null,rk=calcRisk(row),rkC=rk.level!=='none'?' gantt-row-risk':'',eng=row.engineer?row.engineer.split(' ').pop():'',ld=row.person?row.person.split(' ').pop():'';h+=`<tr class="gantt-row${rkC}"><td class="gantt-label" style="background:var(--surface2);border-right:2px solid var(--border2);padding-left:18px"><div class="gantt-label-name">${escHtml(row.name)}</div><div class="gantt-label-sub">${escHtml(row.loc||'')} ${eng?'· '+eng:''} ${ld?'· '+ld:''} · <span class="gantt-label-status gs-${row.status}">${STATUSES[row.status]} ${row.pct}%</span></div></td>`;days.forEach(d=>{const dMs=d.getTime(),isT=dMs===today.getTime(),isW=d.getDay()===0||d.getDay()===6,inB=sMs!==null&&eMs!==null&&dMs>=sMs&&dMs<=eMs,isS=sMs!==null&&dMs===sMs,isE=eMs!==null&&dMs===eMs;let cls='gantt-cell';if(isW)cls+=' wknd';if(isT)cls+=' today-col';if(inB){if(isS&&isE)cls+=' bar-phase bar-phase-start bar-phase-end';else if(isS)cls+=' bar-phase-start';else if(isE)cls+=' bar-phase-end';else cls+=' bar-phase';}h+=`<td class="${cls}"></td>`;});h+=`</tr>`;});});h+=`</tbody></table>`;document.getElementById('totalGanttWrap').innerHTML=h;}
 
 /* ═══════════════════════════════════════════════════════════
    RENDER: Summary + Reminders
@@ -1262,13 +1559,50 @@ function renderReminders(){const z=document.getElementById('reminderZone');if(!z
    EXPORT/IMPORT/RESET
    ═══════════════════════════════════════════════════════════ */
 function exportData(){const blob=new Blob([JSON.stringify(allData,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`plan_${getProject()?.code||'export'}_${new Date().toISOString().slice(0,10)}.json`;a.click();showToast('💾 Exported');}
-function importData(event){const file=event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const d=JSON.parse(e.target.result);if(d.projects&&Array.isArray(d.projects)){allData=d;activeProjectId=allData.projects[0]?.id;activeWpId=allData.projects[0]?.workPackages?.[0]?.id;cacheToLocal();buildProjectSelector();buildWpTabs();render();queueCurrentWpSync();showToast('📂 Imported');}else showToast('❌ Format');}catch{showToast('❌ JSON err');}};reader.readAsText(file);event.target.value='';}
-function resetData(){if(!confirm('Reset?'))return;allData={projects:[createBlankProject('RN 9000','Kovačka linija')]};activeProjectId=allData.projects[0].id;activeWpId=allData.projects[0].workPackages[0].id;filteredIndices=null;cacheToLocal();buildProjectSelector();buildWpTabs();render();showToast('🗑 Reset');}
+function importData(event){if(!canEdit()){showToast('⚠ Pregled — nema izmena');event.target.value='';return;}const file=event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const d=JSON.parse(e.target.result);if(d.projects&&Array.isArray(d.projects)){allData=d;activeProjectId=allData.projects[0]?.id;activeWpId=allData.projects[0]?.workPackages?.[0]?.id;allData.projects.forEach(ensureProjectLocations);cacheToLocal();buildProjectSelector();buildWpTabs();render();queueCurrentWpSync();showToast('📂 Imported');}else showToast('❌ Format');}catch{showToast('❌ JSON err');}};reader.readAsText(file);event.target.value='';}
+function resetData(){if(!canEdit()){showToast('⚠ Pregled — nema izmena');return;}if(!confirm('Reset?'))return;allData={projects:[createBlankProject('RN 9000','Kovačka linija')]};activeProjectId=allData.projects[0].id;activeWpId=allData.projects[0].workPackages[0].id;filteredIndices=null;cacheToLocal();buildProjectSelector();buildWpTabs();render();showToast('🗑 Reset');}
 
 /* ═══════════════════════════════════════════════════════════
    MASTER RENDER + INIT
    ═══════════════════════════════════════════════════════════ */
-function render(){renderPlan();renderReminders();renderSummary();buildPersonFilter();if(activeView==='gantt')renderGantt();if(activeView==='total'){renderGanttWpFilter();renderTotalGantt();}}
+function render(){ensureProjectLocations(getProject());buildLocationFilter();renderPlan();renderReminders();renderSummary();buildPersonFilter();if(activeView==='gantt')renderGantt();if(activeView==='total'){renderGanttWpFilter();renderTotalGantt();}}
+
+/* ═══════════════════════════════════════════════════════════
+   PRINT / PDF
+   ═══════════════════════════════════════════════════════════ */
+function openPrintDialog(){
+  // predloži default = trenutni view
+  const overlay=document.getElementById('printOverlay');
+  if(overlay)overlay.classList.add('open');
+}
+function updatePrintHeader(which){
+  const p=getProject(),wp=getWP();
+  const labelMap={plan:'Plan aktivnosti',gantt:'Gant dijagram — trenutna pozicija',total:'Ukupan Gant'};
+  const title=labelMap[which]||'Plan';
+  const dateStr=new Date().toLocaleDateString('sr-RS');
+  const parts=[];
+  if(p)parts.push(`<span><strong>Projekat:</strong> ${escHtml(p.code)} — ${escHtml(p.name)}</span>`);
+  if(wp&&which!=='total')parts.push(`<span><strong>Pozicija:</strong> ${escHtml(wp.name)} ${wp.rnCode?'· '+escHtml(wp.rnCode):''}</span>`);
+  parts.push(`<span><strong>Prikaz:</strong> ${title}</span>`);
+  parts.push(`<span><strong>Datum:</strong> ${dateStr}</span>`);
+  const meta=document.getElementById('printHeaderMeta');if(meta)meta.innerHTML=parts.join('');
+}
+function printView(which){
+  document.getElementById('printOverlay').classList.remove('open');
+  // Pobrini se da je odgovarajući view renderovan pre štampe
+  const prevView=activeView;
+  if(which==='gantt'){renderGantt();}
+  else if(which==='total'){renderGanttWpFilter();renderTotalGantt();}
+  updatePrintHeader(which);
+  document.body.classList.remove('print-plan','print-gantt','print-total');
+  document.body.classList.add('print-'+which);
+  const cleanup=()=>{
+    document.body.classList.remove('print-plan','print-gantt','print-total');
+    window.removeEventListener('afterprint',cleanup);
+  };
+  window.addEventListener('afterprint',cleanup);
+  setTimeout(()=>{try{window.print();}catch(e){console.error('print error',e);cleanup();}},80);
+}
 
 /* Try session restore first */
 (function init(){

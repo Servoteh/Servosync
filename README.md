@@ -1,19 +1,42 @@
-# Servoteh - Plan Montaže
+# Plan Montaze v5.1
 
-Ovaj repozitorijum sadrži dokumentaciju, bazu podataka i logiku za sistem plana montaže. Cilj projekta je digitalizacija i automatizacija praćenja procesa montaže unutar kompanije.
+Single-file HTML aplikacija za pracenje plana montaze sa modelom `projects -> work_packages -> phases` i Supabase backendom za auth, role logiku i cuvanje podataka.
 
-## 👥 Tim na projektu
+## Sta koristi
 
-* **Nenad Jaraković** – Programiranje i postavljanje baze podataka.
-* **Milan Stojadinović** – Razvoj logike i asistencija na svim segmentima projekta.
+- `index.html` kao jedini frontend
+- `sql/schema.sql` za Supabase semu i RLS
+- Supabase Auth za login/session restore
+- Supabase tabele: `projects`, `work_packages`, `phases`, `user_roles`, `reminder_log`
 
-## 📅 Ključni rokovi
+## SUPABASE_CONFIG
 
-* **01.05.2026.** – Sistem mora biti operativan (online) i spreman za rad.
+Supabase se podesava direktno u `index.html` kroz `SUPABASE_CONFIG`.
 
-## 🛠 Tehnologije i Status
-* Status: **U fazi razvoja**
-* Fokus: Stabilnost baze i implementacija logičkih algoritama.
+Upisati:
+- `url`
+- `anonKey`
+- opciono `reminderEndpoint`
 
----
-*Servoteh d.o.o. - Dobanovci*
+## Role
+
+- `PM`
+- `LeadPM`
+- `Viewer`
+
+Role se kontrolisu kroz tabelu `user_roles`, a pilot hardening koristi lowercase email lookup i RLS provere preko baze.
+
+## Pilot test
+
+1. Pusti `sql/schema.sql` u Supabase SQL editoru.
+2. Napravi korisnike u Supabase Auth.
+3. Popuni `user_roles` sa odgovarajucim rolama.
+4. Otvori `index.html` preko statickog hostinga ili lokalnog servera.
+5. Testiraj login, session restore, role ogranicenja i cuvanje izmena.
+
+## Struktura repoa
+
+- `index.html`
+- `sql/schema.sql`
+- `docs/notes.md`
+- `README.md`

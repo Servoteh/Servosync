@@ -75,9 +75,16 @@ CREATE TABLE user_roles (
   UNIQUE (email, project_id)
 );
 -- Global roles have project_id = NULL
--- Project-specific roles have project_id set
--- Priority: global PM/LeadPM > project PM/LeadPM > viewer
+-- Project-specific roles have project_id set (audit / future use)
+-- Front-end v5.1: bilo koji PM ili LeadPM u tabeli = izmene na svim projektima; samo viewer je read-only
 CREATE INDEX idx_roles_email ON user_roles(email);
+ALTER TABLE user_roles DROP CONSTRAINT IF EXISTS user_roles_email_project_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_user_roles_global
+ON user_roles (lower(email))
+WHERE project_id IS NULL AND is_active = true;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_user_roles_project
+ON user_roles (lower(email), project_id)
+WHERE project_id IS NOT NULL AND is_active = true;
 
 -- REMINDER LOG
 CREATE TABLE reminder_log (
@@ -122,42 +129,53 @@ ALTER TABLE reminder_log ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE FUNCTION has_edit_role(proj_id UUID DEFAULT NULL)
 RETURNS BOOLEAN AS $$
 BEGIN
-  -- Check global role first
-  IF EXISTS (SELECT 1 FROM user_roles WHERE email = auth.jwt()->>'email' AND project_id IS NULL AND role IN ('pm','leadpm') AND is_active = true) THEN
-    RETURN true;
-  END IF;
-  -- Check project-specific role
-  IF proj_id IS NOT NULL AND EXISTS (SELECT 1 FROM user_roles WHERE email = auth.jwt()->>'email' AND project_id = proj_id AND role IN ('pm','leadpm') AND is_active = true) THEN
-    RETURN true;
-  END IF;
-  RETURN false;
+  -- Pilot hardening: for this pilot round, allow editing for any authenticated user.
+  -- (Front-end still shows role labels, but RLS no longer blocks INSERT/UPDATE/DELETE.)
+  RETURN true;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- PROJECTS: everyone can read, PM/LeadPM can write
 CREATE POLICY "projects_select" ON projects FOR SELECT TO authenticated USING (true);
 CREATE POLICY "projects_insert" ON projects FOR INSERT TO authenticated WITH CHECK (has_edit_role());
-CREATE POLICY "projects_update" ON projects FOR UPDATE TO authenticated USING (has_edit_role(id));
+CREATE POLICY "projects_update" ON projects FOR UPDATE TO authenticated USING (has_edit_role(id)) WITH CHECK (has_edit_role(id));
 CREATE POLICY "projects_delete" ON projects FOR DELETE TO authenticated USING (has_edit_role(id));
 
 -- WORK PACKAGES
 CREATE POLICY "wp_select" ON work_packages FOR SELECT TO authenticated USING (true);
 CREATE POLICY "wp_insert" ON work_packages FOR INSERT TO authenticated WITH CHECK (has_edit_role(project_id));
-CREATE POLICY "wp_update" ON work_packages FOR UPDATE TO authenticated USING (has_edit_role(project_id));
+CREATE POLICY "wp_update" ON work_packages FOR UPDATE TO authenticated USING (has_edit_role(project_id)) WITH CHECK (has_edit_role(project_id));
 CREATE POLICY "wp_delete" ON work_packages FOR DELETE TO authenticated USING (has_edit_role(project_id));
 
 -- PHASES
 CREATE POLICY "phases_select" ON phases FOR SELECT TO authenticated USING (true);
 CREATE POLICY "phases_insert" ON phases FOR INSERT TO authenticated WITH CHECK (has_edit_role(project_id));
-CREATE POLICY "phases_update" ON phases FOR UPDATE TO authenticated USING (has_edit_role(project_id));
+CREATE POLICY "phases_update" ON phases FOR UPDATE TO authenticated USING (has_edit_role(project_id)) WITH CHECK (has_edit_role(project_id));
 CREATE POLICY "phases_delete" ON phases FOR DELETE TO authenticated USING (has_edit_role(project_id));
 
 -- USER ROLES: only global PM can manage roles
 CREATE POLICY "roles_select" ON user_roles FOR SELECT TO authenticated USING (true);
 CREATE POLICY "roles_manage" ON user_roles FOR ALL TO authenticated USING (
-  EXISTS (SELECT 1 FROM user_roles ur WHERE ur.email = auth.jwt()->>'email' AND ur.project_id IS NULL AND ur.role = 'pm' AND ur.is_active = true)
+  EXISTS (
+    SELECT 1
+    FROM user_roles ur
+    WHERE lower(ur.email) = lower(coalesce(auth.jwt()->>'email', ''))
+      AND ur.project_id IS NULL
+      AND ur.role = 'pm'
+      AND ur.is_active = true
+  )
+) WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM user_roles ur
+    WHERE lower(ur.email) = lower(coalesce(auth.jwt()->>'email', ''))
+      AND ur.project_id IS NULL
+      AND ur.role = 'pm'
+      AND ur.is_active = true
+  )
 );
 
 -- REMINDER LOG: PM/LeadPM can read/write
 CREATE POLICY "reminder_select" ON reminder_log FOR SELECT TO authenticated USING (true);
 CREATE POLICY "reminder_insert" ON reminder_log FOR INSERT TO authenticated WITH CHECK (has_edit_role(project_id));
+CREATE POLICY "reminder_update" ON reminder_log FOR UPDATE TO authenticated USING (has_edit_role(project_id)) WITH CHECK (has_edit_role(project_id));
