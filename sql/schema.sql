@@ -75,8 +75,8 @@ CREATE TABLE user_roles (
   UNIQUE (email, project_id)
 );
 -- Global roles have project_id = NULL
--- Project-specific roles have project_id set
--- Priority: global PM/LeadPM > project PM/LeadPM > viewer
+-- Project-specific roles have project_id set (audit / future use)
+-- Front-end v5.1: bilo koji PM ili LeadPM u tabeli = izmene na svim projektima; samo viewer je read-only
 CREATE INDEX idx_roles_email ON user_roles(email);
 ALTER TABLE user_roles DROP CONSTRAINT IF EXISTS user_roles_email_project_id_key;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_user_roles_global

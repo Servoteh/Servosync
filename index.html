@@ -910,36 +910,25 @@ async function loadAllProjectData(projectId){
   }
   return wps;
 }
-async function loadUserRoleFromDb(){
-  if(!currentUser)return 'viewer';
-  // Role lookup always uses lowercase trimmed email so Auth and user_roles stay aligned.
+async function loadUserRoleMatchesFromDb(){
+  if(!currentUser)return[];
   const email=((currentUser.email || '').trim().toLowerCase());
-  // Pilot hardening: find role by exact lowercase email match.
-  // To avoid PostgREST filter edge-cases with ilike/eq and casing,
-  // we fetch all active roles and match locally (table is small in pilot).
   const data=await sbReq(`user_roles?is_active=eq.true&select=email,role,project_id`);
-  if(!data||!Array.isArray(data))return 'viewer';
-
-  const matches=data.filter(r=>String(r?.email||'').trim().toLowerCase()===email);
-  if(matches.length===0)return 'viewer';
-
-  // Prefer: global PM/LeadPM > project PM/LeadPM > viewer
+  if(!data||!Array.isArray(data))return[];
+  return data.filter(r=>String(r?.email||'').trim().toLowerCase()===email);
+}
+/** PM ili LeadPM na bilo kom redu = ista prava na sve projekte; inače viewer. */
+function effectiveRoleFromMatches(matches){
+  if(!matches||matches.length===0)return 'viewer';
   const rank=role=>role==='pm'?2:role==='leadpm'?1:0;
-  const globals=matches.filter(r=>r.project_id==null);
-  if(globals.length){
-    const best=globals.slice().sort((a,b)=>rank(b.role)-rank(a.role))[0];
-    if(best?.role && best.role!=='viewer')return best.role;
-  }
-  if(activeProjectId){
-    const proj=matches.filter(r=>String(r.project_id)===String(activeProjectId));
-    if(proj.length){
-      const best=proj.slice().sort((a,b)=>rank(b.role)-rank(a.role))[0];
-      if(best?.role)return best.role;
-    }
-  }
-  // Fallback to any viewer match
+  const elevated=matches.filter(r=>r.role==='pm'||r.role==='leadpm');
+  if(elevated.length)return elevated.slice().sort((a,b)=>rank(b.role)-rank(a.role))[0].role;
   const viewerMatch=matches.find(r=>r.role==='viewer');
   return viewerMatch?.role||'viewer';
+}
+async function loadUserRoleFromDb(){
+  const matches=await loadUserRoleMatchesFromDb();
+  return effectiveRoleFromMatches(matches);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1064,7 +1053,7 @@ async function restoreSession(){
 }
 async function initAfterAuth(){
   document.getElementById('authOverlay').classList.add('hidden');
-  /* Load projects */
+  const roleMatches=await loadUserRoleMatchesFromDb();
   const projects=await loadProjectsFromDb();
   if(projects&&projects.length>0){
     allData.projects=projects;
@@ -1073,13 +1062,13 @@ async function initAfterAuth(){
     if(wps)projects[0].workPackages=wps;
     activeWpId=projects[0].workPackages[0]?.id||null;
   }else{
-    /* No projects in DB - create sample */
     allData={projects:[createBlankProject('RN 9000','Kovačka linija')]};
     activeProjectId=allData.projects[0].id;activeWpId=allData.projects[0].workPackages[0].id;
-    if(canEdit()){await saveProjectToDb(allData.projects[0]);for(const wp of allData.projects[0].workPackages)await saveWorkPackageToDb(wp,allData.projects[0].id);}
   }
-  /* Load role after activeProjectId is known (global or project-specific). */
-  currentRole=await loadUserRoleFromDb();
+  currentRole=effectiveRoleFromMatches(roleMatches);
+  if(!(projects&&projects.length>0)&&canEdit()){
+    await saveProjectToDb(allData.projects[0]);for(const wp of allData.projects[0].workPackages)await saveWorkPackageToDb(wp,allData.projects[0].id);
+  }
   updateAuthUI();
   cacheToLocal();buildProjectSelector();buildWpTabs();render();
   showToast('🌐 Online — '+currentUser.email);
