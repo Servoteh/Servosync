@@ -923,19 +923,36 @@ async function loadAllProjectData(projectId){
 async function loadUserRoleMatchesFromDb(){
   if(!currentUser){lastUserRolesQueryFailed=false;return[];}
   lastUserRolesQueryFailed=false;
-  const email=String(currentUser.email||'').trim().toLowerCase();
-  const path='user_roles?is_active=eq.true&email=eq.'+encodeURIComponent(email)+'&select=email,role,project_id';
-  const data=await sbReq(path);
-  if(data===null){
-    lastUserRolesQueryFailed=true;
-    console.error('[user_roles] Query failed, was blocked, or returned invalid JSON. Role will fall back to viewer. See SB err log above; check RLS SELECT on user_roles.',{email,path});
-    return[];
+  const emailNorm=String(currentUser.email||'').trim().toLowerCase();
+  const emailRaw=String(currentUser.emailRaw||'').trim();
+  const hasLikeWild=emailNorm.includes('%')||emailNorm.includes('_');
+  const filters=[];
+  filters.push(hasLikeWild?('email=eq.'+encodeURIComponent(emailNorm)):('email=ilike.'+encodeURIComponent(emailNorm)));
+  if(emailRaw&&(emailRaw.toLowerCase()!==emailNorm||emailRaw!==emailNorm))filters.push('email=eq.'+encodeURIComponent(emailRaw));
+  let collected=[];
+  for(let fi=0;fi<filters.length;fi++){
+    const path='user_roles?is_active=eq.true&'+filters[fi]+'&select=email,role,project_id';
+    const data=await sbReq(path);
+    if(data===null){
+      lastUserRolesQueryFailed=true;
+      console.error('[user_roles] Query failed, was blocked, or returned invalid JSON. Role will fall back to viewer. See SB err log above.',{emailNorm,emailRaw,path});
+      return[];
+    }
+    if(!Array.isArray(data)){
+      console.error('[user_roles] Expected array from PostgREST, got:',{emailNorm,data});
+      return[];
+    }
+    collected=collected.concat(data);
+    if(collected.length>0)break;
   }
-  if(!Array.isArray(data)){
-    console.error('[user_roles] Expected array from PostgREST, got:',{email,data});
-    return[];
-  }
-  return data.map(r=>({...r,email:String(r.email||'').trim().toLowerCase(),role:String(r.role||'').trim().toLowerCase()}));
+  const normRow=r=>({...r,email:String(r.email||'').trim().toLowerCase(),role:String(r.role||'').trim().toLowerCase()});
+  const seen=new Set();
+  return collected.map(normRow).filter(r=>{
+    const k=r.email+'|'+r.role+'|'+String(r.project_id??'');
+    if(seen.has(k))return false;
+    seen.add(k);
+    return true;
+  });
 }
 /** PM ili LeadPM na bilo kom redu = ista prava na sve projekte; inače viewer. */
 function effectiveRoleFromMatches(matches){
@@ -1015,7 +1032,7 @@ async function doLogin(){
     const r=await fetch(supaUrl+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json','apikey':supaKey},body:JSON.stringify({email,password:pass})});
     const d=await r.json();
     if(d.error){msg.innerHTML='<span class="auth-err">'+escHtml(d.error_description||d.error)+'</span>';return;}
-    currentUser={email:(d.user.email||email).toLowerCase(),id:d.user.id,_token:d.access_token};
+    currentUser={email:(d.user.email||email).toLowerCase(),emailRaw:String(d.user?.email||email||'').trim(),id:d.user.id,_token:d.access_token};
     isOnline=true;
     persistAuthSession({access_token:d.access_token,refresh_token:d.refresh_token,user:d.user});
     await initAfterAuth();
@@ -1056,7 +1073,7 @@ async function restoreSession(){
       user=await userRes.json();
     }
     if(!user?.email||!accessToken)throw new Error('invalid_session');
-    currentUser={email:(user.email||'').toLowerCase(),id:user.id,_token:accessToken};
+    currentUser={email:(user.email||'').toLowerCase(),emailRaw:String(user?.email||'').trim(),id:user.id,_token:accessToken};
     isOnline=true;
     await initAfterAuth();
     return true;
@@ -1075,10 +1092,10 @@ async function initAfterAuth(){
     if(lastUserRolesQueryFailed){
       console.error('[user_roles] Request did not succeed; effective role may be viewer until the API works. This is not the same as “no row in DB”.');
     }else if(roleMatches.length===0){
-      console.warn('No user_roles rows visible for logged-in user. Either no row for this email in the table, or Supabase RLS is hiding them (check SELECT policies on user_roles).',{email:String(currentUser.email||'').trim().toLowerCase()});
+      console.warn('No user_roles rows visible for logged-in user. Either no row for this email in the table, or Supabase RLS is hiding them (check SELECT policies on user_roles).',{emailNorm:String(currentUser.email||'').trim().toLowerCase(),emailRaw:currentUser.emailRaw});
     }
   }
-  console.log('AUTH DEBUG',{email:currentUser?.email,roleMatches,effectiveRole:effectiveRoleFromMatches(roleMatches)});
+  console.log('AUTH DEBUG',{email:currentUser?.email,emailRaw:currentUser?.emailRaw,roleMatches,effectiveRole:effectiveRoleFromMatches(roleMatches)});
   const projects=await loadProjectsFromDb();
   if(projects&&projects.length>0){
     allData.projects=projects;
