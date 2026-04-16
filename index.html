@@ -932,6 +932,8 @@ async function loadUserRoleMatchesFromDb(){
   let collected=[];
   for(let fi=0;fi<filters.length;fi++){
     const path='user_roles?is_active=eq.true&'+filters[fi]+'&select=email,role,project_id';
+    console.log('USER ROLE QUERY PATH',path);
+    console.log('USER ROLE QUERY EMAIL',{emailNorm,emailRaw,filterIndex:fi});
     const data=await sbReq(path);
     if(data===null){
       lastUserRolesQueryFailed=true;
@@ -942,6 +944,7 @@ async function loadUserRoleMatchesFromDb(){
       console.error('[user_roles] Expected array from PostgREST, got:',{emailNorm,data});
       return[];
     }
+    console.log('USER ROLE RAW RESPONSE',data);
     collected=collected.concat(data);
     if(collected.length>0)break;
   }
@@ -963,6 +966,13 @@ function effectiveRoleFromMatches(matches){
   if(normalized.some(r=>r.role==='viewer'))return 'viewer';
   console.warn('Unknown roles found in user_roles:',normalized);
   return 'viewer';
+}
+
+/** TEMP DEBUG: bez email filtera — proverava da li JWT korisnik uopšte vidi `user_roles` (RLS). Ukloni posle dijagnostike. */
+async function debugLoadAllUserRoles(){
+  const data=await sbReq('user_roles?select=email,role,project_id,is_active');
+  console.log('DEBUG ALL USER ROLES',data);
+  return data;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1087,7 +1097,13 @@ async function restoreSession(){
 }
 async function initAfterAuth(){
   document.getElementById('authOverlay').classList.add('hidden');
+  console.log('CURRENT USER RAW',currentUser);
+  console.log('CURRENT USER EMAIL NORMALIZED',String(currentUser?.email||'').trim().toLowerCase());
   const roleMatches=await loadUserRoleMatchesFromDb();
+  await debugLoadAllUserRoles();
+  /* Frontend role resolution is OK.
+     If user is still viewer, the likely cause is Supabase RLS or missing/hidden rows in user_roles.
+     Compare USER ROLE QUERY logs + DEBUG ALL USER ROLES with sql/diagnose_user_roles.sql in Supabase SQL editor. */
   if(currentUser){
     if(lastUserRolesQueryFailed){
       console.error('[user_roles] Request did not succeed; effective role may be viewer until the API works. This is not the same as “no row in DB”.');
