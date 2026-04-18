@@ -145,10 +145,24 @@ export const KADR_CON_TYPE_LABELS = Object.freeze({
   praksa: 'Stručna praksa',
 });
 
-/* ── Supabase config (iz Vite env vars) ── */
+/* ── Supabase config (iz Vite env vars) ──
+ *
+ * DEFENZIVNO čišćenje vrednosti — Cloudflare Pages UI ponekad ostavi
+ * trailing whitespace ili newline kad korisnik paste-uje URL/anon key.
+ * Bez `.trim()` browser pokuša da reši `xyz.supabase.co%20` (razmak je
+ * URL-encoded kao %20) → ERR_NAME_NOT_RESOLVED. Skidamo i trailing `/`
+ * jer `sbReq()` već dodaje vodeći `/` na rest path-u.
+ */
+function _cleanEnvUrl(v) {
+  return String(v || '').trim().replace(/\/+$/, '');
+}
+function _cleanEnvKey(v) {
+  return String(v || '').trim();
+}
+
 export const SUPABASE_CONFIG = Object.freeze({
-  url: import.meta.env.VITE_SUPABASE_URL || '',
-  anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+  url: _cleanEnvUrl(import.meta.env.VITE_SUPABASE_URL),
+  anonKey: _cleanEnvKey(import.meta.env.VITE_SUPABASE_ANON_KEY),
   reminderEndpoint: '/functions/v1/send-reminders',
 });
 
