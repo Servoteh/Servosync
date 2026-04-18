@@ -16,21 +16,16 @@
  * u F5.5. Dotada koristimo native <input type="date">.
  */
 
-import { escHtml, showToast } from '../../lib/dom.js';
+import { escHtml } from '../../lib/dom.js';
 import { canEdit } from '../../state/auth.js';
 import {
   planMontazeState,
-  getActiveProject,
   getActiveWP,
   getActivePhases,
   getProjectLocations,
   getLocationColor,
   ENGINEERS,
   VODJA,
-  addEngineerName,
-  addLeadName,
-  createBlankPhase,
-  persistState,
 } from '../../state/planMontaze.js';
 import {
   STATUSES,
@@ -41,21 +36,22 @@ import {
 import {
   calcDuration,
   dayDiffFromToday,
-  formatDate,
-  parseDateLocal,
 } from '../../lib/date.js';
 import {
   calcReadiness,
   calcRisk,
-  applyBusinessRules,
   statusClass,
   normalizePhaseType,
 } from '../../lib/phase.js';
 import {
-  queuePhaseSaveByIndex,
-  queueCurrentWpSync,
-  deletePhaseAndPersist,
-} from '../../services/plan.js';
+  updatePhaseField,
+  handlePersonChange,
+  updateCheck,
+  togglePhaseType,
+  moveRow,
+  deleteRow,
+  addPhaseFromInput,
+} from './planActions.js';
 
 let _onChangeRoot = null;
 
@@ -439,7 +435,7 @@ function _rerenderTbody(root) {
   _wireTbody(root);
 }
 
-/* ── INTERNAL: row-level handlers ────────────────────────────────────── */
+/* ── INTERNAL: row-level handlers (delegiraju na planActions.js) ─────── */
 
 function _wireTbody(root) {
   const tbody = root.querySelector('#planTableBody');
@@ -458,7 +454,8 @@ function _wireTbody(root) {
       const field = el.dataset.field;
       let val = el.value;
       if (field === 'status' || field === 'pct') val = parseInt(val, 10);
-      _updatePhaseField(i, field, val);
+      updatePhaseField(i, field, val);
+      _onChangeRoot?.();
     });
   });
 
@@ -469,7 +466,8 @@ function _wireTbody(root) {
       const i = Number(tr?.dataset.ri);
       if (Number.isNaN(i)) return;
       const field = el.dataset.fieldPerson;
-      _handlePersonChange(el, i, field);
+      handlePersonChange(el, i, field);
+      _onChangeRoot?.();
     });
   });
 
@@ -479,7 +477,8 @@ function _wireTbody(root) {
       const i = Number(btn.dataset.checkI);
       const ci = Number(btn.dataset.checkCi);
       const next = btn.dataset.checkNext === '1';
-      _updateCheck(i, ci, next);
+      updateCheck(i, ci, next);
+      _onChangeRoot?.();
     });
   });
 
@@ -487,7 +486,8 @@ function _wireTbody(root) {
   tbody.querySelectorAll('[data-toggle-type]').forEach(btn => {
     btn.addEventListener('click', () => {
       const i = Number(btn.dataset.toggleType);
-      _togglePhaseType(i);
+      togglePhaseType(i);
+      _onChangeRoot?.();
     });
   });
 
@@ -496,110 +496,14 @@ function _wireTbody(root) {
     btn.addEventListener('click', () => {
       const action = btn.dataset.rowAction;
       const i = Number(btn.dataset.ri);
-      if (action === 'up') _moveRow(i, -1);
-      else if (action === 'down') _moveRow(i, 1);
-      else if (action === 'del') _deleteRow(i);
+      if (action === 'up') moveRow(i, -1);
+      else if (action === 'down') moveRow(i, 1);
+      else if (action === 'del') deleteRow(i);
+      _onChangeRoot?.();
     });
   });
 }
 
-function _updatePhaseField(i, field, value) {
-  if (!canEdit()) return;
-  const row = getActivePhases()[i];
-  if (!row) return;
-  if (field === 'status' && value === 3 && !row.blocker?.trim()) {
-    showToast('⚠ Upiši blokator pre "Na čekanju"');
-    _onChangeRoot?.();
-    return;
-  }
-  row[field] = value;
-  applyBusinessRules(row);
-  persistState();
-  queuePhaseSaveByIndex(i);
-  _onChangeRoot?.();
-}
-
-function _handlePersonChange(el, i, field) {
-  const row = getActivePhases()[i];
-  if (!row) return;
-  if (el.value === '__add__') {
-    const kind = field === 'engineer' ? 'odg. inženjera' : 'vođu montaže';
-    const raw = prompt('Unesi ime novog ' + kind + ':', '');
-    const name = String(raw || '').trim();
-    if (!name) {
-      el.value = row[field] || '';
-      return;
-    }
-    const added = field === 'engineer' ? addEngineerName(name) : addLeadName(name);
-    if (added) {
-      _updatePhaseField(i, field, added);
-      showToast('✅ ' + kind + ' dodato');
-    } else {
-      el.value = row[field] || '';
-    }
-    return;
-  }
-  _updatePhaseField(i, field, el.value);
-}
-
-function _updateCheck(i, ci, value) {
-  if (!canEdit()) return;
-  const row = getActivePhases()[i];
-  if (!row) return;
-  row.checks[ci] = !!value;
-  persistState();
-  queuePhaseSaveByIndex(i);
-  _onChangeRoot?.();
-}
-
-function _togglePhaseType(i) {
-  if (!canEdit()) return;
-  const row = getActivePhases()[i];
-  if (!row) return;
-  row.type = normalizePhaseType(row.type) === 'mechanical' ? 'electrical' : 'mechanical';
-  persistState();
-  queuePhaseSaveByIndex(i);
-  _onChangeRoot?.();
-}
-
-function _moveRow(i, dir) {
-  if (!canEdit()) { showToast('⚠ Pregled — nema izmena'); return; }
-  const phases = getActivePhases();
-  const j = i + dir;
-  if (j < 0 || j >= phases.length) return;
-  [phases[i], phases[j]] = [phases[j], phases[i]];
-  planMontazeState.filteredIndices = null;
-  persistState();
-  queueCurrentWpSync();
-  _onChangeRoot?.();
-}
-
-function _deleteRow(i) {
-  if (!canEdit()) { showToast('⚠ Pregled — nema izmena'); return; }
-  const phases = getActivePhases();
-  const ph = phases[i];
-  if (!ph) return;
-  if (!confirm(`Obriši "${ph.name}"?`)) return;
-  const deletedId = ph.id;
-  phases.splice(i, 1);
-  planMontazeState.filteredIndices = null;
-  persistState();
-  if (deletedId) deletePhaseAndPersist(deletedId);
-  queueCurrentWpSync();
-  _onChangeRoot?.();
-}
-
 function _onAddPhaseClick() {
-  if (!canEdit()) { showToast('⚠ Pregled — nema izmena'); return; }
-  const wp = getActiveWP();
-  if (!wp) { showToast('⚠ Nema aktivne pozicije'); return; }
-  const inp = document.querySelector('#newPhaseInput');
-  const name = String(inp?.value || '').trim();
-  if (!name) { showToast('⚠ Unesi naziv'); inp?.focus(); return; }
-  wp.phases.push(createBlankPhase(name, wp));
-  if (inp) inp.value = '';
-  persistState();
-  queueCurrentWpSync();
-  _onChangeRoot?.();
-  showToast('✅ Faza dodata');
+  if (addPhaseFromInput()) _onChangeRoot?.();
 }

@@ -2327,3 +2327,16 @@ body.module-plan > .filter-bar { display:none !important; }
 .plan-body .reminder-zone { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
 .plan-body .reminder-zone:empty { display:none; }
 
+/* Mobilne kartice — hide na desktopu, prikazi na mobile, sakrij desktop tabelu */
+.plan-body .mobile-cards { display:none; }
+.plan-body .m-empty { padding:18px; text-align:center; color:var(--text3); font-size:12px; }
+@media (max-width: 767px) {
+  .plan-body .plan-table-wrap { display:none; }
+  .plan-body .mobile-cards { display:block; }
+  .plan-body .filter-bar { padding:8px; gap:6px; }
+  .plan-body .fb-field { min-width:120px; flex:1 1 45%; }
+  .plan-body .fb-actions { width:100%; justify-content:space-between; }
+  .plan-body .add-phase-bar { flex-direction:column; }
+  .plan-body .add-phase-bar input, .plan-body .add-phase-bar .btn { width:100%; }
+}
+

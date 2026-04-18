@@ -33,6 +33,7 @@ import { planHeaderHtml, viewTabsHtml } from './shared.js';
 import { projectBarHtml, wpTabsHtml, wireProjectBar } from './projectBar.js';
 import { openProjectMetaModal, openWpMetaModal } from './metaModals.js';
 import { planSectionHtml, wirePlanSection } from './planTable.js';
+import { mobileCardsHtml, wireMobileCards } from './mobileCards.js';
 import { reminderZoneHtml } from './reminderZone.js';
 
 let _mountEl = null;
@@ -108,7 +109,9 @@ function _wireBody() {
   const body = _mountEl.querySelector('#planBody');
   if (!body) return;
   if (planMontazeState.activeView === 'plan') {
-    wirePlanSection(body, { onChange: () => _renderShell() });
+    const onChange = () => _renderShell();
+    wirePlanSection(body, { onChange });
+    wireMobileCards(body, { onChange });
   }
 }
 
@@ -128,6 +131,7 @@ function _planBodyHtml() {
     return `
       ${reminderZoneHtml()}
       ${planSectionHtml()}
+      ${mobileCardsHtml()}
     `;
   }
   if (view === 'gantt') {
