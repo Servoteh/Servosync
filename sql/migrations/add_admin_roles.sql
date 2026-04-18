@@ -147,42 +147,58 @@ WHERE lower(ur.email) = lower(v.email)
 -- 7) RLS politike ---------------------------------------------------------
 --    Čitaju: svoj red ILI bilo šta ako si aktivan admin.
 --    Pišu (INSERT/UPDATE/DELETE): samo aktivan admin.
+--
+--    VAŽNO: Policy ne sme direktno da SELECT-uje user_roles iz svog tela
+--    (Postgres detektuje infinite recursion). Zato koristimo
+--    SECURITY DEFINER helper public.current_user_is_admin() koji bypass-uje
+--    RLS unutar svog tela. Vidi i sql/migrations/fix_user_roles_rls_recursion.sql
 ALTER TABLE user_roles ENABLE ROW LEVEL SECURITY;
 
+-- Helper: da li je trenutni JWT user aktivan admin?
+CREATE OR REPLACE FUNCTION public.current_user_is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE LOWER(email) = LOWER(COALESCE(auth.jwt() ->> 'email', ''))
+      AND role = 'admin'
+      AND is_active = TRUE
+  );
+$$;
+REVOKE ALL    ON FUNCTION public.current_user_is_admin() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.current_user_is_admin() TO   authenticated;
+GRANT EXECUTE ON FUNCTION public.current_user_is_admin() TO   anon;
+
+-- Skini eventualne stare/rekurzivne politike
 DROP POLICY IF EXISTS "user_roles_read_own_or_admin" ON user_roles;
-CREATE POLICY "user_roles_read_own_or_admin" ON user_roles
+DROP POLICY IF EXISTS "user_roles_read_self"         ON user_roles;
+DROP POLICY IF EXISTS "user_roles_read_admin_all"    ON user_roles;
+DROP POLICY IF EXISTS "user_roles_admin_write"       ON user_roles;
+
+-- SELECT: svako vidi SVOJ red
+CREATE POLICY "user_roles_read_self" ON user_roles
   FOR SELECT
   TO authenticated
   USING (
     LOWER(email) = LOWER(COALESCE(auth.jwt() ->> 'email', ''))
-    OR EXISTS (
-      SELECT 1 FROM user_roles ur
-      WHERE LOWER(ur.email) = LOWER(COALESCE(auth.jwt() ->> 'email', ''))
-        AND ur.role = 'admin'
-        AND ur.is_active = TRUE
-    )
   );
 
-DROP POLICY IF EXISTS "user_roles_admin_write" ON user_roles;
+-- SELECT: admin vidi sve (preko SECURITY DEFINER helper-a → bez rekurzije)
+CREATE POLICY "user_roles_read_admin_all" ON user_roles
+  FOR SELECT
+  TO authenticated
+  USING ( public.current_user_is_admin() );
+
+-- INSERT/UPDATE/DELETE: samo aktivan admin
 CREATE POLICY "user_roles_admin_write" ON user_roles
   FOR ALL
   TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles ur
-      WHERE LOWER(ur.email) = LOWER(COALESCE(auth.jwt() ->> 'email', ''))
-        AND ur.role = 'admin'
-        AND ur.is_active = TRUE
-    )
-  )
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM user_roles ur
-      WHERE LOWER(ur.email) = LOWER(COALESCE(auth.jwt() ->> 'email', ''))
-        AND ur.role = 'admin'
-        AND ur.is_active = TRUE
-    )
-  );
+  USING      ( public.current_user_is_admin() )
+  WITH CHECK ( public.current_user_is_admin() );
 
 -- 8) Verifikacija ---------------------------------------------------------
 -- SELECT email, role, full_name, team, is_active, must_change_password
