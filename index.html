@@ -1268,6 +1268,41 @@ body.module-kadrovska > .legend,
 body.module-kadrovska > .reminder-zone,
 body.module-kadrovska > .filter-bar { display:none !important; }
 
+/* ═══ PODEŠAVANJA MODULE ═══ */
+body:not(.module-settings) #module-settings { display:none !important; }
+body.module-settings > .header,
+body.module-settings > .project-bar,
+body.module-settings > .project-meta-strip,
+body.module-settings > .wp-tabs,
+body.module-settings > .print-only,
+body.module-settings > .main,
+body.module-settings > .view-section,
+body.module-settings > .add-phase-bar,
+body.module-settings > .legend,
+body.module-settings > .reminder-zone,
+body.module-settings > .filter-bar { display:none !important; }
+/* sakrij i Kadrovska shell ako Settings je aktivan */
+body.module-settings > #module-kadrovska { display:none !important; }
+body.module-kadrovska > #module-settings { display:none !important; }
+
+/* Role badge boje */
+.role-indicator.role-admin   { background:color-mix(in srgb, #9B51E0 22%, var(--surface)); color:#9B51E0; border:1px solid color-mix(in srgb, #9B51E0 40%, transparent); }
+.role-indicator.role-leadpm  { background:color-mix(in srgb, var(--accent) 22%, var(--surface)); color:var(--accent); border:1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.role-indicator.role-pm      { background:color-mix(in srgb, #2D9CDB 22%, var(--surface)); color:#2D9CDB; border:1px solid color-mix(in srgb, #2D9CDB 40%, transparent); }
+.role-indicator.role-hr      { background:color-mix(in srgb, #27AE60 22%, var(--surface)); color:#27AE60; border:1px solid color-mix(in srgb, #27AE60 40%, transparent); }
+.role-indicator.role-viewer  { background:var(--surface3); color:var(--text2); border:1px solid var(--border2); }
+
+/* User row badge u tabeli */
+.user-role-badge { display:inline-block; padding:3px 9px; border-radius:5px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; font-family:var(--mono); }
+.user-role-badge.role-admin  { background:color-mix(in srgb, #9B51E0 18%, transparent); color:#9B51E0; }
+.user-role-badge.role-leadpm { background:color-mix(in srgb, var(--accent) 18%, transparent); color:var(--accent); }
+.user-role-badge.role-pm     { background:color-mix(in srgb, #2D9CDB 18%, transparent); color:#2D9CDB; }
+.user-role-badge.role-hr     { background:color-mix(in srgb, #27AE60 18%, transparent); color:#27AE60; }
+.user-role-badge.role-viewer { background:var(--surface3); color:var(--text2); }
+
+/* Hub kartica koja zahteva admin (sakrij za non-admin kroz JS dodavanjem klase .requires-admin) */
+.hub-card.requires-admin[data-hidden="1"] { display:none !important; }
+
 .kadrovska-section {
   position:relative;
   min-height:100vh;
@@ -2427,13 +2462,13 @@ td.td-loc .loc-select { border-left: 3px solid transparent; }
         </div>
       </button>
 
-      <button type="button" class="hub-card is-disabled" onclick="showToast('⚙ Podešavanja — u pripremi')" aria-disabled="true">
+      <button type="button" class="hub-card requires-admin" id="hubCardSettings" data-hidden="1" onclick="enterModule('podesavanja')" aria-label="Otvori Podešavanja">
         <div class="hub-card-icon" aria-hidden="true">⚙</div>
         <div class="hub-card-title">Podešavanja</div>
-        <div class="hub-card-desc">Korisnici, uloge, lokacije, matični podaci i integracije sa ostalim Servoteh sistemima.</div>
+        <div class="hub-card-desc">Korisnici, uloge, matični podaci i integracije sa ostalim Servoteh sistemima.</div>
         <div class="hub-card-footer">
-          <span class="hub-card-cta">Uskoro</span>
-          <span class="hub-card-badge">U pripremi</span>
+          <span class="hub-card-cta">Otvori →</span>
+          <span class="hub-card-badge badge-active">Aktivno</span>
         </div>
       </button>
     </div>
@@ -2704,6 +2739,167 @@ td.td-loc .loc-select { border-left: 3px solid transparent; }
     </main>
   </div>
 </section>
+
+<!-- Module: Podešavanja -->
+<section id="module-settings" class="kadrovska-section" aria-label="Modul Podešavanja">
+  <header class="kadrovska-header">
+    <div class="kadrovska-header-left">
+      <button class="btn-hub-back" onclick="openModuleHub()" title="Nazad na listu modula" aria-label="Nazad na module">
+        <span class="back-icon" aria-hidden="true">←</span>
+        <span>Moduli</span>
+      </button>
+      <div class="kadrovska-title">
+        <span class="ktitle-mark" aria-hidden="true">⚙</span>
+        <span>Podešavanja</span>
+      </div>
+    </div>
+    <div class="kadrovska-header-right">
+      <button class="theme-toggle" onclick="toggleTheme()" title="Promeni temu" aria-label="Promeni temu">
+        <span class="theme-icon-dark">🌙</span>
+        <span class="theme-icon-light">☀️</span>
+      </button>
+      <span class="role-indicator role-viewer" id="settingsRoleLabel">—</span>
+      <button class="hub-logout" onclick="doLogout()">Odjavi se</button>
+    </div>
+  </header>
+
+  <div class="kadrovska-tabs" role="tablist" aria-label="Podešavanja - sekcije">
+    <button class="kadrovska-tab active" role="tab" aria-selected="true" data-set-tab="users" onclick="switchSettingsTab('users')">
+      Korisnici <span class="kadr-tab-badge" id="setTabCountUsers">0</span>
+    </button>
+    <button class="kadrovska-tab" role="tab" aria-selected="false" data-set-tab="masters" onclick="switchSettingsTab('masters')">
+      Matični podaci
+    </button>
+    <button class="kadrovska-tab" role="tab" aria-selected="false" data-set-tab="system" onclick="switchSettingsTab('system')">
+      Sistem
+    </button>
+  </div>
+
+  <!-- ── TAB: KORISNICI ───────────────────────────────── -->
+  <div class="kadr-panel active" id="setPanel-users" role="tabpanel" aria-label="Korisnici">
+    <div class="kadr-summary-strip" id="usersSummary"></div>
+    <div class="kadrovska-toolbar">
+      <input type="text" class="kadrovska-search" id="usersSearch" placeholder="Pretraga po imenu, email-u, timu…" oninput="renderUsers()">
+      <select class="kadrovska-filter" id="usersRoleFilter" onchange="renderUsers()">
+        <option value="">Sve uloge</option>
+        <option value="admin">Admin</option>
+        <option value="leadpm">Lead PM</option>
+        <option value="pm">PM</option>
+        <option value="hr">HR / Kadrovska</option>
+        <option value="viewer">Viewer</option>
+      </select>
+      <select class="kadrovska-filter" id="usersStatusFilter" onchange="renderUsers()">
+        <option value="">Svi statusi</option>
+        <option value="active">Aktivni</option>
+        <option value="inactive">Neaktivni</option>
+      </select>
+      <div class="kadrovska-toolbar-spacer"></div>
+      <span class="kadrovska-count" id="usersCount">0 korisnika</span>
+      <button class="btn btn-primary" id="usersAddBtn" onclick="openUserModal()">+ Dodeli ulogu</button>
+    </div>
+    <main class="kadrovska-main">
+      <table class="kadrovska-table" id="usersTable">
+        <thead>
+          <tr>
+            <th>Ime i prezime</th>
+            <th>Email</th>
+            <th>Uloga</th>
+            <th class="col-hide-sm">Tim</th>
+            <th class="col-hide-sm">Projekat</th>
+            <th>Status</th>
+            <th class="col-hide-sm">Dodato</th>
+            <th class="col-actions">Akcije</th>
+          </tr>
+        </thead>
+        <tbody id="usersTbody"></tbody>
+      </table>
+      <div class="kadrovska-empty" id="usersEmpty" style="display:none;margin-top:16px;">
+        <div class="kadrovska-empty-title">Nema dodeljenih uloga</div>
+        <div>Dodaj prvu preko dugmeta <strong>+ Dodeli ulogu</strong>. Email mora pripadati postojećem nalogu u Supabase Auth.</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ── TAB: MATIČNI PODACI (placeholder) ───────────── -->
+  <div class="kadr-panel" id="setPanel-masters" role="tabpanel" aria-label="Matični podaci">
+    <main class="kadrovska-main">
+      <div class="kadrovska-empty" style="margin-top:30px;">
+        <div class="kadrovska-empty-title">Matični podaci — u izradi</div>
+        <div>Lokacije, odeljenja, timovi, kategorije projekata. Biće dostupno u sledećoj fazi.</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ── TAB: SISTEM (placeholder) ───────────────────── -->
+  <div class="kadr-panel" id="setPanel-system" role="tabpanel" aria-label="Sistem">
+    <main class="kadrovska-main">
+      <div class="kadrovska-empty" style="margin-top:30px;">
+        <div class="kadrovska-empty-title">Sistem — u izradi</div>
+        <div>Verzija aplikacije, status Supabase konekcije, audit log. Biće dostupno u sledećoj fazi.</div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- User role modal (new / edit) -->
+<div class="emp-modal-overlay hidden" id="userModal" role="dialog" aria-labelledby="userModalTitle" aria-modal="true">
+  <div class="emp-modal">
+    <div class="emp-modal-title" id="userModalTitle">Dodeli ulogu</div>
+    <div class="emp-modal-subtitle">
+      Email mora pripadati postojećem nalogu u <strong>Supabase Auth</strong>.
+      Nove naloge (email + lozinka) kreira Admin ručno u Supabase Dashboard → Authentication → Users.
+    </div>
+    <div class="emp-modal-err" id="userModalErr"></div>
+    <form id="userForm" onsubmit="event.preventDefault(); submitUserForm();">
+      <input type="hidden" id="userId" value="">
+      <div class="emp-form-grid">
+        <div class="emp-field col-full">
+          <label for="userEmail">Email *</label>
+          <input type="email" id="userEmail" required maxlength="120" placeholder="ime.prezime@servoteh.com" autocomplete="off">
+        </div>
+        <div class="emp-field">
+          <label for="userFullName">Ime i prezime</label>
+          <input type="text" id="userFullName" maxlength="120" autocomplete="off">
+        </div>
+        <div class="emp-field">
+          <label for="userTeam">Tim / Odeljenje</label>
+          <input type="text" id="userTeam" list="userTeamList" maxlength="80" autocomplete="off">
+          <datalist id="userTeamList">
+            <option value="Uprava"></option>
+            <option value="Administracija"></option>
+            <option value="Montaža"></option>
+            <option value="Projektovanje"></option>
+            <option value="Proizvodnja"></option>
+            <option value="Elektro"></option>
+            <option value="Magacin"></option>
+          </datalist>
+        </div>
+        <div class="emp-field">
+          <label for="userRole">Uloga *</label>
+          <select id="userRole" required>
+            <option value="viewer">Viewer (samo pregled)</option>
+            <option value="hr">HR / Kadrovska</option>
+            <option value="pm">PM</option>
+            <option value="leadpm">Lead PM</option>
+            <option value="admin">Admin (sve)</option>
+          </select>
+        </div>
+        <div class="emp-field">
+          <label for="userProject">Projekat (opciono)</label>
+          <select id="userProject"><option value="">Sve / globalno</option></select>
+        </div>
+        <div class="emp-field emp-field-check">
+          <input type="checkbox" id="userIsActive" checked>
+          <label for="userIsActive">Aktivan korisnik</label>
+        </div>
+      </div>
+      <div class="emp-modal-actions">
+        <button type="button" class="btn" onclick="closeUserModal()">Otkaži</button>
+        <button type="submit" class="btn btn-primary" id="userSubmitBtn">Sačuvaj</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- Employee modal (new / edit) -->
 <div class="emp-modal-overlay hidden" id="empModal" role="dialog" aria-labelledby="empModalTitle" aria-modal="true">
@@ -3012,7 +3208,7 @@ const SUPABASE_CONFIG={
 const today=new Date();today.setHours(0,0,0,0);
 let supaUrl=SUPABASE_CONFIG.url,supaKey=SUPABASE_CONFIG.anonKey,isOnline=false;
 let currentUser=null; // { email, id }
-let currentRole='viewer'; // 'pm'|'leadpm'|'viewer'
+let currentRole='viewer'; // 'admin'|'leadpm'|'pm'|'hr'|'viewer'
 let allData={projects:[]};
 let activeProjectId=null,activeWpId=null,activeView='plan',filteredIndices=null;
 let projectSaveTimer=null;
@@ -3092,8 +3288,13 @@ function toIsoDate(d){const dt=parseDateLocal(d);return dt?dateToYMD(dt):null;}
 function calcDuration(s,e){const a=parseDateLocal(s),b=parseDateLocal(e);if(!a||!b)return null;const d=Math.round((b-a)/864e5);return d<0?-1:d+1;}
 function dayDiffFromToday(s){const d=parseDateLocal(s);if(!d)return null;return Math.round((d-today)/864e5);}
 function statusClass(s){return['st-0','st-1','st-2','st-3'][s]||'st-0';}
-function canEdit(){return currentRole==='pm'||currentRole==='leadpm';}
+function canEdit(){return ['admin','leadpm','pm'].includes(currentRole);}
 function isLeadPM(){return currentRole==='leadpm';}
+function isAdmin(){return currentRole==='admin';}
+function isHR(){return currentRole==='hr'||isAdmin();}
+function canManageUsers(){return isAdmin();}
+/* Kadrovska je pristupna admin/HR/leadpm/pm — view samo za viewer */
+function canAccessKadrovska(){return isAdmin()||isHR()||canEdit();}
 function disabledAttr(){return canEdit()?'':'disabled';}
 function getProject(){return allData.projects.find(p=>p.id===activeProjectId)||null;}
 function getWP(){const p=getProject();return p?p.workPackages.find(w=>w.id===activeWpId):null;}
@@ -3381,11 +3582,14 @@ async function loadUserRoleMatchesFromDb(){
 /** PM ili LeadPM na bilo kom redu = ista prava na sve projekte; inače viewer. */
 function effectiveRoleFromMatches(matches){
   if(!matches||matches.length===0)return 'viewer';
-  const normalized=matches.map(r=>({...r,role:String(r.role||'').trim().toLowerCase()}));
-  if(normalized.some(r=>r.role==='pm'))return 'pm';
-  if(normalized.some(r=>r.role==='leadpm'))return 'leadpm';
-  if(normalized.some(r=>r.role==='viewer'))return 'viewer';
-  console.warn('Unknown roles found in user_roles:',normalized);
+  const norm=matches.map(r=>String(r.role||'').trim().toLowerCase());
+  /* Prioritet: admin > leadpm > pm > hr > viewer */
+  if(norm.includes('admin'))  return 'admin';
+  if(norm.includes('leadpm')) return 'leadpm';
+  if(norm.includes('pm'))     return 'pm';
+  if(norm.includes('hr'))     return 'hr';
+  if(norm.includes('viewer')) return 'viewer';
+  console.warn('Unknown roles found in user_roles:',matches);
   return 'viewer';
 }
 
@@ -5186,11 +5390,343 @@ async function ensureGridReady(){
   renderGrid();
 }
 
+/* ═══════════════════════════════════════════════════════════
+   PODEŠAVANJA — KORISNICI / ULOGE
+   ═══════════════════════════════════════════════════════════ */
+const USERS_CACHE_KEY='plan_montaze_users_v1';
+const SET_TAB_KEY='plan_montaze_v51_settings_tab';
+let usersState={items:[],loaded:false};
+let activeSettingsTab='users';
+
+function _usersLoadCache(){
+  try{const r=localStorage.getItem(USERS_CACHE_KEY);return r?JSON.parse(r):[];}catch(e){return [];}
+}
+function _usersSaveCache(items){
+  try{localStorage.setItem(USERS_CACHE_KEY,JSON.stringify(items||[]));}catch(e){}
+}
+
+function mapDbUser(d){
+  return{
+    id:d.id,
+    email:String(d.email||'').toLowerCase().trim(),
+    fullName:d.full_name||'',
+    team:d.team||'',
+    role:String(d.role||'viewer').toLowerCase(),
+    projectId:d.project_id||null,
+    isActive:d.is_active!==false,
+    mustChangePassword:d.must_change_password===true,
+    createdAt:d.created_at||null,
+    updatedAt:d.updated_at||null,
+    createdBy:d.created_by||''
+  };
+}
+function buildUserPayload(u){
+  const p={
+    email:String(u.email||'').toLowerCase().trim(),
+    role:String(u.role||'viewer').toLowerCase(),
+    project_id:u.projectId||null,
+    is_active:u.isActive!==false,
+    full_name:u.fullName||'',
+    team:u.team||'',
+    updated_at:new Date().toISOString(),
+    created_by:String(currentUser?.email||'').toLowerCase()
+  };
+  if(u.id)p.id=u.id;
+  return p;
+}
+
+async function loadUsersFromDb(){
+  if(!isOnline||!hasSupabaseConfig())return null;
+  return await sbReq('user_roles?select=*&order=role.asc,email.asc');
+}
+async function saveUserToDb(u){
+  if(!canManageUsers())return null;
+  const payload=buildUserPayload(u);
+  if(u.id){
+    return await sbReq(`user_roles?id=eq.${encodeURIComponent(u.id)}`,'PATCH',payload);
+  }
+  return await sbReq('user_roles','POST',payload);
+}
+async function deleteUserRoleFromDb(id){
+  if(!canManageUsers())return false;
+  return (await sbReq(`user_roles?id=eq.${encodeURIComponent(id)}`,'DELETE'))!==null;
+}
+
+async function ensureUsersLoaded(force){
+  if(usersState.loaded&&!force)return;
+  /* Cache first for instant paint */
+  if(!usersState.items.length){
+    usersState.items=_usersLoadCache();
+  }
+  const fresh=await loadUsersFromDb();
+  if(Array.isArray(fresh)){
+    usersState.items=fresh.map(mapDbUser);
+    _usersSaveCache(usersState.items);
+  }
+  usersState.loaded=true;
+}
+
+/* ─── Render ─── */
+const ROLE_LABELS={admin:'Admin',leadpm:'Lead PM',pm:'PM',hr:'HR',viewer:'Viewer'};
+
+function renderUsers(){
+  const tbody=document.getElementById('usersTbody');
+  const empty=document.getElementById('usersEmpty');
+  const countEl=document.getElementById('usersCount');
+  const badge=document.getElementById('setTabCountUsers');
+  if(!tbody)return;
+
+  const q=String(document.getElementById('usersSearch')?.value||'').trim().toLowerCase();
+  const roleFilter=document.getElementById('usersRoleFilter')?.value||'';
+  const statusFilter=document.getElementById('usersStatusFilter')?.value||'';
+
+  let items=usersState.items.slice();
+  if(roleFilter)items=items.filter(u=>u.role===roleFilter);
+  if(statusFilter==='active')items=items.filter(u=>u.isActive);
+  else if(statusFilter==='inactive')items=items.filter(u=>!u.isActive);
+  if(q){
+    items=items.filter(u=>{
+      return [u.email,u.fullName,u.team,ROLE_LABELS[u.role]||u.role]
+        .map(v=>String(v||'').toLowerCase())
+        .some(v=>v.includes(q));
+    });
+  }
+
+  if(badge)badge.textContent=String(usersState.items.length);
+  if(countEl)countEl.textContent=items.length+' '+(items.length===1?'korisnik':'korisnika');
+
+  if(items.length===0){
+    tbody.innerHTML='';
+    if(empty)empty.style.display='block';
+    _renderUsersSummary();
+    return;
+  }
+  if(empty)empty.style.display='none';
+
+  const editable=canManageUsers();
+  const projects=Array.isArray(allData?.projects)?allData.projects:[];
+  const projName=id=>{const p=projects.find(x=>x.id===id);return p?(p.code||p.name||'—'):'—';};
+
+  tbody.innerHTML=items.map(u=>{
+    const created=u.createdAt?new Date(u.createdAt).toLocaleDateString('sr-RS'):'—';
+    const projLabel=u.projectId?projName(u.projectId):'<span style="color:var(--text3)">Sve</span>';
+    const statusBadge=u.isActive
+      ?'<span class="kadr-status-badge status-active">Aktivan</span>'
+      :'<span class="kadr-status-badge status-inactive">Neaktivan</span>';
+    const actions=editable
+      ?`<button class="kadr-action-btn" onclick="openUserModal('${escHtml(u.id)}')" title="Izmeni">✎</button>
+        <button class="kadr-action-btn kadr-action-danger" onclick="confirmDeleteUser('${escHtml(u.id)}')" title="Obriši">🗑</button>`
+      :'<span style="color:var(--text3);font-size:11px">samo Admin</span>';
+    return `<tr data-id="${escHtml(u.id)}">
+      <td>${escHtml(u.fullName||'—')}${u.mustChangePassword?' <span title="Mora promeniti lozinku" style="color:var(--accent);font-size:11px">⚠</span>':''}</td>
+      <td><span style="font-family:var(--mono);font-size:11px">${escHtml(u.email)}</span></td>
+      <td><span class="user-role-badge role-${escHtml(u.role)}">${escHtml(ROLE_LABELS[u.role]||u.role)}</span></td>
+      <td class="col-hide-sm">${escHtml(u.team||'—')}</td>
+      <td class="col-hide-sm">${projLabel}</td>
+      <td>${statusBadge}</td>
+      <td class="col-hide-sm" style="font-size:11px;color:var(--text3)">${escHtml(created)}</td>
+      <td class="col-actions">${actions}</td>
+    </tr>`;
+  }).join('');
+
+  _renderUsersSummary();
+}
+
+function _renderUsersSummary(){
+  const all=usersState.items;
+  const active=all.filter(u=>u.isActive).length;
+  const admins=all.filter(u=>u.role==='admin').length;
+  const hr=all.filter(u=>u.role==='hr').length;
+  const pms=all.filter(u=>u.role==='pm'||u.role==='leadpm').length;
+  const viewers=all.filter(u=>u.role==='viewer').length;
+  _kadrRenderSummary('usersSummary',[
+    {label:'Ukupno korisnika',value:all.length,tone:'accent'},
+    {label:'Aktivnih',value:active,tone:'ok'},
+    {label:'Admin',value:admins,tone:admins>0?'accent':'muted'},
+    {label:'HR',value:hr,tone:hr>0?'ok':'muted'},
+    {label:'PM / Lead PM',value:pms,tone:'muted'},
+    {label:'Viewer',value:viewers,tone:'muted'}
+  ]);
+}
+
+/* ─── Modal ─── */
+function _populateUserProjectSelect(selectedId){
+  const sel=document.getElementById('userProject');
+  if(!sel)return;
+  const projects=Array.isArray(allData?.projects)?allData.projects:[];
+  let html='<option value="">Sve / globalno</option>';
+  projects.slice().sort((a,b)=>String(a.code||a.name||'').localeCompare(String(b.code||b.name||''))).forEach(p=>{
+    const id=escHtml(p.id);
+    const lbl=escHtml((p.code?(p.code+' — '):'')+p.name);
+    html+=`<option value="${id}">${lbl}</option>`;
+  });
+  sel.innerHTML=html;
+  if(selectedId)sel.value=selectedId;
+}
+
+function openUserModal(id){
+  if(!canManageUsers()){showToast('⚠ Samo Admin može da menja uloge');return;}
+  const overlay=document.getElementById('userModal');
+  if(!overlay)return;
+  const titleEl=document.getElementById('userModalTitle');
+  const errEl=document.getElementById('userModalErr');
+  const idEl=document.getElementById('userId');
+  const emailEl=document.getElementById('userEmail');
+  const fnameEl=document.getElementById('userFullName');
+  const teamEl=document.getElementById('userTeam');
+  const roleEl=document.getElementById('userRole');
+  const activeEl=document.getElementById('userIsActive');
+
+  if(errEl){errEl.textContent='';errEl.style.display='none';}
+
+  if(id){
+    const u=usersState.items.find(x=>x.id===id);
+    if(!u){showToast('⚠ Korisnik nije pronađen');return;}
+    titleEl.textContent='Izmeni ulogu';
+    idEl.value=u.id;
+    emailEl.value=u.email;
+    emailEl.disabled=true;          /* email je ključ — ne menjaj */
+    fnameEl.value=u.fullName||'';
+    teamEl.value=u.team||'';
+    roleEl.value=u.role||'viewer';
+    activeEl.checked=u.isActive!==false;
+    _populateUserProjectSelect(u.projectId||'');
+  }else{
+    titleEl.textContent='Dodeli ulogu';
+    idEl.value='';
+    emailEl.value='';
+    emailEl.disabled=false;
+    fnameEl.value='';
+    teamEl.value='';
+    roleEl.value='viewer';
+    activeEl.checked=true;
+    _populateUserProjectSelect('');
+  }
+  overlay.classList.remove('hidden');
+  setTimeout(()=>{(id?fnameEl:emailEl)?.focus();},50);
+}
+function closeUserModal(){
+  const o=document.getElementById('userModal');
+  if(o)o.classList.add('hidden');
+}
+
+async function submitUserForm(){
+  if(!canManageUsers()){showToast('⚠ Samo Admin može da menja uloge');return;}
+  const errEl=document.getElementById('userModalErr');
+  const showErr=msg=>{if(errEl){errEl.textContent=msg;errEl.style.display='block';}};
+  const id=document.getElementById('userId').value||'';
+  const email=String(document.getElementById('userEmail').value||'').trim().toLowerCase();
+  const fullName=String(document.getElementById('userFullName').value||'').trim();
+  const team=String(document.getElementById('userTeam').value||'').trim();
+  const role=String(document.getElementById('userRole').value||'viewer').toLowerCase();
+  const projectId=document.getElementById('userProject').value||null;
+  const isActive=document.getElementById('userIsActive').checked;
+
+  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showErr('Neispravan email');return;}
+  if(!['admin','leadpm','pm','hr','viewer'].includes(role)){showErr('Neispravna uloga');return;}
+
+  /* Duplicate check (samo za novi unos): isti email + ista uloga + isti project */
+  if(!id){
+    const dup=usersState.items.find(u=>
+      u.email===email && u.role===role &&
+      String(u.projectId||'')===String(projectId||'')
+    );
+    if(dup){showErr('Već postoji ista uloga za ovaj email i projekat');return;}
+  }
+
+  const payload={id:id||undefined,email,fullName,team,role,projectId,isActive};
+  const btn=document.getElementById('userSubmitBtn');
+  if(btn){btn.disabled=true;btn.textContent='Snimanje…';}
+  try{
+    if(isOnline&&hasSupabaseConfig()){
+      const res=await saveUserToDb(payload);
+      if(!res){showErr('Supabase greška — proveri dozvole (admin RLS) ili konzolu');return;}
+      const saved=Array.isArray(res)?res[0]:res;
+      const mapped=saved?mapDbUser(saved):null;
+      if(mapped){
+        if(id){
+          const ix=usersState.items.findIndex(x=>x.id===id);
+          if(ix!==-1)usersState.items[ix]=mapped;
+        }else{
+          usersState.items.push(mapped);
+        }
+      }
+    }else{
+      /* Offline fallback — samo lokalno (admin promene se snimaju kad sledeći put bude online) */
+      if(id){
+        const ix=usersState.items.findIndex(x=>x.id===id);
+        if(ix!==-1)usersState.items[ix]={...usersState.items[ix],...payload};
+      }else{
+        usersState.items.push({...payload,id:'local_'+Date.now()});
+      }
+      showToast('⚠ Offline — sačuvano lokalno');
+    }
+    _usersSaveCache(usersState.items);
+    closeUserModal();
+    renderUsers();
+    showToast('✅ Sačuvano: '+email);
+  }catch(e){
+    console.error('[users] save err',e);
+    showErr('Greška — vidi konzolu');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Sačuvaj';}
+  }
+}
+
+async function confirmDeleteUser(id){
+  if(!canManageUsers()){showToast('⚠ Samo Admin');return;}
+  const u=usersState.items.find(x=>x.id===id);
+  if(!u)return;
+  if(String(u.email||'').toLowerCase()===String(currentUser?.email||'').toLowerCase()&&u.role==='admin'){
+    if(!confirm('UPOZORENJE: brišeš svoju admin ulogu! Posle toga nećeš moći da upravljaš korisnicima. Sigurno?'))return;
+  }else{
+    if(!confirm('Obrisati ulogu za '+u.email+' ('+u.role+')?'))return;
+  }
+  try{
+    if(isOnline&&hasSupabaseConfig()&&!String(id).startsWith('local_')){
+      if(!await deleteUserRoleFromDb(id)){showToast('⚠ Supabase brisanje nije uspelo');return;}
+    }
+    usersState.items=usersState.items.filter(x=>x.id!==id);
+    _usersSaveCache(usersState.items);
+    renderUsers();
+    showToast('🗑 Uloga obrisana');
+  }catch(e){console.error(e);showToast('⚠ Greška');}
+}
+
+/* ─── Tab switch ─── */
+function switchSettingsTab(tab){
+  if(!['users','masters','system'].includes(tab))tab='users';
+  activeSettingsTab=tab;
+  try{sessionStorage.setItem(SET_TAB_KEY,tab);}catch(e){}
+  document.querySelectorAll('#module-settings [data-set-tab]').forEach(btn=>{
+    const on=btn.getAttribute('data-set-tab')===tab;
+    btn.classList.toggle('active',on);
+    btn.setAttribute('aria-selected',on?'true':'false');
+  });
+  document.querySelectorAll('#module-settings .kadr-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('setPanel-'+tab)?.classList.add('active');
+  if(tab==='users'){
+    (async()=>{await ensureUsersLoaded();renderUsers();})();
+  }
+}
+
+/* ─── Hub admin gating ─── */
+function _refreshHubAdminCardVisibility(){
+  const card=document.getElementById('hubCardSettings');
+  if(!card)return;
+  if(canManageUsers()){
+    card.removeAttribute('data-hidden');
+  }else{
+    card.setAttribute('data-hidden','1');
+  }
+}
+
 /* ═══ Module hub routing ═══ */
 const MODULE_HUB_KEY='plan_montaze_v51_active_module';
 let activeModule=null;
 function _clearModuleBodyClasses(){
   document.body.classList.remove('module-kadrovska');
+  document.body.classList.remove('module-settings');
 }
 function openModuleHub(){
   activeModule=null;
@@ -5214,12 +5750,16 @@ function enterModule(name){
     // Main content is already rendered by initAfterAuth/doOfflineMode; ensure fresh render
     try{render();}catch(e){}
   }else if(name==='kadrovska'){
+    if(!canAccessKadrovska()){showToast('⚠ Nemaš dozvolu za Kadrovsku');return;}
     activeModule='kadrovska';
     try{sessionStorage.setItem(MODULE_HUB_KEY,'kadrovska');}catch(e){}
     if(hub)hub.classList.add('hidden');
     _clearModuleBodyClasses();
     document.body.classList.remove('hub-active');
     document.body.classList.add('module-kadrovska');
+    /* Update role indicator in Kadrovska header */
+    const krl=document.getElementById('kadrovskaRoleLabel');
+    if(krl){krl.className='role-indicator role-'+(currentRole||'viewer');krl.textContent=(currentRole||'viewer').toUpperCase();}
     (async()=>{
       await ensureKadrovskaLoaded(true);
       /* Preload all three phase-1 datasets in parallel so tab switches are instant */
@@ -5235,6 +5775,24 @@ function enterModule(name){
       try{const saved=sessionStorage.getItem(KADR_TAB_KEY);if(saved)last=saved;}catch(e){}
       switchKadrovskaTab(last);
     })();
+  }else if(name==='podesavanja'){
+    if(!canManageUsers()){showToast('⚠ Pristup samo za Admina');return;}
+    activeModule='podesavanja';
+    try{sessionStorage.setItem(MODULE_HUB_KEY,'podesavanja');}catch(e){}
+    if(hub)hub.classList.add('hidden');
+    _clearModuleBodyClasses();
+    document.body.classList.remove('hub-active');
+    document.body.classList.add('module-settings');
+    /* Update role indicator in Settings header */
+    const srl=document.getElementById('settingsRoleLabel');
+    if(srl){srl.className='role-indicator role-'+(currentRole||'viewer');srl.textContent=(currentRole||'viewer').toUpperCase();}
+    (async()=>{
+      await ensureUsersLoaded(true);
+      /* Restore last active settings tab (or default Korisnici) */
+      let last='users';
+      try{const saved=sessionStorage.getItem(SET_TAB_KEY);if(saved)last=saved;}catch(e){}
+      switchSettingsTab(last);
+    })();
   }else{
     // Placeholder modules — keep user on hub
     showToast('ℹ Modul "'+name+'" je u pripremi');
@@ -5244,13 +5802,19 @@ function updateHubUserInfo(){
   const em=document.getElementById('hubUserEmail');
   const rl=document.getElementById('hubUserRole');
   if(em)em.textContent=currentUser?.email||'—';
-  if(rl)rl.textContent=(currentRole||'viewer').toUpperCase();
+  if(rl){
+    rl.textContent=(currentRole||'viewer').toUpperCase();
+    rl.className='role-indicator role-'+(currentRole||'viewer');
+  }
+  /* Hide / show Settings hub card based on admin role */
+  _refreshHubAdminCardVisibility();
 }
 function restoreModuleFromSession(){
   try{
     const last=sessionStorage.getItem(MODULE_HUB_KEY);
     if(last==='plan-montaze'){enterModule('plan-montaze');return true;}
-    if(last==='kadrovska'){enterModule('kadrovska');return true;}
+    if(last==='kadrovska'&&canAccessKadrovska()){enterModule('kadrovska');return true;}
+    if(last==='podesavanja'&&canManageUsers()){enterModule('podesavanja');return true;}
   }catch(e){}
   return false;
 }
@@ -5292,11 +5856,14 @@ async function doLogout(){
   document.body.classList.remove('hub-active');
   const hub=document.getElementById('moduleHub');
   if(hub)hub.classList.add('hidden');
-  /* Close all Kadrovska modals if open */
+  /* Close all module modals if open */
   document.getElementById('empModal')?.classList.add('hidden');
   document.getElementById('absModal')?.classList.add('hidden');
   document.getElementById('whModal')?.classList.add('hidden');
   document.getElementById('conModal')?.classList.add('hidden');
+  document.getElementById('userModal')?.classList.add('hidden');
+  /* Reset users state on logout (security: do not leak across accounts) */
+  usersState={items:[],loaded:false};
   document.getElementById('authOverlay').classList.remove('hidden');
   updateAuthUI();
 }
@@ -6425,6 +6992,8 @@ document.addEventListener('keydown', function(e){
     if (wh && !wh.classList.contains('hidden')) closeWorkHourModal();
     const con = document.getElementById('conModal');
     if (con && !con.classList.contains('hidden')) closeContractModal();
+    const usr = document.getElementById('userModal');
+    if (usr && !usr.classList.contains('hidden')) closeUserModal();
   }
 });
 /* Close modals on backdrop click */
@@ -6432,6 +7001,7 @@ document.getElementById('empModal')?.addEventListener('click',function(e){ if(e.
 document.getElementById('absModal')?.addEventListener('click',function(e){ if(e.target===this)closeAbsenceModal(); });
 document.getElementById('whModal')?.addEventListener('click',function(e){ if(e.target===this)closeWorkHourModal(); });
 document.getElementById('conModal')?.addEventListener('click',function(e){ if(e.target===this)closeContractModal(); });
+document.getElementById('userModal')?.addEventListener('click',function(e){ if(e.target===this)closeUserModal(); });
 
 /* Try session restore first */
 (function init(){
