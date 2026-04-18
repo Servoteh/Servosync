@@ -19,6 +19,7 @@ import { initTheme } from '../lib/theme.js';
 import { renderLoginScreen } from './auth/loginScreen.js';
 import { renderModuleHub } from './hub/moduleHub.js';
 import { renderModulePlaceholder } from './modulePlaceholder.js';
+import { renderKadrovskaModule } from './kadrovska/index.js';
 import { getAuth, canAccessKadrovska, canManageUsers } from '../state/auth.js';
 import { resetKadrovskaState } from '../state/kadrovska.js';
 import { showToast } from '../lib/dom.js';
@@ -83,6 +84,20 @@ function showModulePlaceholder(moduleId) {
     document.body.classList.add('kadrovska-active');
   }
   setStoredModule(moduleId);
+
+  /* Faza 4: Kadrovska više nije placeholder — renderuje real modul. */
+  if (moduleId === 'kadrovska') {
+    renderKadrovskaModule(mountEl, {
+      onBackToHub: () => showHub(),
+      onLogout: () => {
+        resetKadrovskaState();
+        showLogin();
+      },
+    });
+    return;
+  }
+
+  /* Plan Montaže (F5) i Podešavanja (F5b) i dalje koriste placeholder. */
   const screen = renderModulePlaceholder({
     moduleId,
     onBack: () => showHub(),

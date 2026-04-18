@@ -20,6 +20,8 @@ export const kadrovskaState = {
   employees: [],
   loaded: false,
   _schemaSupported: true,
+  /** Trenutno aktivan tab (sync sa session storage; default 'employees'). */
+  activeTab: ssGet(SESSION_KEYS.KADR_TAB, 'employees'),
 };
 
 export const kadrAbsencesState = {
