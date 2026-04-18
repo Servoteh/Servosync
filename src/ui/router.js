@@ -21,6 +21,7 @@ import { renderModuleHub } from './hub/moduleHub.js';
 import { renderModulePlaceholder } from './modulePlaceholder.js';
 import { renderKadrovskaModule } from './kadrovska/index.js';
 import { renderPlanMontazeModule, teardownPlanMontazeModule } from './planMontaze/index.js';
+import { renderPodesavanjaModule, teardownPodesavanjaModule } from './podesavanja/index.js';
 import { getAuth, canAccessKadrovska, canManageUsers } from '../state/auth.js';
 import { resetKadrovskaState } from '../state/kadrovska.js';
 import { showToast } from '../lib/dom.js';
@@ -35,6 +36,9 @@ function clearMount() {
   /* Cleanup za plan modul (status panel singleton, auth subscription). */
   if (currentScreen === 'plan-montaze') {
     try { teardownPlanMontazeModule(); } catch (e) { /* ignore */ }
+  }
+  if (currentScreen === 'podesavanja') {
+    try { teardownPodesavanjaModule(); } catch (e) { /* ignore */ }
   }
   if (mountEl) mountEl.innerHTML = '';
   /* Skidamo SVE legacy + nove module klase sa body-ja da ne bismo
@@ -172,7 +176,39 @@ function showModulePlaceholder(moduleId) {
     return;
   }
 
-  /* Podešavanja (F5b) i dalje koriste placeholder. */
+  /* Faza 5b: Podešavanja (Korisnici tab + placeholderi). */
+  if (moduleId === 'podesavanja') {
+    try {
+      renderPodesavanjaModule(mountEl, {
+        onBackToHub: () => showHub(),
+        onLogout: () => {
+          resetKadrovskaState();
+          showLogin();
+        },
+      });
+    } catch (e) {
+      console.error('[router] Podešavanja render failed', e);
+      mountEl.innerHTML = `
+        <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px">
+          <div class="auth-box" style="max-width:640px">
+            <div class="auth-brand">
+              <div class="auth-title">Greška u Podešavanja modulu</div>
+              <div class="auth-subtitle">${(e && e.message) || String(e)}</div>
+            </div>
+            <pre style="background:var(--surface3,#222);padding:12px;border-radius:6px;font-family:var(--mono,monospace);font-size:11px;color:var(--text2,#ccc);text-align:left;overflow:auto;max-height:280px">${(e && e.stack) || ''}</pre>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn" id="podErrBackBtn">← Nazad na hub</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const back = mountEl.querySelector('#podErrBackBtn');
+      back?.addEventListener('click', () => showHub());
+    }
+    return;
+  }
+
+  /* Fallback: placeholder za nepoznate module (ne bi trebalo da se desi). */
   const screen = renderModulePlaceholder({
     moduleId,
     onBack: () => showHub(),

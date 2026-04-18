@@ -20,8 +20,19 @@ export const STORAGE_KEYS = Object.freeze({
   KADR_ABS: 'plan_montaze_kadr_absences_v1',
   KADR_WH: 'plan_montaze_kadr_work_hours_v1',
   KADR_CON: 'plan_montaze_kadr_contracts_v1',
+  /* Podešavanja */
+  USERS_CACHE: 'plan_montaze_users_v1',
   /* Theme */
   THEME: 'pm_theme_v1',
+});
+
+/* ── Role labele za UI ── */
+export const ROLE_LABELS = Object.freeze({
+  admin: 'Admin',
+  leadpm: 'Lead PM',
+  pm: 'PM',
+  hr: 'HR',
+  viewer: 'Viewer',
 });
 
 /* ── sessionStorage ključevi ── */
