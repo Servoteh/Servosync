@@ -32,7 +32,14 @@ let currentScreen = null;
 
 function clearMount() {
   if (mountEl) mountEl.innerHTML = '';
-  document.body.classList.remove('hub-active', 'kadrovska-active');
+  /* Skidamo SVE legacy + nove module klase sa body-ja da ne bismo
+     ostavili stari display-toggle koji ide preko CSS-a. */
+  document.body.classList.remove(
+    'hub-active',
+    'kadrovska-active',
+    'module-kadrovska',
+    'module-settings',
+  );
 }
 
 function getStoredModule() {
@@ -80,20 +87,46 @@ function showHub() {
 function showModulePlaceholder(moduleId) {
   currentScreen = moduleId;
   clearMount();
+  /* Legacy CSS koristi body.module-* klase za visibility (display:none !important
+     na #module-kadrovska / #module-settings ako odgovarajuća klasa nije setovana).
+     Dok ne migriramo te selektore u Vite-only verziju, postavi obe klase. */
   if (moduleId === 'kadrovska') {
-    document.body.classList.add('kadrovska-active');
+    document.body.classList.add('kadrovska-active', 'module-kadrovska');
+  }
+  if (moduleId === 'podesavanja') {
+    document.body.classList.add('module-settings');
   }
   setStoredModule(moduleId);
 
   /* Faza 4: Kadrovska više nije placeholder — renderuje real modul. */
   if (moduleId === 'kadrovska') {
-    renderKadrovskaModule(mountEl, {
-      onBackToHub: () => showHub(),
-      onLogout: () => {
-        resetKadrovskaState();
-        showLogin();
-      },
-    });
+    try {
+      renderKadrovskaModule(mountEl, {
+        onBackToHub: () => showHub(),
+        onLogout: () => {
+          resetKadrovskaState();
+          showLogin();
+        },
+      });
+    } catch (e) {
+      console.error('[router] Kadrovska render failed', e);
+      mountEl.innerHTML = `
+        <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px">
+          <div class="auth-box" style="max-width:640px">
+            <div class="auth-brand">
+              <div class="auth-title">Greška u Kadrovska modulu</div>
+              <div class="auth-subtitle">${(e && e.message) || String(e)}</div>
+            </div>
+            <pre style="background:var(--surface3,#222);padding:12px;border-radius:6px;font-family:var(--mono,monospace);font-size:11px;color:var(--text2,#ccc);text-align:left;overflow:auto;max-height:280px">${(e && e.stack) || ''}</pre>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn" id="kadrErrBackBtn">← Nazad na hub</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const back = mountEl.querySelector('#kadrErrBackBtn');
+      back?.addEventListener('click', () => showHub());
+    }
     return;
   }
 
