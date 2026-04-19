@@ -20,6 +20,7 @@ import {
 } from '../state/auth.js';
 
 const DRAWINGS_BUCKET = 'production-drawings';
+const BIGTEHN_DRAWINGS_BUCKET = 'bigtehn-drawings';
 
 /* ── Konstante ── */
 
@@ -380,6 +381,129 @@ export async function getDrawingSignedUrl(storagePath, expiresIn = 300) {
     console.error('[getDrawingSignedUrl] exception', e);
     return null;
   }
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * SPRINT F.5a — BigTehn crteži (PDF iz BigBit foldera)
+ *
+ * Bridge sinhronizuje fajlove iz C:\PDMExport\PDFImportovano u Supabase
+ * bucket "bigtehn-drawings". Frontend samo otvara signed URL-ove.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Vraća signed URL (5 min) za PDF crtež po broju crteža.
+ * Vraća null ako broj nije poznat ili ako Bridge još nije sinhronizovao.
+ *
+ * @param {string} brojCrteza  Naziv crteža (= naziv fajla bez .pdf)
+ * @param {number} [expiresIn=300] Trajanje URL-a u sekundama (default 5 min)
+ */
+export async function getBigtehnDrawingSignedUrl(brojCrteza, expiresIn = 300) {
+  if (!getIsOnline() || !brojCrteza) return null;
+
+  /* 1) Lookup storage_path iz cache-a */
+  const params = new URLSearchParams();
+  params.set('select', 'storage_path');
+  params.set('drawing_no', `eq.${brojCrteza}`);
+  params.set('removed_at', 'is.null');
+  params.set('limit', '1');
+  const rows = await sbReq(`bigtehn_drawings_cache?${params.toString()}`);
+  const storagePath = Array.isArray(rows) && rows[0]?.storage_path;
+  if (!storagePath) return null;
+
+  /* 2) Sign */
+  const user = getCurrentUser();
+  const token = user?._token || getSupabaseAnonKey();
+  const apiKey = getSupabaseAnonKey();
+  const baseUrl = getSupabaseUrl();
+  try {
+    const r = await fetch(
+      `${baseUrl}/storage/v1/object/sign/${BIGTEHN_DRAWINGS_BUCKET}/${encodeURI(storagePath)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'apikey': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ expiresIn }),
+      },
+    );
+    if (!r.ok) {
+      console.error('[getBigtehnDrawingSignedUrl] failed', r.status);
+      return null;
+    }
+    const { signedURL, signedUrl } = await r.json();
+    const rel = signedURL || signedUrl;
+    if (!rel) return null;
+    return baseUrl + '/storage/v1' + (rel.startsWith('/') ? rel : '/' + rel);
+  } catch (e) {
+    console.error('[getBigtehnDrawingSignedUrl] exception', e);
+    return null;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * SPRINT F.5b — Tehnološki postupak (sve operacije za jedan RN)
+ *
+ * Koristi se u modal-u koji se otvara klikom na 📋 pored RN-a u "Po mašini".
+ * Vraća:
+ *   - operations: sve linije RN-a iz v_production_operations (sa svim
+ *     denormalizovanim podacima — mašina, planirano vreme, status, itd.)
+ *   - logs: sve prijave iz bigtehn_tech_routing_cache za taj RN (po opcijama)
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Učitaj kompletan tehnološki postupak za jedan RN.
+ *
+ * @param {number} workOrderId  bigtehn_work_orders_cache.id
+ * @returns {Promise<{operations: object[], logs: object[], header: object|null}>}
+ */
+export async function loadFullTechProcedure(workOrderId) {
+  if (!getIsOnline() || !workOrderId) {
+    return { operations: [], logs: [], header: null };
+  }
+
+  /* 1) Sve operacije za RN (poredak: po Operacija ASC). View već ima
+     denormalizovane podatke (mašina, plan/real time, komada, status…). */
+  const opParams = new URLSearchParams();
+  opParams.set('select', '*');
+  opParams.set('work_order_id', `eq.${workOrderId}`);
+  opParams.set('order', 'operacija.asc');
+  opParams.set('limit', '500');
+  const operations = await sbReq(`v_production_operations?${opParams.toString()}`);
+
+  /* 2) Sve prijave iz tech_routing cache-a (svi radnici, sve operacije). */
+  const logParams = new URLSearchParams();
+  logParams.set(
+    'select',
+    'id,operacija,machine_code,worker_id,komada,prn_timer_seconds,started_at,finished_at,is_completed,napomena,potpis',
+  );
+  logParams.set('work_order_id', `eq.${workOrderId}`);
+  logParams.set('order', 'operacija.asc,started_at.asc');
+  logParams.set('limit', '2000');
+  const logs = await sbReq(`bigtehn_tech_routing_cache?${logParams.toString()}`);
+
+  /* 3) Header info (1. operacija ima sve potrebne RN polja u view-u) */
+  const ops = Array.isArray(operations) ? operations : [];
+  const header = ops[0]
+    ? {
+        rn_ident_broj:        ops[0].rn_ident_broj,
+        broj_crteza:          ops[0].broj_crteza,
+        naziv_dela:           ops[0].naziv_dela,
+        materijal:            ops[0].materijal,
+        dimenzija_materijala: ops[0].dimenzija_materijala,
+        komada_total:         ops[0].komada_total,
+        rok_izrade:           ops[0].rok_izrade,
+        customer_name:        ops[0].customer_name,
+        customer_short:       ops[0].customer_short,
+        rn_napomena:          ops[0].rn_napomena,
+        rn_zavrsen:           ops[0].rn_zavrsen,
+        rn_zakljucano:        ops[0].rn_zakljucano,
+        has_bigtehn_drawing:  ops[0].has_bigtehn_drawing,
+      }
+    : null;
+
+  return { operations: ops, logs: Array.isArray(logs) ? logs : [], header };
 }
 
 /* ── Helpers (čisti, no-side-effects) ── */

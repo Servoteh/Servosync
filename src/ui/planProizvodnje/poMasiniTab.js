@@ -28,8 +28,10 @@ import {
   rokUrgencyClass,
   formatSecondsHm,
   plannedSeconds,
+  getBigtehnDrawingSignedUrl,
 } from '../../services/planProizvodnje.js';
 import { openDrawingManager } from './drawingManager.js';
+import { openTechProcedureModal } from './techProcedureModal.js';
 
 /* ── Local state (po instanci taba — postoji jedan u svakom trenutku) ── */
 const STORAGE_KEY_LAST_MACHINE = 'plan-proizvodnje:last-machine';
@@ -268,17 +270,41 @@ function rowHtml(r) {
     ? `<span class="pp-pri">${escHtml(String(sortVal))}</span>`
     : `<span class="pp-pri is-empty" title="Nije rangirano">–</span>`;
 
+  /* F.5c: HITNE pozicije — overdue (kasni) i today (rok je danas) dobijaju
+     crveni leftborder, suptilno crveni background i ⚠ ikonu pre prioriteta.
+     Ne za 'completed' overlay (ali takve i ne stižu ovde) i ne za RN_zavrsen. */
+  const isUrgent = (urgency === 'overdue' || urgency === 'today');
+  const urgentClass = isUrgent
+    ? (urgency === 'overdue' ? ' is-urgent is-urgent-overdue' : ' is-urgent is-urgent-today')
+    : '';
+
   return `
     <tr
       data-key="${escHtml(rowKey(r))}"
       data-wo="${r.work_order_id}"
       data-line="${r.line_id}"
-      class="${r.is_non_machining ? 'is-non-machining' : ''}${isReassigned ? ' is-reassigned' : ''}"
+      class="${r.is_non_machining ? 'is-non-machining' : ''}${isReassigned ? ' is-reassigned' : ''}${urgentClass}"
       ${state.canEdit ? 'draggable="true"' : ''}>
       <td class="pp-drag-handle" title="${state.canEdit ? 'Prevuci za prioritet' : 'Drag dostupan samo za pm/admin'}">⠿</td>
       <td class="pp-cell-center">${priCell}</td>
-      <td class="pp-cell-strong" title="RN ${escHtml(r.rn_ident_broj || '')}">${escHtml(r.rn_ident_broj || '—')}</td>
-      <td class="pp-cell-muted" title="${escHtml(broj)}">${escHtml(broj)}</td>
+      <td class="pp-cell-strong" title="RN ${escHtml(r.rn_ident_broj || '')}">
+        ${escHtml(r.rn_ident_broj || '—')}
+        <button type="button"
+                class="pp-tech-procedure-btn"
+                data-action="open-tech-procedure"
+                title="Otvori kompletan tehnološki postupak ovog RN-a">📋</button>
+      </td>
+      <td class="pp-cell-muted" title="${escHtml(broj)}">
+        ${r.has_bigtehn_drawing
+          ? `<button type="button"
+                     class="pp-bigtehn-drawing-btn"
+                     data-action="open-bigtehn-drawing"
+                     data-broj="${escHtml(broj)}"
+                     title="Otvori PDF crtež ${escHtml(broj)} u novom tab-u">
+               📄 ${escHtml(broj)}
+             </button>`
+          : escHtml(broj)}
+      </td>
       <td class="pp-cell-clip" title="${escHtml(r.naziv_dela || '')}">${escHtml(r.naziv_dela || '—')}</td>
       <td class="pp-cell-muted" title="${escHtml(r.customer_name || '')}">${escHtml(customerLabel)}</td>
       <td class="pp-cell-num pp-cell-strong">${escHtml(String(r.operacija ?? ''))}</td>
@@ -384,6 +410,16 @@ function wireRows(wrap) {
     btn.addEventListener('click', () => onOpenDrawings(btn));
   });
 
+  /* BigTehn PDF crtež (📄) — otvori u novom tab-u */
+  wrap.querySelectorAll('button[data-action="open-bigtehn-drawing"]').forEach(btn => {
+    btn.addEventListener('click', () => onOpenBigtehnDrawing(btn));
+  });
+
+  /* Tehnološki postupak (📋) — otvori modal sa svim operacijama */
+  wrap.querySelectorAll('button[data-action="open-tech-procedure"]').forEach(btn => {
+    btn.addEventListener('click', () => onOpenTechProcedure(btn));
+  });
+
   /* Drag-drop */
   if (state.canEdit) {
     wireDragDrop(wrap);
@@ -417,6 +453,52 @@ async function onOpenDrawings(btn) {
         : (state.canEdit ? 'Dodaj skicu/sliku' : 'Nema skica');
     },
   });
+}
+
+/**
+ * Klik na 📄 kod broja crteža → otvori PDF iz BigTehn-a u novom tab-u.
+ *
+ * Pop-up blocker workaround: prvo otvorimo prazan window u user-gesture
+ * sinhrono, pa async fetch-ujemo signed URL i postavimo location na otvoreni
+ * window. Ako fetch ne uspe, zatvori window i prikaži toast.
+ */
+async function onOpenBigtehnDrawing(btn) {
+  const broj = btn.dataset.broj;
+  if (!broj) return;
+  const tab = window.open('about:blank', '_blank');
+  if (!tab) {
+    showToast('Pop-up blokiran. Dozvoli pop-up za ovaj sajt.');
+    return;
+  }
+  try {
+    const url = await getBigtehnDrawingSignedUrl(broj);
+    if (!url) {
+      tab.close();
+      showToast(`PDF crtež "${broj}" nije pronađen u Bridge cache-u.`);
+      return;
+    }
+    tab.location.href = url;
+  } catch (e) {
+    tab.close();
+    showToast('Greška pri otvaranju PDF-a.');
+    console.error('[onOpenBigtehnDrawing]', e);
+  }
+}
+
+/**
+ * Klik na 📋 pored RN-a → modal sa kompletnim tehnološkim postupkom
+ * (sve operacije + sve prijave radnika za taj RN).
+ */
+async function onOpenTechProcedure(btn) {
+  const tr = btn.closest('tr');
+  if (!tr) return;
+  const woId = Number(tr.dataset.wo);
+  const lineId = Number(tr.dataset.line);
+  const row = state.rows.find(r => r.work_order_id === woId && r.line_id === lineId);
+  const opTitle = row
+    ? `RN ${row.rn_ident_broj || '?'} · ${row.naziv_dela || ''}`.trim()
+    : `RN #${woId}`;
+  await openTechProcedureModal({ work_order_id: woId, opTitle });
 }
 
 /* ── Status cycle ── */
