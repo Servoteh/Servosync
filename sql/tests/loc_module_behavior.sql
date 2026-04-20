@@ -28,10 +28,12 @@ SELECT is(
   0,
   'root lokacija ima depth=0'
 );
+-- `path_cached` se gradi od `name` (ne `location_code`) i koristi ' › '
+-- separator (U+203A SINGLE RIGHT-POINTING ANGLE QUOTATION MARK sa razmacima).
 SELECT is(
   (SELECT path_cached FROM public.loc_locations WHERE location_code = 'TEST-ROOT'),
-  'TEST-ROOT',
-  'path_cached root-a = location_code'
+  'Test root',
+  'path_cached root-a = name'
 );
 
 -- ── 2) Dete nasleđuje path + depth inkrementiran ───────────────────────
@@ -52,8 +54,8 @@ SELECT is(
 );
 SELECT is(
   (SELECT path_cached FROM public.loc_locations WHERE location_code = 'TEST-CHILD'),
-  'TEST-ROOT > TEST-CHILD',
-  'dete path_cached = root > child'
+  'Test root ' || chr(8250) || ' Test child',
+  'dete path_cached = root › child'
 );
 
 -- ── 3) Case-insensitive unique: ne može duplikat u drugom case-u ───────
@@ -100,22 +102,24 @@ END $$;
 
 SELECT is(
   (SELECT path_cached FROM public.loc_locations WHERE location_code = 'TEST-CHILD'),
-  'TEST-ALT > TEST-CHILD',
+  'Alt root ' || chr(8250) || ' Test child',
   'path_cached se updateuje po promeni roditelja'
 );
 
 -- ── 6) Movement insert kreira placement (trigger loc_after_movement_insert) ─
 -- Napomena: insert direktno u loc_location_movements zaobilazi RPC (i RLS),
--- što pgTAP dozvoljava jer rolluje transakciju. moved_by ostavljamo NULL
--- (kolona to dozvoljava) — samo testiramo trigger grafu.
+-- što pgTAP dozvoljava jer rolluje transakciju. `moved_by` je NOT NULL u
+-- produkcionoj šemi (RPC ga popunjava iz auth.uid()) — za trigger test je
+-- dovoljno proslediti fiksni dummy UUID.
 DO $$
 DECLARE
   v_loc uuid := current_setting('test.alt_id')::uuid;
+  v_user uuid := '00000000-0000-0000-0000-000000000001'::uuid;
 BEGIN
   INSERT INTO public.loc_location_movements
-    (item_ref_table, item_ref_id, to_location_id, movement_type, movement_reason)
+    (item_ref_table, item_ref_id, to_location_id, movement_type, movement_reason, moved_by)
   VALUES
-    ('parts', 'pgtap-item-1', v_loc, 'INITIAL_PLACEMENT', 'pgtap test');
+    ('parts', 'pgtap-item-1', v_loc, 'INITIAL_PLACEMENT', 'pgtap test', v_user);
 END $$;
 
 SELECT ok(
@@ -139,11 +143,12 @@ SELECT ok(
 DO $$
 DECLARE
   v_loc uuid := current_setting('test.alt_id')::uuid;
+  v_user uuid := '00000000-0000-0000-0000-000000000001'::uuid;
 BEGIN
   INSERT INTO public.loc_location_movements
-    (item_ref_table, item_ref_id, from_location_id, to_location_id, movement_type)
+    (item_ref_table, item_ref_id, from_location_id, to_location_id, movement_type, moved_by)
   VALUES
-    ('parts', 'pgtap-item-1', v_loc, v_loc, 'TRANSFER');
+    ('parts', 'pgtap-item-1', v_loc, v_loc, 'TRANSFER', v_user);
 END $$;
 
 SELECT pass('TRANSFER posle INITIAL_PLACEMENT ne baca na trigger-u');
