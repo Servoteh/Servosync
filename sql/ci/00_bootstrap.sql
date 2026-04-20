@@ -101,3 +101,12 @@ ALTER TABLE public.user_roles
 -- Grant-ovi očekivani u migracijama (PostgREST style).
 GRANT USAGE ON SCHEMA public TO authenticated, anon, service_role;
 GRANT USAGE ON SCHEMA auth TO authenticated, service_role;
+
+-- ── Dummy test korisnici ────────────────────────────────────────────────
+-- Neki pgTAP testovi referenciraju `auth.users(id)` preko FK (npr. moved_by
+-- u loc_location_movements). Seedujemo dva stabilna UUID-a kako bi insert-i
+-- u testovima prošli bez potrebe da svaki test ručno kreira korisnika.
+INSERT INTO auth.users (id, email) VALUES
+  ('00000000-0000-0000-0000-000000000001', 'pgtap-user-1@ci.local'),
+  ('00000000-0000-0000-0000-000000000002', 'pgtap-user-2@ci.local')
+ON CONFLICT (id) DO NOTHING;
