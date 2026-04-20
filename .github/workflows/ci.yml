@@ -132,6 +132,34 @@ jobs:
           path: /tmp/ci-logs/
           if-no-files-found: warn
 
+      - name: Post migration errors as commit comment
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          # Sakupi sve log fajlove (1 po migraciji) u jedan tekst.
+          body_file=/tmp/ci-comment.md
+          {
+            echo "## CI failure — SQL migrations + pgTAP"
+            echo ""
+            echo "Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo ""
+            for f in /tmp/ci-logs/*.log; do
+              [ -f "$f" ] || continue
+              echo "### \`$(basename "$f")\`"
+              echo ""
+              echo '```'
+              tail -n 200 "$f"
+              echo '```'
+              echo ""
+            done
+          } > "$body_file"
+          # `gh` CLI je pre-instaliran na ubuntu runner-u; GITHUB_TOKEN ima
+          # `repo` scope pa možemo postavljati commit komentare u javnom repo-u.
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+            -f body="$(cat "$body_file")" || true
+
       - name: Run pgTAP tests
         env:
           PGPASSWORD: postgres
