@@ -96,13 +96,30 @@ jobs:
           PGPASSWORD: postgres
         run: |
           set -euo pipefail
+          mkdir -p /tmp/ci-logs
           while IFS= read -r line; do
             # preskoči prazne i komentare
             [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
             echo "::group::Applying $line"
-            psql -h localhost -U postgres -d ci_test -v ON_ERROR_STOP=1 -f "$line"
+            # -a = echo SQL pre izvršavanja (olakšava debug u stdout log-u)
+            # stderr+stdout se pipe-uje i u fajl (artifact) i na konzolu.
+            log_file="/tmp/ci-logs/$(echo "$line" | tr '/' '_').log"
+            if ! psql -h localhost -U postgres -d ci_test \
+                 -v ON_ERROR_STOP=1 -a -f "$line" 2>&1 | tee "$log_file"; then
+              echo "::error::Migration failed: $line"
+              echo "::endgroup::"
+              exit 1
+            fi
             echo "::endgroup::"
           done < sql/ci/migrations.txt
+
+      - name: Upload migration logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-logs
+          path: /tmp/ci-logs/
+          if-no-files-found: warn
 
       - name: Run pgTAP tests
         env:
