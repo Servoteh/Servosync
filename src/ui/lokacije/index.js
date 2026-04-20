@@ -522,10 +522,29 @@ async function renderPanel(host, tabId) {
         ? `<p class="loc-warn">Ne mogu da učitam podatke. Proveri da li je u Supabase-u primenjena migracija <code>add_loc_module.sql</code> i da li si ulogovan.</p>`
         : '';
 
+    /* First-run state — baza je prazna. Nema smisla prikazati "0 lokacija, 0 stavki"
+     * bez ikakvog konteksta; dajemo jasan CTA da korisnik zna šta da klikne. */
+    const isEmptyFirstRun =
+      Array.isArray(locs) && locs.length === 0 && Array.isArray(plac) && plac.length === 0;
+    const firstRunHtml = isEmptyFirstRun && canEdit()
+      ? `<div class="loc-firstrun" role="note">
+           <div class="loc-firstrun-title">Dobrodošao u Lokacije delova</div>
+           <p class="loc-firstrun-sub">Baza je trenutno prazna. Da bi modul zaživeo:</p>
+           <ol class="loc-firstrun-steps">
+             <li>Klikni <strong>Nova lokacija</strong> i dodaj bar jednu master lokaciju (npr. <code>MAG-1</code> — Centralni magacin).</li>
+             <li>Otvori karticu <strong>Lokacije</strong> da pregledaš/doteraš hijerarhiju.</li>
+             <li>Klikni <strong>Brzo premeštanje</strong> da evidentiraš prvu stavku (INITIAL_PLACEMENT).</li>
+           </ol>
+         </div>`
+      : isEmptyFirstRun
+        ? `<p class="loc-muted" style="padding:12px 0">Nema još master lokacija. Admin / PM mogu da ih dodaju.</p>`
+        : '';
+
     host.innerHTML = `
       <div class="kadr-panel active loc-panel">
         ${err}
         ${locToolbarHtml()}
+        ${firstRunHtml}
         <div class="loc-kpi-row">
           <div class="loc-kpi"><span class="loc-kpi-label">Aktivnih lokacija</span><span class="loc-kpi-val">${escHtml(String(locN))}</span></div>
           <div class="loc-kpi"><span class="loc-kpi-label">Placements (stavki)</span><span class="loc-kpi-val">${escHtml(String(plN))}</span></div>

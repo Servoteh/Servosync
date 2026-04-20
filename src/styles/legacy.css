@@ -2527,6 +2527,18 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .loc-hint { margin-top:16px; font-size:11px; }
 .loc-subh { font-size:13px; font-weight:600; margin:16px 0 8px; color:var(--text2); }
 .loc-kpi-row { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:8px; }
+.loc-firstrun {
+  margin: 10px 0 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--accent);
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface2));
+}
+.loc-firstrun-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px; }
+.loc-firstrun-sub { font-size:12px; color:var(--text2); margin:0 0 8px; }
+.loc-firstrun-steps { margin:0; padding-left:20px; font-size:12px; color:var(--text2); line-height:1.6; }
+.loc-firstrun-steps code { font-family:var(--mono); font-size:11px; padding:1px 4px; background:var(--surface); border:1px solid var(--border2); border-radius:3px; }
 .loc-kpi {
   min-width:140px; padding:12px 14px;
   background:var(--surface2); border:1px solid var(--border2); border-radius:8px;

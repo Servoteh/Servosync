@@ -425,6 +425,27 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       return;
     }
 
+    /* Prva upotreba — nema nijedne master lokacije. Nema smisla prikazati
+     * prazan select; usmeri korisnika na "Nova lokacija". */
+    if (locs.length === 0) {
+      body.innerHTML = `
+        <div class="kadr-modal-empty" style="padding:16px 8px;text-align:center">
+          <p style="font-size:14px;color:var(--text2);margin:0 0 12px">
+            Nema definisanih master lokacija.<br>
+            Prvo dodaj bar jednu lokaciju preko <strong>Nova lokacija</strong>,
+            pa se vrati ovde.
+          </p>
+          <button type="button" class="btn btn-primary" id="locQmGotoNew">Nova lokacija</button>
+          <button type="button" class="btn" id="locQmCloseEmpty" style="margin-left:8px">Zatvori</button>
+        </div>`;
+      overlay.querySelector('#locQmCloseEmpty').addEventListener('click', close);
+      overlay.querySelector('#locQmGotoNew').addEventListener('click', () => {
+        close();
+        openNewLocationModal({ onSuccess });
+      });
+      return;
+    }
+
     const toOpts = locationOptionsHtml(locs, {
       includeBlank: true,
       blankLabel: '— izaberi odredište —',
