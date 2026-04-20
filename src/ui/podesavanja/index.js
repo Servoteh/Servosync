@@ -22,6 +22,11 @@ import { usersState } from '../../state/users.js';
 import { renderUsersTab, refreshUsers, wireUsersTab } from './usersTab.js';
 import { renderMastersTab } from './mastersTab.js';
 import { renderSystemTab } from './systemTab.js';
+import {
+  renderMaintProfilesTab,
+  wireMaintProfilesTab,
+  refreshMaintProfiles,
+} from './maintProfilesTab.js';
 
 let _mountEl = null;
 let _onLogoutCb = null;
@@ -31,6 +36,7 @@ let _activeTab = 'users';
 
 const TABS = [
   { id: 'users', label: 'Korisnici' },
+  { id: 'maint-profiles', label: 'Održ. profili' },
   { id: 'masters', label: 'Matični podaci' },
   { id: 'system', label: 'Sistem' },
 ];
@@ -47,6 +53,11 @@ export async function renderPodesavanjaModule(mountEl, options = {}) {
   /* Async DB load za Korisnici tab — kada svežih podaci stignu, rerenderuj. */
   if (_activeTab === 'users') {
     refreshUsers().then(() => _renderShell()).catch(e => console.warn('[podesavanja] users load failed', e));
+  }
+  if (_activeTab === 'maint-profiles') {
+    refreshMaintProfiles()
+      .then(() => _renderShell())
+      .catch(e => console.warn('[podesavanja] maint profiles load failed', e));
   }
 
   if (_authUnsubscribe) _authUnsubscribe();
@@ -119,6 +130,7 @@ function _headerHtml() {
 
 function _panelHtml(tab) {
   if (tab === 'users') return renderUsersTab({ onChange: () => _renderShell() });
+  if (tab === 'maint-profiles') return renderMaintProfilesTab();
   if (tab === 'masters') return renderMastersTab();
   if (tab === 'system') return renderSystemTab();
   return '';
@@ -172,6 +184,11 @@ function _wireTabs() {
       if (t === 'users') {
         refreshUsers().then(() => _renderShell()).catch(e => console.warn('[podesavanja] users refresh failed', e));
       }
+      if (t === 'maint-profiles') {
+        refreshMaintProfiles()
+          .then(() => _renderShell())
+          .catch(e => console.warn('[podesavanja] maint profiles refresh failed', e));
+      }
     });
   });
 }
@@ -179,5 +196,8 @@ function _wireTabs() {
 function _wireTabBody() {
   if (_activeTab === 'users') {
     wireUsersTab(_mountEl, { onChange: () => _renderShell() });
+  }
+  if (_activeTab === 'maint-profiles') {
+    wireMaintProfilesTab(_mountEl, { onChange: () => _renderShell() });
   }
 }

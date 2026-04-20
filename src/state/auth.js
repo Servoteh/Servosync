@@ -140,6 +140,19 @@ export function canPrioritizeTeme() {
 }
 
 /**
+ * Modul Lokacije delova — svi ulogovani korisnici mogu da otvore (čitanje + pokreti
+ * preko RPC; master lokacije: admin/leadpm/pm u RLS-u).
+ */
+export function canAccessLokacije() {
+  return !!state.user;
+}
+
+/** Sync monitor (loc_sync_outbound_events) — samo admin po RLS-u. */
+export function canViewLokacijeSync() {
+  return state.role === 'admin';
+}
+
+/**
  * Da li trenutni korisnik vlasnik teme (predlozio_email).
  * Koristi se za "edit only own" gate na PM temama.
  */

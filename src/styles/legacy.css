@@ -2508,3 +2508,85 @@ body.module-plan > .filter-bar { display:none !important; }
   .plan-body .add-phase-bar input, .plan-body .add-phase-bar .btn { width:100%; }
 }
 
+/* ── Lokacije delova ─────────────────────────────────────────────────── */
+body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-direction:column; }
+.loc-tabs.loc-tabs { margin-bottom:0; }
+.loc-panel {
+  padding:16px 24px 32px;
+  flex:1;
+}
+.loc-toolbar {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+  margin-bottom:16px;
+}
+.loc-muted { color:var(--text3); font-size:12px; line-height:1.5; }
+.loc-warn { color:#ffb4a8; font-size:13px; margin:0 0 12px; }
+.loc-hint { margin-top:16px; font-size:11px; }
+.loc-subh { font-size:13px; font-weight:600; margin:16px 0 8px; color:var(--text2); }
+.loc-kpi-row { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:8px; }
+.loc-kpi {
+  min-width:140px; padding:12px 14px;
+  background:var(--surface2); border:1px solid var(--border2); border-radius:8px;
+}
+.loc-kpi-label { display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.4px; color:var(--text3); }
+.loc-kpi-val { font-size:22px; font-weight:700; font-family:var(--mono); color:var(--text); }
+.loc-mov-list { margin:0; padding-left:18px; font-size:12px; color:var(--text2); max-height:280px; overflow:auto; }
+.loc-mov-list li { margin-bottom:6px; }
+.loc-mov-type { font-family:var(--mono); font-size:10px; color:var(--accent); }
+.loc-path { font-size:11px; color:var(--text2); word-break:break-all; }
+.loc-code-cell { white-space:nowrap; }
+.loc-code-strong { font-weight:600; font-family:var(--mono); font-size:11px; color:var(--text); }
+.loc-actions-cell { white-space:nowrap; text-align:right; }
+.loc-actions-cell .btn { margin-left:4px; }
+.btn-xs { padding:3px 8px !important; font-size:9px !important; letter-spacing:0.2px !important; text-transform:none !important; }
+.loc-row-inactive td { opacity:0.55; font-style:italic; }
+.loc-row-click { cursor:pointer; }
+.loc-row-click:hover { background:color-mix(in srgb, var(--accent) 8%, transparent) !important; }
+
+/* ── Browse: view switch (Tabela/Stablo) ──────────────────────────── */
+.loc-view-switch { display:inline-flex; gap:0; border:1px solid var(--border2); border-radius:6px; overflow:hidden; }
+.loc-view-switch .btn { border-radius:0; border:0; border-right:1px solid var(--border2); margin:0; }
+.loc-view-switch .btn:last-child { border-right:0; }
+.loc-view-switch .btn.is-active { background:var(--accent); color:#fff; }
+
+/* ── Stablo lokacija ──────────────────────────────────────────────── */
+.loc-tree, .loc-tree ul { list-style:none; margin:0; padding-left:18px; }
+.loc-tree-root { padding-left:0; margin:4px 0; }
+.loc-tree > li, .loc-tree li { margin:2px 0; }
+.loc-tree details > summary { cursor:pointer; display:flex; gap:8px; align-items:center; padding:4px 6px; border-radius:4px; font-size:12px; }
+.loc-tree details > summary:hover { background:color-mix(in srgb, var(--accent) 6%, transparent); }
+.loc-tree-leaf { display:flex; gap:8px; align-items:center; padding:4px 6px 4px 22px; font-size:12px; color:var(--text2); }
+.loc-tree-bullet { color:var(--text3); }
+.loc-tree-code { font-family:var(--mono); font-size:11px; font-weight:600; color:var(--text); }
+.loc-tree-name { color:var(--text2); }
+.loc-tree-type { font-family:var(--mono); font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:0.3px; }
+.loc-tree-actions { margin-left:auto; display:inline-flex; gap:4px; }
+.loc-tree-inactive > details > summary,
+.loc-tree-inactive { opacity:0.55; font-style:italic; }
+.loc-inline-check { display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--text2); margin-left:auto; cursor:pointer; }
+.loc-inline-check input { margin:0; }
+
+/* ── Pretraga / filter (browse + items) ───────────────────────────── */
+.loc-search { display:inline-flex; align-items:center; gap:8px; flex:1 1 220px; min-width:200px; }
+.loc-items-search { flex:1 1 260px; }
+.loc-search-input { flex:1 1 auto; min-width:180px; padding:6px 10px; font-size:12px; border:1px solid var(--border2); border-radius:6px; background:var(--surface); color:var(--text); }
+.loc-search-input:focus { outline:2px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset:0; border-color:var(--accent); }
+.loc-filter-hint { font-size:11px; color:var(--text3); white-space:nowrap; }
+
+/* ── Paginator (items tab) ────────────────────────────────────────── */
+.loc-pager { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:8px; padding:8px 10px; border:1px solid var(--border2); border-radius:6px; background:var(--surface2); flex-wrap:wrap; }
+.loc-pager-info { font-size:12px; color:var(--text2); }
+.loc-pager-controls { display:inline-flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.loc-pager-size { display:inline-flex; gap:6px; align-items:center; font-size:11px; color:var(--text3); }
+.loc-pager-size select { padding:3px 6px; font-size:11px; border:1px solid var(--border2); border-radius:4px; background:var(--surface); color:var(--text); }
+.loc-pager .btn[disabled] { opacity:0.45; cursor:not-allowed; }
+
+.loc-table-wrap { overflow:auto; max-height:min(60vh, 520px); border:1px solid var(--border2); border-radius:8px; }
+.loc-table { width:100%; border-collapse:collapse; font-size:12px; }
+.loc-table th, .loc-table td { padding:8px 10px; text-align:left; border-bottom:1px solid var(--border2); }
+.loc-table thead th { background:var(--surface2); color:var(--text3); font-size:10px; text-transform:uppercase; letter-spacing:0.3px; }
+.loc-table tbody tr:hover { background:color-mix(in srgb, var(--accent) 6%, transparent); }
+

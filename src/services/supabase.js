@@ -28,10 +28,17 @@ export function getSupabaseAnonKey() {
  *                          ili 'rpc/get_my_user_roles' za RPC.
  * @param {'GET'|'POST'|'PATCH'|'DELETE'} [method='GET']
  * @param {object|null} [body=null]
+ * @param {{ upsert?: boolean, withCount?: boolean }} [options]
+ *        `upsert` (default `true`) — na POST pridružuje `resolution=merge-duplicates`
+ *        kako bi UNIQUE konflikti odradili UPSERT; prosledi `false` kada želiš
+ *        klasičan INSERT koji na duplikat vraća 409 (npr. kreiranje master zapisa).
+ *        `withCount` — kada je `true` koristi internu grananu varijantu koja
+ *        vraća `{ rows, total }`. NE koristi ovo sa sbReq direktno; postoji
+ *        {@link sbReqWithCount} wrapper radi type-safety.
  * @returns {Promise<any|null>}
  */
-export async function sbReq(path, method = 'GET', body = null) {
-  if (!hasSupabaseConfig()) return null;
+export async function sbReq(path, method = 'GET', body = null, options = {}) {
+  if (!hasSupabaseConfig()) return options.withCount ? { rows: null, total: null } : null;
 
   const user = getCurrentUser();
   const token = user?._token || SUPABASE_CONFIG.anonKey;
@@ -42,9 +49,16 @@ export async function sbReq(path, method = 'GET', body = null) {
     'Authorization': 'Bearer ' + token,
   };
   if (method === 'POST') {
-    headers['Prefer'] = 'return=representation,resolution=merge-duplicates';
+    const upsert = options.upsert !== false;
+    headers['Prefer'] = upsert
+      ? 'return=representation,resolution=merge-duplicates'
+      : 'return=representation';
   } else if (method === 'PATCH') {
     headers['Prefer'] = 'return=representation';
+  }
+  if (options.withCount && method === 'GET') {
+    /* PostgREST `count=exact` → Content-Range header sadrži ukupan broj redova. */
+    headers['Prefer'] = (headers['Prefer'] ? headers['Prefer'] + ',' : '') + 'count=exact';
   }
 
   try {
@@ -56,19 +70,58 @@ export async function sbReq(path, method = 'GET', body = null) {
     const txt = await r.text();
     if (!r.ok) {
       console.error('SB err', { path, method, status: r.status, body: txt });
-      return null;
+      return options.withCount ? { rows: null, total: null } : null;
     }
-    if (!txt) return null;
-    try {
-      return JSON.parse(txt);
-    } catch (parseErr) {
-      console.error('SB JSON parse err', { path, method, status: r.status, body: txt, parseErr });
-      return null;
+    /* PostgREST ponekad vrati prazno telo uz 2xx (npr. 204); ranije je to bilo kao greška (null). */
+    let parsed;
+    if (!txt) {
+      if (method === 'PATCH') parsed = [];
+      else if (method === 'DELETE') parsed = true;
+      else parsed = null;
+    } else {
+      try {
+        parsed = JSON.parse(txt);
+      } catch (parseErr) {
+        console.error('SB JSON parse err', {
+          path,
+          method,
+          status: r.status,
+          body: txt,
+          parseErr,
+        });
+        return options.withCount ? { rows: null, total: null } : null;
+      }
     }
+    if (options.withCount && method === 'GET') {
+      const cr = r.headers.get('content-range') || ''; /* primer: "0-49/1234" */
+      const total = parseContentRangeTotal(cr);
+      return { rows: Array.isArray(parsed) ? parsed : [], total };
+    }
+    return parsed;
   } catch (e) {
     console.error('SB fetch failed', { path, method, error: e });
-    return null;
+    return options.withCount ? { rows: null, total: null } : null;
   }
+}
+
+/**
+ * Wrapper nad `sbReq` koji vraća `{ rows, total }` gde je `total` iz Content-Range header-a.
+ * Koristi se za paginated liste.
+ * @param {string} path
+ * @returns {Promise<{ rows: any[]|null, total: number|null }>}
+ */
+export async function sbReqWithCount(path) {
+  return sbReq(path, 'GET', null, { withCount: true });
+}
+
+function parseContentRangeTotal(cr) {
+  if (!cr) return null;
+  const idx = cr.lastIndexOf('/');
+  if (idx < 0) return null;
+  const tail = cr.slice(idx + 1).trim();
+  if (!tail || tail === '*') return null;
+  const n = Number(tail);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**

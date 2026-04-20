@@ -20,6 +20,8 @@ export const STORAGE_KEYS = Object.freeze({
   KADR_ABS: 'plan_montaze_kadr_absences_v1',
   KADR_WH: 'plan_montaze_kadr_work_hours_v1',
   KADR_CON: 'plan_montaze_kadr_contracts_v1',
+  /* Lokacije delova */
+  LOC_TAB: 'plan_montaze_loc_active_tab_v1',
   /* Podešavanja */
   USERS_CACHE: 'plan_montaze_users_v1',
   /* Theme */
@@ -41,6 +43,8 @@ export const SESSION_KEYS = Object.freeze({
   KADR_TAB: 'plan_montaze_kadr_active_tab_v1',
   MODULE_HUB: 'plan_montaze_v51_active_module',
   SETTINGS_TAB: 'plan_montaze_v51_settings_tab',
+  /** Posle login-a: pun path + query (npr. /maintenance/machines/8.3?tab=checks) */
+  POST_LOGIN_REDIRECT: 'plan_montaze_v51_post_login_redirect_v1',
 });
 
 /* ── Role hijerarhija (priority: admin > leadpm > pm > hr > viewer) ── */

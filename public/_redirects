@@ -1,7 +1,7 @@
 # Cloudflare Pages — rewrite rules.
 #
-# Servoteh ERP je SPA (router u src/ui/router.js drži sve "rute" u
-# memoriji), tako da svaka navigacija mora da završi na /index.html
+# Servoteh ERP je SPA (src/ui/router.js + History API: /plan-montaze,
+# /maintenance/… itd.). Sve nepoznate putanje moraju na /index.html
 # kako se ne bi videlo CF-ovo 404 kad korisnik refresh-uje stranicu na
 # nekoj "ruti".
 #

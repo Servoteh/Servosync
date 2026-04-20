@@ -3,8 +3,8 @@
  *
  * Kartice (sa istim renames-ima koje je user tražio u prethodnoj sesiji):
  *   - Plan Montaže          [aktivno]
- *   - Lokacije delova       [u pripremi]
- *   - Održavanje mašina     [u pripremi]
+ *   - Lokacije delova       [aktivno — skelet + loc_* migracija]
+ *   - Održavanje mašina     [skelet + URL deep link; baza sledeća faza]
  *   - Sastanci              [u pripremi]
  *   - Planiranje proizvodnje [aktivno — Sprint F]
  *   - Kadrovska             [aktivno za hr/admin]
@@ -30,12 +30,8 @@ import {
   canEditPlanProizvodnje,
   canAccessSastanci,
   canEditSastanci,
+  canAccessLokacije,
 } from '../../state/auth.js';
-
-const PLACEHOLDER_TOAST = {
-  'lokacije-delova': '📍 Lokacije delova — u pripremi',
-  'odrzavanje-masina': '🛠 Održavanje mašina — u pripremi',
-};
 
 export function renderModuleHub({ onModuleSelect, onLogout }) {
   const auth = getAuth();
@@ -71,7 +67,7 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
     <main class="hub-main">
       <div class="hub-intro">
         <h2>Dobrodošli nazad</h2>
-        <p>Izaberi modul sa kojim želiš da radiš. Aktivni moduli: <strong style="color:var(--text)">Plan Montaže</strong>, <strong style="color:var(--text)">Planiranje proizvodnje</strong>, <strong style="color:var(--text)">Sastanci</strong> i <strong style="color:var(--text)">Kadrovska</strong>${canManageUsers() ? ' i <strong style="color:var(--text)">Podešavanja</strong>' : ''}.</p>
+        <p>Izaberi modul sa kojim želiš da radiš. Aktivni moduli: <strong style="color:var(--text)">Plan Montaže</strong>, <strong style="color:var(--text)">Lokacije delova</strong>, <strong style="color:var(--text)">Održavanje mašina</strong> (skelet), <strong style="color:var(--text)">Planiranje proizvodnje</strong>, <strong style="color:var(--text)">Sastanci</strong> i <strong style="color:var(--text)">Kadrovska</strong>${canManageUsers() ? ' i <strong style="color:var(--text)">Podešavanja</strong>' : ''}.</p>
       </div>
 
       <div class="hub-grid">
@@ -85,23 +81,23 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
           </div>
         </button>
 
-        <button type="button" class="hub-card is-disabled" data-toast="lokacije-delova" aria-disabled="true">
+        <button type="button" class="hub-card${canAccessLokacije() ? '' : ' is-disabled'}" data-module="lokacije-delova" aria-label="Otvori Lokacije delova"${canAccessLokacije() ? '' : ' aria-disabled="true"'}>
           <div class="hub-card-icon" aria-hidden="true">📍</div>
           <div class="hub-card-title">Lokacije delova</div>
-          <div class="hub-card-desc">Evidencija gde se fizički nalaze delovi, sklopovi i alati: regal, polica, magacin, projektna lokacija. Brza pretraga i premeštanje.</div>
+          <div class="hub-card-desc">Evidencija gde se fizički nalaze delovi, sklopovi i alati: regal, polica, magacin, projektna lokacija. Pregled lokacija, stavki i sync reda.</div>
           <div class="hub-card-footer">
-            <span class="hub-card-cta">Uskoro</span>
-            <span class="hub-card-badge">U pripremi</span>
+            <span class="hub-card-cta">${canAccessLokacije() ? 'Otvori →' : 'Prijavi se'}</span>
+            <span class="hub-card-badge badge-active">${canAccessLokacije() ? 'Aktivno' : 'Zaključano'}</span>
           </div>
         </button>
 
-        <button type="button" class="hub-card is-disabled" data-toast="odrzavanje-masina" aria-disabled="true">
+        <button type="button" class="hub-card" data-module="odrzavanje-masina" aria-label="Otvori Održavanje mašina">
           <div class="hub-card-icon" aria-hidden="true">🛠</div>
           <div class="hub-card-title">Održavanje mašina</div>
-          <div class="hub-card-desc">Plan i evidencija preventivnog i korektivnog održavanja: intervalni servisi, kvarovi, utrošeni delovi, sati zastoja po mašini.</div>
+          <div class="hub-card-desc">Plan i evidencija preventivnog i korektivnog održavanja: intervalni servisi, kvarovi, deep linkovi sa URL-a (/maintenance/…).</div>
           <div class="hub-card-footer">
-            <span class="hub-card-cta">Uskoro</span>
-            <span class="hub-card-badge">U pripremi</span>
+            <span class="hub-card-cta">Otvori →</span>
+            <span class="hub-card-badge badge-active">Skelet</span>
           </div>
         </button>
 
@@ -168,14 +164,11 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
         showToast('🔒 Sastanci zahtevaju validnu autentifikaciju');
         return;
       }
+      if (moduleId === 'lokacije-delova' && !canAccessLokacije()) {
+        showToast('🔒 Lokacije delova zahtevaju prijavu');
+        return;
+      }
       onModuleSelect?.(moduleId);
-    });
-  });
-
-  container.querySelectorAll('button[data-toast]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.toast;
-      showToast(PLACEHOLDER_TOAST[key] || 'U pripremi');
     });
   });
 
