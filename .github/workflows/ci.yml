@@ -11,6 +11,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write  # potrebno za `gh api commits/<sha>/comments` u CI diagnostici
+
 jobs:
   js-tests:
     name: JS unit tests (Vitest)
