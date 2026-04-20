@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  js-tests:
+    name: JS unit tests (Vitest)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Vitest
+        run: npm test
+
+  sql-tests:
+    name: SQL migrations + pgTAP
+    runs-on: ubuntu-24.04
+    # Postgres se instalira na runner umesto kroz `services:` jer moramo
+    # instalirati pgTAP ekstenziju preko PGDG apt-a.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Postgres 15 + pgTAP
+        run: |
+          set -euo pipefail
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            http://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            postgresql-15 \
+            postgresql-15-pgtap \
+            postgresql-client-15 \
+            libtap-parser-sourcehandler-pgtap-perl
+
+          # Runner image može imati stariji default PG cluster koji okupira 5432;
+          # restartujemo samo pg-15 cluster.
+          sudo pg_ctlcluster 15 main restart
+
+          # Postavi lozinku i napravi test bazu.
+          sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+          sudo -u postgres psql -c "CREATE DATABASE ci_test;"
+
+      - name: Apply CI bootstrap
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d ci_test -v ON_ERROR_STOP=1 \
+            -f sql/ci/00_bootstrap.sql
+
+      - name: Apply migrations in order
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          while IFS= read -r line; do
+            # preskoči prazne i komentare
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+            echo "::group::Applying $line"
+            psql -h localhost -U postgres -d ci_test -v ON_ERROR_STOP=1 -f "$line"
+            echo "::endgroup::"
+          done < sql/ci/migrations.txt
+
+      - name: Run pgTAP tests
+        env:
+          PGPASSWORD: postgres
+        run: |
+          shopt -s nullglob
+          tests=(sql/tests/*.sql)
+          if [ ${#tests[@]} -eq 0 ]; then
+            echo "Nema pgTAP testova u sql/tests/."
+            exit 1
+          fi
+          pg_prove --verbose -h localhost -U postgres -d ci_test "${tests[@]}"
+
+      - name: Dump Postgres log on failure
+        if: failure()
+        run: |
+          sudo tail -n 200 /var/log/postgresql/postgresql-15-main.log || true

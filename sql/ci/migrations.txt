@@ -1,0 +1,16 @@
+# =============================================================================
+# Spisak migracija koje CI primenjuje na praznu Postgres bazu POSLE bootstrap-a.
+# Redosled je bitan. Komentari (# ...) i prazni redovi se ignorišu.
+#
+# Namerno preskačemo:
+#   - sql/migrations/add_loc_step4_pgcron.sql — zahteva `pg_cron` ekstenziju
+#     koja nije dostupna van Supabase/self-hosted PG sa posebnom konfiguracijom.
+#     Scheduler logika se smoke-testira na Supabase-u manuelno.
+#   - sql/migrations/add_loc_module_step1_tables.sql — subset add_loc_module.sql;
+#     idempotentne DDL naredbe bi prošle, ali je redundantno.
+# =============================================================================
+
+sql/migrations/add_loc_module.sql
+sql/migrations/add_loc_step2_ci_unique.sql
+sql/migrations/add_loc_step3_cleanup.sql
+sql/migrations/add_loc_step5_sync_rpcs.sql
