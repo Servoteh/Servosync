@@ -2,14 +2,23 @@
 <html lang="sr" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- viewport-fit=cover je POTREBAN za iPhone X+ safe-area-inset-* CSS var-e
+       koje koristimo u mobile.css za notch/home-indicator. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0a0e14">
   <!-- PWA / mobilni shell ikona (same fajl za sve Android density + iOS). -->
   <link rel="icon" type="image/svg+xml" href="/icons/servoteh-lokacije.svg">
   <link rel="apple-touch-icon" href="/icons/servoteh-lokacije.svg">
+  <!-- iOS Safari — legacy meta (još uvek obavezan; "mobile-web-app-capable"
+       je moderni naslednik ali iOS ga ignoriše do Safari 18+). Bez ovoga
+       "Add to Home Screen" ne ulazi u standalone mode. -->
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Lokacije">
+  <!-- Sprečava iOS Safari da format-uje brojeve kao "klikabilne" telefone
+       (magacinski kodovi K-A1 su ponekad tumačeni kao tel: linkovi). -->
+  <meta name="format-detection" content="telephone=no">
   <title>Servoteh — Plan Montaže</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

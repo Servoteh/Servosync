@@ -3,7 +3,14 @@
   "appName": "Servoteh Lokacije",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "iosScheme": "capacitor"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "scheme": "Servoteh Lokacije",
+    "allowsLinkPreview": false,
+    "preferredContentMode": "mobile"
   },
   "plugins": {
     "BarcodeScanner": {

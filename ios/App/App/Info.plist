@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CAPACITOR_DEBUG</key>
+	<string>$(CAPACITOR_DEBUG)</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+        <string>Servoteh Lokacije</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>armv7</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+	<!-- Pristup kameri za barcode skener (native ML Kit + web ZXing fallback).
+	     Ova vrednost je korisniku vidljiva u iOS dijalogu "App wants to access
+	     camera" — držati kratak, razumljiv tekst na srpskom. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Servoteh Lokacije koristi kameru za skeniranje barkoda na nalepnicama crteža.</string>
+	<!-- iOS WebView traži i mic pristup kada getUserMedia koristi video constraint
+	     (iako zapravo ne snima audio). Bez ovog iOS Safari odbija kameru. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Nije potreban mikrofon — ova permisija je traženje iOS-a pri otvaranju kamere.</string>
+	<!-- Torch / flashlight toggle (nije striktno permisija ali iOS nekada traži
+	     da bude deklarisano). -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Servoteh Lokacije ne pristupa biblioteci fotografija.</string>
+	<!-- App Transport Security — dopusti localhost (Capacitor WebView koristi
+	     `capacitor://localhost` scheme) i Supabase HTTPS endpoint. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

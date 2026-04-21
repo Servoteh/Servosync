@@ -1,0 +1,176 @@
+name: Build iOS IPA (unsigned)
+
+# Gradi UNSIGNED iOS .app bundle + .ipa arhivu za Servoteh Lokacije.
+#
+# ZAŠTO UNSIGNED:
+#   - Apple Developer account ($99/god) nije postavljen u ovom repou;
+#   - bez njega CI ne može da potpiše aplikaciju da se direktno instalira
+#     na iPhone.
+#   - Rezultat je .app bundle koji magacioner NE može direktno da
+#     instalira tap-om; moraš ga dodatno potpisati (vidi `docs/MOBILE.md`
+#     sekciju "iOS instalacija — tri puta").
+#
+# ALTERNATIVE POTPISIVANJA (posle ovog artifact-a):
+#   1. **AltStore / Sideloadly** (free, 7-day cert): preuzmeš `.ipa` na
+#      svoj Mac/Windows, potpišeš sa svojim Apple ID-jem, instaliraš na
+#      telefon. Mora se ponoviti svakih 7 dana.
+#   2. **Apple Developer Program** ($99/god): TestFlight distribucija
+#      linkom, do 100 internal testera, 90-day cert. Za ovo moraš
+#      kreirati signing cert u CI-u — vidi komentar na dnu fajla.
+#   3. **Xcode na Mac-u** (free, 7-day): `npx cap open ios` otvori
+#      projekat, izaberi svoj Apple ID kao Team, klikni Run dok je
+#      telefon kablom povezan.
+#
+# TROŠAK:
+#   - macOS runner je ~10× skuplji od Linux-a u Actions minutama. Ovaj
+#     workflow se zato NE pokreće automatski na svaki push — samo
+#     manuelno (`workflow_dispatch`) ili na konkretne iOS fajlove.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'capacitor.config.json'
+      - '.github/workflows/ios-ipa.yml'
+
+concurrency:
+  group: ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ipa:
+    name: Build iOS unsigned IPA
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Select Xcode 15.4
+        # macos-14 runner ima više Xcode verzija; fiksiramo da CI bude stabilan.
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web (Vite + PWA)
+        run: npm run build
+        env:
+          VITE_APP_VERSION: ${{ github.sha }}
+
+      - name: Capacitor sync ios
+        run: npx cap sync ios
+
+      - name: Install CocoaPods
+        working-directory: ios/App
+        run: pod install --repo-update
+
+      - name: Build unsigned archive
+        working-directory: ios/App
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            -archivePath build/App.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive | xcpretty
+
+      - name: Package unsigned IPA
+        working-directory: ios/App
+        run: |
+          set -euo pipefail
+          # Bez signing-a, xcodebuild -exportArchive ne može da kreira .ipa.
+          # Ali .app u arhivi je sve što Sideloadly/AltStore treba. Pakujemo
+          # ga kao .ipa ručno (pravi .ipa = zip od Payload/ foldera sa .app).
+          cd build/App.xcarchive/Products/Applications
+          mkdir -p ../../../../ipa/Payload
+          cp -R App.app ../../../../ipa/Payload/
+          cd ../../../../ipa
+          zip -qr App-unsigned.ipa Payload
+          ls -la
+
+      - name: Rename IPA with build info
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          src="ios/App/ipa/App-unsigned.ipa"
+          if [ ! -f "$src" ]; then
+            echo "::error::IPA not produced at $src"
+            ls -R ios/App/ipa || true
+            ls -R ios/App/build || true
+            exit 1
+          fi
+          short_sha="${GITHUB_SHA::7}"
+          ts=$(date -u +%Y%m%d-%H%M)
+          out="release/servoteh-lokacije-${ts}-${short_sha}-unsigned.ipa"
+          cp "$src" "$out"
+          echo "IPA_PATH=$out" >> "$GITHUB_ENV"
+          echo "IPA_NAME=$(basename "$out")" >> "$GITHUB_ENV"
+          echo "--- IPA info ---"
+          ls -la "$out"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.IPA_NAME }}
+          path: ${{ env.IPA_PATH }}
+          retention-days: 60
+
+      - name: Job summary
+        run: |
+          {
+            echo "### 📱 iOS IPA build (unsigned)"
+            echo ""
+            echo "- **Artifact:** \`${IPA_NAME}\`"
+            echo "- **Commit:** \`${GITHUB_SHA::7}\`"
+            echo ""
+            echo "### ⚠ OVO NIJE SIGNED IPA"
+            echo ""
+            echo "Da bi se instalirao na iPhone, prvo mora da se potpiše sa"
+            echo "tvojim Apple ID-jem ili Developer cert-om. Vidi"
+            echo "\`docs/MOBILE.md\` sekciju **\"iOS instalacija — tri puta\"**."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+# ─── KAKO PREĆI NA AUTOMATSKI SIGNED TESTFLIGHT BUILD ─────────────────
+#
+# Kad kupiš Apple Developer ($99/god) nalog:
+#
+# 1. Kreiraj Distribution cert + App Store provisioning profile u
+#    https://developer.apple.com/account/resources/certificates
+#    (moraš dodati App ID `com.servoteh.lokacije`).
+#
+# 2. Export-uj privatni ključ + cert kao `.p12` fajl sa passphrase-om.
+#
+# 3. Dodaj GitHub Secrets:
+#    - APPLE_ID_USERNAME   (tvoj Apple email)
+#    - APPLE_ID_PASSWORD   (app-specific password iz appleid.apple.com)
+#    - APPLE_TEAM_ID       (10-char team ID)
+#    - IOS_CERT_P12_BASE64 (base64 encoded .p12 fajl)
+#    - IOS_CERT_PASSWORD   (passphrase za .p12)
+#    - IOS_PROFILE_BASE64  (base64 encoded .mobileprovision)
+#
+# 4. Zameni korake "Build unsigned archive" + "Package unsigned IPA" sa:
+#    - `fastlane match appstore` ili direktno sa `xcodebuild archive`
+#      + `xcodebuild -exportArchive -exportOptionsPlist ExportOptions.plist`
+#    - `xcrun altool --upload-app -f App.ipa -u $APPLE_ID_USERNAME ...`
+#
+# 5. U TestFlight-u dodaš email magacionera kao internal testera — dobije
+#    email sa linkom da preuzme TestFlight app i instalira build.
+#
+# Ovaj workflow zadrži ga kao `build-ipa` job, dodaj paralelni
+# `upload-testflight` job koji se okida samo na tag-ovima (v*).

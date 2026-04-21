@@ -37,3 +37,19 @@ android/capacitor-cordova-android-plugins/
 android/local.properties
 *.iml
 .capacitor/
+
+# iOS / Capacitor build artifacts
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+ios/App/App/config.xml
+ios/App/Pods/
+ios/App/Podfile.lock
+ios/App/build/
+ios/App/DerivedData/
+ios/capacitor-cordova-ios-plugins/
+ios/App/output/
+*.xcuserstate
+*.xcuserdatad/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
