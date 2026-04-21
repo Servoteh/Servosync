@@ -141,7 +141,22 @@ function setDrawingCache(orderNo, itemRefId, drawingNo) {
  *     koristi se iz mobilnog shell-a kada user klikne "Ručni unos".
  *   - `onClose` — poziva se kada user zatvori modal bez uspešnog upisa.
  */
-export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan' } = {}) {
+/**
+ * @param {object} [opts]
+ * @param {() => void} [opts.onSuccess]
+ * @param {() => void} [opts.onClose]
+ * @param {'scan'|'manual'} [opts.startMode]
+ * @param {'shelf'|'warehouse'|null} [opts.preferLocationCategory]
+ *   Prečica sa mobilne home strane: 'shelf' = POLICA dugme, 'warehouse' = HALA.
+ *   Kad je setovano, optgroup te kategorije ide prvi u "Na lokaciju" selectu i
+ *   header dobije subtilni chip "filter: POLICA / HALA".
+ */
+export async function openScanMoveModal({
+  onSuccess,
+  onClose,
+  startMode = 'scan',
+  preferLocationCategory = null,
+} = {}) {
   removeModal();
 
   /* Učitaj ZXing wrapper sinhrono pre nego što otvorimo overlay — tako
@@ -248,7 +263,10 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
               <input type="number" id="locScanQty" min="0.001" step="1" value="1" inputmode="decimal">
             </div>
             <div class="emp-field col-full">
-              <label for="locScanTo">Na lokaciju *</label>
+              <label for="locScanTo">
+                Na lokaciju *
+                <span class="loc-muted" id="locScanToHint" style="font-weight:400;font-size:12px"></span>
+              </label>
               <select id="locScanTo" required></select>
             </div>
             <div class="emp-field col-full">
@@ -650,15 +668,69 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
     if (first) $('#locScanQty').value = String(first.quantity);
   }
 
+  /**
+   * Popuni "Na lokaciju" select grupisano po kategorijama da user brže nađe
+   * odredište. Kategorije (po `location_type`):
+   *   📍 POLICE  — SHELF / RACK / BIN (konkretan fizički spot; dugačka lista)
+   *   🏭 HALE     — WAREHOUSE / PRODUCTION / ASSEMBLY / FIELD / TEMP (veći prostor)
+   *   📦 OSTALE   — SCRAPPED / OFFICE / TRANSIT / SERVICE / PROJECT / OTHER
+   *
+   * Ako je `preferLocationCategory` prosleđeno (iz mobilne POLICA/HALA prečice),
+   * preferirana grupa ide PRVA u listi (user prvo vidi ono što mu treba), ali
+   * ostale su i dalje dostupne — ne filtriramo tvrdо jer user u toku rada
+   * može odlučiti da promeni kategoriju (npr. "ipak ide u škart").
+   */
   function populateToSelect() {
-    $('#locScanTo').innerHTML =
-      '<option value="">— izaberi odredište —</option>' +
-      state.locs
-        .filter(l => l.is_active !== false)
+    const SHELF = new Set(['SHELF', 'RACK', 'BIN']);
+    const HALL = new Set(['WAREHOUSE', 'PRODUCTION', 'ASSEMBLY', 'FIELD', 'TEMP']);
+    const shelves = [];
+    const halls = [];
+    const others = [];
+    for (const l of state.locs) {
+      if (l.is_active === false) continue;
+      const t = String(l.location_type || '').toUpperCase();
+      if (SHELF.has(t)) shelves.push(l);
+      else if (HALL.has(t)) halls.push(l);
+      else others.push(l);
+    }
+    const renderGroup = (label, items) => {
+      if (!items.length) return '';
+      const opts = items
         .map(
-          l => `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
+          l =>
+            `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
         )
         .join('');
+      return `<optgroup label="${escHtml(label)}">${opts}</optgroup>`;
+    };
+    const shelfGroup = renderGroup('📍 POLICE', shelves);
+    const hallGroup = renderGroup('🏭 HALE', halls);
+    const otherGroup = renderGroup('📦 OSTALE', others);
+
+    let grouped;
+    if (preferLocationCategory === 'shelf') {
+      grouped = shelfGroup + hallGroup + otherGroup;
+    } else if (preferLocationCategory === 'warehouse') {
+      grouped = hallGroup + shelfGroup + otherGroup;
+    } else {
+      grouped = shelfGroup + hallGroup + otherGroup;
+    }
+
+    $('#locScanTo').innerHTML =
+      '<option value="">— izaberi odredište —</option>' + grouped;
+
+    /* Kratak tekstualni ključ iznad selecta — pomaže da user razume zašto je
+     * neka grupa prva (npr. kliknuo je "POLICA" prečicu sa home-a). */
+    const hintEl = $('#locScanToHint');
+    if (hintEl) {
+      if (preferLocationCategory === 'shelf') {
+        hintEl.textContent = '— prečica sa home: POLICE su prve u listi';
+      } else if (preferLocationCategory === 'warehouse') {
+        hintEl.textContent = '— prečica sa home: HALE su prve u listi';
+      } else {
+        hintEl.textContent = '';
+      }
+    }
   }
 
   /**

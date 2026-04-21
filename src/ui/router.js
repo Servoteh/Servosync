@@ -40,6 +40,7 @@ import {
 } from './mobile/mobileHome.js';
 import { renderMobileHistory } from './mobile/mobileHistory.js';
 import { renderMobileBatch } from './mobile/mobileBatch.js';
+import { renderMobileLookup } from './mobile/mobileLookup.js';
 import { installAutoFlush } from '../services/offlineQueue.js';
 import { registerMobilePWA } from '../lib/pwa.js';
 import {
@@ -505,6 +506,8 @@ async function showMobile(screen, opts = {}) {
       result = await renderMobileHistory(mountEl, navCtx);
     } else if (screen === 'batch') {
       result = await renderMobileBatch(mountEl, navCtx);
+    } else if (screen === 'lookup') {
+      result = await renderMobileLookup(mountEl, navCtx);
     } else {
       navigateToAppPath('/m');
       return;

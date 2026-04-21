@@ -59,23 +59,55 @@ export function renderMobileHome(mountEl, ctx) {
       </div>
 
       <main class="m-main">
+        <!-- 1. Primarna akcija: skeniraj barkod. Najveća vizuelna težina,
+             plavi gradient, jedinstveno primarno CTA. -->
         <button type="button" class="m-cta m-cta-primary" data-act="scan">
           <span class="m-cta-ico">📷</span>
           <span class="m-cta-txt">
             <span class="m-cta-title">SKENIRAJ BARKOD</span>
-            <span class="m-cta-sub">Uslikaj nalepnicu sa crtežom</span>
+            <span class="m-cta-sub">Pritisni i usmeri na nalepnicu</span>
           </span>
         </button>
 
-        <button type="button" class="m-cta m-cta-secondary" data-act="manual">
-          <span class="m-cta-ico">⌨</span>
+        <!-- 2. "Dodaj na lokaciju" sekcija — brze prečice do scan-a sa već
+             podešenim filterom u 'Na lokaciju' selectu (police vs hale).
+             Korisnik ih koristi kad unapred zna gde ide komad: npr. direktno
+             'na policu K-A3' vs 'u hala MAG'. -->
+        <div class="m-section-head">Dodaj na lokaciju</div>
+        <div class="m-cta-row">
+          <button type="button" class="m-cta m-cta-secondary" data-act="scanShelf">
+            <span class="m-cta-ico">📍</span>
+            <span class="m-cta-txt">
+              <span class="m-cta-title">POLICA</span>
+              <span class="m-cta-sub">npr. K-A3, K-B2</span>
+            </span>
+          </button>
+          <button type="button" class="m-cta m-cta-secondary" data-act="scanWarehouse">
+            <span class="m-cta-ico">🏭</span>
+            <span class="m-cta-txt">
+              <span class="m-cta-title">HALA</span>
+              <span class="m-cta-sub">npr. MAG, Hala 2</span>
+            </span>
+          </button>
+        </div>
+
+        <!-- 3. Sekundarne akcije — manje vizuelne težine. Pretraga je read-only
+             flow (ne premešta komad, samo pokazuje gde je), ručni unos je
+             fallback kad nema barkoda. -->
+        <div class="m-section-head">Ostalo</div>
+        <button type="button" class="m-cta m-cta-secondary" data-act="lookup">
+          <span class="m-cta-ico">🔍</span>
           <span class="m-cta-txt">
-            <span class="m-cta-title">RUČNI UNOS</span>
-            <span class="m-cta-sub">Unesi broj crteža ako nema barkoda</span>
+            <span class="m-cta-title">PRETRAGA PO CRTEŽU</span>
+            <span class="m-cta-sub">Pronađi gde se nalazi neki broj crteža</span>
           </span>
         </button>
 
         <div class="m-cta-row">
+          <button type="button" class="m-cta m-cta-tertiary" data-act="manual">
+            <span class="m-cta-ico">⌨</span>
+            <span class="m-cta-title">RUČNI UNOS</span>
+          </button>
           <button type="button" class="m-cta m-cta-tertiary" data-act="history">
             <span class="m-cta-ico">📋</span>
             <span class="m-cta-title">MOJA ISTORIJA</span>
@@ -116,6 +148,18 @@ export function renderMobileHome(mountEl, ctx) {
     switch (act) {
       case 'scan':
         ctx.onNavigate('/m/scan');
+        break;
+      case 'scanShelf':
+        /* Prečica "dodaj na POLICU": isti scan flow, ali modal filtrira
+         * 'Na lokaciju' select samo na lokacije tipa SHELF/RACK/BIN. Query
+         * param se čita u router-u → prosleđuje se u openScanMoveModal. */
+        ctx.onNavigate('/m/scan?cat=shelf');
+        break;
+      case 'scanWarehouse':
+        ctx.onNavigate('/m/scan?cat=warehouse');
+        break;
+      case 'lookup':
+        ctx.onNavigate('/m/lookup');
         break;
       case 'manual':
         ctx.onNavigate('/m/manual');
@@ -193,6 +237,11 @@ async function tryFlush(mountEl) {
 /**
  * Otvori scan modal odmah — ovo je isto što se dešava kada user na desktopu
  * klikne "Skeniraj". Razlika je što po zatvaranju vraćamo na `/m`.
+ *
+ * Home prečice "POLICA" / "HALA" navigiraju na `/m/scan?cat=shelf` ili
+ * `/m/scan?cat=warehouse`. `cat` query param se čita ovde i prosleđuje u
+ * modal kao `preferLocationCategory` — modal onda filtrira "Na lokaciju"
+ * select da pokaže samo odgovarajući tip lokacija (police, odn. hale).
  */
 export function renderMobileScan(mountEl, ctx) {
   /* Sami rendererI scan-a su full-screen overlay-i (uzimaju viewport).
@@ -202,8 +251,18 @@ export function renderMobileScan(mountEl, ctx) {
 
   const goHome = () => ctx.onNavigate('/m');
 
+  let preferLocationCategory = null;
+  try {
+    const qp = new URLSearchParams(window.location.search);
+    const cat = qp.get('cat');
+    if (cat === 'shelf' || cat === 'warehouse') preferLocationCategory = cat;
+  } catch {
+    /* no-op */
+  }
+
   openScanMoveModal({
     startMode: 'scan',
+    preferLocationCategory,
     onSuccess: () => {
       /* Nakon uspešnog premeštanja → back na home (i pending queue badge osvežen). */
       goHome();

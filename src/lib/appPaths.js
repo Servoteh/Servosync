@@ -24,7 +24,7 @@ function normalizePathname(pathname) {
  *   moduleId?: string,
  *   section?: 'dashboard' | 'machines' | 'machine' | 'board' | 'notifications' | 'catalog',
  *   machineCode?: string,
- *   mobileScreen?: 'home' | 'scan' | 'manual' | 'history' | 'batch'
+ *   mobileScreen?: 'home' | 'scan' | 'manual' | 'history' | 'batch' | 'lookup'
  * }}
  */
 export function pathnameToRoute(pathname) {
@@ -36,7 +36,7 @@ export function pathnameToRoute(pathname) {
     return { kind: 'hub' };
   }
   /* Mobilni shell za magacionere / viljuškariste (Faza 1 — PWA + Capacitor wrapper).
-   * Namerno plitak tree: `/m` (home), i 4 pod-rute (scan, manual, history, batch).
+   * Namerno plitak tree: `/m` (home), i pod-rute (scan, manual, history, batch, lookup).
    * Sve nepoznate `/m/*` vode na home. */
   if (p === '/m') {
     return { kind: 'mobile', mobileScreen: 'home' };
@@ -52,6 +52,9 @@ export function pathnameToRoute(pathname) {
   }
   if (p === '/m/batch') {
     return { kind: 'mobile', mobileScreen: 'batch' };
+  }
+  if (p === '/m/lookup') {
+    return { kind: 'mobile', mobileScreen: 'lookup' };
   }
   if (p === '/plan-montaze') {
     return { kind: 'module', moduleId: 'plan-montaze' };

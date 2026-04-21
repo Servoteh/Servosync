@@ -161,6 +161,125 @@ export async function fetchItemPlacements(itemRefTable, itemRefId, orderNo = und
 }
 
 /**
+ * "Pretraga po broju crteža" za mobilni `lookup` ekran i desktop items tab.
+ *
+ * PROBLEM: `item_ref_id` u `loc_item_placements` nije uvek broj crteža —
+ * u RNZ barkod formatu `item_ref_id` je TP (tehnološki postupak, npr. "522"),
+ * a u short/legacy formatu je broj crteža (npr. "1130927"). Broj crteža za
+ * RNZ placement je sačuvan samo u `loc_location_movements.note` kao prefix
+ * `Crtež:NNNN | ...`. Trigger ga ne kopira na `placement.notes` (zasad).
+ *
+ * RESENJE (bez izmene trigger-a ili schema-e): dva paralelna upita i merge
+ * u klijentu.
+ *   A) Direktni match — placement.item_ref_id == drawing_no (short format).
+ *   B) Indirektni — `loc_location_movements.note ILIKE '*Crtež:<drawing>*'`
+ *      → uzmi unique (item_ref_table, item_ref_id, order_no) tuple-ove →
+ *      dovuci njihove placement-e.
+ *
+ * Dedup po `placement.id`. Red po `updated_at DESC`.
+ *
+ * @param {string} drawingNo  npr. "1130927" (ilike match, wildcard-ovan)
+ * @returns {Promise<object[]>}
+ */
+export async function fetchPlacementsByDrawing(drawingNo) {
+  const q = typeof drawingNo === 'string' ? drawingNo.trim() : '';
+  if (!q) return [];
+
+  /* (A) Direktni match — placement.item_ref_id = broj crteža (short format).
+   *     Koristimo `ilike` da bi i delimični unos radio (radnik piše "130927"). */
+  const enc = encodeURIComponent(`*${q}*`);
+  const directP = sbReq(
+    `loc_item_placements?select=*&item_ref_id=ilike.${enc}&order=updated_at.desc&limit=200`,
+  );
+
+  /* (B) RNZ format — crtež je u movement.note kao 'Crtež:NNN'. Tražimo movement-e,
+   *     pa za unique tuple-ove (table, id, order_no) povučemo njihove placement-e. */
+  const noteEnc = encodeURIComponent(`*Crtež:${q}*`);
+  const movementsP = sbReq(
+    `loc_location_movements?select=item_ref_table,item_ref_id,order_no,note,moved_at` +
+      `&note=ilike.${noteEnc}` +
+      `&order=moved_at.desc&limit=500`,
+  );
+
+  const [directRows, movementRows] = await Promise.all([directP, movementsP]);
+
+  const out = new Map(); /* placement.id → placement */
+  for (const r of Array.isArray(directRows) ? directRows : []) {
+    out.set(r.id, r);
+  }
+
+  const tuples = new Map(); /* "table|id|order_no" → {table, id, order_no} */
+  for (const m of Array.isArray(movementRows) ? movementRows : []) {
+    const key = `${m.item_ref_table}|${m.item_ref_id}|${m.order_no || ''}`;
+    if (!tuples.has(key)) {
+      tuples.set(key, {
+        table: m.item_ref_table,
+        id: m.item_ref_id,
+        order_no: m.order_no || '',
+      });
+    }
+  }
+
+  /* Fetch placement-e za sve jedinstvene tuple-ove paralelno, ali cap na
+   * ~50 da ne napunimo PostgREST. Za tipičan crtež neće biti > 5 tuple-ova. */
+  const tupleList = Array.from(tuples.values()).slice(0, 50);
+  await Promise.all(
+    tupleList.map(async t => {
+      const params = new URLSearchParams();
+      params.set('select', '*');
+      params.set('item_ref_table', `eq.${t.table}`);
+      params.set('item_ref_id', `eq.${t.id}`);
+      params.set('order_no', `eq.${t.order_no}`);
+      params.set('order', 'updated_at.desc');
+      const rows = await sbReq(`loc_item_placements?${params.toString()}`);
+      for (const r of Array.isArray(rows) ? rows : []) {
+        out.set(r.id, r);
+      }
+    }),
+  );
+
+  /* Sort po updated_at DESC. */
+  return Array.from(out.values()).sort((a, b) => {
+    const ta = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+    const tb = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+    return tb - ta;
+  });
+}
+
+/**
+ * Pokušaj da izvučeš broj crteža iz placement-a koji može biti u 3 izvora:
+ *   1. `item_ref_id` ako je u short formatu (sve su cifre, dužina 5-8).
+ *   2. `notes` placement-a (budući prefix — trenutno nije popunjen).
+ *   3. Poslednji movement na placement.last_movement_id (prefix 'Crtež:NNN').
+ *
+ * Vraća `null` ako nema nijednog.
+ *
+ * @param {object} placement
+ * @returns {Promise<string|null>}
+ */
+export async function resolveDrawingNoForPlacement(placement) {
+  if (!placement) return null;
+  /* 1) Short format: item_ref_id izgleda kao crtež. */
+  const refId = String(placement.item_ref_id || '').trim();
+  if (/^\d{5,8}$/.test(refId)) return refId;
+  /* 2) Placement.notes — check prefix (korisno ako se jednom kasnije
+   *     trigger patch-uje da kopira Crtež:NNN prefix). */
+  const notes = String(placement.notes || '');
+  const m1 = notes.match(/Crtež:([^\s|]+)/);
+  if (m1) return m1[1];
+  /* 3) Fallback: pročitaj movement.note za last_movement_id. */
+  if (placement.last_movement_id) {
+    const rows = await sbReq(
+      `loc_location_movements?select=note&id=eq.${encodeURIComponent(placement.last_movement_id)}&limit=1`,
+    );
+    const note = String(rows?.[0]?.note || '');
+    const m2 = note.match(/Crtež:([^\s|]+)/);
+    if (m2) return m2[1];
+  }
+  return null;
+}
+
+/**
  * @returns {Promise<object[]|null>}
  */
 export async function fetchRecentMovements(limit = 50) {

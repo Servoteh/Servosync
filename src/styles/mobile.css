@@ -250,6 +250,30 @@ body.m-body #app {
   gap: 12px;
 }
 
+/* ── Section header u m-main ───────────────────────────────────────────────
+ * Mali, muted naslov iznad grupe dugmadi ("Dodaj na lokaciju", "Ostalo").
+ * Cilj: vizuelno podeliti primary CTA od prečica i sekundarnih akcija, bez
+ * vizuelne buke. Koristimo uppercase letter-spacing jer je ekran mali,
+ * a mali ALL-CAPS naslov stvara čist "section break" bez velikih paddinga. */
+.m-section-head {
+  margin: 6px 4px -4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #6b7b8e;
+}
+
+/* U m-cta-row sa dva secondary-stil dugmeta (npr. POLICA/HALA prečice) —
+ * želimo da imaju ikonu + dvostruki text (naslov + primer) kao kod glavnog
+ * primary CTA, pa resetujemo tertiary-specifične override-e koje primeni
+ * .m-cta-tertiary. Ovde su secondary, pa `.m-cta-secondary` stil već radi;
+ * ovo pravilo je zaštita od vertical layout-a koji bi napravio row tesnim. */
+.m-cta-row .m-cta-secondary {
+  flex: 1;
+  min-height: 86px;
+}
+
 /* ── Footer ─────────────────────────────────────────────────────────────── */
 
 .m-footer {
@@ -265,6 +289,132 @@ body.m-body #app {
 
 .m-dot {
   opacity: 0.5;
+}
+
+/* ── Lookup ekran (pretraga po broju crteža) ──────────────────────────────
+ * Layout: search input gore, pa vertical scroll liste grupe HALA → police.
+ * Kartice su veće od history kartica jer pokazuju više metadata-a (broj
+ * naloga, status, količina, vreme poslednje izmene). */
+
+.m-lookup-main {
+  padding: 12px;
+  gap: 12px;
+}
+
+.m-lookup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: #121a26;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+.m-lookup-row {
+  display: flex;
+  gap: 8px;
+}
+
+.m-lookup-input {
+  flex: 1;
+  min-height: 48px;
+  padding: 10px 14px;
+  font-size: 18px;
+  font-weight: 600;
+  background: #0a0e14;
+  color: #eef2f7;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  outline: none;
+}
+
+.m-lookup-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+.m-lookup-submit {
+  min-height: 48px;
+  padding: 0 18px;
+  font-size: 15px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.m-lookup-submit:active {
+  transform: translateY(1px);
+}
+
+.m-lookup-hint {
+  font-size: 11px;
+  color: #6b7b8e;
+  padding: 0 4px;
+}
+
+.m-lookup-summary {
+  font-size: 13px;
+  color: #8aa0b7;
+  padding: 4px 6px;
+}
+
+.m-lookup-summary strong {
+  color: #eef2f7;
+  font-weight: 700;
+}
+
+.m-lookup-results {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.m-lookup-hall {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.m-lookup-hall-head {
+  font-size: 14px;
+  font-weight: 700;
+  color: #9cc8f0;
+  padding: 4px 6px;
+  letter-spacing: 0.3px;
+}
+
+.m-lookup-card {
+  background: #121a26;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.m-lookup-shelf {
+  font-size: 15px;
+  font-weight: 600;
+  color: #8af5a7;
+}
+
+.m-lookup-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #6b7b8e;
+}
+
+.m-lookup-qty {
+  font-size: 14px;
+  font-weight: 700;
+  color: #eef2f7;
 }
 
 /* ── History ekran ──────────────────────────────────────────────────────── */
