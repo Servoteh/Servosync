@@ -455,6 +455,32 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
   }
 
   /**
+   * Kratko uputstvo gde dozvoliti kameru (različito za Android / iOS / desktop).
+   */
+  function cameraBlockedUserHint() {
+    const ua = navigator.userAgent || '';
+    const isAndroid = /Android/i.test(ua);
+    const isIOS =
+      /iPad|iPhone|iPod/.test(ua) || (ua.includes('Mac') && 'ontouchend' in document);
+    if (isAndroid) {
+      return (
+        '🚫 Kamera je blokirana — Podešavanja → Aplikacije → tvoj pregledač (Chrome, Samsung Internet…) → ' +
+        'Dozvole → Kamera → Dozvoli, pa osveži stranicu'
+      );
+    }
+    if (isIOS) {
+      return (
+        '🚫 Kamera je blokirana — Podešavanja → Safari → Kamera → Dozvoli ' +
+        '(ili Podešavanja → ova aplikacija ako je PWA), pa otvori link ponovo'
+      );
+    }
+    return (
+      '🚫 Kamera je blokirana — u adresnoj traci klikni ikonicu kamere / lokacije i dozvoli pristup, ' +
+      'ili u podešavanjima pregledača: privatnost / dozvole za sajt → Kamera'
+    );
+  }
+
+  /**
    * Mapiraj getUserMedia/DOMException u kratku poruku za radnika.
    * @param {any} err
    */
@@ -462,13 +488,19 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
     const name = err?.name || '';
     const msg = err?.message || String(err);
     if (name === 'NotAllowedError' || /denied|blocked/i.test(msg)) {
-      return '🚫 Kamera je blokirana — Settings → Safari → Camera: Allow, pa otvori link ponovo';
+      return cameraBlockedUserHint();
     }
     if (name === 'NotFoundError' || /no.*camera|not found/i.test(msg)) {
       return '🚫 Nije pronađena kamera na uređaju';
     }
     if (name === 'NotReadableError' || /in use|busy/i.test(msg)) {
-      return '🚫 Kamera je zauzeta drugom aplikacijom — zatvori FaceTime/Kamera app';
+      const ua = navigator.userAgent || '';
+      const isIOS =
+        /iPad|iPhone|iPod/.test(ua) || (ua.includes('Mac') && 'ontouchend' in document);
+      if (isIOS) {
+        return '🚫 Kamera je zauzeta — zatvori FaceTime ili Kamera aplikaciju i probaj ponovo';
+      }
+      return '🚫 Kamera je zauzeta — zatvori druge aplikacije koje koriste kameru i probaj ponovo';
     }
     if (name === 'SecurityError' || /secure|https/i.test(msg)) {
       return '🚫 Kamera radi samo preko HTTPS — otvori sa `https://…`';
