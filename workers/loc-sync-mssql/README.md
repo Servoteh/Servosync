@@ -95,3 +95,29 @@ UPDATE public.loc_sync_outbound_events
 ```bash
 npm test   # node --test u test/ folderu (za sada skelet)
 ```
+
+## Backfill: `bigtehn_work_orders_cache`
+
+Skripta u `scripts/backfill-bigtehn-work-orders.js` jednokratno povlači `dbo.tRN` iz MSSQL-a i upsertuje u Supabase `public.bigtehn_work_orders_cache`. Koristi se kad periodični bridge nije zahvatio stare RN-ove (npr. `9000/522`), pa u aplikaciji ne radi autofill broja crteža.
+
+Koristi **iste env varijable** kao runtime worker (`.env` fajl).
+
+```bash
+cd workers/loc-sync-mssql
+
+# 1) Prvo dry-run — koliko redova fali u cache-u (ništa ne piše)
+npm run backfill:work-orders:dry
+
+# 2) Targetovani test za jedan RN
+node scripts/backfill-bigtehn-work-orders.js --ident=9000/522
+
+# 3) Produkcioni backfill samo onih koji fale
+npm run backfill:work-orders
+
+# 4) Potpuni re-sync (idempotentno, sporije)
+npm run backfill:work-orders:full
+```
+
+Svi flag-ovi: `node scripts/backfill-bigtehn-work-orders.js --help`.
+
+**Bezbednost:** skripta koristi `SUPABASE_SERVICE_ROLE_KEY` (zaobilazi RLS) — pokreći je samo sa admin mašine, nikad iz browser-a.

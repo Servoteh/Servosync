@@ -8,7 +8,10 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "backfill:work-orders": "node scripts/backfill-bigtehn-work-orders.js",
+    "backfill:work-orders:dry": "node scripts/backfill-bigtehn-work-orders.js --dry-run",
+    "backfill:work-orders:full": "node scripts/backfill-bigtehn-work-orders.js --full"
   },
   "engines": {
     "node": ">=20"
