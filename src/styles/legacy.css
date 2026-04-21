@@ -339,7 +339,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
   background: var(--surface3); color: var(--text3); border-color: var(--border2);
 }
 
-/* --- PHASE TYPE (Mašinska / Elektro) --- */
+/* --- PHASE TYPE (Ma?inska / Elektro) --- */
 .phase-type-chip {
   display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 10px;
   font-weight: 700; letter-spacing: 0.3px; border-radius: 6px; padding: 2px 7px; cursor: pointer;
@@ -360,7 +360,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 .phase-type-chip[disabled] { cursor: default; opacity: 0.75; }
 .phase-type-chip .pt-ic { font-size: 10px; }
 
-/* --- GANTT: "Prikaži završene" toggle --- */
+/* --- GANTT: "Prika?i zavr?ene" toggle --- */
 .gantt-toggle-bar {
   display: flex; align-items: center; gap: 12px; padding: 8px 14px; margin: 0 0 6px 0;
   background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
@@ -522,7 +522,7 @@ select:focus, input[type="text"]:focus, input[type="date"]:focus { border-color:
 .loc-select,
 .loc-pill { background: var(--surface2); border-color: var(--border2); color: var(--text); font-weight: 500; }
 
-/* Status select (table dropdown) — styled as a badge */
+/* Status select (table dropdown) ? styled as a badge */
 select.st-0, select.st-1, select.st-2, select.st-3 {
   font-weight: 700; font-size: 11px; padding: 6px 10px; border-radius: 999px;
   border: 1px solid transparent;
@@ -581,7 +581,7 @@ textarea.note-area:focus { border-color: var(--accent); box-shadow: 0 0 0 2px va
 .gantt-cell.today-col { background: var(--gantt-today); }
 .gantt-cell.bar-phase,.gantt-cell.bar-phase-start,.gantt-cell.bar-phase-end { background: var(--accent); }
 /* -- Phase type tiers on Gantt bars (not mixed with status colors) --
-   - Mašinska ? darker overlay (darker tier)
+   - Ma?inska ? darker overlay (darker tier)
    - Elektro  ? lighter overlay + thin diagonal pattern for clarity */
 .gantt-cell.bar-phase.bar-mech, .gantt-cell.bar-phase-start.bar-mech, .gantt-cell.bar-phase-end.bar-mech {
   background-image: linear-gradient(rgba(0,0,0,0.18), rgba(0,0,0,0.18));
@@ -1264,7 +1264,7 @@ body.module-kadrovska > .legend,
 body.module-kadrovska > .reminder-zone,
 body.module-kadrovska > .filter-bar { display:none !important; }
 
-/* --- PODEŠAVANJA MODULE --- */
+/* --- PODE?AVANJA MODULE --- */
 body:not(.module-settings) #module-settings { display:none !important; }
 body.module-settings > .header,
 body.module-settings > .project-bar,
@@ -1551,7 +1551,7 @@ body.module-kadrovska > #module-settings { display:none !important; }
   border-color:color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
-/* Tab panels — only active one visible */
+/* Tab panels ? only active one visible */
 .kadr-panel { display:none; }
 .kadr-panel.active { display:block; }
 
@@ -1620,7 +1620,7 @@ body.module-kadrovska > #module-settings { display:none !important; }
 .kadr-type-badge.c-praksa      { background:var(--surface3); color:var(--text2); border-color:var(--border2); }
 .kadr-type-badge.c-ostalo      { background:var(--surface3); color:var(--text3); border-color:var(--border2); }
 
-/* Contract row — expiry states */
+/* Contract row ? expiry states */
 .kadrovska-table tr.row-expired td { background:color-mix(in srgb, var(--red) 8%, transparent); }
 .kadrovska-table tr.row-expiring td { background:color-mix(in srgb, #F2994A 9%, transparent); }
 .kadr-expiry-hint {
@@ -1805,7 +1805,7 @@ td.col-day.cell-dirty .grid-cell { color:#F2994A; font-weight:600; }
 td.col-day.cell-error   { background:color-mix(in srgb, var(--red) 22%, var(--surface)) !important; }
 td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
 
-/* Absence pill — used inside cell when value is a code */
+/* Absence pill ? used inside cell when value is a code */
 .grid-cell.is-absence { font-weight:700; text-transform:uppercase; letter-spacing:0.5px; font-size:10px; }
 .grid-cell.abs-go { background:color-mix(in srgb, #27AE60 18%, transparent); color:#27AE60; }
 .grid-cell.abs-bo { background:color-mix(in srgb, var(--red) 18%, transparent); color:var(--red); }
@@ -1814,11 +1814,11 @@ td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
 .grid-cell.abs-sl { background:color-mix(in srgb, var(--accent) 18%, transparent); color:var(--accent); }
 .grid-cell.abs-pr { background:color-mix(in srgb, #9B51E0 18%, transparent); color:#9B51E0; }
 
-/* Teren podtipovi: domaci (žuto-amber) vs inostrani (plavo) */
+/* Teren podtipovi: domaci (?uto-amber) vs inostrani (plavo) */
 .grid-cell.is-field-domestic { background:color-mix(in srgb, #F2C94C 22%, transparent); color:#B07B00; font-weight:600; }
 .grid-cell.is-field-foreign  { background:color-mix(in srgb, #2F80ED 22%, transparent); color:#1B5BB7; font-weight:600; }
 
-/* Teren celija — input + mali D/I toggle dugme */
+/* Teren celija ? input + mali D/I toggle dugme */
 .grid-field-wrap { position:relative; display:block; width:100%; height:100%; }
 .grid-cell.grid-cell-field { padding-right:18px; }
 .fsub-btn {
@@ -1837,7 +1837,7 @@ td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
 .fsub-btn.is-hidden   { display:none; }
 .fsub-btn:disabled    { opacity:0.55; cursor:not-allowed; }
 
-/* Rad na 2 mašine — narandžasta/crvenkasta da odskace */
+/* Rad na 2 ma?ine ? narand?asta/crvenkasta da odskace */
 .grid-cell.is-twomach { background:color-mix(in srgb, #F2994A 22%, transparent); color:#C26B14; font-weight:700; }
 
 /* Section header rows (SERVOTEH / HAP FLUID) */
@@ -1883,7 +1883,7 @@ td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
 .grid-pill.pill-ffor { background:color-mix(in srgb, #2F80ED 22%, transparent); color:#1B5BB7; border-color:color-mix(in srgb, #2F80ED 35%, transparent); }
 .grid-pill.pill-tm   { background:color-mix(in srgb, #F2994A 22%, transparent); color:#C26B14; border-color:color-mix(in srgb, #F2994A 35%, transparent); }
 
-/* --- Reports (sub-tabovi unutar Izveštaji) --- */
+/* --- Reports (sub-tabovi unutar Izve?taji) --- */
 .reports-tabs {
   display:flex; gap:6px; padding:14px 22px 0; flex-wrap:wrap;
   border-bottom:1px solid var(--border2);
@@ -1938,7 +1938,7 @@ td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
 .offline-badge { font-size:9px; padding:2px 8px; border-radius:10px; font-family:var(--mono); background:var(--yellow-bg); color:var(--yellow); border:1px solid var(--yellow); letter-spacing:0.3px; }
 .online-badge { font-size:9px; padding:2px 8px; border-radius:10px; font-family:var(--mono); background:var(--green-bg); color:var(--green-light); border:1px solid color-mix(in srgb, var(--green-light) 45%, transparent); letter-spacing:0.3px; }
 
-/* --- PRINT HEADER (samo za štampu) --- */
+/* --- PRINT HEADER (samo za ?tampu) --- */
 .print-only { display: none; }
 .print-header { padding: 12px 16px; border-bottom: 1px solid #ccc; }
 .print-header h1 { font-size: 20px; font-weight: 700; color: #000; margin-bottom: 4px; }
@@ -1953,7 +1953,7 @@ td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
     print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
-  /* Iskljuci sve animacije/tranzicije/shadow-e — ubrzava paint u Chrome print preview-u */
+  /* Iskljuci sve animacije/tranzicije/shadow-e ? ubrzava paint u Chrome print preview-u */
   *, *::before, *::after {
     transition: none !important;
     animation: none !important;
@@ -1970,7 +1970,7 @@ td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
   body { font-size: 10px !important; }
   .print-only { display: block !important; }
   .print-header h1 { color: #000 !important; }
-  /* Skrivanje UI-a nevezanog za sadržaj */
+  /* Skrivanje UI-a nevezanog za sadr?aj */
   .header-top, .project-bar, .wp-tabs, .view-tabs, .filter-bar, .filter-toggle-btn,
   .auth-overlay, .cal-overlay, .toast, .reminder-zone, .legend, .add-phase-bar,
   .td-actions, .m-card-actions, #printOverlay, .user-bar, .online-badge, .offline-badge,
@@ -2025,7 +2025,7 @@ td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
   .gantt-cell.bar-phase, .gantt-cell.bar-phase-start, .gantt-cell.bar-phase-end {
     border-color: rgba(0,0,0,0.25) !important;
   }
-  /* Pattern fallback: guarantees Mašinska vs Elektro is distinguishable even in B/W prints.
+  /* Pattern fallback: guarantees Ma?inska vs Elektro is distinguishable even in B/W prints.
      Electrical bars get diagonal stripes, mechanical stays solid. */
   .gantt-cell.bar-elec.bar-phase, .gantt-cell.bar-elec.bar-phase-start, .gantt-cell.bar-elec.bar-phase-end {
     background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.55) 0 2px, transparent 2px 6px) !important;
@@ -2158,14 +2158,14 @@ td.td-loc .loc-select { border-left: 3px solid transparent; }
 }
 
 /* -----------------------------------------------------------------------
-   PLAN MONTAŽE MODULE — Vite (F5.1.a)
+   PLAN MONTA?E MODULE ? Vite (F5.1.a)
    Shell, project bar overrides, view tabs, generic modal/form helpers.
    ----------------------------------------------------------------------- */
 .plan-main { padding:18px 24px 32px; min-height:calc(100vh - 64px); background:var(--bg); }
 .plan-toolbar { display:flex; flex-direction:column; gap:10px; margin-bottom:18px; }
 .plan-body { display:flex; flex-direction:column; gap:14px; }
 
-/* Project bar — extends legacy .project-bar with Vite-specific layout */
+/* Project bar ? extends legacy .project-bar with Vite-specific layout */
 .plan-toolbar .project-bar {
   display:flex; align-items:center; gap:14px; flex-wrap:wrap;
   padding:10px 14px; background:var(--surface); border:1px solid var(--border);
@@ -2177,7 +2177,7 @@ td.td-loc .loc-select { border-left: 3px solid transparent; }
 .project-bar-meta { font-size:11px; color:var(--text3); margin-left:8px; font-family:var(--mono); }
 .project-bar-rok:not(:empty) { color:var(--text2); }
 
-/* WP tabs wrapper — adds + Pozicija button on right */
+/* WP tabs wrapper ? adds + Pozicija button on right */
 .wp-tabs-wrap { display:flex; align-items:stretch; gap:8px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:0 8px; }
 .wp-tabs-wrap .wp-tabs { flex:1; border-bottom:none; background:transparent; padding:0; }
 .wp-tabs-wrap .wp-tab { background:transparent; border:none; cursor:pointer; font-family:var(--font); }
@@ -2195,7 +2195,7 @@ td.td-loc .loc-select { border-left: 3px solid transparent; }
 .btn-ghost.danger { color:var(--red); border-color:color-mix(in srgb, var(--red) 35%, var(--border2)); }
 .btn-ghost.danger:hover:not([disabled]) { background:color-mix(in srgb, var(--red) 10%, var(--surface2)); border-color:var(--red); }
 
-/* Generic modal — reused by metaModals.js */
+/* Generic modal ? reused by metaModals.js */
 .modal-overlay {
   position:fixed; inset:0; z-index:2500;
   background:rgba(0,0,0,0.6); backdrop-filter:blur(6px);
@@ -2220,7 +2220,7 @@ td.td-loc .loc-select { border-left: 3px solid transparent; }
 .modal-close:hover { background:var(--surface2); color:var(--text); }
 .modal-body { padding:18px 20px 20px; overflow-y:auto; }
 
-/* Form helpers — used in metaModals + later phases */
+/* Form helpers ? used in metaModals + later phases */
 .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 14px; }
 .form-grid > label { display:flex; flex-direction:column; gap:4px; font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; }
 .form-grid input[type="text"], .form-grid input[type="date"], .form-grid select {
@@ -2271,7 +2271,7 @@ body.module-plan > .filter-bar { display:none !important; }
   .project-bar-actions .btn { flex:1; justify-content:center; }
 }
 
-/* --- Plan Montaže (Vite) — plan tabela / filter bar / add bar --- */
+/* --- Plan Monta?e (Vite) ? plan tabela / filter bar / add bar --- */
 .plan-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:var(--surface); margin-top:10px; }
 .plan-table { width:100%; border-collapse:collapse; font-size:12px; min-width:1400px; }
 .plan-table thead th { background:var(--surface2); color:var(--text2); text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; white-space:nowrap; position:sticky; top:0; z-index:2; }
@@ -2309,7 +2309,7 @@ body.module-plan > .filter-bar { display:none !important; }
 .plan-table .row-btn:hover { background:var(--surface3); color:var(--text); }
 .plan-table .row-btn.btn-del:hover { border-color:var(--red); color:var(--red); }
 
-/* Filter bar — Vite varijanta (bez .filter-group) */
+/* Filter bar ? Vite varijanta (bez .filter-group) */
 .plan-body .filter-bar { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:flex-end; padding:10px 12px; border:1px solid var(--border); background:var(--surface); border-radius:10px; margin-bottom:8px; }
 .plan-body .fb-field { display:flex; flex-direction:column; gap:3px; min-width:130px; }
 .plan-body .fb-field > span { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:0.7px; font-weight:600; }
@@ -2318,12 +2318,12 @@ body.module-plan > .filter-bar { display:none !important; }
 .plan-body .fb-actions { display:flex; gap:8px; align-items:center; margin-left:auto; }
 .plan-body .fb-count { font-family:var(--mono); color:var(--text3); font-size:11px; }
 
-/* Add phase bar — Vite varijanta */
+/* Add phase bar ? Vite varijanta */
 .plan-body .add-phase-bar { display:flex; gap:8px; padding:8px 0; }
 .plan-body .add-phase-bar input { flex:1; background:var(--surface2); border:1px solid var(--border2); color:var(--text); border-radius:8px; padding:9px 12px; font:inherit; outline:none; }
 .plan-body .add-phase-bar input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
 
-/* Reminder zone — Vite — vec postoji legacy stil za .reminder-card; samo grid wrapper */
+/* Reminder zone ? Vite ? vec postoji legacy stil za .reminder-card; samo grid wrapper */
 .plan-body .reminder-zone { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
 .plan-body .reminder-zone:empty { display:none; }
 
@@ -2334,10 +2334,10 @@ body.module-plan > .filter-bar { display:none !important; }
 .plan-body .gantt-hint { font-size:10.5px; color:var(--text3); margin-left:auto; }
 .plan-body .gantt-empty { padding:24px; text-align:center; color:var(--text3); font-size:12px; }
 
-/* Drag tooltip — global, body-level */
+/* Drag tooltip ? global, body-level */
 #ganttDragTip.gantt-drag-tip { position:fixed; z-index:9999; pointer-events:none; background:var(--surface); border:1px solid var(--accent); color:var(--text); border-radius:6px; padding:6px 10px; font-size:11.5px; font-family:var(--mono); box-shadow:0 4px 12px rgba(0,0,0,0.3); display:none; }
 
-/* Total Gantt — filter bar (koristi .filter-bar/.fb-field stilove iz plan-body) i WP filter */
+/* Total Gantt ? filter bar (koristi .filter-bar/.fb-field stilove iz plan-body) i WP filter */
 .plan-body .tg-filter-bar { margin-bottom:8px; }
 .plan-body .tg-wp-filter { display:flex; flex-wrap:wrap; gap:6px 10px; padding:8px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface); margin-bottom:8px; align-items:center; }
 .plan-body .tg-wp-label { font-size:9px; color:var(--text3); font-weight:600; text-transform:uppercase; letter-spacing:0.7px; margin-right:4px; }
@@ -2350,7 +2350,7 @@ body.module-plan > .filter-bar { display:none !important; }
 .plan-body .tg-wp-hdr .tg-wp-rn { font-size:9px; opacity:0.7; }
 .plan-body .tg-phase-label { background:var(--surface2); border-right:2px solid var(--border2); padding-left:24px; }
 
-/* -- F5.6 — Export modal + header dugme ------------------------------- */
+/* -- F5.6 ? Export modal + header dugme ------------------------------- */
 .btn-export-header {
   display: inline-flex;
   align-items: center;
@@ -2423,7 +2423,7 @@ body.module-plan > .filter-bar { display:none !important; }
   color: var(--text3);
 }
 
-/* -- F5.5 — Reminder zone head + send button + modal list ------------- */
+/* -- F5.5 ? Reminder zone head + send button + modal list ------------- */
 .plan-body .reminder-zone .reminder-zone-head {
   display:flex; justify-content:space-between; align-items:center; gap:10px;
   padding:6px 10px; margin-bottom:8px; border:1px solid var(--border);
@@ -2445,7 +2445,7 @@ body.module-plan > .filter-bar { display:none !important; }
 .modal-panel .reminder-row .rr-meta { margin-top:3px; font-size:10.5px; color:var(--text2); }
 .modal-panel .reminder-row .rr-reasons { margin-top:3px; font-size:10.5px; color:var(--text3); font-style:italic; }
 
-/* -- F5.5 — 3D model dialog ------------------------------------------- */
+/* -- F5.5 ? 3D model dialog ------------------------------------------- */
 .modal-panel .model-thumb { width:100%; aspect-ratio:4/3; background:var(--surface2); border:1px solid var(--border2); border-radius:var(--radius); display:flex; align-items:center; justify-content:center; overflow:hidden; margin-bottom:10px; }
 .modal-panel .model-thumb img { max-width:100%; max-height:100%; object-fit:contain; }
 .modal-panel .model-empty { width:100%; aspect-ratio:4/3; max-height:160px; background:var(--surface2); border:1px dashed var(--border2); border-radius:var(--radius); display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:12px; margin-bottom:10px; }
@@ -2453,12 +2453,12 @@ body.module-plan > .filter-bar { display:none !important; }
   .modal-panel .model-thumb, .modal-panel .model-empty { aspect-ratio:16/9; }
 }
 
-/* 3D model row button — has-model = sa modelom (highlight) */
+/* 3D model row button ? has-model = sa modelom (highlight) */
 .row-btn.btn-3d { background:var(--surface2); border:1px solid var(--border2); color:var(--text2); }
 .row-btn.btn-3d:hover { border-color:var(--accent); color:var(--accent); }
 .row-btn.btn-3d.has-model { background:rgba(110, 160, 255, 0.18); border-color:#4b79c8; color:#aac8ff; box-shadow:0 0 0 1px rgba(110, 160, 255, 0.25) inset; }
 
-/* -- F5.5 — Status panel (fixed bottom-right) ------------------------- */
+/* -- F5.5 ? Status panel (fixed bottom-right) ------------------------- */
 .plan-status-panel {
   position: fixed;
   right: 14px;
@@ -2495,7 +2495,7 @@ body.module-plan > .filter-bar { display:none !important; }
   .plan-status-panel { right:8px; bottom:8px; padding:5px 9px; font-size:10.5px; }
 }
 
-/* Mobilne kartice — hide na desktopu, prikazi na mobile, sakrij desktop tabelu */
+/* Mobilne kartice ? hide na desktopu, prikazi na mobile, sakrij desktop tabelu */
 .plan-body .mobile-cards { display:none; }
 .plan-body .m-empty { padding:18px; text-align:center; color:var(--text3); font-size:12px; }
 @media (max-width: 767px) {
@@ -2540,7 +2540,7 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .loc-firstrun-steps { margin:0; padding-left:20px; font-size:12px; color:var(--text2); line-height:1.6; }
 .loc-firstrun-steps code { font-family:var(--mono); font-size:11px; padding:1px 4px; background:var(--surface); border:1px solid var(--border2); border-radius:3px; }
 
-/* Quick move modal — trenutni placement-i za izabranu stavku. */
+/* Quick move modal ? trenutni placement-i za izabranu stavku. */
 .loc-current-state { padding:8px 10px; background:var(--surface2); border:1px solid var(--border2); border-radius:6px; }
 .loc-current-title { font-size:11px; color:var(--text3); margin-bottom:6px; text-transform:uppercase; letter-spacing:.4px; }
 .loc-chip-row { display:flex; flex-wrap:wrap; gap:6px; }
@@ -2615,6 +2615,22 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
   border-radius:3px; font-size:10px; font-weight:600; letter-spacing:.5px;
   color:var(--accent); text-transform:uppercase;
 }
+/* Dijagnosti?ka linija ispod parsed-hint-a: pokazuje verziju app-a i status
+ * ERP lookup-a; vidi scanModal.js ? diagHtml. "Osve?i app" dugme unutar nje
+ * okida forceAppReload() (unregister SW + clear caches + reload). */
+.loc-scan-diag {
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px;
+}
+.loc-scan-btn-reload {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:3px 8px; font-size:11px; font-weight:600;
+  background:color-mix(in srgb, var(--warn, #f0a93a) 20%, transparent);
+  color:var(--warn, #f0a93a);
+  border:1px solid color-mix(in srgb, var(--warn, #f0a93a) 50%, transparent);
+  border-radius:4px; cursor:pointer;
+}
+.loc-scan-btn-reload:hover { filter:brightness(1.15); }
+.loc-scan-btn-reload:active { transform:translateY(1px); }
 .loc-scan-form-body .emp-field.col-full { grid-column: 1 / -1; }
 .loc-scan-err { min-height:18px; color:var(--err, #ff6b6b); font-size:13px; }
 .loc-scan-actions { display:flex; gap:8px; margin-top:8px; }
@@ -2670,7 +2686,7 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .loc-search-input:focus { outline:2px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset:0; border-color:var(--accent); }
 .loc-filter-hint { font-size:11px; color:var(--text3); white-space:nowrap; }
 
-/* -- Istorija — filteri grid ----------------------------------- */
+/* -- Istorija ? filteri grid ----------------------------------- */
 .loc-history-filters {
   display:grid;
   grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
@@ -2712,7 +2728,7 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .loc-table thead th { background:var(--surface2); color:var(--text3); font-size:10px; text-transform:uppercase; letter-spacing:0.3px; }
 .loc-table tbody tr:hover { background:color-mix(in srgb, var(--accent) 6%, transparent); }
 
-/* --- KADROVSKA ZARADE — sub-tabs + uslovi modal proširenje (K3.2) --- */
+/* --- KADROVSKA ZARADE ? sub-tabs + uslovi modal pro?irenje (K3.2) --- */
 .kadr-subtab-strip {
   display:flex; gap:6px; padding:10px 20px 4px;
   border-bottom:1px solid var(--border2);
@@ -2762,7 +2778,7 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .kadr-type-badge.t-sal-dogovor  { background:color-mix(in srgb, #9B51E0 14%, var(--surface)); color:#9B51E0; border-color:color-mix(in srgb, #9B51E0 40%, transparent); }
 .kadr-type-badge.t-sal-satnica  { background:color-mix(in srgb, #F2994A 14%, var(--surface)); color:#F2994A; border-color:color-mix(in srgb, #F2994A 40%, transparent); }
 
-/* --- KADROVSKA ZARADE — Mesecni obracun (K3.2) --- */
+/* --- KADROVSKA ZARADE ? Mesecni obracun (K3.2) --- */
 .payroll-toolbar { flex-wrap:wrap; gap:8px; }
 .payroll-toolbar #payrPrevMonth,
 .payroll-toolbar #payrNextMonth { padding:6px 10px; font-size:14px; line-height:1; }
@@ -2873,7 +2889,7 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 }
 
 /* -----------------------------------------------------------------------
-   PM MODAL — generic full-screen modal (koristi emp-bulk i drugi moduli).
+   PM MODAL ? generic full-screen modal (koristi emp-bulk i drugi moduli).
    ----------------------------------------------------------------------- */
 .pm-modal-backdrop {
   position:fixed; inset:0;
@@ -2945,7 +2961,7 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .btn.btn-sm { padding:4px 10px; font-size:12px; }
 
 /* -----------------------------------------------------------------------
-   EMPLOYEES BULK — brzi unos grid + Excel import preview.
+   EMPLOYEES BULK ? brzi unos grid + Excel import preview.
    ----------------------------------------------------------------------- */
 .emp-bulk-info {
   display:flex; align-items:center; gap:10px;
@@ -3023,10 +3039,10 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .emp-bulk-import-drop .muted { color:var(--text3); margin-top:8px; font-size:12px; }
 
 /* -----------------------------------------------------------------------
-   PLAN MONTAŽE — D&D redosled faza, dugme "Opis", PDF export overrides
+   PLAN MONTA?E ? D&D redosled faza, dugme "Opis", PDF export overrides
    ----------------------------------------------------------------------- */
 
-/* — Drag handle u # koloni — */
+/* ? Drag handle u # koloni ? */
 .plan-table .td-num { white-space: nowrap; padding-left: 4px; padding-right: 4px; }
 .plan-table .td-num .td-num-n {
   display: inline-block;
@@ -3059,7 +3075,7 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 }
 .row-drag-handle:active { cursor: grabbing; }
 
-/* — Dragging / drop indicator — */
+/* ? Dragging / drop indicator ? */
 .plan-table tbody tr.phase-row-dragging td {
   opacity: 0.45;
   background: var(--accent-dim) !important;
@@ -3071,7 +3087,7 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
   box-shadow: inset 0 -3px 0 0 var(--accent);
 }
 
-/* — "Opis" dugme ispod naziva faze (desktop) — */
+/* ? "Opis" dugme ispod naziva faze (desktop) ? */
 .phase-desc-btn {
   background: var(--surface2);
   border: 1px solid var(--border2);
@@ -3103,13 +3119,13 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .phase-desc-btn .pdb-ic { font-size: 11px; }
 .phase-desc-btn .pdb-lbl { text-transform: lowercase; letter-spacing: 0.2px; }
 
-/* Mobilni "Opis" dugme — bazni .row-btn vec postoji; samo has-desc naglašavamo */
+/* Mobilni "Opis" dugme ? bazni .row-btn vec postoji; samo has-desc nagla?avamo */
 .row-btn.btn-desc.has-desc {
   border-color: var(--status-done);
   color: var(--status-done);
 }
 
-/* — Textarea u description dijalogu — */
+/* ? Textarea u description dijalogu ? */
 .phase-description-textarea {
   width: 100%;
   background: var(--surface2);
@@ -3130,10 +3146,10 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 }
 
 /* -----------------------------------------------------------------------
-   PDF EXPORT OVERRIDES — aktivno preko `.pdf-export` klase na <body>
+   PDF EXPORT OVERRIDES ? aktivno preko `.pdf-export` klase na <body>
    koju dodaje exportModal u html2canvas `onclone` callback-u.
 
-   html2canvas 1.4.1 ne podržava moderne CSS funkcije (color-mix, oklch…)
+   html2canvas 1.4.1 ne podr?ava moderne CSS funkcije (color-mix, oklch?)
    pa bi Gantt u dark mode-u izgledao skoro potpuno crn. Ovde "zakucavamo"
    eksplicitne, print-safe boje van `@media print`.
    =================================================================== */
@@ -3205,7 +3221,7 @@ body.pdf-export .gantt-label-status.gs-1 { color: #1a56a8 !important; }
 body.pdf-export .gantt-label-status.gs-2 { color: #1b7d3a !important; }
 body.pdf-export .gantt-label-status.gs-3 { color: #a52020 !important; }
 
-/* Bars: zadržavamo inline background (boja lokacije) koji je
+/* Bars: zadr?avamo inline background (boja lokacije) koji je
    postavljen preko `style="background-color:..."`. Dodajemo vidljiv border
    i vizuelni pattern za mech/elec razlikovanje u B/W. */
 body.pdf-export .gantt-cell.bar-phase,
@@ -3231,7 +3247,7 @@ body.pdf-export .phase-desc-btn {
   display: none !important;
 }
 
-/* Total Gantt — isti overrides, vec su nasledeni preko klasa gantt-*.
+/* Total Gantt ? isti overrides, vec su nasledeni preko klasa gantt-*.
    Dodatno: WP / machine group header-i moraju biti citki. */
 body.pdf-export .gantt-machine-hdr td,
 body.pdf-export .gantt-wp-group-hdr td,

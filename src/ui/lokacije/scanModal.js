@@ -16,6 +16,49 @@ import {
 } from '../../services/lokacije.js';
 import { fetchBigtehnOpSnapshotByRnAndTp } from '../../services/planProizvodnje.js';
 import { enqueueMovement } from '../../services/offlineQueue.js';
+import { getIsOnline } from '../../state/auth.js';
+
+/* `__APP_VERSION__` je string koji Vite inject-uje u build time (git SHA ili
+ * CF_PAGES_COMMIT_SHA). Koristimo ga u dijagnostičkom badge-u pored polja
+ * crtež da magacioner može odmah da vidi koja verzija app-a se izvršava
+ * (bitno za "ne pokazuje crtež" troubleshooting — PWA često isporučuje stari
+ * JS iz service worker cache-a). */
+/* global __APP_VERSION__ */
+const APP_VERSION =
+  typeof __APP_VERSION__ === 'string' && __APP_VERSION__ ? __APP_VERSION__ : 'dev';
+
+/**
+ * "Hard reset" za PWA na telefonu kad magacioner vidi da autofill ne radi
+ * (tipično stari JS cached od prethodnog deploy-a). Redosled:
+ *   1. unregister svih service worker-a
+ *   2. obriši sve `caches` (Workbox precache + runtime cache-ove)
+ *   3. obriši localStorage drawing cache (ne toucha login token)
+ *   4. reload sa no-cache hint
+ * Sve korake zavrti BEST-EFFORT: ako pojedinačni korak fail-uje (npr. stari
+ * browser), idemo na sledeći.
+ */
+async function forceAppReload() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister().catch(() => {})));
+    }
+  } catch (e) {
+    console.warn('[scan] SW unregister failed', e);
+  }
+  try {
+    if ('caches' in window) {
+      const names = await caches.keys();
+      await Promise.all(names.map(n => caches.delete(n).catch(() => {})));
+    }
+  } catch (e) {
+    console.warn('[scan] caches.delete failed', e);
+  }
+  /* Dodaj cache-bust query da browser sigurno ne posluži iz HTTP cache-a. */
+  const url = new URL(window.location.href);
+  url.searchParams.set('_r', String(Date.now()));
+  window.location.replace(url.toString());
+}
 
 /* ZXing je ~250KB gzip i treba samo na ovom ekranu — lazy load da ne kasnimo
  * initial load za sve korisnike (većina nikad ne skenira sa desktop-a). */
@@ -655,11 +698,22 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
 
     state.erpSnapshot = null;
     let erpSnap = null;
+    /* `erpLookupStatus` ide u dijagnostičku liniju hint-a i pokazuje magacioneru
+     * šta se desilo sa ERP lookup-om: 'ok' | 'not_found' | 'offline' | 'error' | 'skip'. */
+    let erpLookupStatus = 'skip';
+    let erpLookupErr = '';
     if (format === 'rnz' && orderNo && itemRefId) {
-      try {
-        erpSnap = await fetchBigtehnOpSnapshotByRnAndTp(orderNo, itemRefId);
-      } catch (e) {
-        console.warn('[scan] ERP snapshot failed', e);
+      if (!getIsOnline()) {
+        erpLookupStatus = 'offline';
+      } else {
+        try {
+          erpSnap = await fetchBigtehnOpSnapshotByRnAndTp(orderNo, itemRefId);
+          erpLookupStatus = erpSnap ? 'ok' : 'not_found';
+        } catch (e) {
+          console.warn('[scan] ERP snapshot failed', e);
+          erpLookupStatus = 'error';
+          erpLookupErr = e?.message || String(e);
+        }
       }
       state.erpSnapshot = erpSnap;
     }
@@ -708,9 +762,40 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
         }
       }
 
+      /* Dijagnostička linija — UVEK vidljiva za RNZ skeniranja. Pokazuje:
+       *   - verziju aplikacije (`__APP_VERSION__` iz Vite build-a) → user vidi
+       *     odmah da li je PWA skinuo novi JS ili i dalje vrti stari cache;
+       *   - status ERP lookup-a (cache nađen / nije / offline / greška);
+       *   - dugme "Osveži app" ako je status NOT_FOUND ili ERROR — jedan klik
+       *     deregistruje service worker + briše caches + reload. Neophodno kad
+       *     magacioner vidi stari autofill flow. */
+      let diagHtml = '';
+      if (format === 'rnz') {
+        const statusTxt =
+          erpLookupStatus === 'ok'
+            ? '✔ nađen u BigTehn cache-u'
+            : erpLookupStatus === 'not_found'
+              ? '✖ nema u BigTehn cache-u'
+              : erpLookupStatus === 'offline'
+                ? '⚠ offline — ne mogu da proverim'
+                : erpLookupStatus === 'error'
+                  ? `⚠ greška: ${escHtml(erpLookupErr || 'nepoznata')}`
+                  : '—';
+        const needsReload = erpLookupStatus === 'not_found' || erpLookupStatus === 'error';
+        const btnHtml = needsReload
+          ? ` <button type="button" class="loc-scan-btn-reload" data-act="reloadApp">🔄 Osveži app</button>`
+          : '';
+        diagHtml =
+          `<div class="loc-scan-diag loc-muted" style="margin-top:6px;font-size:11px;line-height:1.4">` +
+          `<span>app v${escHtml(APP_VERSION)}</span> · ` +
+          `<span>ERP cache: ${statusTxt}</span>` +
+          btnHtml +
+          `</div>`;
+      }
+
       hint.innerHTML =
         `${badgeHtml}<span class="loc-scan-parsed-raw">Skenirano: <strong>${escHtml(rawHint)}</strong></span> ` +
-        `<span class="loc-muted">→ nalog <strong>${escHtml(orderNo)}</strong>, TP <strong>${escHtml(itemRefId)}</strong>${drawingPart}</span>${erpExtra}`;
+        `<span class="loc-muted">→ nalog <strong>${escHtml(orderNo)}</strong>, TP <strong>${escHtml(itemRefId)}</strong>${drawingPart}</span>${erpExtra}${diagHtml}`;
     } else {
       hint.hidden = true;
       hint.innerHTML = '';
@@ -945,6 +1030,18 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
         break;
       case 'submit':
         submit();
+        break;
+      case 'reloadApp':
+        /* Hard reset PWA cache-a — vidi forceAppReload() za redosled koraka.
+         * Ovo rešava "stari autofill flow nakon novog deploy-a" bez da radnik
+         * mora da deinstalira i ponovo doda app na home screen. */
+        showToast('♻ Osvežavam aplikaciju…');
+        try {
+          await forceAppReload();
+        } catch (e) {
+          console.warn('[scan] force reload failed', e);
+          window.location.reload();
+        }
         break;
       default:
         break;

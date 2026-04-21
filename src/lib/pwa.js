@@ -32,14 +32,26 @@ export async function registerMobilePWA() {
       immediate: true,
       onRegisteredSW(swUrl, registration) {
         console.info('[pwa] SW registered', swUrl);
+        if (!registration) return;
         /* Periodični update check — svaki put kad radnik otvori app,
          * pokušamo da skinemo novu verziju. Bez ovoga SW bi update-ovao
-         * samo kad browser slučajno „odluči". 15 min je razuman kompromis. */
-        if (registration) {
-          setInterval(() => {
+         * samo kad browser slučajno „odluči". Skraćeno na 5 min (magacioneri
+         * često koriste app kratko i zatvore je pre 15 min). */
+        setInterval(() => {
+          registration.update().catch(() => {});
+        }, 5 * 60 * 1000);
+        /* Forsiraj update check kad god se PWA vrati u foreground — tipičan
+         * slučaj: magacioner zaključa telefon, otvori posle sat vremena, a
+         * deploy se desio u međuvremenu. Bez ovoga vrti stari JS dok god ga
+         * 5-min interval ne stigne (ili uopšte ne ako se tab-a ne drži
+         * otvorenim u pozadini, što je Android default). */
+        const onVisible = () => {
+          if (document.visibilityState === 'visible') {
             registration.update().catch(() => {});
-          }, 15 * 60 * 1000);
-        }
+          }
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('focus', onVisible);
       },
       onOfflineReady() {
         console.info('[pwa] Ready for offline use.');
