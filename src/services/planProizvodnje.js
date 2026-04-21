@@ -160,7 +160,14 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija) {
     operacija == null || operacija === '' ? null : parseInt(String(operacija).trim(), 10);
   const opFinite = Number.isFinite(opNum);
 
-  /* 1) Direktno iz RN cache-a — radi bez obzira da li je RN otvoren ili zatvoren. */
+  /* 1) Direktno iz RN cache-a — radi bez obzira da li je RN otvoren ili zatvoren.
+   *
+   * BigTehn `tRN.IdentBroj` je u formatu `"nalog/broj_tp"` (npr. `"9000/568"`),
+   * TJ. već kombinuje broj naloga i broj TP u jedan string. Zato kod RNZ
+   * barkoda `RNZ:XXXX:9000/522:…` tražimo PRVO po punom
+   * kombinovanom ident_broj-u (`orderNo + '/' + operacija`), pa tek
+   * fallback na samo `orderNo` (ako bi se negde koristio drugi format).
+   */
   const woCols = [
     'id',
     'ident_broj',
@@ -183,10 +190,28 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija) {
     return Array.isArray(data) ? data : [];
   };
 
-  let woRows = await tryFetchWo(ident);
-  if (woRows.length === 0 && /^\d+$/.test(ident)) {
+  /* Primarni lookup: "nalog/operacija" (kombinovani ident_broj u BigTehn-u). */
+  const candidates = [];
+  if (opFinite) {
+    candidates.push(`${ident}/${opNum}`);
+    /* Ako je nalog sa vodećim nulama (npr. "07351") a u cache-u je "7351/1088". */
+    if (/^\d+$/.test(ident)) {
+      const normalized = String(parseInt(ident, 10));
+      if (normalized !== ident) candidates.push(`${normalized}/${opNum}`);
+    }
+  }
+  /* Fallback: samo nalog bez TP (legacy, ako se ikad koristi). */
+  candidates.push(ident);
+  if (/^\d+$/.test(ident)) {
     const normalized = String(parseInt(ident, 10));
-    if (normalized !== ident) woRows = await tryFetchWo(normalized);
+    if (normalized !== ident) candidates.push(normalized);
+  }
+
+  let woRows = [];
+  for (const c of candidates) {
+    if (!c) continue;
+    woRows = await tryFetchWo(c);
+    if (woRows.length > 0) break;
   }
   if (woRows.length === 0) return null;
   if (woRows.length > 1) {
