@@ -127,6 +127,71 @@ export async function loadAllOpenOperations() {
   return Array.isArray(data) ? data : [];
 }
 
+/**
+ * Jedna operacija iz BigTehn cache-a (isti izvor kao Plan proizvodnje), po
+ * broju radnog naloga (`IdentBroj` / `rn_ident_broj`) i broju TP (`operacija`).
+ * Koristi se u modulu Lokacije da se posle RNZ barkoda automatski popune
+ * broj crteža, količina, naziv dela itd.
+ *
+ * @param {string} rnIdentBroj  npr. `"7351"`
+ * @param {string|number} operacija  broj tehnološkog postupka (TP), npr. `1088`
+ * @returns {Promise<object|null>} jedan red iz `v_production_operations` ili `null`
+ */
+export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija) {
+  if (!getIsOnline() || rnIdentBroj == null || rnIdentBroj === '' || operacija == null) {
+    return null;
+  }
+  const ident = String(rnIdentBroj).trim();
+  const opNum = parseInt(String(operacija).trim(), 10);
+  if (!ident || !Number.isFinite(opNum)) return null;
+
+  const cols = [
+    'broj_crteza',
+    'komada_total',
+    'komada_done',
+    'naziv_dela',
+    'materijal',
+    'dimenzija_materijala',
+    'opis_rada',
+    'rok_izrade',
+    'customer_short',
+    'customer_name',
+    'rn_ident_broj',
+    'operacija',
+    'line_id',
+    'work_order_id',
+  ].join(',');
+
+  const tryFetch = async idCandidate => {
+    const params = new URLSearchParams();
+    params.set('select', cols);
+    params.set('rn_ident_broj', `eq.${idCandidate}`);
+    params.set('operacija', `eq.${opNum}`);
+    params.set('limit', '8');
+    const data = await sbReq(`v_production_operations?${params.toString()}`);
+    return Array.isArray(data) ? data : [];
+  };
+
+  let rows = await tryFetch(ident);
+  /* Ako je korisnik uneo npr. "07351" a u cache-u je "7351" (ili obrnuto). */
+  if (rows.length === 0 && /^\d+$/.test(ident)) {
+    const normalized = String(parseInt(ident, 10));
+    if (normalized !== ident) {
+      rows = await tryFetch(normalized);
+    }
+  }
+
+  if (rows.length === 0) return null;
+  if (rows.length > 1) {
+    console.warn('[fetchBigtehnOpSnapshotByRnAndTp] više redova za RN+TP — uzimam prvi', {
+      ident,
+      opNum,
+      n: rows.length,
+    });
+  }
+  return rows[0];
+}
+
 /* ── Writes (overlay) ── */
 
 /**

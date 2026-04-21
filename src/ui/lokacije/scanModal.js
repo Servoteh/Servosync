@@ -14,6 +14,7 @@ import {
   fetchLocations,
   locCreateMovement,
 } from '../../services/lokacije.js';
+import { fetchBigtehnOpSnapshotByRnAndTp } from '../../services/planProizvodnje.js';
 import { enqueueMovement } from '../../services/offlineQueue.js';
 
 /* ZXing je ~250KB gzip i treba samo na ovom ekranu — lazy load da ne kasnimo
@@ -234,6 +235,8 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
      * pregledamo sve naloge za taj crtež. Set-uje se pri svakom refresh-u. */
     scopedOrderNo: '',
     item_ref_table: 'bigtehn_rn',
+    /** @type {object|null} red iz v_production_operations (BigTehn cache) */
+    erpSnapshot: null,
   };
 
   const $ = sel => overlay.querySelector(sel);
@@ -650,11 +653,24 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
     $('#locScanItemId').value = itemRefId;
     $('#locScanOrder').value = orderNo;
 
-    /* Autofill broja crteža: RNZ barkod ga ne nosi, ali ga je radnik nekad ranije
-     * upisao za isti (nalog, TP). Cache je u localStorage da preživi F5. */
+    state.erpSnapshot = null;
+    let erpSnap = null;
+    if (format === 'rnz' && orderNo && itemRefId) {
+      try {
+        erpSnap = await fetchBigtehnOpSnapshotByRnAndTp(orderNo, itemRefId);
+      } catch (e) {
+        console.warn('[scan] ERP snapshot failed', e);
+      }
+      state.erpSnapshot = erpSnap;
+    }
+
+    /* Autofill broja crteža: 1) RNZ iz ERP cache (Plan proizvodnje), 2) short format
+     * sa barkoda, 3) localStorage keš od ranijeg unosa. */
     const cachedDrawing =
-      drawingNo || (orderNo && itemRefId ? getDrawingCache(orderNo, itemRefId) : '');
-    $('#locScanDrawing').value = cachedDrawing;
+      !drawingNo && orderNo && itemRefId ? getDrawingCache(orderNo, itemRefId) : '';
+    const erpDrawing = erpSnap?.broj_crteza ? String(erpSnap.broj_crteza).trim() : '';
+    const finalDrawing = (drawingNo || erpDrawing || cachedDrawing || '').trim();
+    $('#locScanDrawing').value = finalDrawing;
 
     const hint = $('#locScanParsed');
     if (rawHint && (orderNo || itemRefId)) {
@@ -663,14 +679,38 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
       const badgeHtml = fmtBadge
         ? `<span class="loc-scan-parsed-badge">${escHtml(fmtBadge)}</span> `
         : '';
-      const drawingPart = drawingNo
-        ? `, crtež <strong>${escHtml(drawingNo)}</strong>`
-        : cachedDrawing
-          ? `, crtež <strong>${escHtml(cachedDrawing)}</strong> <em class="loc-muted">(iz keša)</em>`
-          : ' <em class="loc-muted">(upiši broj crteža sa teksta nalepnice)</em>';
+      let drawingPart = '';
+      if (drawingNo) {
+        drawingPart = `, crtež <strong>${escHtml(drawingNo)}</strong>`;
+      } else if (erpDrawing) {
+        drawingPart = `, crtež <strong>${escHtml(erpDrawing)}</strong> <em class="loc-muted">(iz plana / BigTehn)</em>`;
+      } else if (cachedDrawing) {
+        drawingPart = `, crtež <strong>${escHtml(cachedDrawing)}</strong> <em class="loc-muted">(iz keša)</em>`;
+      } else {
+        drawingPart = ' <em class="loc-muted">(upiši broj crteža sa teksta nalepnice)</em>';
+      }
+
+      let erpExtra = '';
+      if (erpSnap) {
+        const nd = erpSnap.naziv_dela ? escHtml(String(erpSnap.naziv_dela)) : '';
+        const kt = erpSnap.komada_total != null ? escHtml(String(erpSnap.komada_total)) : '';
+        const kd = erpSnap.komada_done != null ? escHtml(String(erpSnap.komada_done)) : '';
+        const mat = erpSnap.materijal ? escHtml(String(erpSnap.materijal)) : '';
+        const cust = erpSnap.customer_short || erpSnap.customer_name;
+        const custH = cust ? escHtml(String(cust)) : '';
+        const parts = [];
+        if (nd) parts.push(`deo: ${nd}`);
+        if (kt) parts.push(`kom. ukupno: ${kt}${kd !== '' ? ` (urađeno ${kd})` : ''}`);
+        if (mat) parts.push(`mat.: ${mat}`);
+        if (custH) parts.push(`kupac: ${custH}`);
+        if (parts.length) {
+          erpExtra = `<div class="loc-muted" style="margin-top:6px;font-size:12px;line-height:1.35">${parts.join(' · ')}</div>`;
+        }
+      }
+
       hint.innerHTML =
         `${badgeHtml}<span class="loc-scan-parsed-raw">Skenirano: <strong>${escHtml(rawHint)}</strong></span> ` +
-        `<span class="loc-muted">→ nalog <strong>${escHtml(orderNo)}</strong>, TP <strong>${escHtml(itemRefId)}</strong>${drawingPart}</span>`;
+        `<span class="loc-muted">→ nalog <strong>${escHtml(orderNo)}</strong>, TP <strong>${escHtml(itemRefId)}</strong>${drawingPart}</span>${erpExtra}`;
     } else {
       hint.hidden = true;
       hint.innerHTML = '';
@@ -700,6 +740,19 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
     state.currentPlacements = (rows || []).filter(r => Number(r.quantity) > 0);
     renderChips();
     populateFromSelect();
+
+    /* Ako nema postojećih placement-a, predloži količinu iz ERP-a (preostalo za TP). */
+    const snap = state.erpSnapshot;
+    if (snap && state.currentPlacements.length === 0) {
+      const total = Number(snap.komada_total);
+      const done = Number(snap.komada_done ?? 0);
+      if (Number.isFinite(total) && total > 0) {
+        const remaining = Math.max(0, total - (Number.isFinite(done) ? done : 0));
+        const q = remaining > 0 ? remaining : total;
+        const qtyEl = /** @type {HTMLInputElement|null} */ ($('#locScanQty'));
+        if (qtyEl) qtyEl.value = String(q);
+      }
+    }
   }
 
   async function submit() {
