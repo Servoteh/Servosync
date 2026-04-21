@@ -81,8 +81,18 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
       </div>
 
       <div class="loc-scan-hint">
-        Drži kod u centru — automatski se pokupi<br>
-        <span class="loc-scan-manual" data-act="manual">…ili unesi ručno</span>
+        📏 Drži telefon 10-15 cm od nalepnice<br>
+        Tap-ni na ekran za fokus · <span class="loc-scan-manual" data-act="manual">ili unesi ručno</span>
+      </div>
+
+      <!-- Zoom slider — pojavi se samo ako track.getCapabilities().zoom
+           postoji (iOS 17.2+, Android Chrome). Na iPhone 11+ native hardware
+           zoom 1×-5×/15×; jedini način da barkod odjednom ima dovoljno piksela. -->
+      <div class="loc-scan-zoom" id="locScanZoom" hidden>
+        <button type="button" class="loc-zoom-btn" data-zoom-step="-1" aria-label="Smanji zoom">−</button>
+        <input type="range" class="loc-zoom-range" id="locScanZoomRange" min="1" max="5" step="0.1" value="1" aria-label="Zoom">
+        <span class="loc-zoom-val" id="locScanZoomVal">1×</span>
+        <button type="button" class="loc-zoom-btn" data-zoom-step="1" aria-label="Povećaj zoom">+</button>
       </div>
 
       <!-- Vidljiv status/dijagnostika dok je skener aktivan. Ne diramo layout:
@@ -258,6 +268,9 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
        * nam da — ovo user vidi, i ako kaže "front kamera" znamo tačno
        * problem (facingMode ignoring). */
       setTimeout(() => reportCameraDiag(videoEl), 600);
+      /* Zoom capability detekcija + UI slider init. Radi samo ako kamera
+       * podržava (iPhone 11+, iOS 17.2+, novi Android-i). */
+      setTimeout(() => setupZoomUI(), 800);
     } catch (err) {
       /* Ovde stižemo kada getUserMedia odbije permisiju, nema kamere, ili
        * kad je sistem zauzeo kameru (npr. FaceTime). */
@@ -337,6 +350,39 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
     } catch (e) {
       console.warn('[scan] force back camera failed', e);
     }
+  }
+
+  /**
+   * Inicijalizuj zoom slider + bind event-e. Zove se posle `startScan`,
+   * kad je track.getCapabilities dostupan.
+   */
+  async function setupZoomUI() {
+    if (!state.scanCtrl || typeof state.scanCtrl.getZoom !== 'function') return;
+    const cap = await state.scanCtrl.getZoom();
+    const wrap = $('#locScanZoom');
+    const range = /** @type {HTMLInputElement|null} */ ($('#locScanZoomRange'));
+    const label = $('#locScanZoomVal');
+    if (!cap || !wrap || !range || !label) return;
+    /* Ako kamera vraća zoom range 1..1 (nema zoom-a), sakrij UI. */
+    if (cap.max <= cap.min + 0.01) {
+      wrap.hidden = true;
+      return;
+    }
+    range.min = String(cap.min);
+    range.max = String(cap.max);
+    range.step = String(cap.step || 0.1);
+    range.value = String(cap.current || cap.min);
+    label.textContent = `${Number(range.value).toFixed(1)}×`;
+    wrap.hidden = false;
+    /* Live update — iOS Safari može da primeni zoom sinhronizovano (hardware),
+     * Android često ima 200-300ms latenciju. Radi i jedno i drugo. */
+    range.addEventListener('input', async () => {
+      const v = Number(range.value);
+      label.textContent = `${v.toFixed(1)}×`;
+      if (state.scanCtrl?.setZoom) {
+        await state.scanCtrl.setZoom(v);
+      }
+    });
   }
 
   /**
@@ -654,6 +700,20 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
       return;
     }
 
+    /* Zoom +/− dugmad: pomera slider za ±0.5 (pa ga dispatch-ujemo kao input
+     * event da `setupZoomUI` primeni promenu preko istog koda). */
+    const zoomStep = ev.target.closest?.('[data-zoom-step]')?.getAttribute('data-zoom-step');
+    if (zoomStep) {
+      const range = /** @type {HTMLInputElement|null} */ ($('#locScanZoomRange'));
+      if (range) {
+        const next = Number(range.value) + Number(zoomStep) * 0.5;
+        const clamped = Math.max(Number(range.min), Math.min(Number(range.max), next));
+        range.value = String(clamped);
+        range.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return;
+    }
+
     const act = ev.target.dataset?.act;
     if (!act) return;
     switch (act) {
@@ -682,6 +742,32 @@ export async function openScanMoveModal({ onSuccess, onClose, startMode = 'scan'
         break;
       default:
         break;
+    }
+  });
+
+  /* Tap-to-focus na video element: šalje pointsOfInterest + single-shot
+   * focusMode. Ignoriše klikove po dugmadima i slider-u (oni već imaju
+   * svoje handlere gore).
+   *
+   * Koristimo pointerdown umesto click jer iOS Safari tretira dugački tap
+   * kao "force touch" koji ne propagira click. pointerdown radi svuda. */
+  const videoEl = $('#locScanVideo');
+  videoEl?.addEventListener('pointerdown', async ev => {
+    if (!state.scanCtrl?.tapFocus) return;
+    const rect = videoEl.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) / rect.width;
+    const y = (ev.clientY - rect.top) / rect.height;
+    const ok = await state.scanCtrl.tapFocus(x, y);
+    if (ok) {
+      /* Kratak vizuelni feedback — prikaži focus ring na mestu tapa.
+       * Koristimo dinamički kreiran div umesto CSS ::after da znamo tačnu
+       * poziciju. Auto-remove posle 600ms da ne zagadi overlay. */
+      const ring = document.createElement('div');
+      ring.className = 'loc-scan-focus-ring';
+      ring.style.left = `${ev.clientX - rect.left}px`;
+      ring.style.top = `${ev.clientY - rect.top}px`;
+      videoEl.parentElement?.appendChild(ring);
+      setTimeout(() => ring.remove(), 600);
     }
   });
 
