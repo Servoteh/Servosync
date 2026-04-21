@@ -2636,6 +2636,142 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 }
 .loc-scan-btn-reload:hover { filter:brightness(1.15); }
 .loc-scan-btn-reload:active { transform:translateY(1px); }
+
+/* ?? "Nova lokacija" modal ? redizajn sa POLICA/HALA karticama ????????????
+ * Stari modal je koristio tehni?ke termine (?ifra/Naziv/Tip/Roditelj) koji
+ * su zbunjivali magacionere. Novi modal vodi kroz 2 koraka:
+ *   1. Picker ? velika kartica POLICA ili HALA.
+ *   2. Forma za izabrani tip, sa preset prefiks dugmi?ima (A/B/C/D/F) i
+ *      "bulk" generatorom (slovo × raspon) za masovni unos.
+ * Termini "Tip" i "Roditelj" su potpuno sakriveni iz UI-ja ? backend i
+ * dalje koristi `location_type` i `parent_id` kolone, samo je UI preveden. */
+.loc-picker-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 8px 0 16px;
+}
+.loc-picker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 16px;
+  background: var(--surface2);
+  border: 2px solid var(--border2);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 120ms ease;
+  color: var(--text);
+  font: inherit;
+}
+.loc-picker-card:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface2));
+}
+.loc-picker-card:active { transform: scale(0.98); }
+.loc-picker-ico { font-size: 48px; line-height: 1; }
+.loc-picker-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text);
+}
+.loc-picker-sub {
+  font-size: 12px;
+  color: var(--text2);
+  text-align: center;
+  line-height: 1.5;
+}
+.loc-picker-sub em { font-style: italic; color: var(--text3); font-size: 11px; }
+
+.loc-form-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 600;
+}
+.loc-breadcrumb-back {
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text);
+}
+.loc-breadcrumb-back:hover { background: var(--surface2); }
+.loc-path-muted { color: var(--text3); font-weight: 400; }
+
+/* Brzi prefiks dugmad (A/B/C/D/F) iznad input-a "Oznaka police". */
+.loc-prefix-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.loc-prefix-btn {
+  min-width: 36px;
+  height: 32px;
+  padding: 0 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+.loc-prefix-btn:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface2));
+}
+
+/* Bulk details (collapse) */
+.loc-bulk-details {
+  margin: 12px 0;
+  padding: 10px 12px;
+  background: var(--surface2);
+  border: 1px dashed var(--border2);
+  border-radius: 8px;
+}
+.loc-bulk-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text2);
+  user-select: none;
+}
+.loc-bulk-details summary:hover { color: var(--text); }
+.loc-bulk-details[open] summary { margin-bottom: 10px; }
+.loc-bulk-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+.loc-bulk-grid .col-full { grid-column: 1 / -1; }
+
+.loc-empty-card {
+  padding: 20px;
+  text-align: center;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+}
+.loc-empty-card .loc-empty-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.loc-empty-card p {
+  color: var(--text2);
+  font-size: 13px;
+  margin: 0 0 14px;
+}
 .loc-scan-form-body .emp-field.col-full { grid-column: 1 / -1; }
 .loc-scan-err { min-height:18px; color:var(--err, #ff6b6b); font-size:13px; }
 .loc-scan-actions { display:flex; gap:8px; margin-top:8px; }

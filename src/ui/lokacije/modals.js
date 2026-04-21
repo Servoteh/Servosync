@@ -158,6 +158,20 @@ function createModalShell({ id, title, subtitle = '' }) {
 
 /**
  * Modal za kreiranje ili izmenu master lokacije.
+ *
+ * UX: koristimo operativne termine POLICA / HALA umesto tehničkih (šifra,
+ * tip, roditelj). Backend kolone `location_code`, `location_type`, `parent_id`
+ * ostaju iste — samo je UI preveden.
+ *
+ * Mapiranje:
+ *   - POLICA  = location_type SHELF (RACK/BIN može da se doda kasnije).
+ *               Parent je obavezno neka HALA (ne može POLICA bez hale).
+ *   - HALA    = location_type WAREHOUSE. Parent je null (root).
+ *
+ * Za izmenu postojeće lokacije ne menjamo tip (SHELF ostaje SHELF, WAREHOUSE
+ * ostaje WAREHOUSE) — to je retka operacija i može se uraditi direktno u bazi
+ * ako stvarno treba.
+ *
  * @param {{ existing?: object|null, onSuccess?: () => void }} [opts]
  */
 export function openLocationModal({ existing = null, onSuccess } = {}) {
@@ -172,8 +186,8 @@ export function openLocationModal({ existing = null, onSuccess } = {}) {
     id: modalId,
     title: isEdit ? 'Izmeni lokaciju' : 'Nova lokacija',
     subtitle: isEdit
-      ? 'Šifra se ne menja (koristi se u sync-u). Ostala polja su ažurabilna.'
-      : 'Master zapis u <code>loc_locations</code> (RLS: admin / LeadPM / PM).',
+      ? 'Menjaju se naziv i opis; šifra i tip ostaju isti.'
+      : 'Izaberi šta dodaješ — policu unutar hale, ili novu halu.',
   });
 
   let unbindEsc = null;
@@ -197,101 +211,470 @@ export function openLocationModal({ existing = null, onSuccess } = {}) {
       return;
     }
 
-    /* Pri izmeni, izbacujemo samu lokaciju i sve njene potomke iz parent dropdown-a
-     * (nema dobrog načina da otkrijemo potomke iz flat liste bez dodatnog upita,
-     * ali prosto izbacivanje samog ID-ja pokriva 99% slučajeva — ciklus hvata
-     * SQL trigger loc_locations_guard_and_path). */
-    const parentChoices = isEdit ? locs.filter(l => l.id !== existing.id) : locs;
-    const parentOpts = locationOptionsHtml(parentChoices, {
-      includeBlank: true,
-      blankLabel: '— bez roditelja —',
-    });
-    const selectedParent = isEdit ? existing.parent_id || '' : '';
-    const selectedType = isEdit ? existing.location_type : LOC_TYPES[0];
+    if (isEdit) {
+      renderEditForm({
+        overlay,
+        body,
+        existing,
+        close,
+        onSuccess,
+      });
+      return;
+    }
 
-    const typeOpts = LOC_TYPES.map(
-      t => `<option value="${t}"${t === selectedType ? ' selected' : ''}>${escHtml(t)}</option>`,
-    ).join('');
-
-    body.innerHTML = `
-      <div class="kadr-modal-err" id="locModalNewLocErr"></div>
-      <form id="locFormNewLoc">
-        <div class="emp-form-grid">
-          <div class="emp-field">
-            <label for="locNewCode">Šifra *</label>
-            <input type="text" id="locNewCode" required maxlength="80" placeholder="npr. M2-R1-P3" autocomplete="off"
-              value="${escHtml(isEdit ? existing.location_code || '' : '')}"
-              ${isEdit ? 'readonly' : ''}>
-          </div>
-          <div class="emp-field col-full">
-            <label for="locNewName">Naziv *</label>
-            <input type="text" id="locNewName" required maxlength="200" placeholder="Kratak naziv lokacije"
-              value="${escHtml(isEdit ? existing.name || '' : '')}">
-          </div>
-          <div class="emp-field">
-            <label for="locNewType">Tip *</label>
-            <select id="locNewType" required>${typeOpts}</select>
-          </div>
-          <div class="emp-field">
-            <label for="locNewParent">Roditelj</label>
-            <select id="locNewParent">${parentOpts}</select>
-          </div>
-        </div>
-        <div class="kadr-modal-actions">
-          <button type="button" class="btn" id="locNewLocCancel">Otkaži</button>
-          <button type="submit" class="btn btn-primary" id="locNewLocSubmit">Sačuvaj</button>
-        </div>
-      </form>`;
-
-    const errEl = overlay.querySelector('#locModalNewLocErr');
-    const form = overlay.querySelector('#locFormNewLoc');
-    const submitBtn = overlay.querySelector('#locNewLocSubmit');
-    const parentSel = overlay.querySelector('#locNewParent');
-
-    if (selectedParent) parentSel.value = String(selectedParent);
-
-    overlay.querySelector('#locNewLocCancel').addEventListener('click', close);
-    (isEdit ? overlay.querySelector('#locNewName') : overlay.querySelector('#locNewCode')).focus();
-
-    form.addEventListener('submit', async ev => {
-      ev.preventDefault();
-      errEl.textContent = '';
-      const name = overlay.querySelector('#locNewName').value.trim();
-      const location_type = overlay.querySelector('#locNewType').value;
-      const parent_id = parentSel.value || null;
-
-      if (isEdit) {
-        if (!name) {
-          errEl.textContent = 'Naziv je obavezan.';
-          return;
-        }
-        submitBtn.disabled = true;
-        const row = await updateLocation(existing.id, { name, location_type, parent_id });
-        submitBtn.disabled = false;
-        if (!row) {
-          errEl.textContent = 'Izmena nije uspela (možda ciklus u hijerarhiji ili RLS).';
-          return;
-        }
-        showToast('✓ Lokacija izmenjena');
-      } else {
-        const code = overlay.querySelector('#locNewCode').value.trim();
-        if (!code || !name) {
-          errEl.textContent = 'Šifra i naziv su obavezni.';
-          return;
-        }
-        submitBtn.disabled = true;
-        const row = await createLocation({ location_code: code, name, location_type, parent_id });
-        submitBtn.disabled = false;
-        if (!row) {
-          errEl.textContent = 'Snimanje nije uspelo (duplikat šifre ili RLS).';
-          return;
-        }
-        showToast('✓ Lokacija kreirana');
-      }
-      close();
-      onSuccess?.();
+    renderPickerStage({
+      overlay,
+      body,
+      locs,
+      close,
+      onSuccess,
     });
   })();
+}
+
+/**
+ * "Šta dodaješ?" — dve velike kartice iznad konkretne forme. Klik otvara
+ * pripadajuću formu (polica ili hala) u istom modalu (swap body.innerHTML).
+ */
+function renderPickerStage({ overlay, body, locs, close, onSuccess }) {
+  body.innerHTML = `
+    <div class="loc-picker-row">
+      <button type="button" class="loc-picker-card" data-kind="shelf">
+        <span class="loc-picker-ico">📍</span>
+        <span class="loc-picker-title">POLICA</span>
+        <span class="loc-picker-sub">Konkretno mesto unutar hale<br><em>npr. A23, B12, K-A3</em></span>
+      </button>
+      <button type="button" class="loc-picker-card" data-kind="hall">
+        <span class="loc-picker-ico">🏭</span>
+        <span class="loc-picker-title">HALA</span>
+        <span class="loc-picker-sub">Veći prostor / magacin<br><em>npr. MAG, Hala 2, Hala 2a</em></span>
+      </button>
+    </div>
+    <div class="kadr-modal-actions">
+      <button type="button" class="btn" data-act="picker-cancel">Otkaži</button>
+    </div>
+  `;
+
+  overlay.querySelector('[data-act="picker-cancel"]').addEventListener('click', close);
+
+  overlay.querySelectorAll('[data-kind]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const kind = btn.dataset.kind;
+      if (kind === 'shelf') {
+        renderShelfForm({ overlay, body, locs, close, onSuccess });
+      } else if (kind === 'hall') {
+        renderHallForm({ overlay, body, close, onSuccess });
+      }
+    });
+  });
+}
+
+/**
+ * Forma za POLICU — user unosi oznaku (A1/B12) + opis + bira halu iz
+ * postojećih. Ima i "Dodaj više odjednom" bulk generator sa slovo × raspon.
+ */
+function renderShelfForm({ overlay, body, locs, close, onSuccess }) {
+  /* Samo WAREHOUSE kao parent za policu. PRODUCTION/ASSEMBLY/FIELD su root
+   * kategorije, ali UX ih tretira odvojeno (nisu "hala" u smislu magacina). */
+  const halls = locs.filter(
+    l => String(l.location_type || '').toUpperCase() === 'WAREHOUSE' && l.is_active !== false,
+  );
+
+  if (!halls.length) {
+    body.innerHTML = `
+      <div class="loc-empty-card">
+        <div class="loc-empty-title">⚠ Nema definisanih hala</div>
+        <p>Prvo dodaj bar jednu halu (npr. "MAG — Centralni magacin"), pa se vrati da dodaš police u njoj.</p>
+        <div class="kadr-modal-actions">
+          <button type="button" class="btn" data-act="back">← Nazad</button>
+          <button type="button" class="btn btn-primary" data-act="add-hall">Dodaj halu</button>
+        </div>
+      </div>
+    `;
+    overlay.querySelector('[data-act="back"]').addEventListener('click', () => {
+      renderPickerStage({ overlay, body, locs, close, onSuccess });
+    });
+    overlay.querySelector('[data-act="add-hall"]').addEventListener('click', () => {
+      renderHallForm({ overlay, body, close, onSuccess });
+    });
+    return;
+  }
+
+  const hallOpts = halls
+    .map(
+      h =>
+        `<option value="${escHtml(String(h.id))}" data-code="${escHtml(h.location_code || '')}">${escHtml(h.location_code || '')} — ${escHtml(h.name || '')}</option>`,
+    )
+    .join('');
+
+  const prefixBtns = ['A', 'B', 'C', 'D', 'F']
+    .map(
+      p =>
+        `<button type="button" class="loc-prefix-btn" data-prefix="${p}" title="Brzi izbor slova">${p}</button>`,
+    )
+    .join('');
+
+  body.innerHTML = `
+    <div class="loc-form-breadcrumb">
+      <button type="button" class="loc-breadcrumb-back" data-act="back">←</button>
+      <span>Nova polica</span>
+    </div>
+
+    <div class="kadr-modal-err" id="locModalNewLocErr"></div>
+    <form id="locFormNewShelf">
+      <div class="emp-form-grid">
+        <div class="emp-field col-full">
+          <label for="locShelfHall">Pripada hali *</label>
+          <select id="locShelfHall" required>${hallOpts}</select>
+        </div>
+
+        <div class="emp-field">
+          <label for="locShelfSlot">Oznaka police *
+            <span class="loc-muted" style="font-weight:400;font-size:12px">— primer: A23, B12, C5</span>
+          </label>
+          <div class="loc-prefix-row">${prefixBtns}</div>
+          <input type="text" id="locShelfSlot" required maxlength="40" placeholder="npr. A23"
+                 autocomplete="off" style="text-transform:uppercase" />
+        </div>
+
+        <div class="emp-field">
+          <label for="locShelfDesc">Kratak opis *
+            <span class="loc-muted" style="font-weight:400;font-size:12px">— šta se drži ovde</span>
+          </label>
+          <input type="text" id="locShelfDesc" required maxlength="200" placeholder="npr. Farbanje, Završna, Dorada">
+        </div>
+      </div>
+
+      <!-- Bulk generator: dodaj više polica odjednom (tipično "A1…A30" po
+           uzoru na postojeće K-A1..K-A6). Rasterećuje admin-a od 30 klikova. -->
+      <details class="loc-bulk-details">
+        <summary>➕ Dodaj više polica odjednom (bulk)</summary>
+        <div class="loc-bulk-grid">
+          <div class="emp-field">
+            <label for="locShelfBulkPrefix">Slovo</label>
+            <select id="locShelfBulkPrefix">
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+              <option value="F">F</option>
+            </select>
+          </div>
+          <div class="emp-field">
+            <label for="locShelfBulkFrom">Od broja</label>
+            <input type="number" id="locShelfBulkFrom" min="1" max="999" value="1">
+          </div>
+          <div class="emp-field">
+            <label for="locShelfBulkTo">Do broja</label>
+            <input type="number" id="locShelfBulkTo" min="1" max="999" value="30">
+          </div>
+          <div class="emp-field col-full">
+            <label for="locShelfBulkDesc">Opis za sve (isti)</label>
+            <input type="text" id="locShelfBulkDesc" maxlength="200" placeholder="npr. Farbanje">
+          </div>
+          <div class="emp-field col-full">
+            <div class="loc-muted" id="locShelfBulkPreview" style="font-size:12px"></div>
+          </div>
+          <div class="emp-field col-full">
+            <button type="button" class="btn" id="locShelfBulkSubmit">Napravi sve</button>
+          </div>
+        </div>
+      </details>
+
+      <div class="kadr-modal-actions">
+        <button type="button" class="btn" data-act="cancel">Otkaži</button>
+        <button type="submit" class="btn btn-primary" id="locShelfSubmit">Sačuvaj policu</button>
+      </div>
+    </form>
+  `;
+
+  const errEl = overlay.querySelector('#locModalNewLocErr');
+  const slotInput = overlay.querySelector('#locShelfSlot');
+  const hallSel = overlay.querySelector('#locShelfHall');
+  const descInput = overlay.querySelector('#locShelfDesc');
+  const submitBtn = overlay.querySelector('#locShelfSubmit');
+
+  overlay.querySelector('[data-act="cancel"]').addEventListener('click', close);
+  overlay.querySelector('[data-act="back"]').addEventListener('click', () => {
+    renderPickerStage({ overlay, body, locs, close, onSuccess });
+  });
+
+  overlay.querySelectorAll('[data-prefix]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      /* Ubaci prefiks u slot ako je polje prazno, inače zameni prvo slovo. */
+      const p = btn.dataset.prefix;
+      const cur = slotInput.value.trim();
+      slotInput.value = cur.match(/^[A-Z]/) ? p + cur.slice(1) : p + (cur || '1');
+      slotInput.focus();
+    });
+  });
+
+  slotInput.addEventListener('input', () => {
+    slotInput.value = slotInput.value.toUpperCase();
+  });
+
+  hallSel.focus();
+
+  /* ── Bulk generator logic ── */
+  const bulkPrefix = overlay.querySelector('#locShelfBulkPrefix');
+  const bulkFrom = overlay.querySelector('#locShelfBulkFrom');
+  const bulkTo = overlay.querySelector('#locShelfBulkTo');
+  const bulkDesc = overlay.querySelector('#locShelfBulkDesc');
+  const bulkPreview = overlay.querySelector('#locShelfBulkPreview');
+  const bulkSubmit = overlay.querySelector('#locShelfBulkSubmit');
+
+  function updateBulkPreview() {
+    const p = bulkPrefix.value;
+    const from = Math.max(1, Math.min(999, Number(bulkFrom.value) || 1));
+    const to = Math.max(1, Math.min(999, Number(bulkTo.value) || 1));
+    const count = Math.max(0, to - from + 1);
+    const hallCode = hallSel.selectedOptions[0]?.dataset?.code || '';
+    const example = `${hallCode ? hallCode + '-' : ''}${p}${from}, ${hallCode ? hallCode + '-' : ''}${p}${from + 1}, ...`;
+    bulkPreview.textContent = `Kreiraće se ${count} polica: ${example}`;
+  }
+  [bulkPrefix, bulkFrom, bulkTo, hallSel].forEach(el => el.addEventListener('input', updateBulkPreview));
+  updateBulkPreview();
+
+  bulkSubmit.addEventListener('click', async () => {
+    errEl.textContent = '';
+    const parent_id = hallSel.value || null;
+    if (!parent_id) {
+      errEl.textContent = 'Prvo izaberi halu.';
+      return;
+    }
+    const hallCode = hallSel.selectedOptions[0]?.dataset?.code || '';
+    const p = bulkPrefix.value;
+    const from = Math.max(1, Math.min(999, Number(bulkFrom.value) || 1));
+    const to = Math.max(1, Math.min(999, Number(bulkTo.value) || 1));
+    const desc = bulkDesc.value.trim();
+    if (to < from) {
+      errEl.textContent = '"Do broja" mora biti >= "Od broja".';
+      return;
+    }
+    if (!desc) {
+      errEl.textContent = 'Unesi opis koji se primenjuje na sve nove police.';
+      return;
+    }
+    const count = to - from + 1;
+    if (count > 100) {
+      if (!window.confirm(`Hoćeš da napraviš ${count} polica odjednom?`)) return;
+    }
+
+    bulkSubmit.disabled = true;
+    let ok = 0;
+    let failed = 0;
+    for (let n = from; n <= to; n++) {
+      const slot = `${p}${n}`;
+      const location_code = hallCode ? `${hallCode}-${slot}` : slot;
+      const row = await createLocation({
+        location_code,
+        name: desc,
+        location_type: 'SHELF',
+        parent_id,
+      }).catch(() => null);
+      if (row) ok++;
+      else failed++;
+    }
+    bulkSubmit.disabled = false;
+    if (failed > 0) {
+      showToast(`⚠ Kreirano ${ok}, nije uspelo ${failed} (verovatno duplikat šifre)`);
+    } else {
+      showToast(`✓ Kreirano ${ok} polica`);
+    }
+    close();
+    onSuccess?.();
+  });
+
+  /* ── Single save ── */
+  overlay.querySelector('#locFormNewShelf').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    errEl.textContent = '';
+    const parent_id = hallSel.value || null;
+    const slot = slotInput.value.trim().toUpperCase();
+    const desc = descInput.value.trim();
+    if (!parent_id) {
+      errEl.textContent = 'Izaberi halu.';
+      return;
+    }
+    if (!slot) {
+      errEl.textContent = 'Unesi oznaku police (npr. A23).';
+      return;
+    }
+    if (!desc) {
+      errEl.textContent = 'Unesi kratak opis police.';
+      return;
+    }
+    const hallCode = hallSel.selectedOptions[0]?.dataset?.code || '';
+    /* Finalna šifra: "HALA-SLOT" (konzistentno sa postojećim K-A1..K-S).
+     * Ako user već kuca punu šifru (koja sadrži `-`), preskačemo prefiks. */
+    const location_code = slot.includes('-') ? slot : hallCode ? `${hallCode}-${slot}` : slot;
+
+    submitBtn.disabled = true;
+    const row = await createLocation({
+      location_code,
+      name: desc,
+      location_type: 'SHELF',
+      parent_id,
+    }).catch(() => null);
+    submitBtn.disabled = false;
+    if (!row) {
+      errEl.textContent = `Snimanje nije uspelo (verovatno već postoji polica "${location_code}").`;
+      return;
+    }
+    showToast(`✓ Polica ${location_code} kreirana`);
+    close();
+    onSuccess?.();
+  });
+}
+
+/**
+ * Forma za HALU — user unosi šifru (npr. "MAG", "H2") i naziv. Tip je
+ * uvek WAREHOUSE, parent je null.
+ */
+function renderHallForm({ overlay, body, close, onSuccess }) {
+  body.innerHTML = `
+    <div class="loc-form-breadcrumb">
+      <button type="button" class="loc-breadcrumb-back" data-act="back">←</button>
+      <span>Nova hala</span>
+    </div>
+
+    <div class="kadr-modal-err" id="locModalNewLocErr"></div>
+    <form id="locFormNewHall">
+      <div class="emp-form-grid">
+        <div class="emp-field">
+          <label for="locHallCode">Šifra hale *
+            <span class="loc-muted" style="font-weight:400;font-size:12px">— kratko, 2-8 slova</span>
+          </label>
+          <input type="text" id="locHallCode" required maxlength="20" placeholder="npr. MAG, H2, H2A"
+                 autocomplete="off" style="text-transform:uppercase" />
+        </div>
+        <div class="emp-field">
+          <label for="locHallName">Naziv hale *</label>
+          <input type="text" id="locHallName" required maxlength="200" placeholder="npr. Centralni magacin, Hala 2">
+        </div>
+      </div>
+      <div class="kadr-modal-actions">
+        <button type="button" class="btn" data-act="cancel">Otkaži</button>
+        <button type="submit" class="btn btn-primary" id="locHallSubmit">Sačuvaj halu</button>
+      </div>
+    </form>
+  `;
+
+  const errEl = overlay.querySelector('#locModalNewLocErr');
+  const codeInput = overlay.querySelector('#locHallCode');
+  const nameInput = overlay.querySelector('#locHallName');
+  const submitBtn = overlay.querySelector('#locHallSubmit');
+
+  overlay.querySelector('[data-act="cancel"]').addEventListener('click', close);
+  overlay.querySelector('[data-act="back"]').addEventListener('click', () => {
+    /* Vrati na picker — moramo opet da fetch-ujemo da bi lista bila aktuelna. */
+    body.innerHTML = '<p class="loc-muted" style="padding:24px 0; text-align:center">Učitavam…</p>';
+    fetchLocations({ activeOnly: false }).then(locs => {
+      if (Array.isArray(locs)) {
+        renderPickerStage({ overlay, body, locs, close, onSuccess });
+      } else {
+        close();
+      }
+    });
+  });
+
+  codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.toUpperCase();
+  });
+
+  codeInput.focus();
+
+  overlay.querySelector('#locFormNewHall').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    errEl.textContent = '';
+    const code = codeInput.value.trim().toUpperCase();
+    const name = nameInput.value.trim();
+    if (!code) {
+      errEl.textContent = 'Šifra hale je obavezna.';
+      return;
+    }
+    if (!name) {
+      errEl.textContent = 'Naziv hale je obavezan.';
+      return;
+    }
+    submitBtn.disabled = true;
+    const row = await createLocation({
+      location_code: code,
+      name,
+      location_type: 'WAREHOUSE',
+      parent_id: null,
+    }).catch(() => null);
+    submitBtn.disabled = false;
+    if (!row) {
+      errEl.textContent = `Snimanje nije uspelo (verovatno već postoji hala "${code}").`;
+      return;
+    }
+    showToast(`✓ Hala ${code} kreirana`);
+    close();
+    onSuccess?.();
+  });
+}
+
+/**
+ * Edit forma — ažurira samo naziv / opis. Šifra i tip se ne menjaju jer
+ * se koriste u sync-u sa ERP-om i u `loc_item_placements` indeksima.
+ */
+function renderEditForm({ overlay, body, existing, close, onSuccess }) {
+  const type = String(existing.location_type || '').toUpperCase();
+  const SHELF = new Set(['SHELF', 'RACK', 'BIN']);
+  const kindLabel = SHELF.has(type)
+    ? '📍 POLICA'
+    : ['WAREHOUSE', 'PRODUCTION', 'ASSEMBLY', 'FIELD', 'TEMP'].includes(type)
+      ? '🏭 HALA'
+      : `📦 ${type}`;
+
+  body.innerHTML = `
+    <div class="loc-form-breadcrumb">
+      <span>${kindLabel}</span>
+      <strong class="loc-path-muted">· ${escHtml(existing.location_code || '')}</strong>
+    </div>
+
+    <div class="kadr-modal-err" id="locModalNewLocErr"></div>
+    <form id="locFormEditLoc">
+      <div class="emp-form-grid">
+        <div class="emp-field col-full">
+          <label for="locEditName">Naziv / opis *</label>
+          <input type="text" id="locEditName" required maxlength="200" value="${escHtml(existing.name || '')}">
+        </div>
+      </div>
+      <div class="kadr-modal-actions">
+        <button type="button" class="btn" data-act="cancel">Otkaži</button>
+        <button type="submit" class="btn btn-primary" id="locEditSubmit">Sačuvaj</button>
+      </div>
+    </form>
+  `;
+
+  const errEl = overlay.querySelector('#locModalNewLocErr');
+  const nameInput = overlay.querySelector('#locEditName');
+  const submitBtn = overlay.querySelector('#locEditSubmit');
+
+  overlay.querySelector('[data-act="cancel"]').addEventListener('click', close);
+  nameInput.focus();
+
+  overlay.querySelector('#locFormEditLoc').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    errEl.textContent = '';
+    const name = nameInput.value.trim();
+    if (!name) {
+      errEl.textContent = 'Naziv je obavezan.';
+      return;
+    }
+    submitBtn.disabled = true;
+    const row = await updateLocation(existing.id, { name });
+    submitBtn.disabled = false;
+    if (!row) {
+      errEl.textContent = 'Izmena nije uspela (možda nemaš permisije).';
+      return;
+    }
+    showToast('✓ Izmene snimljene');
+    close();
+    onSuccess?.();
+  });
 }
 
 /* Wrapper — zadržava staro ime radi kompatibilnosti sa postojećim pozivima. */
