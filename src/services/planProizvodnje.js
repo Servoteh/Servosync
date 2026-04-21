@@ -128,68 +128,130 @@ export async function loadAllOpenOperations() {
 }
 
 /**
- * Jedna operacija iz BigTehn cache-a (isti izvor kao Plan proizvodnje), po
- * broju radnog naloga (`IdentBroj` / `rn_ident_broj`) i broju TP (`operacija`).
- * Koristi se u modulu Lokacije da se posle RNZ barkoda automatski popune
- * broj crteža, količina, naziv dela itd.
+ * BigTehn snapshot za par (broj naloga, broj TP) iz RN cache-a u Supabase-u.
  *
- * @param {string} rnIdentBroj  npr. `"7351"`
- * @param {string|number} operacija  broj tehnološkog postupka (TP), npr. `1088`
- * @returns {Promise<object|null>} jedan red iz `v_production_operations` ili `null`
+ * Čita prvo iz `bigtehn_work_orders_cache` (po `ident_broj`) — tu su
+ * **broj crteža** i **ukupna količina**, i radi i za RN-ove koji nisu u
+ * view-u otvorenih operacija (v_production_operations je filtriran na
+ * is_done_in_bigtehn=false i rn_zavrsen=false). Zatim, ako postoji
+ * operacija (TP), pokušava da dohvati i `komada_done` iz
+ * `bigtehn_tech_routing_cache` da predlog količine bude "preostalo".
+ *
+ * @param {string} rnIdentBroj  npr. `"9000"`
+ * @param {string|number|null} operacija  broj TP (npr. `522`); može biti null
+ * @returns {Promise<{
+ *   rn_ident_broj: string,
+ *   broj_crteza: string,
+ *   komada_total: number|null,
+ *   komada_done: number|null,
+ *   naziv_dela: string|null,
+ *   materijal: string|null,
+ *   dimenzija_materijala: string|null,
+ *   customer_id: number|null,
+ *   work_order_id: number|null,
+ *   operacija: number|null,
+ * } | null>}
  */
 export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija) {
-  if (!getIsOnline() || rnIdentBroj == null || rnIdentBroj === '' || operacija == null) {
-    return null;
-  }
+  if (!getIsOnline() || rnIdentBroj == null || rnIdentBroj === '') return null;
   const ident = String(rnIdentBroj).trim();
-  const opNum = parseInt(String(operacija).trim(), 10);
-  if (!ident || !Number.isFinite(opNum)) return null;
+  if (!ident) return null;
+  const opNum =
+    operacija == null || operacija === '' ? null : parseInt(String(operacija).trim(), 10);
+  const opFinite = Number.isFinite(opNum);
 
-  const cols = [
+  /* 1) Direktno iz RN cache-a — radi bez obzira da li je RN otvoren ili zatvoren. */
+  const woCols = [
+    'id',
+    'ident_broj',
     'broj_crteza',
-    'komada_total',
-    'komada_done',
+    'komada',
     'naziv_dela',
     'materijal',
     'dimenzija_materijala',
-    'opis_rada',
+    'customer_id',
     'rok_izrade',
-    'customer_short',
-    'customer_name',
-    'rn_ident_broj',
-    'operacija',
-    'line_id',
-    'work_order_id',
+    'status_rn',
   ].join(',');
 
-  const tryFetch = async idCandidate => {
-    const params = new URLSearchParams();
-    params.set('select', cols);
-    params.set('rn_ident_broj', `eq.${idCandidate}`);
-    params.set('operacija', `eq.${opNum}`);
-    params.set('limit', '8');
-    const data = await sbReq(`v_production_operations?${params.toString()}`);
+  const tryFetchWo = async idCandidate => {
+    const p = new URLSearchParams();
+    p.set('select', woCols);
+    p.set('ident_broj', `eq.${idCandidate}`);
+    p.set('limit', '4');
+    const data = await sbReq(`bigtehn_work_orders_cache?${p.toString()}`);
     return Array.isArray(data) ? data : [];
   };
 
-  let rows = await tryFetch(ident);
-  /* Ako je korisnik uneo npr. "07351" a u cache-u je "7351" (ili obrnuto). */
-  if (rows.length === 0 && /^\d+$/.test(ident)) {
+  let woRows = await tryFetchWo(ident);
+  if (woRows.length === 0 && /^\d+$/.test(ident)) {
     const normalized = String(parseInt(ident, 10));
-    if (normalized !== ident) {
-      rows = await tryFetch(normalized);
+    if (normalized !== ident) woRows = await tryFetchWo(normalized);
+  }
+  if (woRows.length === 0) return null;
+  if (woRows.length > 1) {
+    console.warn('[fetchBigtehnOpSnapshotByRnAndTp] više RN redova za ident_broj — uzimam prvi', {
+      ident,
+      n: woRows.length,
+    });
+  }
+  const wo = woRows[0];
+  const workOrderId = wo.id != null ? Number(wo.id) : null;
+  const total = wo.komada != null ? Number(wo.komada) : null;
+
+  /* 2) Ako imamo TP, pokušaj da dohvatiš komada_done iz tech routing cache-a. */
+  let done = null;
+  if (opFinite && workOrderId != null) {
+    try {
+      const p = new URLSearchParams();
+      p.set('select', 'komada,is_completed');
+      p.set('work_order_id', `eq.${workOrderId}`);
+      p.set('operacija', `eq.${opNum}`);
+      p.set('limit', '200');
+      const rows = await sbReq(`bigtehn_tech_routing_cache?${p.toString()}`);
+      if (Array.isArray(rows) && rows.length) {
+        done = rows.reduce((s, r) => s + (Number(r?.komada) || 0), 0);
+      } else {
+        done = 0;
+      }
+    } catch (e) {
+      console.warn('[fetchBigtehnOpSnapshotByRnAndTp] tech routing fetch failed', e);
     }
   }
 
-  if (rows.length === 0) return null;
-  if (rows.length > 1) {
-    console.warn('[fetchBigtehnOpSnapshotByRnAndTp] više redova za RN+TP — uzimam prvi', {
-      ident,
-      opNum,
-      n: rows.length,
-    });
+  /* 3) Opciono: kupac (best-effort, ne blokira na grešku). */
+  let customerName = null;
+  let customerShort = null;
+  if (wo.customer_id != null) {
+    try {
+      const p = new URLSearchParams();
+      p.set('select', 'id,name,short_name');
+      p.set('id', `eq.${wo.customer_id}`);
+      p.set('limit', '1');
+      const rows = await sbReq(`bigtehn_customers_cache?${p.toString()}`);
+      if (Array.isArray(rows) && rows[0]) {
+        customerName = rows[0].name ?? null;
+        customerShort = rows[0].short_name ?? null;
+      }
+    } catch (e) {
+      console.warn('[fetchBigtehnOpSnapshotByRnAndTp] customer fetch failed', e);
+    }
   }
-  return rows[0];
+
+  return {
+    rn_ident_broj: wo.ident_broj != null ? String(wo.ident_broj) : ident,
+    broj_crteza: wo.broj_crteza != null ? String(wo.broj_crteza) : '',
+    komada_total: Number.isFinite(total) ? total : null,
+    komada_done: done,
+    naziv_dela: wo.naziv_dela ?? null,
+    materijal: wo.materijal ?? null,
+    dimenzija_materijala: wo.dimenzija_materijala ?? null,
+    customer_id: wo.customer_id ?? null,
+    customer_name: customerName,
+    customer_short: customerShort,
+    work_order_id: workOrderId,
+    operacija: opFinite ? opNum : null,
+  };
 }
 
 /* ── Writes (overlay) ── */
