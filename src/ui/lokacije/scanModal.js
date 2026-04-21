@@ -150,12 +150,23 @@ function setDrawingCache(orderNo, itemRefId, drawingNo) {
  *   Prečica sa mobilne home strane: 'shelf' = POLICA dugme, 'warehouse' = HALA.
  *   Kad je setovano, optgroup te kategorije ide prvi u "Na lokaciju" selectu i
  *   header dobije subtilni chip "filter: POLICA / HALA".
+ * @param {{
+ *   itemRefTable?: string,
+ *   itemRefId?: string,
+ *   orderNo?: string,
+ *   drawingNo?: string,
+ *   fromLocationId?: string,
+ * }} [opts.prefill]
+ *   Pre-popuni formu (npr. iz /m/lookup kartice: "Premesti odavde"). Kad je
+ *   setovano, preskače scan stage i otvara odmah formu sa popunjenim poljima
+ *   i odabranom polaznom lokacijom.
  */
 export async function openScanMoveModal({
   onSuccess,
   onClose,
   startMode = 'scan',
   preferLocationCategory = null,
+  prefill = null,
 } = {}) {
   removeModal();
 
@@ -953,10 +964,11 @@ export async function openScanMoveModal({
     const btn = overlay.querySelector('[data-act="submit"]');
     btn.disabled = true;
 
-    /* Broj crteža nije u DB schemi kao zaseban column — čuvamo ga u `note`
-     * kao strukturisani prefix "Crtež:NNNN |" + slobodan tekst. Tako ne
-     * moramo sada DB migraciju (faza B). Parsing iz note radi `extractDrawing`
-     * u services/maintenance-style helper-u — zasad samo zapisujemo. */
+    /* Od v4 migracije `drawing_no` je prvoklasna kolona u movement/placement
+     * tabeli (trigger je propagira, RPC prihvata). Ipak, i dalje dupliramo
+     * "Crtež:NNN" prefix u `note` da bi legacy trigger-i i istorijske vizu-
+     * elizacije (badge "📐 crtež X" u movement-ima) radili bez dodatnih
+     * promena. Parsing iz note je idempotentan (trigger backfilluje prazne). */
     const noteParts = [];
     if (drawing_no) noteParts.push(`Crtež:${drawing_no}`);
     if (note_raw) noteParts.push(note_raw);
@@ -973,6 +985,7 @@ export async function openScanMoveModal({
       item_ref_table: state.item_ref_table,
       item_ref_id,
       order_no,
+      drawing_no: drawing_no || undefined,
       to_location_id,
       from_location_id: from_location_id || undefined,
       movement_type: isInitial ? 'INITIAL_PLACEMENT' : 'TRANSFER',
@@ -1190,17 +1203,40 @@ export async function openScanMoveModal({
   });
 
   /* Preload lokacije odmah, paralelno sa kamerom. */
-  (async () => {
+  const locsReady = (async () => {
     const locs = await fetchLocations();
     state.locs = Array.isArray(locs) ? locs : [];
     state.locById = new Map(state.locs.map(l => [l.id, l]));
-    if (startMode === 'manual') {
+    if (startMode === 'manual' || prefill) {
       /* Populate to-select odmah (inače bi ostao prazan dok korisnik ne klikne). */
       populateToSelect();
     }
   })();
 
-  if (startMode === 'manual') {
+  /* Prefill flow: preskoči scan stage i odmah popuni formu poznatim poljima.
+   * Koristi se iz /m/lookup kartice "Premesti odavde" — radnik već zna crtež,
+   * nalog i trenutnu policu pa ga ne teramo da ponovo skenira. */
+  if (prefill && (prefill.itemRefId || prefill.orderNo || prefill.drawingNo)) {
+    if (prefill.itemRefTable) state.item_ref_table = prefill.itemRefTable;
+    /* Čekamo locsReady pre showForm-a jer showForm → refreshPlacements →
+     * populateFromSelect koristi state.locById za labele. Bez toga from-select
+     * bi se na trenutak prikazao sa golim UUID-evima. */
+    locsReady.then(() => {
+      showForm({
+        itemRefId: prefill.itemRefId || '',
+        orderNo: prefill.orderNo || '',
+        drawingNo: prefill.drawingNo || '',
+        raw: '',
+        format: '',
+      }).then(() => {
+        if (prefill.fromLocationId) {
+          const fromEl = /** @type {HTMLSelectElement} */ ($('#locScanFrom'));
+          if (fromEl) fromEl.value = prefill.fromLocationId;
+        }
+        setTimeout(() => $('#locScanTo')?.focus(), 80);
+      });
+    });
+  } else if (startMode === 'manual') {
     /* Preskoči kamera stage — prikaži formu praznu, fokus na polje `Broj naloga`.
      * Korisno za telefone bez kamere ili kada nalepnica fali. */
     showForm('');

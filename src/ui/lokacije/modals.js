@@ -628,10 +628,21 @@ function renderEditForm({ overlay, body, existing, close, onSuccess }) {
       ? '🏭 HALA'
       : `📦 ${type}`;
 
+  const isActive = existing.is_active !== false;
+  /* Dugme za deaktivaciju mora biti dovoljno uočljivo da admin primeti da je
+   * to DESTRUCTIVE action (skriva lokaciju iz svih dropdown-a), ali skriveno
+   * ispod linije da ne bi slučajno kliknuo umesto "Sačuvaj". Aktiviraj je
+   * suprotan toggle. */
+  const toggleLabel = isActive ? '🗑 Deaktiviraj ovu lokaciju' : '✅ Aktiviraj ponovo';
+  const toggleHint = isActive
+    ? 'Posle deaktivacije lokacija neće biti vidljiva u "Na lokaciju" select-u, ali ostaje u bazi radi istorije.'
+    : 'Lokacija je trenutno deaktivirana — kad je aktiviraš ponovo biće ponuđena u "Na lokaciju" select-u.';
+
   body.innerHTML = `
     <div class="loc-form-breadcrumb">
       <span>${kindLabel}</span>
       <strong class="loc-path-muted">· ${escHtml(existing.location_code || '')}</strong>
+      ${isActive ? '' : '<span class="loc-badge loc-badge-inactive">neaktivno</span>'}
     </div>
 
     <div class="kadr-modal-err" id="locModalNewLocErr"></div>
@@ -647,11 +658,20 @@ function renderEditForm({ overlay, body, existing, close, onSuccess }) {
         <button type="submit" class="btn btn-primary" id="locEditSubmit">Sačuvaj</button>
       </div>
     </form>
+
+    <div class="loc-edit-danger">
+      <div class="loc-edit-danger-hint">${escHtml(toggleHint)}</div>
+      <button type="button" class="btn ${isActive ? 'btn-danger-soft' : 'btn-success-soft'}"
+              id="locEditToggle" data-next-active="${isActive ? 'false' : 'true'}">
+        ${toggleLabel}
+      </button>
+    </div>
   `;
 
   const errEl = overlay.querySelector('#locModalNewLocErr');
   const nameInput = overlay.querySelector('#locEditName');
   const submitBtn = overlay.querySelector('#locEditSubmit');
+  const toggleBtn = overlay.querySelector('#locEditToggle');
 
   overlay.querySelector('[data-act="cancel"]').addEventListener('click', close);
   nameInput.focus();
@@ -672,6 +692,25 @@ function renderEditForm({ overlay, body, existing, close, onSuccess }) {
       return;
     }
     showToast('✓ Izmene snimljene');
+    close();
+    onSuccess?.();
+  });
+
+  toggleBtn.addEventListener('click', async () => {
+    const nextActive = toggleBtn.getAttribute('data-next-active') === 'true';
+    const confirmMsg = nextActive
+      ? `Aktiviraj lokaciju "${existing.location_code}"?`
+      : `Deaktiviraj lokaciju "${existing.location_code}"?\nBiće sakrivena iz select-a, ali istorija ostaje.`;
+    if (!window.confirm(confirmMsg)) return;
+    errEl.textContent = '';
+    toggleBtn.disabled = true;
+    const row = await updateLocation(existing.id, { is_active: nextActive });
+    toggleBtn.disabled = false;
+    if (!row) {
+      errEl.textContent = 'Promena statusa nije uspela (možda nemaš permisije).';
+      return;
+    }
+    showToast(nextActive ? '✓ Lokacija aktivirana' : '✓ Lokacija deaktivirana');
     close();
     onSuccess?.();
   });

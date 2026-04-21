@@ -29,6 +29,7 @@ import {
   fetchLocations,
   resolveDrawingNoForPlacement,
 } from '../../services/lokacije.js';
+import { openScanMoveModal } from '../lokacije/scanModal.js';
 
 /** Tipovi koje UI tretira kao "POLICA" (konkretno fizičko mesto na polici). */
 const SHELF_TYPES = new Set(['SHELF', 'RACK', 'BIN']);
@@ -135,9 +136,43 @@ export async function renderMobileLookup(mountEl, ctx) {
   const resultsEl = mountEl.querySelector('#mLookupResults');
   const goBack = () => ctx.onNavigate('/m');
 
+  /* Index placement-a po id-u, radi brze rehidratacije pri kliku na "Premesti".
+   * Resetuje se svaki put kad startuje nova pretraga. */
+  const placementIndex = new Map();
+
   mountEl.addEventListener('click', ev => {
-    const act = ev.target.closest('[data-act]')?.dataset?.act;
-    if (act === 'back') goBack();
+    const actEl = ev.target.closest('[data-act]');
+    const act = actEl?.dataset?.act;
+    if (act === 'back') {
+      goBack();
+      return;
+    }
+    if (act === 'move') {
+      const id = actEl.getAttribute('data-placement-id');
+      const p = id ? placementIndex.get(id) : null;
+      if (!p) return;
+      /* Prefill scan modal:
+       *   - itemRefTable/Id + orderNo → da bi RPC znao bucket
+       *   - drawingNo → da se upiše eksplicitno u novi movement (v4 schema)
+       *   - fromLocationId → postavljeno u #locScanFrom kad populateFromSelect
+       *     napuni opcije (scan modal vraća placements za (table, id, order))
+       * Posle uspešnog premeštanja re-runujemo pretragu da user vidi novu
+       * lokaciju odmah (bez manuelnog refresh-a). */
+      openScanMoveModal({
+        startMode: 'manual',
+        preferLocationCategory: 'shelf',
+        prefill: {
+          itemRefTable: p.item_ref_table,
+          itemRefId: p.item_ref_id,
+          orderNo: p.order_no || '',
+          drawingNo: p.drawing_no || '',
+          fromLocationId: p.location_id,
+        },
+        onSuccess: () => {
+          setTimeout(() => void runSearch(), 200);
+        },
+      });
+    }
   });
 
   form.addEventListener('submit', ev => {
@@ -199,6 +234,7 @@ export async function renderMobileLookup(mountEl, ctx) {
       return;
     }
 
+    placementIndex.clear();
     if (!Array.isArray(placements) || placements.length === 0) {
       resultsEl.innerHTML = `
         <div class="m-empty">
@@ -222,13 +258,14 @@ export async function renderMobileLookup(mountEl, ctx) {
     /* Grupiši po HALI. U svakoj HALI imamo listu police+količina. */
     const byHall = new Map(); /* hallLabel → {hall, rows: [{placement, shelf, drawing}]} */
     placements.forEach((p, i) => {
+      placementIndex.set(String(p.id), p);
       const loc = locMap.get(p.location_id);
       const path = resolveLocPath(loc, locMap);
       const bucket = byHall.get(path.hall) || { hall: path.hall, kind: path.kind, rows: [] };
       bucket.rows.push({
         placement: p,
         shelf: path.shelf,
-        drawing: resolvedDrawings[i] || p.item_ref_id,
+        drawing: resolvedDrawings[i] || p.drawing_no || p.item_ref_id,
       });
       byHall.set(path.hall, bucket);
     });
@@ -278,6 +315,12 @@ export async function renderMobileLookup(mountEl, ctx) {
               <span class="m-lookup-qty">${escHtml(String(p.quantity || 0))} kom</span>
               <span class="m-dot">·</span>
               <span title="${escHtml(fmtDate(p.updated_at))}">${escHtml(fmtAgo(p.updated_at))}</span>
+            </div>
+            <div class="m-lookup-actions">
+              <button type="button" class="m-lookup-move-btn"
+                      data-act="move" data-placement-id="${escHtml(String(p.id))}">
+                ➡ PREMESTI ODAVDE
+              </button>
             </div>
           </div>
         `;
