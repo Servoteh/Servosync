@@ -281,10 +281,13 @@ export async function exportGanttAsPDF(which) {
 
   showToast('⏳ Generišem PDF...');
   try {
-    const isDark = !document.documentElement.classList.contains('theme-light');
-    const bg = isDark ? '#0a0e14' : '#ffffff';
+    /* PDF-ove renderujemo uvek u "papirnom" (svetlom) režimu — bez obzira što
+       korisnik trenutno gleda dark theme. html2canvas 1.4.1 ne podržava
+       `color-mix()` / `oklch()` pa dark-mode stilovi lako završe kao crno.
+       Rešenje: u `onclone` callback-u dodajemo `.pdf-export` klasu koja
+       aktivira set static (print-safe) pravila van `@media print`. */
     const canvas = await html2canvas(el, {
-      backgroundColor: bg,
+      backgroundColor: '#ffffff',
       scale: 1.5,
       windowWidth: Math.max(1400, el.scrollWidth),
       scrollX: 0,
@@ -292,6 +295,20 @@ export async function exportGanttAsPDF(which) {
       width: el.scrollWidth,
       height: el.scrollHeight,
       useCORS: true,
+      onclone: (clonedDoc) => {
+        try {
+          /* Forsiraj light temu u klonu (data-theme="light") kako CSS varijable
+             iz `[data-theme="light"]` bloka postanu aktivne. */
+          clonedDoc.documentElement.setAttribute('data-theme', 'light');
+          const bodyEl = clonedDoc.body;
+          if (bodyEl) {
+            bodyEl.classList.add('pdf-export');
+            bodyEl.classList.add(which === 'gantt' ? 'pdf-export-gantt' : 'pdf-export-total');
+          }
+        } catch (err) {
+          console.warn('[export] onclone theme-force failed', err);
+        }
+      },
     });
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });

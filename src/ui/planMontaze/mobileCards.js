@@ -31,6 +31,7 @@ import {
   getPhaseModel,
 } from '../../state/planMontaze.js';
 import { openModelDialog } from './modelDialog.js';
+import { openDescriptionDialog } from './descriptionDialog.js';
 import {
   STATUSES,
   CHECK_SHORT,
@@ -147,6 +148,10 @@ export function wireMobileCards(root, { onChange } = {}) {
         const card = btn.closest('.m-card');
         const phaseId = card?.dataset.phaseId;
         if (phaseId) openModelDialog(phaseId, () => onChange?.());
+        return;
+      }
+      else if (action === 'desc') {
+        openDescriptionDialog(i, () => onChange?.());
         return;
       }
       onChange?.();
@@ -294,8 +299,9 @@ function _mobileCardHtml(row, i) {
           <textarea class="note-area" rows="2" data-mfield="note" ${dis}>${escHtml(row.note || '')}</textarea>
         </div>
 
-        <div style="display:flex;gap:6px;margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">
+        <div style="display:flex;gap:6px;margin-top:8px;padding-top:6px;border-top:1px solid var(--border);flex-wrap:wrap">
           <button type="button" class="row-btn btn-3d ${getPhaseModel(row.id) ? 'has-model' : ''}" data-mrow-action="model" data-ri="${i}" title="3D model">🧩</button>
+          <button type="button" class="row-btn btn-desc ${(row.description && row.description.trim()) ? 'has-desc' : ''}" data-mrow-action="desc" data-ri="${i}" title="Opis faze">📝 Opis</button>
           <button type="button" class="row-btn btn-up" data-mrow-action="up" data-ri="${i}" ${dis}>▲</button>
           <button type="button" class="row-btn btn-dn" data-mrow-action="down" data-ri="${i}" ${dis}>▼</button>
           <button type="button" class="row-btn btn-del" data-mrow-action="del" data-ri="${i}" ${dis}>✕</button>

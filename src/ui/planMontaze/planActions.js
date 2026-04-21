@@ -101,6 +101,28 @@ export function moveRow(i, dir) {
   queueCurrentWpSync();
 }
 
+/**
+ * Pomeri fazu sa `fromIdx` na poziciju odmah ispred `toIdx` u originalnom nizu
+ * faza aktivnog WP-a. `toIdx` može biti `phases.length` što znači "drop na kraj".
+ * Koristi se za drag-and-drop promenu redosleda.
+ * @returns {boolean} true ako je redosled promenjen
+ */
+export function movePhaseToIndex(fromIdx, toIdx) {
+  if (!canEdit()) { showToast('⚠ Pregled — nema izmena'); return false; }
+  const phases = getActivePhases();
+  if (fromIdx < 0 || fromIdx >= phases.length) return false;
+  if (toIdx < 0 || toIdx > phases.length) return false;
+  /* Normalizacija: drop odmah ispred/iza samog sebe je no-op. */
+  if (toIdx === fromIdx || toIdx === fromIdx + 1) return false;
+  const [moved] = phases.splice(fromIdx, 1);
+  const insertAt = toIdx > fromIdx ? toIdx - 1 : toIdx;
+  phases.splice(insertAt, 0, moved);
+  planMontazeState.filteredIndices = null;
+  persistState();
+  queueCurrentWpSync();
+  return true;
+}
+
 export function deleteRow(i) {
   if (!canEdit()) { showToast('⚠ Pregled — nema izmena'); return; }
   const phases = getActivePhases();

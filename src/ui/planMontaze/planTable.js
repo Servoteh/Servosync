@@ -29,6 +29,7 @@ import {
   VODJA,
 } from '../../state/planMontaze.js';
 import { openModelDialog } from './modelDialog.js';
+import { openDescriptionDialog } from './descriptionDialog.js';
 import {
   STATUSES,
   CHECK_LABELS,
@@ -51,6 +52,7 @@ import {
   updateCheck,
   togglePhaseType,
   moveRow,
+  movePhaseToIndex,
   deleteRow,
   addPhaseFromInput,
 } from './planActions.js';
@@ -294,14 +296,28 @@ function _planRowHtml(row, i) {
     </td>`;
   }).join('');
 
+  const hasDesc = !!(row.description && row.description.trim());
+  const descTitle = hasDesc
+    ? 'Opis dodeljen — klikni za izmenu'
+    : 'Dodaj detaljan opis faze';
+  const dragHandle = canEdit()
+    ? `<span class="row-drag-handle" data-drag-handle="${i}" title="Prevuci za promenu redosleda" aria-label="Prevuci za promenu redosleda">⋮⋮</span>`
+    : '';
+
   return `
     <tr class="${rkC}${finC}" data-ri="${i}" data-phase-id="${escHtml(row.id)}">
-      <td class="td-num">${i + 1}</td>
+      <td class="td-num">
+        ${dragHandle}
+        <span class="td-num-n">${i + 1}</span>
+      </td>
       <td class="td-name">
         ${remDot}
         <input class="phase-name-input" type="text" value="${escHtml(row.name)}" data-field="name" ${dis}>
         <button type="button" class="phase-type-chip ${ptCls}" data-toggle-type="${i}" title="${ptTitle}" ${dis}>
           <span class="pt-ic">${ptIc}</span>${ptLbl}
+        </button>
+        <button type="button" class="phase-desc-btn${hasDesc ? ' has-desc' : ''}" data-row-action="desc" data-ri="${i}" title="${descTitle}">
+          <span class="pdb-ic">📝</span><span class="pdb-lbl">opis</span>
         </button>
       </td>
       <td class="td-loc">
@@ -508,7 +524,80 @@ function _wireTbody(root) {
         if (phaseId) openModelDialog(phaseId, () => _onChangeRoot?.());
         return;
       }
+      else if (action === 'desc') {
+        openDescriptionDialog(i, () => _onChangeRoot?.());
+        return;
+      }
       _onChangeRoot?.();
+    });
+  });
+
+  /* Drag & drop: promena redosleda faza preko handle-a ⋮⋮ */
+  _wireRowDragDrop(tbody);
+}
+
+/**
+ * Handle-scoped drag & drop: red se postaje `draggable` tek posle `mousedown`
+ * na `.row-drag-handle`, kako klik u phase-name-input ili druge kontrole ne bi
+ * pokretao drag. Vizuelni feedback: `phase-row-dragging` na izvornom redu +
+ * `phase-drop-above` / `phase-drop-below` insert indikator na meti.
+ */
+function _wireRowDragDrop(tbody) {
+  let draggingIdx = null;
+
+  tbody.querySelectorAll('[data-drag-handle]').forEach(h => {
+    h.addEventListener('mousedown', () => {
+      const tr = h.closest('tr');
+      if (tr) tr.setAttribute('draggable', 'true');
+    });
+  });
+
+  tbody.querySelectorAll('tr[data-ri]').forEach(tr => {
+    tr.addEventListener('dragstart', (ev) => {
+      const fromStr = tr.dataset.ri;
+      if (fromStr == null) return;
+      draggingIdx = Number(fromStr);
+      if (ev.dataTransfer) {
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', fromStr);
+      }
+      tr.classList.add('phase-row-dragging');
+    });
+
+    tr.addEventListener('dragover', (ev) => {
+      if (draggingIdx === null) return;
+      ev.preventDefault();
+      if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+      const rect = tr.getBoundingClientRect();
+      const above = (ev.clientY - rect.top) < rect.height / 2;
+      tr.classList.toggle('phase-drop-above', above);
+      tr.classList.toggle('phase-drop-below', !above);
+    });
+
+    tr.addEventListener('dragleave', () => {
+      tr.classList.remove('phase-drop-above', 'phase-drop-below');
+    });
+
+    tr.addEventListener('drop', (ev) => {
+      ev.preventDefault();
+      tr.classList.remove('phase-drop-above', 'phase-drop-below');
+      if (draggingIdx === null) return;
+      const targetRi = Number(tr.dataset.ri);
+      if (Number.isNaN(targetRi)) return;
+      const rect = tr.getBoundingClientRect();
+      const above = (ev.clientY - rect.top) < rect.height / 2;
+      const to = above ? targetRi : targetRi + 1;
+      const changed = movePhaseToIndex(draggingIdx, to);
+      draggingIdx = null;
+      if (changed) _onChangeRoot?.();
+    });
+
+    tr.addEventListener('dragend', () => {
+      tr.classList.remove('phase-row-dragging');
+      tr.removeAttribute('draggable');
+      tbody.querySelectorAll('.phase-drop-above, .phase-drop-below')
+        .forEach(el => el.classList.remove('phase-drop-above', 'phase-drop-below'));
+      draggingIdx = null;
     });
   });
 }

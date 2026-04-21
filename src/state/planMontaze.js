@@ -377,6 +377,7 @@ export function createBlankPhase(name, wp) {
     checks: new Array(NUM_CHECKS).fill(false),
     note: '',
     blocker: '',
+    description: '',
     type: _normalizePhaseType(inferType),
   };
 }

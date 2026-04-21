@@ -2712,3 +2712,228 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .loc-table thead th { background:var(--surface2); color:var(--text3); font-size:10px; text-transform:uppercase; letter-spacing:0.3px; }
 .loc-table tbody tr:hover { background:color-mix(in srgb, var(--accent) 6%, transparent); }
 
+
+/* -----------------------------------------------------------------------
+   PLAN MONTAZE -- D&D redosled faza, dugme "Opis", PDF export overrides
+   ----------------------------------------------------------------------- */
+
+/* -- Drag handle u # koloni -- */
+.plan-table .td-num { white-space: nowrap; padding-left: 4px; padding-right: 4px; }
+.plan-table .td-num .td-num-n {
+  display: inline-block;
+  vertical-align: middle;
+  color: var(--text3);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.row-drag-handle {
+  display: inline-block;
+  vertical-align: middle;
+  width: 14px;
+  line-height: 20px;
+  text-align: center;
+  color: var(--text3);
+  font-size: 14px;
+  letter-spacing: -2px;
+  cursor: grab;
+  user-select: none;
+  border-radius: 4px;
+  opacity: 0.55;
+  margin-right: 2px;
+  transition: opacity 0.12s, background 0.12s, color 0.12s;
+  background: transparent;
+}
+.row-drag-handle:hover {
+  opacity: 1;
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.row-drag-handle:active { cursor: grabbing; }
+
+/* -- Dragging / drop indicator -- */
+.plan-table tbody tr.phase-row-dragging td {
+  opacity: 0.45;
+  background: var(--accent-dim) !important;
+}
+.plan-table tbody tr.phase-drop-above td {
+  box-shadow: inset 0 3px 0 0 var(--accent);
+}
+.plan-table tbody tr.phase-drop-below td {
+  box-shadow: inset 0 -3px 0 0 var(--accent);
+}
+
+/* -- "Opis" dugme ispod naziva faze (desktop) -- */
+.phase-desc-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text3);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.phase-desc-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.phase-desc-btn.has-desc {
+  border-color: var(--status-done);
+  color: var(--status-done);
+  background: color-mix(in srgb, var(--status-done) 10%, transparent);
+}
+.phase-desc-btn.has-desc:hover {
+  background: color-mix(in srgb, var(--status-done) 18%, transparent);
+}
+.phase-desc-btn .pdb-ic { font-size: 11px; }
+.phase-desc-btn .pdb-lbl { text-transform: lowercase; letter-spacing: 0.2px; }
+
+/* Mobilni "Opis" dugme -- bazni .row-btn vec postoji; samo has-desc naglasavamo */
+.row-btn.btn-desc.has-desc {
+  border-color: var(--status-done);
+  color: var(--status-done);
+}
+
+/* -- Textarea u description dijalogu -- */
+.phase-description-textarea {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  outline: none;
+  resize: vertical;
+  min-height: 220px;
+}
+.phase-description-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+/* -----------------------------------------------------------------------
+   PDF EXPORT OVERRIDES -- aktivno preko `.pdf-export` klase na <body>
+   koju dodaje exportModal u html2canvas `onclone` callback-u.
+
+   html2canvas 1.4.1 ne podrzava moderne CSS funkcije (color-mix, oklch...)
+   pa bi Gantt u dark mode-u izgledao skoro potpuno crn. Ovde "zakucavamo"
+   eksplicitne, print-safe boje van `@media print`.
+   ----------------------------------------------------------------------- */
+body.pdf-export { background: #ffffff !important; color: #000 !important; }
+body.pdf-export .header,
+body.pdf-export .status-panel,
+body.pdf-export .plan-toolbar,
+body.pdf-export .view-tabs,
+body.pdf-export .filter-bar,
+body.pdf-export .add-phase-bar,
+body.pdf-export .reminder-zone,
+body.pdf-export .gantt-toolbar {
+  display: none !important;
+}
+body.pdf-export .gantt-wrap {
+  overflow: visible !important;
+  border: 1px solid #bbb !important;
+  box-shadow: none !important;
+  background: #ffffff !important;
+}
+body.pdf-export .gantt-table {
+  background: #ffffff !important;
+  color: #000 !important;
+  border-collapse: collapse !important;
+}
+body.pdf-export .gantt-table th,
+body.pdf-export .gantt-table td {
+  border: 1px solid #bbb !important;
+  background: #ffffff !important;
+  color: #000 !important;
+}
+body.pdf-export .gantt-month-hdr {
+  background: #e4e4e4 !important;
+  color: #000 !important;
+  font-weight: 700 !important;
+}
+body.pdf-export .gantt-day-hdr {
+  background: #f0f0f0 !important;
+  color: #222 !important;
+  font-weight: 600 !important;
+}
+body.pdf-export .gantt-day-hdr.today-col,
+body.pdf-export .gantt-cell.today-col {
+  background: #ddecff !important;
+  color: #000 !important;
+}
+body.pdf-export .gantt-day-hdr.wknd,
+body.pdf-export .gantt-cell.wknd {
+  background: #f5f5f5 !important;
+  color: #555 !important;
+}
+body.pdf-export .gantt-day-hdr.col-selected,
+body.pdf-export .gantt-cell.col-selected {
+  background: #fff3b3 !important;
+  color: #000 !important;
+}
+body.pdf-export .gantt-label {
+  background: #fafafa !important;
+  color: #000 !important;
+  border-right: 2px solid #888 !important;
+}
+body.pdf-export .gantt-label-name,
+body.pdf-export .gantt-label-sub,
+body.pdf-export .gantt-label-status {
+  color: #000 !important;
+}
+body.pdf-export .gantt-label-status.gs-0 { color: #8a7700 !important; }
+body.pdf-export .gantt-label-status.gs-1 { color: #1a56a8 !important; }
+body.pdf-export .gantt-label-status.gs-2 { color: #1b7d3a !important; }
+body.pdf-export .gantt-label-status.gs-3 { color: #a52020 !important; }
+
+/* Bars: zadrzavamo inline background (boja lokacije) koji je
+   postavljen preko `style="background-color:..."`. Dodajemo vidljiv border
+   i vizuelni pattern za mech/elec razlikovanje u B/W. */
+body.pdf-export .gantt-cell.bar-phase,
+body.pdf-export .gantt-cell.bar-phase-start,
+body.pdf-export .gantt-cell.bar-phase-end {
+  border: 1px solid rgba(0,0,0,0.3) !important;
+}
+body.pdf-export .gantt-cell.bar-mech.bar-phase,
+body.pdf-export .gantt-cell.bar-mech.bar-phase-start,
+body.pdf-export .gantt-cell.bar-mech.bar-phase-end {
+  background-image: linear-gradient(rgba(0,0,0,0.12), rgba(0,0,0,0.12)) !important;
+}
+body.pdf-export .gantt-cell.bar-elec.bar-phase,
+body.pdf-export .gantt-cell.bar-elec.bar-phase-start,
+body.pdf-export .gantt-cell.bar-elec.bar-phase-end {
+  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.55) 0 2px, transparent 2px 6px) !important;
+}
+body.pdf-export .gantt-drag-handle-l,
+body.pdf-export .gantt-drag-handle-r,
+body.pdf-export .reminder-dot,
+body.pdf-export .row-drag-handle,
+body.pdf-export .phase-desc-btn {
+  display: none !important;
+}
+
+/* Total Gantt -- isti overrides, vec su nasledeni preko klasa gantt-*.
+   Dodatno: WP / machine group header-i moraju biti citki. */
+body.pdf-export .gantt-machine-hdr td,
+body.pdf-export .gantt-wp-group-hdr td,
+body.pdf-export .tg-group-hdr td {
+  background: #e4e4e4 !important;
+  color: #000 !important;
+  border-top: 2px solid #888 !important;
+  font-weight: 700 !important;
+}
+
+/* Filter strip iznad total gantt-a i WP filter se takode sakrivaju */
+body.pdf-export .tg-filter-bar,
+body.pdf-export .tg-wp-filter { display: none !important; }
+

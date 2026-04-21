@@ -24,6 +24,13 @@ export function isPhaseTypeSchemaSupported() {
   return phaseTypeSchemaSupported;
 }
 
+/* Isti princip kao phase_type: ako DB nema `description` kolonu,
+   posle prvog neuspelog upserta je isključujemo za tu sesiju. */
+let phaseDescriptionSchemaSupported = true;
+export function setPhaseDescriptionSchemaSupported(v) {
+  phaseDescriptionSchemaSupported = !!v;
+}
+
 export function normalizePhaseType(t) {
   const v = String(t || '').toLowerCase();
   return v === 'electrical' || v === 'elektro' || v === 'e' ? 'electrical' : 'mechanical';
@@ -83,6 +90,7 @@ export function mapDbPhase(d) {
     checks: d.checks || new Array(NUM_CHECKS).fill(false),
     note: d.note || '',
     blocker: d.blocker || '',
+    description: d.description || '',
     type: normalizePhaseType(rawType),
   };
 }
@@ -143,6 +151,9 @@ export function buildPhasePayload(ph, projectId, wpId, sortOrder) {
   if (phaseTypeSchemaSupported) {
     base.phase_type = normalizePhaseType(ph.type);
   }
+  if (phaseDescriptionSchemaSupported) {
+    base.description = ph.description || '';
+  }
   return base;
 }
 
@@ -195,9 +206,19 @@ export async function savePhaseToDb(ph, projectId, wpId, sortOrder) {
     /* Fallback: kolona phase_type ne postoji — isključi je i probaj ponovo. */
     setPhaseTypeSchemaSupported(false);
     const { phase_type, ...rest } = payload;
-    res = await sbReq('phases', 'POST', rest);
+    payload = rest;
+    res = await sbReq('phases', 'POST', payload);
     if (res !== null) {
       console.warn('[phase_type] Column not present in DB; skipping phase_type. Apply sql/migrations/add_phase_type.sql to enable.');
+    }
+  }
+  if (res === null && payload.description !== undefined && phaseDescriptionSchemaSupported) {
+    /* Fallback: kolona `description` ne postoji — isključi je i probaj ponovo. */
+    setPhaseDescriptionSchemaSupported(false);
+    const { description, ...rest } = payload;
+    res = await sbReq('phases', 'POST', rest);
+    if (res !== null) {
+      console.warn('[phase.description] Column not present in DB; skipping description. Apply sql/migrations/add_phase_description.sql to enable.');
     }
   }
   return res;
