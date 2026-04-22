@@ -15,7 +15,14 @@ import { setUser, setOnline, setRole } from '../../state/auth.js';
 import { escHtml, showToast } from '../../lib/dom.js';
 import { hasSupabaseConfig } from '../../lib/constants.js';
 
-export function renderLoginScreen({ onLoginSuccess }) {
+/**
+ * @param {object} opts
+ * @param {() => void} opts.onLoginSuccess
+ * @param {() => void} [opts.onForgotPassword] Navigacija na /reset-password
+ *   bez tokena (forma "pošalji link"). Ako nije prosleđeno, link se ne
+ *   renderuje.
+ */
+export function renderLoginScreen({ onLoginSuccess, onForgotPassword }) {
   const overlay = document.createElement('div');
   overlay.className = 'auth-overlay';
   overlay.id = 'authOverlay';
@@ -44,6 +51,11 @@ export function renderLoginScreen({ onLoginSuccess }) {
           Prijavi se
           <span class="arrow" aria-hidden="true">→</span>
         </button>
+        <div class="auth-forgot-row">
+          <button type="button" class="auth-link-btn" id="authForgotBtn">
+            Zaboravljena lozinka?
+          </button>
+        </div>
       </form>
 
       <div class="auth-divider">ili</div>
@@ -88,6 +100,11 @@ export function renderLoginScreen({ onLoginSuccess }) {
       msg.innerHTML = '<span class="auth-err">Greška pri prijavi</span>';
       submitBtn.disabled = false;
     }
+  });
+
+  const forgotBtn = overlay.querySelector('#authForgotBtn');
+  forgotBtn?.addEventListener('click', () => {
+    onForgotPassword?.();
   });
 
   offlineBtn.addEventListener('click', () => {

@@ -20,6 +20,7 @@ function normalizePathname(pathname) {
  *   | 'module'
  *   | 'maintenance'
  *   | 'mobile'
+ *   | 'reset-password'
  *   | 'unknown',
  *   moduleId?: string,
  *   section?: 'dashboard' | 'machines' | 'machine' | 'board' | 'notifications' | 'catalog',
@@ -34,6 +35,12 @@ export function pathnameToRoute(pathname) {
   }
   if (p === '/hub') {
     return { kind: 'hub' };
+  }
+  /* Reset password — javna stranica (bez login guard-a). Supabase u mail-u
+   * šalje redirect_to sa `/reset-password#access_token=...&type=recovery`
+   * (implicit flow) ili `?code=...` (PKCE flow). */
+  if (p === '/reset-password') {
+    return { kind: 'reset-password' };
   }
   /* Mobilni shell za magacionere / viljuškariste (Faza 1 — PWA + Capacitor wrapper).
    * Namerno plitak tree: `/m` (home), i pod-rute (scan, manual, history, batch, lookup).

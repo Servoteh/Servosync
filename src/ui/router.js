@@ -16,6 +16,10 @@ import {
 } from '../lib/appPaths.js';
 import { initTheme } from '../lib/theme.js';
 import { renderLoginScreen } from './auth/loginScreen.js';
+import {
+  renderResetPasswordScreen,
+  parseRecoveryUrl,
+} from './auth/resetPasswordScreen.js';
 import { renderModuleHub } from './hub/moduleHub.js';
 import { renderModulePlaceholder } from './modulePlaceholder.js';
 import { renderKadrovskaModule } from './kadrovska/index.js';
@@ -161,6 +165,42 @@ function showLogin() {
       } else {
         restoreOrShowHub();
       }
+    },
+    onForgotPassword: () => {
+      history.pushState(null, '', '/reset-password');
+      showResetPassword();
+    },
+  });
+  mountEl.appendChild(screen);
+}
+
+/**
+ * Reset password ekran — javan (ne zahteva login). Otvara se kad korisnik:
+ *   1. klikne "Zaboravljena lozinka?" na login ekranu → prazna forma za
+ *      slanje mail-a;
+ *   2. otvori magic link iz Supabase email-a → forma za novu lozinku.
+ */
+function showResetPassword() {
+  const leaving = currentScreen;
+  currentScreen = 'reset-password';
+  clearMount(leaving);
+  setStoredModule(null);
+  const screen = renderResetPasswordScreen({
+    onSuccess: async () => {
+      /* Posle uspešnog reseta, sesija je već persistovana u state/localStorage.
+       * Primeni ulogu pa idi na hub. */
+      try {
+        await loadAndApplyUserRole();
+      } catch (e) {
+        /* ignore — ako nije moguće, korisnik može ručno da ode na hub */
+      }
+      history.replaceState(null, '', '/');
+      restoreOrShowHub();
+    },
+    onCancel: () => {
+      /* Očisti URL od starog query-ja i vrati na login. */
+      history.replaceState(null, '', '/');
+      showLogin();
     },
   });
   mountEl.appendChild(screen);
@@ -625,13 +665,21 @@ function showMaintenanceFromRoute(route, searchParsed, opts = {}) {
 }
 
 function applyRouteFromLocation() {
+  const route = pathnameToRoute(window.location.pathname);
+  const search = parseSearchParams(window.location.search);
+
+  /* Reset password je javna ruta — uvek je obradi pre auth guard-a,
+   * bez obzira da li korisnik ima sesiju. Supabase magic link može stići
+   * i dok je druga sesija aktivna (npr. admin resetuje svoju lozinku). */
+  if (route.kind === 'reset-password') {
+    showResetPassword();
+    return;
+  }
+
   const auth = getAuth();
   if (!auth.user || !auth.isOnline) {
     return;
   }
-
-  const route = pathnameToRoute(window.location.pathname);
-  const search = parseSearchParams(window.location.search);
 
   if (route.kind === 'unknown') {
     syncBrowserUrl('/', { replace: true });
@@ -727,6 +775,11 @@ export function initRouter(rootEl) {
   initTheme();
 
   window.addEventListener('popstate', () => {
+    const route = pathnameToRoute(window.location.pathname);
+    if (route.kind === 'reset-password') {
+      showResetPassword();
+      return;
+    }
     const auth = getAuth();
     if (!auth.user || !auth.isOnline) {
       showLogin();
@@ -735,11 +788,32 @@ export function initRouter(rootEl) {
     applyRouteFromLocation();
   });
 
+  /* Prepoznaj Supabase recovery flow: i kad je URL upravo `/` ali hash
+   * sadrži `#access_token=...&type=recovery` (stariji Supabase email template
+   * redirektuje na site URL bez path-a). U tom slučaju skreni na
+   * /reset-password bez dodatnog koraka. */
+  const recovery = parseRecoveryUrl();
+  const isRecovery =
+    recovery.type === 'recovery' ||
+    (!!recovery.accessToken && !!recovery.refreshToken);
+  if (isRecovery && window.location.pathname !== '/reset-password') {
+    /* Sačuvaj hash — tu su access_token / refresh_token. */
+    const hash = window.location.hash || '';
+    history.replaceState(null, '', '/reset-password' + hash);
+    showResetPassword();
+    return;
+  }
+
+  const route = pathnameToRoute(window.location.pathname);
+  if (route.kind === 'reset-password') {
+    showResetPassword();
+    return;
+  }
+
   const auth = getAuth();
   if (auth.user) {
     applyRouteFromLocation();
   } else {
-    const route = pathnameToRoute(window.location.pathname);
     if (route.kind !== 'session') {
       ssSet(SESSION_KEYS.POST_LOGIN_REDIRECT, window.location.pathname + window.location.search);
     }
