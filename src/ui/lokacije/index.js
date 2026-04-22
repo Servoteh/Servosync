@@ -70,7 +70,7 @@ function canUseCamera() {
 
 const TABS = [
   { id: 'dashboard', label: 'Početna' },
-  { id: 'predmet', label: 'Predmet' },
+  { id: 'predmet', label: 'Pregled predmeta' },
   { id: 'browse', label: 'Lokacije' },
   { id: 'items', label: 'Stavke' },
   { id: 'report', label: 'Pregled po lokacijama' },
@@ -1033,7 +1033,7 @@ async function renderPanel(host, tabId) {
               <div><strong>Nema evidentiranih stavki na lokacijama.</strong></div>
               <div style="margin-top:6px">Tabela <code>loc_item_placements</code> je prazna ili filter nema pogodaka. Da bi se ovde pojavili podaci:</div>
               <ul style="margin:6px 0 0 22px">
-                <li>Otvori tab <strong>Predmet</strong> da pregledaš sve TP-ove jednog predmeta i vidiš da li već imaju lokaciju.</li>
+                <li>Otvori tab <strong>Pregled predmeta</strong> da pregledaš sve TP-ove jednog predmeta i vidiš da li već imaju lokaciju.</li>
                 <li>Klikni <strong>Brzo premeštanje</strong> da evidentiraš prvu lokaciju (zaduženje) za neku stavku.</li>
                 <li>Skenirani RNZ barkod automatski pravi <em>placement</em>.</li>
               </ul>
@@ -1207,7 +1207,7 @@ async function renderPanel(host, tabId) {
             </tr></thead>
             <tbody>${bodyRows || `<tr><td colspan="12" class="loc-muted" style="padding:18px 12px">
               <div><strong>Nema redova za zadate filtere.</strong></div>
-              <div style="margin-top:6px">Pregled spaja <code>loc_item_placements</code> sa BigTehn cache-om i filtrira po predmetu/RN/crtežu/lokaciji. Ako baza placement-a još nije puna, otvori tab <strong>Predmet</strong> da vidiš sve TP-ove jednog predmeta — i tamo ćeš videti koji još nemaju lokaciju.</div>
+              <div style="margin-top:6px">Pregled spaja <code>loc_item_placements</code> sa BigTehn cache-om i filtrira po predmetu/RN/crtežu/lokaciji. Ako baza placement-a još nije puna, otvori tab <strong>Pregled predmeta</strong> da vidiš sve TP-ove jednog predmeta — i tamo ćeš videti koji još nemaju lokaciju.</div>
             </td></tr>`}</tbody>
           </table>
         </div>

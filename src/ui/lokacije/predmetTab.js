@@ -1,5 +1,5 @@
 /**
- * Lokacije — tab „Predmet".
+ * Lokacije — tab „Pregled predmeta".
  *
  * Pun ekran (ne modal) u sklopu modula Lokacije. Tok:
  *   1. Ako predmet nije izabran → vidljiva pretraga + lista BigTehn predmeta.
@@ -7,12 +7,17 @@
  *      re-render-uje sa drugim layout-om.
  *   2. Ako je predmet izabran → vidljiv header sa ID/naziv/komitent + filteri
  *      (TP, Crtež, Sa/Bez lokacije, Ugrađeni, Otvoreni RN) + tabela
- *      tehnoloških postupaka iz `loc_tps_for_predmet` (v2, server-side filteri)
+ *      tehnoloških postupaka iz `loc_tps_for_predmet` (v3 — server-side
+ *      PREFIX match na TP/crtež + has_pdf flag iz bigtehn_drawings_cache)
  *      + Print/Export PDF/Export CSV/Promeni-predmet dugmad.
  *
  * Sve UI state je u `state/lokacije.js` (perzistira u localStorage), pa
  * povratak na tab čuva izabrani predmet i filtere. Klik na red u tabeli
  * otvara postojeći `openTechProcedureModal` iz Plan Proizvodnje.
+ *
+ * Pored crteža gde u BigTehn arhivi postoji PDF (`storage_path != null`)
+ * prikazuje se 📄 ikonica koja kroz `openDrawingPdf` otvara signed URL
+ * iz Supabase Storage bucket-a `bigtehn-drawings` u novom tabu.
  *
  * Ne piše u bazu. Sve sortiranje/filtriranje radi se na serveru (RPC).
  */
@@ -23,6 +28,7 @@ import {
   searchBigtehnItems,
   fetchTpsForPredmet,
 } from '../../services/lokacije.js';
+import { openDrawingPdf } from '../../services/drawings.js';
 import {
   getLokacijeUiState,
   setPredmetSelected,
@@ -60,7 +66,7 @@ async function renderPickerView(host, refresh) {
    * fetch-a; dok traje, prikazujemo „Učitavam…" stanje. */
   host.innerHTML = `
     <div class="kadr-panel active loc-panel">
-      <h2 class="loc-subh" style="margin:0 0 6px">Predmet — pregled svih tehnoloških postupaka i lokacija</h2>
+      <h2 class="loc-subh" style="margin:0 0 6px;letter-spacing:0.5px">PREGLED PREDMETA</h2>
       <p class="loc-muted" style="margin:0 0 14px">
         Izaberi jedan Predmet (BigTehn, status „U TOKU"). Posle izbora ćeš videti
         sve njegove tehnološke postupke (RN-ove) sa lokacijama i moći da filtriraš,
@@ -71,9 +77,12 @@ async function renderPickerView(host, refresh) {
           <span>Pretraga po broju predmeta, nazivu, ugovoru ili narudžbenici</span>
           <input type="search" id="lpPickerQ" class="loc-search-input"
             placeholder="npr. 7351, 'sistem za…', ugovor, narudžbenica"
+            title="Kucaj broj predmeta (npr. 7351), deo naziva, broj ugovora ili narudžbenice. Lista se filtrira automatski dok kucaš."
             autocomplete="off" />
         </label>
-        <div id="lpPickerList" class="loc-picker-list" style="border:1px solid var(--border2,#ccc);border-radius:6px;background:var(--surface,#fff);min-height:200px;max-height:62vh;overflow:auto">
+        <div id="lpPickerList" class="loc-picker-list"
+          title="Klik na red bira Predmet i otvara pregled svih njegovih tehnoloških postupaka (RN-ova) sa lokacijama"
+          style="border:1px solid var(--border2,#ccc);border-radius:6px;background:var(--surface,#fff);min-height:200px;max-height:62vh;overflow:auto">
           <div class="loc-muted" style="padding:14px">Učitavam aktuelne predmete…</div>
         </div>
       </div>
@@ -137,6 +146,7 @@ function renderPickerRowHtml(item) {
   const nar = item.broj_narudzbenice ? `<span class="loc-muted"> · NAR ${escHtml(item.broj_narudzbenice)}</span>` : '';
   const rok = item.rok_zavrsetka ? `<span class="loc-muted"> · rok ${escHtml(String(item.rok_zavrsetka).slice(0, 10))}</span>` : '';
   return `<button type="button" class="loc-picker-row" data-pick-id="${escHtml(String(item.id))}"
+    title="Otvori pregled predmeta ${code} sa svim tehnološkim postupcima i njihovim lokacijama"
     style="display:block;width:100%;text-align:left;border:none;border-bottom:1px solid var(--border2,#eee);padding:10px 14px;background:transparent;cursor:pointer">
     <div style="font-size:14px"><strong>${code}</strong> · ${naz}</div>
     <div style="font-size:12px;margin-top:2px">${cust}${ug}${nar}${rok}</div>
@@ -156,27 +166,33 @@ async function renderDataView(host, refresh) {
    * korisnik vidi izabrani Predmet i filtere bez čekanja na RPC. */
   host.innerHTML = `
     <div class="kadr-panel active loc-panel">
+      <h2 class="loc-subh" style="margin:0 0 10px;letter-spacing:0.5px">PREGLED PREDMETA</h2>
       ${renderHeaderHtml(sel)}
       ${renderFiltersHtml(f)}
       <div class="loc-predmet-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
-        <button type="button" class="btn btn-xs" id="lpApply">Primeni filtere</button>
-        <button type="button" class="btn btn-xs" id="lpReset">Resetuj filtere</button>
+        <button type="button" class="btn btn-xs" id="lpApply"
+          title="Primeni unete filtere (Broj TP, Crtež, Lokacija, Ugrađeni, Otvoreni RN) i ponovo učitaj listu sa servera">Primeni filtere</button>
+        <button type="button" class="btn btn-xs" id="lpReset"
+          title="Vrati sve filtere na podrazumevane vrednosti (prazan TP/crtež, sve lokacije, samo otvoreni RN, bez ugrađenih)">Resetuj filtere</button>
         <span style="flex:1"></span>
-        <button type="button" class="btn btn-xs" id="lpPrint" title="Otvori print dijalog za trenutno filtriran rezultat">🖨 Štampa</button>
-        <button type="button" class="btn btn-xs" id="lpExportPdf" title="Otvori print dijalog — izaberi „Sačuvaj kao PDF" u dialogu štampe">📄 Export PDF</button>
-        <button type="button" class="btn btn-xs" id="lpExportCsv" title="Preuzmi CSV svih redova koji odgovaraju trenutnim filterima">⬇ Export CSV</button>
+        <button type="button" class="btn btn-xs" id="lpPrint"
+          title="Otvori novi prozor sa formatiranom tabelom svih trenutno filtriranih redova i automatski pokreni dijalog štampe">🖨 Štampa</button>
+        <button type="button" class="btn btn-xs" id="lpExportPdf"
+          title="Otvori formatiranu stranicu za štampu — u dijalogu izaberi „Sačuvaj kao PDF" da dobiješ PDF fajl izveštaja">📄 Export PDF</button>
+        <button type="button" class="btn btn-xs" id="lpExportCsv"
+          title="Preuzmi CSV (Excel kompatibilan, UTF-8 BOM) sa SVIM redovima koji odgovaraju trenutnim filterima — ide kroz sve stranice (do 50 000 redova)">⬇ Export CSV</button>
       </div>
       <div id="lpSummary" class="loc-muted" style="margin:6px 0">Učitavam…</div>
       <div class="loc-table-wrap">
         <table class="loc-table">
           <thead><tr>
-            <th>RN (Predmet/TP)</th>
-            <th>TP #</th>
-            <th>Crtež</th>
-            <th>Naziv dela</th>
-            <th class="loc-qty-cell">Količina (lok / RN)</th>
-            <th>Lokacija</th>
-            <th>Materijal</th>
+            <th title="Pun ident broj radnog naloga: format Predmet/TP (npr. 7351/1088)">RN (Predmet/TP)</th>
+            <th title="Drugi deo ident broja — broj tehnološkog postupka unutar predmeta">TP #</th>
+            <th title="Broj crteža iz BigTehn baze. Ako postoji PDF crteža, prikazuje se ikonica za otvaranje">Crtež</th>
+            <th title="Naziv dela / pozicije iz tehnološkog postupka">Naziv dela</th>
+            <th class="loc-qty-cell" title="Količina koja se nalazi na konkretnoj lokaciji / ukupna količina po RN-u">Količina (lok / RN)</th>
+            <th title="Lokacija na kojoj se deo nalazi (šifra i naziv). Ako je polje prazno — deo još nije postavljen ni na jednu lokaciju">Lokacija</th>
+            <th title="Materijal i dimenzija materijala iz tehnološkog postupka">Materijal</th>
           </tr></thead>
           <tbody id="lpRows"><tr><td colspan="7" class="loc-muted" style="padding:24px;text-align:center">Učitavam tehnološke postupke…</td></tr></tbody>
         </table>
@@ -230,7 +246,8 @@ function renderHeaderHtml(sel) {
           ${cust}
         </div>
       </div>
-      <button type="button" class="btn btn-xs" id="lpChangePredmet">↻ Promeni predmet</button>
+      <button type="button" class="btn btn-xs" id="lpChangePredmet"
+        title="Vrati se na izbor predmeta — bira drugi predmet bez napuštanja Lokacije modula">↻ Promeni predmet</button>
     </div>`;
 }
 
@@ -238,24 +255,38 @@ function renderFiltersHtml(f) {
   const lf = f.locationFilter;
   return `
     <div class="loc-history-filters" role="group" aria-label="Filteri u okviru Predmeta" style="gap:14px;align-items:flex-end;flex-wrap:wrap">
-      <label class="loc-filter-field">
-        <span>Broj TP (drugi deo ident-a, npr. 1088)</span>
-        <input type="text" id="lpFiltTp" class="loc-search-input" value="${escHtml(f.tpNo)}" maxlength="12" inputmode="numeric" placeholder="1088…" />
+      <label class="loc-filter-field"
+        title="Filter po broju tehnološkog postupka (drugi deo ident-a iza /). Pretraga je „počinje sa…": unos 10 prikazuje 10, 100, 1014, 1015 — zato što je TP 10 sklop, a 100/101/1014/1015 njegovi podsklopovi/crteži.">
+        <span>Broj TP (počinje sa…)</span>
+        <input type="text" id="lpFiltTp" class="loc-search-input" value="${escHtml(f.tpNo)}" maxlength="12" inputmode="numeric"
+          placeholder="npr. 10 (matchuje 10, 100, 101, 1014…)"
+          title="Unos „10" pronalazi sve TP-ove koji počinju sa 10 (10, 100, 101, 1014, 1015…). Korisno za hijerarhiju sklopova. Pritisni Enter ili „Primeni filtere"." />
       </label>
-      <label class="loc-filter-field">
-        <span>Broj crteža</span>
-        <input type="text" id="lpFiltDr" class="loc-search-input" value="${escHtml(f.drawingNo)}" maxlength="40" placeholder="npr. 1084924" />
+      <label class="loc-filter-field"
+        title="Filter po broju crteža (počinje sa…). Case-insensitive — npr. unos „1084" pronalazi 1084924 i sve revizije koje počinju sa 1084.">
+        <span>Broj crteža (počinje sa…)</span>
+        <input type="text" id="lpFiltDr" class="loc-search-input" value="${escHtml(f.drawingNo)}" maxlength="40"
+          placeholder="npr. 1084 (matchuje 1084924, 1084925…)"
+          title="Pretraga „počinje sa…". Pritisni Enter ili „Primeni filtere" za pokretanje." />
       </label>
-      <label class="loc-filter-field">
+      <label class="loc-filter-field"
+        title="Filter po prisutnosti lokacije: prikaži sve, samo TP-ove koji imaju aktivan placement, ili samo one BEZ ijedne lokacije.">
         <span>Lokacija</span>
-        <select id="lpFiltLoc" class="loc-search-input">
+        <select id="lpFiltLoc" class="loc-search-input"
+          title="Svi = i sa i bez lokacije. Sa lokacijom = bar jedan aktivan placement. BEZ lokacije = nije postavljeno nigde.">
           <option value="all"${lf === 'all' ? ' selected' : ''}>Svi (sa i bez lokacije)</option>
           <option value="with"${lf === 'with' ? ' selected' : ''}>Samo sa lokacijom</option>
           <option value="without"${lf === 'without' ? ' selected' : ''}>Samo BEZ lokacije</option>
         </select>
       </label>
-      <label class="loc-inline-check"><input type="checkbox" id="lpFiltAssembled" ${f.includeAssembled ? 'checked' : ''}><span>Prikaži i ugrađene / otpisane</span></label>
-      <label class="loc-inline-check"><input type="checkbox" id="lpFiltOnlyOpen" ${f.onlyOpen ? 'checked' : ''}><span>Samo otvoreni RN</span></label>
+      <label class="loc-inline-check" title="Uključi i delove koji su već ugrađeni u finalni proizvod (lokacija UGRADJENO/ASSEMBLY) ili otpisani (SCRAPPED). Po default-u su sakriveni jer su završeni.">
+        <input type="checkbox" id="lpFiltAssembled" ${f.includeAssembled ? 'checked' : ''}>
+        <span>Prikaži i ugrađene / otpisane</span>
+      </label>
+      <label class="loc-inline-check" title="Po default-u prikazuje samo otvorene radne naloge. Otkači da uključiš i zatvorene RN-ove.">
+        <input type="checkbox" id="lpFiltOnlyOpen" ${f.onlyOpen ? 'checked' : ''}>
+        <span>Samo otvoreni RN</span>
+      </label>
     </div>`;
 }
 
@@ -305,7 +336,8 @@ function renderTpRowsHtml(rows) {
 function renderTpRowHtml(r) {
   const ident = escHtml(r.wo_ident_broj || '');
   const tpNo = escHtml(r.tp_no || '');
-  const cr = escHtml(r.wo_broj_crteza || '');
+  const crRaw = r.wo_broj_crteza || '';
+  const cr = escHtml(crRaw);
   const nz = escHtml(String(r.naziv_dela || '').slice(0, 80));
   const komRn = r.komada_rn != null ? Number(r.komada_rn) : null;
   const placed = r.qty_total_placed != null ? Number(r.qty_total_placed) : 0;
@@ -327,10 +359,19 @@ function renderTpRowHtml(r) {
     komRn != null && placed > 0 && placed >= komRn
       ? '<br><span class="loc-muted" style="font-size:11px">✓ raspoređeno u celosti</span>'
       : '';
-  return `<tr class="loc-row-click${assemblyClass}" data-wo-id="${escHtml(woId)}" title="Otvori tehnološki postupak (operacije + prijave)">
+  /* PDF ikonica: prikaži samo ako u bigtehn_drawings_cache postoji storage_path
+   * za ovaj broj crteža (RPC vraća has_pdf=true). Klik = stopPropagation pa
+   * red ne otvara TP modal. data-pdf-drawing nosi broj crteža za handler. */
+  const pdfBtn = (crRaw && r.has_pdf === true)
+    ? ` <button type="button" class="loc-pdf-btn" data-pdf-drawing="${cr}"
+        title="Otvori PDF crteža ${cr} u novom tabu (BigTehn arhiva)"
+        aria-label="Otvori PDF crteža ${cr}"
+        style="border:none;background:transparent;cursor:pointer;padding:0 2px;font-size:14px;line-height:1;vertical-align:middle">📄</button>`
+    : '';
+  return `<tr class="loc-row-click${assemblyClass}" data-wo-id="${escHtml(woId)}" title="Klikni red da otvoriš tehnološki postupak: operacije, prijave radova i detalje (modal iz Plan Proizvodnje)">
     <td><strong>${ident}</strong></td>
     <td>${tpNo}</td>
-    <td>${cr || '<span class="loc-muted">—</span>'}</td>
+    <td>${cr ? `${cr}${pdfBtn}` : '<span class="loc-muted">—</span>'}</td>
     <td>${nz || '<span class="loc-muted">—</span>'}</td>
     <td class="loc-qty-cell">${qtyCell}${allPlacedNote}</td>
     <td>${locCell}</td>
@@ -363,17 +404,30 @@ function renderPagerHtml({ page, pageSize, total }) {
     <div class="loc-pager" role="navigation" aria-label="Paginacija TP-ova predmeta">
       <div class="loc-pager-info"><span>Strana ${page + 1} od ${Math.max(1, Math.ceil(total / pageSize))}</span></div>
       <div class="loc-pager-controls">
-        <label class="loc-pager-size">
+        <label class="loc-pager-size" title="Broj redova po stranici. Veće vrednosti opterećuju pretraživač pri velikim predmetima.">
           <span>Po stranici:</span>
-          <select id="lpPageSize">${sizeOpts}</select>
+          <select id="lpPageSize" title="Izaberi koliko TP-ova da se prikaže po stranici">${sizeOpts}</select>
         </label>
-        <button type="button" class="btn btn-xs" id="lpPrev" ${page === 0 ? 'disabled' : ''}>← Prethodna</button>
-        <button type="button" class="btn btn-xs" id="lpNext" ${isLast ? 'disabled' : ''}>Sledeća →</button>
+        <button type="button" class="btn btn-xs" id="lpPrev" ${page === 0 ? 'disabled' : ''}
+          title="Idi na prethodnu stranicu rezultata">← Prethodna</button>
+        <button type="button" class="btn btn-xs" id="lpNext" ${isLast ? 'disabled' : ''}
+          title="Idi na sledeću stranicu rezultata">Sledeća →</button>
       </div>
     </div>`;
 }
 
 function attachTableRowClicks(host) {
+  /* PDF dugme prvo — stopPropagation sprečava da klik na ikonicu i otvori
+   * TP modal kao "klik na red". Open u novom tabu kroz signed URL. */
+  host.querySelectorAll('#lpRows [data-pdf-drawing]').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      const drawing = btn.getAttribute('data-pdf-drawing') || '';
+      if (drawing) void openDrawingPdf(drawing);
+    });
+  });
+
   host.querySelectorAll('#lpRows [data-wo-id]').forEach(tr => {
     tr.addEventListener('click', () => {
       const id = Number(tr.getAttribute('data-wo-id'));
