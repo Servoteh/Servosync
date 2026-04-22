@@ -458,11 +458,11 @@ tbody tr:nth-child(even):hover { background: var(--row-hover); }
 td { padding: 8px 10px; vertical-align: middle; }
 .td-num    { color: var(--text3); font-family: var(--mono); font-size: 10px; width: 36px; text-align: center; position: sticky; left: 0; z-index: 2; background: var(--surface); }
 .td-name   { color: var(--text); font-weight: 500; min-width: 220px; position: sticky; left: 34px; z-index: 2; background: var(--surface); border-right: 1px solid var(--border); }
-.td-loc    { min-width: 130px; }
-.td-date   { width: 118px; }
+.td-loc    { min-width: 110px; width: 110px; }
+.td-date   { width: 108px; }
 .td-dur    { width: 58px; text-align: center; font-family: var(--mono); color: var(--text3); font-size: 11px; }
 .td-person { min-width: 160px; }
-.td-status { min-width: 130px; }
+.td-status { min-width: 112px; width: 112px; }
 .td-pct    { width: 110px; }
 .td-note   { min-width: 170px; }
 .td-blocker { min-width: 150px; }
@@ -707,6 +707,12 @@ tr.row-finished td { color: var(--text3); }
   padding: 10px 12px 8px; cursor: pointer;
 }
 .m-card-name { font-weight: 600; font-size: 13px; color: var(--text); }
+.m-card-name-meta { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
+.m-card-name-meta .phase-type-chip { font-size: 10px; padding: 2px 6px; }
+.m-card-name-meta .row-btn { font-size: 10px; padding: 2px 7px; margin-left: 0; background: var(--surface2); border: 1px solid var(--border2); color: var(--text2); border-radius: 6px; cursor: pointer; }
+.m-card-name-meta .row-btn:hover { background: var(--surface3); color: var(--text); }
+.m-card-name-meta .row-btn.btn-desc.has-desc { background: color-mix(in srgb, var(--accent) 18%, var(--surface)); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.m-card-name-meta .row-btn.btn-3d.has-model { background: rgba(110, 160, 255, 0.18); border-color: #4b79c8; color: #aac8ff; }
 .m-card-badges { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
 .m-card-row { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0 12px 8px; font-size: 11px; color: var(--text2); }
 .m-card-field { display: flex; align-items: center; gap: 4px; }
@@ -2317,15 +2323,19 @@ body.module-plan > .filter-bar { display:none !important; }
 .plan-table tbody td { padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:middle; color:var(--text); }
 .plan-table tbody tr:hover td { background:var(--surface2); }
 .plan-table .td-num { text-align:center; color:var(--text3); font-family:var(--mono); width:38px; }
-.plan-table .td-name { min-width:240px; display:flex; gap:6px; align-items:center; }
-.plan-table .td-name .phase-name-input { flex:1; background:var(--surface2); border:1px solid var(--border2); color:var(--text); border-radius:6px; padding:6px 9px; font:inherit; outline:none; }
+.plan-table .td-name { min-width:320px; display:flex; flex-direction:column; gap:6px; align-items:stretch; }
+.plan-table .td-name .phase-name-row { display:flex; gap:6px; align-items:center; }
+.plan-table .td-name .phase-meta-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.plan-table .td-name .phase-meta-row .row-btn { margin-left:0; }
+.plan-table .td-name .phase-name-input { flex:1; background:var(--surface2); border:1px solid var(--border2); color:var(--text); border-radius:6px; padding:6px 9px; font:inherit; font-size:13px; font-weight:500; outline:none; }
 .plan-table .td-name .phase-name-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
-.plan-table .td-loc select.loc-select { background:var(--surface2); border:1px solid var(--border2); color:var(--text); border-radius:6px; padding:5px 6px; font:inherit; outline:none; min-width:140px; }
-.plan-table .td-date input[type="date"] { background:var(--surface2); border:1px solid var(--border2); color:var(--text); border-radius:6px; padding:5px 6px; font:inherit; outline:none; min-width:120px; }
+.plan-table .td-loc select.loc-select { background:var(--surface2); border:1px solid var(--border2); color:var(--text); border-radius:6px; padding:5px 6px; font:inherit; outline:none; min-width:100px; }
+.plan-table .td-date input[type="date"] { background:var(--surface2); border:1px solid var(--border2); color:var(--text); border-radius:6px; padding:5px 6px; font:inherit; outline:none; min-width:105px; }
 .plan-table .td-date.date-error input[type="date"] { border-color:var(--red); background:var(--red-bg, rgba(239,68,68,0.08)); }
 .plan-table .td-dur { text-align:center; font-family:var(--mono); color:var(--text2); white-space:nowrap; }
 .plan-table .td-dur.dur-error { color:var(--red); font-weight:600; }
 .plan-table .td-eng select, .plan-table .td-person select, .plan-table .td-status select { background:var(--surface2); border:1px solid var(--border2); color:var(--text); border-radius:6px; padding:5px 6px; font:inherit; outline:none; min-width:140px; }
+.plan-table .td-status select { min-width:110px; }
 .plan-table .td-pct { min-width:140px; }
 .plan-table .td-pct .pct-bar-wrap { display:flex; align-items:center; gap:6px; }
 .plan-table .td-pct .pct-bar { flex:1; background:var(--surface3); border-radius:8px; overflow:hidden; height:8px; }

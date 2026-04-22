@@ -311,14 +311,19 @@ function _planRowHtml(row, i) {
         <span class="td-num-n">${i + 1}</span>
       </td>
       <td class="td-name">
-        ${remDot}
-        <input class="phase-name-input" type="text" value="${escHtml(row.name)}" data-field="name" ${dis}>
-        <button type="button" class="phase-type-chip ${ptCls}" data-toggle-type="${i}" title="${ptTitle}" ${dis}>
-          <span class="pt-ic">${ptIc}</span>${ptLbl}
-        </button>
-        <button type="button" class="phase-desc-btn${hasDesc ? ' has-desc' : ''}" data-row-action="desc" data-ri="${i}" title="${descTitle}">
-          <span class="pdb-ic">📝</span><span class="pdb-lbl">opis</span>
-        </button>
+        <div class="phase-name-row">
+          ${remDot}
+          <input class="phase-name-input" type="text" value="${escHtml(row.name)}" data-field="name" ${dis}>
+        </div>
+        <div class="phase-meta-row">
+          <button type="button" class="phase-type-chip ${ptCls}" data-toggle-type="${i}" title="${ptTitle}" ${dis}>
+            <span class="pt-ic">${ptIc}</span>${ptLbl}
+          </button>
+          <button type="button" class="phase-desc-btn${hasDesc ? ' has-desc' : ''}" data-row-action="desc" data-ri="${i}" title="${descTitle}">
+            <span class="pdb-ic">📝</span><span class="pdb-lbl">opis</span>
+          </button>
+          <button type="button" class="row-btn btn-3d ${getPhaseModel(row.id) ? 'has-model' : ''}" data-row-action="model" data-ri="${i}" title="${getPhaseModel(row.id) ? '3D: ' + escHtml(getPhaseModel(row.id).name || 'model dodeljen') : '3D model (nema)'}">🧩 3D</button>
+        </div>
       </td>
       <td class="td-loc">
         <select class="loc-select" data-field="loc" style="border-left:3px solid ${locColor}" ${dis}>${locOpts}</select>
@@ -358,7 +363,6 @@ function _planRowHtml(row, i) {
         <textarea class="note-area" rows="2" data-field="note" ${dis}>${escHtml(row.note || '')}</textarea>
       </td>
       <td class="td-actions">
-        <button type="button" class="row-btn btn-3d ${getPhaseModel(row.id) ? 'has-model' : ''}" data-row-action="model" data-ri="${i}" title="${getPhaseModel(row.id) ? '3D: ' + escHtml(getPhaseModel(row.id).name || 'model dodeljen') : '3D model (nema)'}">🧩</button>
         <button type="button" class="row-btn btn-up" data-row-action="up" data-ri="${i}" title="Pomeri gore">▲</button>
         <button type="button" class="row-btn btn-dn" data-row-action="down" data-ri="${i}" title="Pomeri dole">▼</button>
         <button type="button" class="row-btn btn-del" data-row-action="del" data-ri="${i}" title="Obriši">✕</button>

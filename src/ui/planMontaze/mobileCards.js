@@ -204,7 +204,10 @@ function _mobileCardHtml(row, i) {
   const pType = normalizePhaseType(row.type);
   const ptCls = pType === 'electrical' ? 'pt-elec' : 'pt-mech';
   const ptIc = pType === 'electrical' ? '⚡' : '⚙';
-  const ptLbl = pType === 'electrical' ? 'Elektro' : 'Mašinska';
+  const ptLblShort = pType === 'electrical' ? 'E' : 'M';
+
+  const hasDesc = !!(row.description && row.description.trim());
+  const hasModel = !!getPhaseModel(row.id);
 
   /* Lokacija/person opcije */
   const locOpts = _locationOptionsHtml(row.loc);
@@ -236,7 +239,16 @@ function _mobileCardHtml(row, i) {
       <div class="m-card-top" data-mcard-toggle>
         <div>
           <div class="m-card-name">${escHtml(row.name)}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <div class="m-card-name-meta">
+            <button type="button" class="phase-type-chip ${ptCls}" data-stop data-mtoggle-type="${i}" title="Tip montaže" ${dis}>
+              <span class="pt-ic">${ptIc}</span>${ptLblShort}
+            </button>
+            <button type="button" class="row-btn btn-desc${hasDesc ? ' has-desc' : ''}" data-stop data-mrow-action="desc" data-ri="${i}" title="${hasDesc ? 'Opis dodeljen' : 'Dodaj opis'}">
+              <span class="pdb-ic">📝</span> opis
+            </button>
+            <button type="button" class="row-btn btn-3d${hasModel ? ' has-model' : ''}" data-stop data-mrow-action="model" data-ri="${i}" title="${hasModel ? '3D model dodeljen' : '3D model'}">🧩 3D</button>
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span class="loc-chip" style="border-color:${locColor};color:${locColor};background:${locColor}22">
               <span class="loc-dot" style="background:${locColor}"></span>${escHtml(row.loc || '—')}
             </span>
@@ -272,12 +284,6 @@ function _mobileCardHtml(row, i) {
             <select data-mfield="loc" style="border-left:3px solid ${locColor}" ${dis}>${locOpts}</select>
           </div>
           <div class="m-card-detail-item">
-            <span class="m-lbl">Tip</span>
-            <button type="button" class="phase-type-chip ${ptCls}" data-mtoggle-type="${i}" ${dis}>
-              <span class="pt-ic">${ptIc}</span> ${ptLbl}
-            </button>
-          </div>
-          <div class="m-card-detail-item">
             <span class="m-lbl">Ing.</span>
             <select data-mfield-person="engineer" ${dis}>${engOpts}</select>
           </div>
@@ -300,8 +306,6 @@ function _mobileCardHtml(row, i) {
         </div>
 
         <div style="display:flex;gap:6px;margin-top:8px;padding-top:6px;border-top:1px solid var(--border);flex-wrap:wrap">
-          <button type="button" class="row-btn btn-3d ${getPhaseModel(row.id) ? 'has-model' : ''}" data-mrow-action="model" data-ri="${i}" title="3D model">🧩</button>
-          <button type="button" class="row-btn btn-desc ${(row.description && row.description.trim()) ? 'has-desc' : ''}" data-mrow-action="desc" data-ri="${i}" title="Opis faze">📝 Opis</button>
           <button type="button" class="row-btn btn-up" data-mrow-action="up" data-ri="${i}" ${dis}>▲</button>
           <button type="button" class="row-btn btn-dn" data-mrow-action="down" data-ri="${i}" ${dis}>▼</button>
           <button type="button" class="row-btn btn-del" data-mrow-action="del" data-ri="${i}" ${dis}>✕</button>
