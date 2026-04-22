@@ -496,7 +496,7 @@ export async function renderMaintCatalogPanel(host, ctx, state = {}) {
     ]);
     filesCounts = counts instanceof Map ? counts : new Map();
     if (rows === null) {
-      tableHost.innerHTML = `<p class="mnt-muted">Ne mogu da učitam katalog (RLS ili migracija nije primenjena).</p>`;
+      tableHost.innerHTML = `<p class="mnt-muted">Ne mogu da učitam katalog. Verovatno je u pitanju ograničenje pristupa ili migracija nije primenjena.</p>`;
       countEl.textContent = '';
       return;
     }
@@ -999,7 +999,7 @@ export async function openMaintMachinesImportDialog(opts) {
       onlyMachining: !includeNonInp.checked,
     });
     if (rows === null) {
-      listHost.innerHTML = `<p class="mnt-muted">Ne mogu da učitam listu (RLS ili migracija).</p>`;
+      listHost.innerHTML = `<p class="mnt-muted">Ne mogu da učitam listu. Verovatno je u pitanju ograničenje pristupa ili migracija nije primenjena.</p>`;
       all = [];
       return;
     }
@@ -1300,7 +1300,7 @@ export function openMaintDeletionLogDialog() {
 
   fetchMaintMachineDeletionLog({ limit: 500 }).then(rows => {
     if (rows === null) {
-      host.innerHTML = `<p class="mnt-muted">Ne mogu da učitam log (RLS ili migracija nije primenjena).</p>`;
+      host.innerHTML = `<p class="mnt-muted">Ne mogu da učitam istoriju brisanja. Verovatno je u pitanju ograničenje pristupa ili migracija nije primenjena.</p>`;
       return;
     }
     all = Array.isArray(rows) ? rows : [];

@@ -187,6 +187,39 @@ function severityBadge(sev) {
   return 'mnt-badge';
 }
 
+/**
+ * Korisnički naziv ozbiljnosti — srpski, dosledan svuda u modulu.
+ * @param {string|null|undefined} sev
+ */
+function severityLabelSr(sev) {
+  const s = String(sev || '').toLowerCase();
+  if (s === 'critical') return 'Kritično';
+  if (s === 'major') return 'Visok';
+  if (s === 'minor') return 'Nizak';
+  if (s === 'info') return 'Info';
+  return sev || '';
+}
+
+/**
+ * Info banner za nedostatak profila održavanja — pojavljuje se pri vrhu
+ * sadržaja (ne u sticky header-u) i ne pominje interne tabele.
+ *
+ * @param {object|null} prof Profil iz `maint_user_profiles` ili null.
+ * @returns {string} HTML (prazan string ako profil postoji).
+ */
+function profileInfoBannerHtml(prof) {
+  if (prof) return '';
+  return `
+    <div class="mnt-info-banner" role="note">
+      <span class="mnt-info-banner-ico" aria-hidden="true">ℹ</span>
+      <div class="mnt-info-banner-body">
+        <strong>Profil održavanja nije podešen.</strong>
+        Prikaz je ograničen na podatke do kojih dopire tvoja ERP uloga.
+        Javi šefu održavanja ili ERP administratoru da ti doda profil.
+      </div>
+    </div>`;
+}
+
 function headerHtml() {
   const auth = getAuth();
   return `
@@ -349,7 +382,7 @@ async function renderOperationalMachinesList(host, opts) {
   if (disposeRef.disposed || !host.isConnected) return;
 
   if (!Array.isArray(statuses) || !Array.isArray(machines)) {
-    host.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Ne mogu da učitam mašine (RLS ili migracija).</p></div>`;
+    host.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Ne mogu da učitam mašine. Verovatno je u pitanju ograničenje pristupa ili migracija nije primenjena.</p></div>`;
     return;
   }
 
@@ -409,11 +442,15 @@ async function renderOperationalMachinesList(host, opts) {
     new Set(all.map(r => r.location).filter(Boolean)),
   ).sort((a, b) => a.localeCompare(b, 'sr', { sensitivity: 'base' }));
 
-  /* State (lokalno, preko zatvorice). */
+  /* State (lokalno, preko zatvorice). Inicijalni chip se može pretdefinisati
+     URL parametrom `?chip=…` — koristi se kada Pregled linkuje na listu već
+     filtriranu (npr. KPI „Otvoreni kvarovi" → ?chip=kvar). */
+  const VALID_CHIPS = new Set(['sve', 'kasni', 'kvar', 'danas', 'preventiva', 'moje']);
+  const urlChip = new URLSearchParams(window.location.search).get('chip');
   const state = {
     search: '',
-    chip: 'sve', // sve | kasni | kvar | danas | preventiva | moje
-    location: '', // prazno = sve lokacije
+    chip: urlChip && VALID_CHIPS.has(urlChip) ? urlChip : 'sve',
+    location: '',
   };
 
   function filterRows() {
@@ -460,10 +497,6 @@ async function renderOperationalMachinesList(host, opts) {
     ? all.filter(r => r.responsibleUserId === myUid).length
     : 0;
 
-  const profTag = myProf
-    ? `<span class="mnt-muted" style="font-size:12px">Profil: <strong>${escHtml(String(myProf.role))}</strong>${myProf.full_name ? ' · ' + escHtml(myProf.full_name) : ''}</span>`
-    : `<span class="mnt-muted" style="font-size:12px"><em>Nemaš maint_user_profiles</em></span>`;
-
   const locOptions = [
     `<option value="">Sve lokacije</option>`,
     ...locations.map(l => `<option value="${escHtml(l)}">${escHtml(l)}</option>`),
@@ -478,11 +511,14 @@ async function renderOperationalMachinesList(host, opts) {
     ...(myUid && hasResponsibleFeature ? [{ id: 'moje', label: `Moje${nMine ? ` · ${nMine}` : ''}` }] : []),
   ];
 
-  const adminCatalogBtn = canEditCatalog
-    ? `<button type="button" class="btn mnt-header-admin-btn" id="mntOpCatalogBtn" title="Otvori katalog mašina (admin uređivanje)">⚙ Katalog</button>`
+  /* Katalog je sekundarna akcija na operativnom ekranu: ghost link ispod
+     glavnog reda, nikako prominentno crveno dugme — vidi UX preporuku 8. */
+  const adminCatalogLink = canEditCatalog
+    ? `<button type="button" class="mnt-catalog-link" id="mntOpCatalogBtn" title="Otvori katalog mašina (admin uređivanje)">⚙ Katalog mašina →</button>`
     : '';
 
   host.innerHTML = `
+    ${profileInfoBannerHtml(myProf)}
     <div class="mnt-ops-header">
       <div class="mnt-ops-toolbar">
         <div class="mnt-search-wrap">
@@ -492,7 +528,6 @@ async function renderOperationalMachinesList(host, opts) {
         </div>
         <select class="form-input mnt-loc-select" id="mntOpLoc" title="Filtriraj po lokaciji">${locOptions}</select>
         <button type="button" class="btn mnt-header-cta" id="mntOpReportBtn">+ Prijavi kvar</button>
-        ${adminCatalogBtn}
       </div>
       <div class="mnt-chip-row" id="mntOpChips">
         ${chipDef.map(c => {
@@ -507,7 +542,7 @@ async function renderOperationalMachinesList(host, opts) {
         <div class="mnt-sum-item mnt-sum-item--today"><span class="mnt-sum-label">Danas</span><span class="mnt-sum-val">${nToday}</span></div>
         <div class="mnt-sum-item"><span class="mnt-sum-label">Moje</span><span class="mnt-sum-val">${nMine}</span></div>
         <span style="flex:1"></span>
-        ${profTag}
+        ${adminCatalogLink}
       </div>
     </div>
     <div id="mntOpListHost"></div>
@@ -812,7 +847,7 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
     ]);
     if (disposeRef.disposed || !host.isConnected) return;
     if (dues === null) {
-      host.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Ne mogu da učitam rokove (RLS ili migracija).</p></div>`;
+      host.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Ne mogu da učitam rokove. Verovatno je u pitanju ograničenje pristupa ili migracija nije primenjena.</p></div>`;
       return;
     }
     const nameByCode = new Map(
@@ -838,15 +873,12 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
       }
       return [...live, ...paused];
     };
-    const profLine = prof
-      ? `<p class="mnt-muted">Profil održavanja: <strong>${escHtml(String(prof.role))}</strong></p>`
-      : `<p class="mnt-muted"><em>Nemaš red u <code>maint_user_profiles</code> — vidiš podatke samo ako ERP uloga ima širok pregled (admin/PM).</em></p>`;
     const rowHtml = d => {
       const disp = nameByCode.get(d.machine_code) || d.machine_code;
       const path = buildMaintenanceMachinePath(d.machine_code, 'kontrole');
       const ovr = overrideByCode.get(d.machine_code);
       const ovrBadge = ovr
-        ? ` <span class="${statusBadgeClass(ovr.status)}" title="${escHtml(ovr.reason || '')}${ovr.valid_until ? ' (do ' + ovr.valid_until.replace('T', ' ').slice(0, 16) + ')' : ''}">PAUZA · ${escHtml(ovr.status)}</span>`
+        ? ` <span class="${statusBadgeClass(ovr.status)}" title="${escHtml(ovr.reason || '')}${ovr.valid_until ? ' (do ' + ovr.valid_until.replace('T', ' ').slice(0, 16) + ')' : ''}">PAUZA · ${escHtml(statusLabel(ovr.status))}</span>`
         : '';
       const liStyle = ovr ? ' style="opacity:.55"' : '';
       return `<li${liStyle}><button type="button" class="mnt-linkish" data-mnt-nav="${path}">${escHtml(disp)}</button>${ovrBadge} — ${escHtml(d.title || '')}
@@ -865,8 +897,8 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
         </div>`;
     };
     host.innerHTML = `
-      ${profLine}
-      <p class="mnt-muted" style="margin:12px 0">Preventivni taskovi — sledeći rok po mašini (<code>v_maint_task_due_dates</code>). Mašine pod manuelnim override-om (<code>down</code>/<code>maintenance</code>) idu na dno svake kolone i obeležene su badge-om „PAUZA”.</p>
+      ${profileInfoBannerHtml(prof)}
+      <p class="mnt-muted" style="margin:4px 0 12px">Preventivni taskovi — sledeći rok po mašini. Mašine u pauzi (npr. čekaju deo, planirano održavanje) prikazane su na dnu svake kolone i obeležene značkom „PAUZA”.</p>
       <div class="mnt-board-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;align-items:start">
         ${col('Prekoračeno', overdue)}
         ${col('Danas', today)}
@@ -883,55 +915,119 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
   }
 
   if (section === 'dashboard') {
-    const [rows, prof, names] = await Promise.all([
+    const [rows, prof, names, dues] = await Promise.all([
       fetchMaintMachineStatuses(),
       fetchMaintUserProfile(),
       fetchMaintMachines(),
+      /* Dues treba za KPI „Rokovi danas" — best-effort, ako RPC nije dostupan
+         kartica će samo pokazati 0, ne ruši dashboard. */
+      fetchMaintTaskDueDates().catch(() => []),
     ]);
     if (disposeRef.disposed || !host.isConnected) return;
 
     if (rows === null) {
-      host.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Ne mogu da učitam status mašina (RLS ili migracija).</p></div>`;
+      host.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Ne mogu da učitam status mašina. Verovatno je u pitanju ograničenje pristupa ili migracija nije primenjena.</p></div>`;
       return;
     }
     const nameByCode = new Map(
       (Array.isArray(names) ? names : []).map(n => [n.machine_code, n.name || n.machine_code]),
     );
     const merged = mergeMachineNames(rows, nameByCode);
-    const run = merged.filter(r => r.status === 'running').length;
-    const deg = merged.filter(r => r.status === 'degraded').length;
-    const down = merged.filter(r => r.status === 'down').length;
-    const maint = merged.filter(r => r.status === 'maintenance').length;
-    const profLine = prof
-      ? `<p class="mnt-muted">Profil održavanja: <strong>${escHtml(String(prof.role))}</strong></p>`
-      : `<p class="mnt-muted"><em>Nemaš red u <code>maint_user_profiles</code> — vidiš podatke samo ako ERP uloga ima širok pregled (admin/PM).</em></p>`;
+
+    /* Operativno-orijentisani KPI (umesto proste podele po status-u). */
+    const nDown = merged.filter(r => r.status === 'down').length;
+    const nOpenIncMachines = merged.filter(r => Number(r.open_incidents_count) > 0).length;
+    const nLate = merged.filter(r => Number(r.overdue_checks_count) > 0).length;
+
+    const now = new Date();
+    const sod = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const eod = new Date(sod); eod.setHours(23, 59, 59, 999);
+    const nextDueByCode = aggregateNextDueByMachine(Array.isArray(dues) ? dues : []);
+    let nToday = 0;
+    for (const iso of nextDueByCode.values()) {
+      const t = new Date(iso);
+      if (Number.isFinite(t.getTime()) && t >= sod && t <= eod) nToday += 1;
+    }
+
+    const kpiDef = [
+      {
+        label: 'Otvoreni kvarovi',
+        val: nOpenIncMachines,
+        tone: 'down',
+        nav: '/maintenance/machines?chip=kvar',
+        title: 'Mašine sa otvorenim incidentima',
+      },
+      {
+        label: 'U zastoju',
+        val: nDown,
+        tone: 'down',
+        nav: '/maintenance/machines?chip=kvar',
+        title: 'Mašine trenutno u zastoju',
+      },
+      {
+        label: 'Kasni rokovi',
+        val: nLate,
+        tone: 'late',
+        nav: '/maintenance/machines?chip=kasni',
+        title: 'Mašine sa prekoračenim preventivnim rokovima',
+      },
+      {
+        label: 'Rokovi danas',
+        val: nToday,
+        tone: 'today',
+        nav: '/maintenance/machines?chip=danas',
+        title: 'Mašine kojima sledeći preventivni zadatak pada danas',
+      },
+    ];
+    const kpiRowHtml = kpiDef.map(k => {
+      const zero = !k.val;
+      return `<button type="button" class="mnt-kpi mnt-kpi--${k.tone}${zero ? ' mnt-kpi--zero' : ''} mnt-kpi--clickable"
+        data-mnt-nav="${escHtml(k.nav)}" title="${escHtml(k.title)}"
+        aria-label="${escHtml(k.label)}: ${k.val}">
+        <span class="mnt-kpi-label">${escHtml(k.label)}</span>
+        <span class="mnt-kpi-val">${k.val}</span>
+      </button>`;
+    }).join('');
+
     const attention = sortAttention(merged).filter(
       r => r.status !== 'running' || (Number(r.overdue_checks_count) > 0 || Number(r.open_incidents_count) > 0),
     );
-    const attRows = attention.slice(0, 12).map(r => {
+    const attRowsHtml = attention.slice(0, 12).map(r => {
       const path = buildMaintenanceMachinePath(r.machine_code, 'pregled');
-      const ovr = r.override_reason
-        ? ` <span class="mnt-badge" title="${escHtml(r.override_reason)}${r.override_valid_until ? ' (do ' + r.override_valid_until.replace('T', ' ').slice(0, 16) + ')' : ''}">OVERRIDE</span>`
+      const statusChip = `<span class="${statusBadgeClass(r.status)}">${escHtml(statusLabel(r.status))}</span>`;
+      const ovrChip = r.override_reason
+        ? ` <span class="mnt-badge mnt-badge--maintenance" title="${escHtml(r.override_reason)}${r.override_valid_until ? ' (do ' + r.override_valid_until.replace('T', ' ').slice(0, 16) + ')' : ''}">PAUZA</span>`
         : '';
-      return `<li><button type="button" class="mnt-linkish" data-mnt-nav="${path}">${escHtml(r.display_name)}</button>
-        <span class="${statusBadgeClass(r.status)}">${escHtml(statusLabel(r.status))}</span>${ovr}
-        ${Number(r.open_incidents_count) > 0 ? ` · incidenti: ${escHtml(String(r.open_incidents_count))}` : ''}
-        ${Number(r.overdue_checks_count) > 0 ? ` · overdue: ${escHtml(String(r.overdue_checks_count))}` : ''}
+      const problemParts = [];
+      const nInc = Number(r.open_incidents_count) || 0;
+      const nOverdue = Number(r.overdue_checks_count) || 0;
+      if (nInc > 0) problemParts.push(`${nInc} ${nInc === 1 ? 'otvoreni kvar' : 'otvorena kvara/ova'}`);
+      if (nOverdue > 0) problemParts.push(`${nOverdue} kasni rok${nOverdue === 1 ? '' : 'a'}`);
+      const problemTxt = problemParts.length ? problemParts.join(' · ') : '—';
+      return `<li class="mnt-att-row">
+        <button type="button" class="mnt-att-name mnt-linkish" data-mnt-nav="${escHtml(path)}" title="Otvori detalj mašine">${escHtml(r.display_name)}</button>
+        <span class="mnt-att-status">${statusChip}${ovrChip}</span>
+        <span class="mnt-att-problem">${escHtml(problemTxt)}</span>
+        <button type="button" class="mnt-att-action" data-mnt-nav="${escHtml(path)}">Otvori →</button>
       </li>`;
-    });
+    }).join('');
+
     const canEditCatalogDash = canManageMaintCatalog(prof);
     host.innerHTML = `
-      <div class="mnt-kpi-row">
-        <div class="${statusKpiClass('running')}"><span class="mnt-kpi-label">Radi</span><span class="mnt-kpi-val">${run}</span></div>
-        <div class="${statusKpiClass('degraded')}"><span class="mnt-kpi-label">Smetnje</span><span class="mnt-kpi-val">${deg}</span></div>
-        <div class="${statusKpiClass('down')}"><span class="mnt-kpi-label">Zastoj</span><span class="mnt-kpi-val">${down}</span></div>
-        <div class="${statusKpiClass('maintenance')}"><span class="mnt-kpi-label">Održavanje</span><span class="mnt-kpi-val">${maint}</span></div>
-      </div>
-      ${profLine}
-      <div class="mnt-attention" style="margin-top:20px">
-        <h3>Zahtevaju pažnju (do 12)</h3>
-        <ul class="mnt-list">${attRows.length ? attRows.join('') : '<li class="mnt-muted">Nema stavki van „radi” stanja.</li>'}</ul>
-      </div>
+      ${profileInfoBannerHtml(prof)}
+      <div class="mnt-kpi-row">${kpiRowHtml}</div>
+      <section class="mnt-attention" style="margin-top:20px">
+        <div class="mnt-att-head">
+          <h3>Zahtevaju pažnju</h3>
+          ${attention.length > 0 ? `<span class="mnt-muted mnt-att-count">${attention.length > 12 ? `prikazano 12 od ${attention.length}` : `${attention.length} ${attention.length === 1 ? 'stavka' : 'stavki'}`}</span>` : ''}
+        </div>
+        ${attRowsHtml
+          ? `<ul class="mnt-att-list" role="list">${attRowsHtml}</ul>`
+          : `<div class="mnt-att-empty">
+              <strong>Sve mašine rade normalno.</strong>
+              <span class="mnt-muted">Nema otvorenih kvarova ni kašnjenja po planu održavanja.</span>
+            </div>`}
+      </section>
       <p style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
         <button type="button" class="btn" id="mntGoMachinesBtn">Otvori listu mašina →</button>
         ${canEditCatalogDash ? '<button type="button" class="btn" id="mntGoCatalogBtn" style="background:var(--surface3)">⚙ Katalog mašina (uredi/dodaj) →</button>' : ''}
@@ -942,10 +1038,12 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
     host.querySelector('#mntGoCatalogBtn')?.addEventListener('click', () => {
       onNavigateToPath?.('/maintenance/catalog');
     });
-    host.querySelectorAll('.mnt-linkish[data-mnt-nav]').forEach(btn => {
-      btn.addEventListener('click', e => {
+    /* Jedan wire i za KPI kartice i za linkove u „Zahtevaju pažnju" (klik na ime
+       i klik na „Otvori →" idu na isti path). */
+    host.querySelectorAll('[data-mnt-nav]').forEach(el => {
+      el.addEventListener('click', e => {
         e.stopPropagation();
-        const p = btn.getAttribute('data-mnt-nav');
+        const p = el.getAttribute('data-mnt-nav');
         if (p) onNavigateToPath?.(p);
       });
     });

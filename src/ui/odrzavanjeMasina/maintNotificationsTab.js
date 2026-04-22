@@ -42,10 +42,22 @@ export function canRetryMaintNotification(prof) {
 
 const STATUSES = [
   { v: 'all', l: 'Svi' },
-  { v: 'queued', l: 'Queued' },
-  { v: 'sent', l: 'Sent' },
-  { v: 'failed', l: 'Failed' },
+  { v: 'queued', l: 'Na čekanju' },
+  { v: 'sent', l: 'Poslato' },
+  { v: 'failed', l: 'Greška' },
 ];
+
+/**
+ * Korisnički naziv statusa dostave — srpski, u jednini.
+ * @param {string} s
+ */
+function statusLabelSr(s) {
+  const v = String(s || '').toLowerCase();
+  if (v === 'sent') return 'Poslato';
+  if (v === 'queued') return 'Na čekanju';
+  if (v === 'failed') return 'Greška';
+  return s || '';
+}
 
 function statusBadge(s) {
   const v = String(s || '').toLowerCase();
@@ -67,17 +79,31 @@ function severityFromPayload(payload) {
 }
 
 /**
- * Formatira recipient kolonu: ako je `pending` (stub), prikaži koga čeka fanout.
- * @param {object} row
- * @param {Map<string,string>} nameByCode
+ * Korisnički naziv ozbiljnosti (isti kao u index.js — ali kopija ovde da
+ * izbegnemo cross-module helper sada; TODO: izdvojiti u shared util).
+ * @param {string} sev
  */
-function recipientCell(row, nameByCode) {
+function severityLabelSr(sev) {
+  const s = String(sev || '').toLowerCase();
+  if (s === 'critical') return 'Kritično';
+  if (s === 'major') return 'Visok';
+  if (s === 'minor') return 'Nizak';
+  if (s === 'info') return 'Info';
+  return sev || '';
+}
+
+/**
+ * Formatira primaoca: ako je obaveštenje „stub" (čeka da worker rasporedi
+ * primaoce), prikaži friendly label umesto internog `pending`.
+ * @param {object} row
+ */
+function recipientCell(row) {
   if (row.recipient === 'pending' && !row.recipient_user_id) {
-    return `<span class="mnt-muted"><em>pending (fanout)</em></span>`;
+    return `<span class="mnt-muted" title="Sistem će rasporediti primaoce pri sledećem prolazu">čeka dostavu</span>`;
   }
   const rcp = row.recipient ? escHtml(row.recipient) : '';
   if (row.channel === 'in_app' && row.recipient_user_id) {
-    return `<code class="mnt-muted">${escHtml(String(row.recipient_user_id).slice(0, 8))}…</code>`;
+    return `<span class="mnt-muted" title="ID korisnika: ${escHtml(String(row.recipient_user_id))}">korisnik aplikacije</span>`;
   }
   return rcp || '<span class="mnt-muted">—</span>';
 }
@@ -116,11 +142,14 @@ export async function renderMaintNotificationsPanel(host, ctx, state = {}) {
       <div id="mntNotifTableHost">
         <p class="mnt-muted">Učitavam…</p>
       </div>
-      <p class="mnt-muted" style="margin-top:14px;font-size:12px">
-        Fan-out stub redove (<code>recipient = pending</code>) obrađuje worker
-        <code>maint-notify-dispatch</code>. Ako je status <strong>failed</strong>,
-        chief/admin može da pritisne „Retry” — worker će ponovo pokušati pri sledećem ticku.
-      </p>
+      <details class="mnt-tech-details" style="margin-top:14px">
+        <summary>Tehnički detalji</summary>
+        <p class="mnt-muted" style="margin-top:8px;font-size:12px">
+          Stavke u stanju „čeka dostavu" obrađuje pozadinski servis pri sledećem
+          prolazu. Ako je status <strong>Greška</strong>, šef ili administrator
+          može da pritisne „Ponovi" — servis će ponovo pokušati slanje.
+        </p>
+      </details>
     </div>
   `;
 
@@ -142,7 +171,7 @@ export async function renderMaintNotificationsPanel(host, ctx, state = {}) {
     ]);
 
     if (rows === null) {
-      tableHost.innerHTML = `<p class="mnt-muted">Nemaš dozvolu za pregled notifikacija (RLS) ili migracija nije primenjena.</p>`;
+      tableHost.innerHTML = `<p class="mnt-muted">Nemaš dozvolu za pregled obaveštenja, ili migracija nije primenjena.</p>`;
       countEl.textContent = '';
       return;
     }
@@ -163,7 +192,7 @@ export async function renderMaintNotificationsPanel(host, ctx, state = {}) {
       .map(r => {
         const sev = severityFromPayload(r.payload);
         const sevBadge = sev
-          ? ` <span class="${sev === 'critical' ? 'mnt-badge mnt-badge--down' : sev === 'major' ? 'mnt-badge mnt-badge--degraded' : 'mnt-badge'}">${escHtml(sev)}</span>`
+          ? ` <span class="${sev === 'critical' ? 'mnt-badge mnt-badge--down' : sev === 'major' ? 'mnt-badge mnt-badge--degraded' : 'mnt-badge'}">${escHtml(severityLabelSr(sev))}</span>`
           : '';
         const mcode = r.machine_code || '';
         const mDisp = mcode ? (nameByCode.get(mcode) || mcode) : '';
@@ -172,24 +201,24 @@ export async function renderMaintNotificationsPanel(host, ctx, state = {}) {
           : '<span class="mnt-muted">—</span>';
         const canAction = canRetry && r.status === 'failed';
         const actionCell = canAction
-          ? `<button type="button" class="btn" style="padding:2px 10px;font-size:12px" data-mnt-notif-retry="${escHtml(String(r.id))}">Retry</button>`
+          ? `<button type="button" class="btn" style="padding:2px 10px;font-size:12px" data-mnt-notif-retry="${escHtml(String(r.id))}">Ponovi</button>`
           : '';
         const err = r.error
           ? `<br><span class="mnt-muted" style="font-size:11px" title="${escHtml(String(r.error))}">${escHtml(String(r.error).slice(0, 80))}${String(r.error).length > 80 ? '…' : ''}</span>`
           : '';
         const last = r.last_attempt_at
-          ? `<br><span class="mnt-muted" style="font-size:11px">last: ${escHtml(fmtIso(r.last_attempt_at))}</span>`
+          ? `<br><span class="mnt-muted" style="font-size:11px">poslednji pokušaj: ${escHtml(fmtIso(r.last_attempt_at))}</span>`
           : '';
         const next = r.status !== 'sent' && r.next_attempt_at
-          ? `<br><span class="mnt-muted" style="font-size:11px">next: ${escHtml(fmtIso(r.next_attempt_at))}</span>`
+          ? `<br><span class="mnt-muted" style="font-size:11px">sledeći pokušaj: ${escHtml(fmtIso(r.next_attempt_at))}</span>`
           : '';
         return `<tr>
           <td><span class="mnt-muted" style="font-size:11px">${escHtml(fmtIso(r.created_at))}</span></td>
           <td>${escHtml(r.channel || '')}</td>
           <td>${machineCell}${sevBadge}</td>
-          <td>${recipientCell(r, nameByCode)}</td>
+          <td>${recipientCell(r)}</td>
           <td>${escHtml(r.subject || '')}${err}</td>
-          <td><span class="${statusBadge(r.status)}">${escHtml(r.status || '')}</span>${last}${next}</td>
+          <td><span class="${statusBadge(r.status)}">${escHtml(statusLabelSr(r.status))}</span>${last}${next}</td>
           <td style="text-align:center">${escHtml(String(r.attempts ?? 0))}</td>
           <td>${actionCell}</td>
         </tr>`;
@@ -207,7 +236,7 @@ export async function renderMaintNotificationsPanel(host, ctx, state = {}) {
               <th>Primalac</th>
               <th>Naslov / greška</th>
               <th>Status</th>
-              <th>Pok.</th>
+              <th>Pokušaji</th>
               <th></th>
             </tr>
           </thead>
@@ -232,11 +261,11 @@ export async function renderMaintNotificationsPanel(host, ctx, state = {}) {
         const ok = await retryMaintNotification(id);
         if (!ok) {
           btn.disabled = false;
-          btn.textContent = 'Retry';
-          showToast('⚠ Nije moguće vratiti u queue (ovlašćenja ili red ne postoji)');
+          btn.textContent = 'Ponovi';
+          showToast('⚠ Nije moguće vratiti u red za slanje (ovlašćenja ili red ne postoji)');
           return;
         }
-        showToast('✅ Vraćeno u queue — worker će pokušati ponovo');
+        showToast('✅ Vraćeno u red za slanje — servis će ponovo pokušati');
         load();
       });
     });
