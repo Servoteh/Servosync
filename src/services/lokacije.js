@@ -390,6 +390,108 @@ export async function locCreateMovement(payload) {
   return row;
 }
 
+const LOC_REPORT_SORT_WHITELIST = new Set([
+  'updated_at',
+  'drawing_no',
+  'order_no',
+  'location_code',
+  'qty_on_location',
+  'customer_name',
+  'project_code',
+  'item_ref_id',
+]);
+
+/**
+ * Pregled delova po lokacijama — RPC `loc_report_parts_by_locations`.
+ * Migracija: `sql/migrations/add_loc_report_by_locations_rpc.sql`.
+ *
+ * @param {{
+ *   drawingNo?: string,
+ *   orderNo?: string,
+ *   tpNo?: string,
+ *   projectSearch?: string,
+ *   locationId?: string,
+ *   locationQ?: string,
+ *   sort?: string,
+ *   desc?: boolean,
+ *   limit?: number,
+ *   offset?: number,
+ * }} [params]
+ * @returns {Promise<{ total: number, rows: object[] }|null>}
+ */
+export async function fetchLocReportPartsByLocations(params = {}) {
+  const body = {};
+  const d = params.drawingNo;
+  if (d != null && String(d).trim() !== '') body.p_drawing_no = String(d).trim();
+  const o = params.orderNo;
+  if (o != null && String(o).trim() !== '') body.p_order_no = String(o).trim();
+  const t = params.tpNo;
+  if (t != null && String(t).trim() !== '') body.p_tp_no = String(t).trim();
+  const ps = params.projectSearch;
+  if (ps != null && String(ps).trim() !== '') body.p_project_search = String(ps).trim();
+  if (params.locationId && typeof params.locationId === 'string') {
+    const u = params.locationId.trim().toLowerCase();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(u)) {
+      body.p_location_id = u;
+    }
+  }
+  const lq = params.locationQ;
+  if (lq != null && String(lq).trim() !== '') body.p_location_q = String(lq).trim();
+
+  const sortRaw = typeof params.sort === 'string' ? params.sort.trim().toLowerCase() : 'updated_at';
+  body.p_sort = LOC_REPORT_SORT_WHITELIST.has(sortRaw) ? sortRaw : 'updated_at';
+  body.p_desc = params.desc !== false;
+
+  const lim = Math.max(1, Math.min(Number(params.limit) || 50, 500));
+  const off = Math.max(0, Number(params.offset) || 0);
+  body.p_limit = lim;
+  body.p_offset = off;
+
+  const res = await sbReq('rpc/loc_report_parts_by_locations', 'POST', body, { upsert: false });
+  if (!res || typeof res !== 'object') return null;
+  const total = typeof res.total === 'number' ? res.total : Number(res.total) || 0;
+  const rows = Array.isArray(res.rows) ? res.rows : [];
+  return { total, rows };
+}
+
+/**
+ * @param {Parameters<typeof fetchLocReportPartsByLocations>[0]} filters
+ * @param {{ pageSize?: number, onProgress?: (p: { loaded: number, total: number|null }) => void, signal?: AbortSignal }} [opts]
+ */
+export async function fetchAllLocReportPartsByLocations(filters = {}, opts = {}) {
+  const size = Math.max(1, Math.min(Number(opts.pageSize) || 500, 500));
+  const HARD_CAP = 50_000;
+  const all = [];
+  let offset = 0;
+  let total = null;
+  let truncated = false;
+  const { onProgress, signal } = opts;
+
+  while (true) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const res = await fetchLocReportPartsByLocations({
+      ...filters,
+      limit: size,
+      offset,
+    });
+    if (!res) break;
+    if (typeof res.total === 'number') total = res.total;
+    const chunk = res.rows || [];
+    if (!chunk.length) break;
+    all.push(...chunk);
+    if (typeof onProgress === 'function') onProgress({ loaded: all.length, total });
+    if (chunk.length < size) break;
+    if (total != null && all.length >= total) break;
+    if (all.length >= HARD_CAP) {
+      truncated = true;
+      break;
+    }
+    offset += size;
+  }
+
+  return { rows: all, total, truncated };
+}
+
 /**
  * Nova master lokacija (RLS: admin / leadpm / pm).
  * @param {{ location_code: string, name: string, location_type: string, parent_id?: string|null }} row

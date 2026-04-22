@@ -279,6 +279,20 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija) {
   };
 }
 
+/**
+ * @param {number[]} ids — `bigtehn_work_orders_cache.id` (npr. iz projekt_bigtehn_rn)
+ * @returns {Promise<object[]>}
+ */
+export async function fetchBigtehnWorkOrdersByIds(ids) {
+  if (!getIsOnline() || !Array.isArray(ids) || !ids.length) return [];
+  const uniq = [...new Set(ids.map(n => Number(n)).filter(Number.isFinite))];
+  if (!uniq.length) return [];
+  const rows = await sbReq(
+    `bigtehn_work_orders_cache?id=in.(${uniq.join(',')})&select=id,ident_broj,broj_crteza,naziv_dela,komada`,
+  );
+  return Array.isArray(rows) ? rows : [];
+}
+
 /* ── Writes (overlay) ── */
 
 /**

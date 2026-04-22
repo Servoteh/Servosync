@@ -98,3 +98,41 @@ export function parseBigTehnBarcode(raw) {
 
   return null;
 }
+
+/**
+ * Generiši RNZ barkod kompatibilan sa {@link parseBigTehnBarcode}.
+ *
+ * @param {{ internalId?: string|number, orderNo: string|number, tpNo: string|number, segment3?: string|number, segment4?: string|number }} args
+ * @returns {string|null}
+ */
+export function formatBigTehnRnzBarcode({
+  internalId = '0',
+  orderNo,
+  tpNo,
+  segment3 = '0',
+  segment4 = '0',
+} = {}) {
+  if (orderNo == null || tpNo == null) return null;
+  const a = String(internalId).replace(/\D/g, '').slice(0, 10) || '0';
+  const o = String(orderNo).replace(/\D/g, '').slice(0, 8);
+  const t = String(tpNo).replace(/\D/g, '').slice(0, 8);
+  const s3 = String(segment3).replace(/\D/g, '').slice(0, 12) || '0';
+  const s4 = String(segment4).replace(/\D/g, '').slice(0, 12) || '0';
+  if (!o || !t) return null;
+  return `RNZ:${a}:${o}/${t}:${s3}:${s4}`;
+}
+
+/**
+ * Kratki format `NALOG/CRTEŽ` (legacy BigTehn).
+ *
+ * @param {string|number} orderNo
+ * @param {string|number} drawingNo
+ * @returns {string|null}
+ */
+export function formatBigTehnShortBarcode(orderNo, drawingNo) {
+  if (orderNo == null || drawingNo == null) return null;
+  const o = String(orderNo).replace(/\D/g, '').slice(0, 8);
+  const d = String(drawingNo).replace(/\D/g, '').slice(0, 10);
+  if (!o || !d) return null;
+  return `${o}/${d}`;
+}

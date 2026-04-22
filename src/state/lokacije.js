@@ -7,7 +7,7 @@ import { STORAGE_KEYS } from '../lib/constants.js';
 
 /* Whitelist legitimnih tab ID-jeva — sprečava da korumpirana LS vrednost dovede
  * do praznog panela (renderPanel ima if-grane po tabId-u). */
-const VALID_TABS = new Set(['dashboard', 'browse', 'items', 'history', 'sync']);
+const VALID_TABS = new Set(['dashboard', 'browse', 'items', 'report', 'history', 'sync']);
 const DEFAULT_TAB = 'dashboard';
 
 /* Veličine stranice za items paginator — striktan whitelist da se LS ne koristi kao XSS vektor. */
@@ -31,6 +31,18 @@ const state = {
   },
   historyPage: 0,
   historyPageSize: DEFAULT_PAGE_SIZE,
+  reportFilters: {
+    drawingNo: '',
+    orderNo: '',
+    tpNo: '',
+    projectSearch: '',
+    locationId: '',
+    locationQ: '',
+  },
+  reportSort: 'updated_at',
+  reportSortDesc: true,
+  reportPage: 0,
+  reportPageSize: DEFAULT_PAGE_SIZE,
 };
 
 function normalizeTab(v) {
@@ -150,4 +162,75 @@ export function setHistoryPage(n) {
 export function setHistoryPageSize(n) {
   state.historyPageSize = normalizePageSize(n);
   state.historyPage = 0;
+}
+
+const VALID_REPORT_SORT = new Set([
+  'updated_at',
+  'drawing_no',
+  'order_no',
+  'location_code',
+  'qty_on_location',
+  'customer_name',
+  'project_code',
+  'item_ref_id',
+]);
+
+function normalizeReportSort(v) {
+  const s = typeof v === 'string' ? v.trim().toLowerCase() : '';
+  return VALID_REPORT_SORT.has(s) ? s : 'updated_at';
+}
+
+/**
+ * @param {Partial<{ drawingNo: string, orderNo: string, tpNo: string, projectSearch: string, locationId: string, locationQ: string }>} patch
+ */
+export function setReportFilters(patch) {
+  const next = { ...state.reportFilters };
+  if (patch && typeof patch === 'object') {
+    if ('drawingNo' in patch) next.drawingNo = normalizeFilter(patch.drawingNo);
+    if ('orderNo' in patch) next.orderNo = normalizeOrderNo(patch.orderNo);
+    if ('tpNo' in patch) next.tpNo = normalizeFilter(patch.tpNo).replace(/\D/g, '').slice(0, 12);
+    if ('projectSearch' in patch) next.projectSearch = normalizeFilter(patch.projectSearch).slice(0, 80);
+    if ('locationId' in patch) next.locationId = normalizeUuid(patch.locationId);
+    if ('locationQ' in patch) next.locationQ = normalizeFilter(patch.locationQ).slice(0, 80);
+  }
+  state.reportFilters = next;
+  state.reportPage = 0;
+}
+
+export function resetReportFilters() {
+  state.reportFilters = {
+    drawingNo: '',
+    orderNo: '',
+    tpNo: '',
+    projectSearch: '',
+    locationId: '',
+    locationQ: '',
+  };
+  state.reportPage = 0;
+}
+
+export function setReportSort(sortKey, desc) {
+  state.reportSort = normalizeReportSort(sortKey);
+  if (typeof desc === 'boolean') state.reportSortDesc = desc;
+  state.reportPage = 0;
+}
+
+export function toggleReportSort(sortKey) {
+  const s = normalizeReportSort(sortKey);
+  if (state.reportSort === s) {
+    state.reportSortDesc = !state.reportSortDesc;
+  } else {
+    state.reportSort = s;
+    state.reportSortDesc = true;
+  }
+  state.reportPage = 0;
+}
+
+export function setReportPage(n) {
+  state.reportPage = Math.max(0, Number(n) || 0);
+}
+
+export function setReportPageSize(n) {
+  state.reportPageSize = normalizePageSize(n);
+  state.reportPage = 0;
 }

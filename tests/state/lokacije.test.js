@@ -10,6 +10,9 @@ import {
   resetHistoryFilters,
   setHistoryPage,
   setHistoryPageSize,
+  setReportFilters,
+  resetReportFilters,
+  setReportPage,
 } from '../../src/state/lokacije.js';
 
 /* storage.js je fail-safe (try/catch na localStorage), pa testovi rade
@@ -23,6 +26,11 @@ describe('state/lokacije — normalizeTab', () => {
   it('postavlja validan tab', () => {
     setLokacijeActiveTab('items');
     expect(getLokacijeUiState().activeTab).toBe('items');
+  });
+
+  it('prihvata tab pregled po lokacijama', () => {
+    setLokacijeActiveTab('report');
+    expect(getLokacijeUiState().activeTab).toBe('report');
   });
 
   it('odbija nevalidan tab i fallback-uje na dashboard', () => {
@@ -170,5 +178,20 @@ describe('state/lokacije — history filteri', () => {
     setHistoryPageSize(250);
     expect(getLokacijeUiState().historyPageSize).toBe(250);
     expect(getLokacijeUiState().historyPage).toBe(0);
+  });
+});
+
+describe('state/lokacije — report filteri', () => {
+  beforeEach(() => {
+    resetReportFilters();
+  });
+
+  it('setReportFilters ažurira polja i resetuje reportPage', () => {
+    setReportPage(2);
+    setReportFilters({ drawingNo: '1091', orderNo: '9000' });
+    const f = getLokacijeUiState().reportFilters;
+    expect(f.drawingNo).toBe('1091');
+    expect(f.orderNo).toBe('9000');
+    expect(getLokacijeUiState().reportPage).toBe(0);
   });
 });

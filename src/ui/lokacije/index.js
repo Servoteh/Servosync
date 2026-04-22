@@ -291,6 +291,189 @@ function attachBrowseSearch() {
  * Server-side pretraga u items tabu — šalje ILIKE upit nad `item_ref_id`/`item_ref_table`
  * celokupne `loc_item_placements`. Debounce 300ms zbog network trip-a.
  */
+function attachReportTabHandlers() {
+  const host = locPanelHost;
+  if (!host) return;
+
+  host.querySelector('#locRepApply')?.addEventListener('click', () => {
+    setReportFilters({
+      drawingNo: host.querySelector('#locRepDraw')?.value || '',
+      orderNo: host.querySelector('#locRepOrder')?.value || '',
+      tpNo: host.querySelector('#locRepTp')?.value || '',
+      projectSearch: host.querySelector('#locRepProj')?.value || '',
+      locationId: host.querySelector('#locRepLoc')?.value || '',
+      locationQ: host.querySelector('#locRepLocQ')?.value || '',
+    });
+    refreshLocPanel();
+  });
+
+  host.querySelector('#locRepReset')?.addEventListener('click', () => {
+    resetReportFilters();
+    refreshLocPanel();
+  });
+
+  host.querySelector('#locRepLoc')?.addEventListener('change', e => {
+    setReportFilters({ locationId: e.target.value });
+    refreshLocPanel();
+  });
+
+  host.querySelectorAll('[data-report-sort]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const col = btn.getAttribute('data-report-sort');
+      if (!col) return;
+      toggleReportSort(col);
+      refreshLocPanel();
+    });
+  });
+
+  host.querySelector('#locRepPrev')?.addEventListener('click', () => {
+    const { reportPage } = getLokacijeUiState();
+    if (reportPage > 0) {
+      setReportPage(reportPage - 1);
+      refreshLocPanel();
+    }
+  });
+  host.querySelector('#locRepNext')?.addEventListener('click', () => {
+    const { reportPage } = getLokacijeUiState();
+    setReportPage(reportPage + 1);
+    refreshLocPanel();
+  });
+  host.querySelector('#locRepPageSize')?.addEventListener('change', e => {
+    setReportPageSize(Number(e.target.value));
+    refreshLocPanel();
+  });
+
+  host.querySelectorAll('[data-rep-item-table]').forEach(tr => {
+    tr.addEventListener('click', ev => {
+      if (ev.target.closest('button')) return;
+      const itemRefTable = tr.getAttribute('data-rep-item-table') || '';
+      const itemRefId = tr.getAttribute('data-rep-item-id') || '';
+      const orderNo = tr.getAttribute('data-rep-order') || '';
+      openItemHistoryModal({ itemRefTable, itemRefId, orderNo });
+    });
+  });
+
+  host.querySelectorAll('[data-rep-print-tp]').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const tr = btn.closest('tr');
+      if (!tr) return;
+      const p = {
+        item_ref_table: tr.getAttribute('data-rep-item-table') || '',
+        item_ref_id: tr.getAttribute('data-rep-item-id') || '',
+        order_no: tr.getAttribute('data-rep-order') || '',
+        drawing_no: tr.getAttribute('data-rep-drawing') || '',
+      };
+      const bc = barcodeForPlacementRow(p);
+      if (!bc) {
+        alert('Za ovaj red nema prepoznatljivog barkoda (RNZ / kratki format).');
+        return;
+      }
+      void printTechProcessLabelWindow({
+        title: 'Tehnološki postupak',
+        lines: [
+          p.order_no && p.item_ref_id
+            ? { text: `RN ${p.order_no} · TP ${p.item_ref_id}` }
+            : { text: `RN ${p.order_no || ''}` },
+          { text: `Crtež: ${p.drawing_no || '—'}`, small: true },
+        ],
+        barcodeValue: bc,
+      });
+    });
+  });
+
+  const btnEx = host.querySelector('#locRepExport');
+  if (btnEx) {
+    btnEx.addEventListener('click', async () => {
+      const orig = btnEx.textContent || 'Export CSV';
+      btnEx.disabled = true;
+      btnEx.textContent = 'Export… 0';
+      try {
+        const ui = getLokacijeUiState();
+        const rf = ui.reportFilters;
+        const { rows, total, truncated } = await fetchAllLocReportPartsByLocations(
+          {
+            drawingNo: rf.drawingNo,
+            orderNo: rf.orderNo,
+            tpNo: rf.tpNo,
+            projectSearch: rf.projectSearch,
+            locationId: rf.locationId || undefined,
+            locationQ: rf.locationQ,
+            sort: ui.reportSort,
+            desc: ui.reportSortDesc,
+          },
+          {
+            pageSize: 500,
+            onProgress: ({ loaded, total: tot }) => {
+              btnEx.textContent = tot != null ? `Export… ${loaded}/${tot}` : `Export… ${loaded}`;
+            },
+          },
+        );
+        if (!rows.length) {
+          alert('Nema redova za export.');
+          return;
+        }
+        const headers = [
+          'Predmet kod',
+          'Predmet naziv',
+          'Kupac',
+          'RN',
+          'Crtež',
+          'TP ref',
+          'Tabela',
+          'Lokacija šifra',
+          'Lokacija naziv',
+          'Putanja',
+          'Opis police',
+          'Kol lok',
+          'Ukupno bucket',
+          'Status',
+          'Poslednje',
+        ];
+        const data = rows.map(r => [
+          r.project_code || '',
+          r.project_name || '',
+          r.customer_name || '',
+          r.order_no || '',
+          r.drawing_no || '',
+          r.item_ref_id || '',
+          r.item_ref_table || '',
+          r.location_code || '',
+          r.location_name || '',
+          r.location_path || '',
+          r.shelf_note || '',
+          r.qty_on_location ?? '',
+          r.qty_total_for_bucket ?? '',
+          r.placement_status || '',
+          (r.last_moved_at || r.updated_at || '').replace('T', ' ').slice(0, 19),
+        ]);
+        const csv = CSV_BOM + rowsToCsv(headers, data);
+        downloadCsv(csv, buildReportExportFilename());
+        if (truncated) {
+          alert(
+            `Export prekinut na 50 000 redova. Ukupno u upitu: ${total ?? '?'}. Suzi filtere.`,
+          );
+        }
+      } catch (err) {
+        console.error('[lokacije/report] CSV export failed', err);
+        alert(`Export neuspešan: ${err?.message || err}`);
+      } finally {
+        btnEx.disabled = false;
+        btnEx.textContent = orig;
+      }
+    });
+  }
+}
+
+function buildReportExportFilename() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const ts =
+    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+    `_${pad(now.getHours())}${pad(now.getMinutes())}`;
+  return `lokacije_pregled_po_lokacijama_${ts}.csv`;
+}
+
 function attachItemsSearch() {
   const host = locPanelHost;
   if (!host) return;
@@ -893,7 +1076,7 @@ async function renderPanel(host, tabId) {
         ${pagerHtml}
       </div>`;
     attachLocToolbar();
-    attachReportTabHandlers(locs);
+    attachReportTabHandlers();
     return;
   }
 

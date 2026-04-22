@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   normalizeBarcodeText,
   parseBigTehnBarcode,
+  formatBigTehnRnzBarcode,
+  formatBigTehnShortBarcode,
 } from '../../src/lib/barcodeParse.js';
 
 describe('normalizeBarcodeText', () => {
@@ -114,5 +116,29 @@ describe('parseBigTehnBarcode — invalid input', () => {
   it('ne hvata prevelike brojeve (chaos safeguard)', () => {
     expect(parseBigTehnBarcode('999999999/1')).toBeNull(); // 9-cifreni nalog
     expect(parseBigTehnBarcode('1/12345678901')).toBeNull(); // 11-cifreni crtež
+  });
+});
+
+describe('formatBigTehnRnzBarcode / formatBigTehnShortBarcode', () => {
+  it('RNZ generator round-trip sa parserom', () => {
+    const raw = formatBigTehnRnzBarcode({
+      internalId: '8693',
+      orderNo: '7351',
+      tpNo: '1088',
+      segment3: '0',
+      segment4: '39757',
+    });
+    expect(raw).toBe('RNZ:8693:7351/1088:0:39757');
+    expect(parseBigTehnBarcode(raw)).toMatchObject({
+      orderNo: '7351',
+      itemRefId: '1088',
+      format: 'rnz',
+    });
+  });
+
+  it('short format round-trip', () => {
+    const s = formatBigTehnShortBarcode('9000', '1091063');
+    expect(s).toBe('9000/1091063');
+    expect(parseBigTehnBarcode(s)?.format).toBe('short');
   });
 });
