@@ -85,22 +85,45 @@ function statusLabel(status, archivedAt) {
 
 /**
  * Vraća priority chip (markup) i „sort priority" — manji broj = veći prioritet.
+ *
+ * Redosled po UX preporuci (Faza 3):
+ *   0 Zastoj (down ili otvoreni kvar)
+ *   1 Smetnje (degraded bez otvorenih kvarova)
+ *   2 U održavanju (planirano)
+ *   3 Kasni rok (overdue)
+ *   4 Rok danas
+ *   5 Rok u narednih 7 dana
+ *   6 Radi normalno
+ *   9 Arhivirano
+ *
  * @param {{ status: string, overdue: number, openInc: number, nextDueAt: Date|null, archived: boolean }} info
  */
 function priorityDescriptor(info) {
   const now = new Date();
   if (info.archived) return { rank: 9, html: '' };
-  if (info.status === 'down' || info.openInc > 0 && info.status !== 'running') {
+  if (info.status === 'down' || info.openInc > 0) {
     return {
       rank: 0,
       html: `<span class="mnt-priority mnt-priority--down">Zastoj</span>`,
+    };
+  }
+  if (info.status === 'degraded') {
+    return {
+      rank: 1,
+      html: `<span class="mnt-priority mnt-priority--warn">Smetnje</span>`,
+    };
+  }
+  if (info.status === 'maintenance') {
+    return {
+      rank: 2,
+      html: `<span class="mnt-priority mnt-priority--maint">Održavanje</span>`,
     };
   }
   if (info.overdue > 0 && info.nextDueAt) {
     const daysLate = Math.floor((now.getTime() - info.nextDueAt.getTime()) / 86400000);
     const txt = daysLate <= 0 ? 'Kasni' : `Kasni ${daysLate} d`;
     return {
-      rank: 1,
+      rank: 3,
       html: `<span class="mnt-priority mnt-priority--late">${escHtml(txt)}</span>`,
     };
   }
@@ -110,7 +133,7 @@ function priorityDescriptor(info) {
     if (info.nextDueAt <= eod) {
       const hrs = Math.max(0, Math.round((info.nextDueAt.getTime() - now.getTime()) / 3600000));
       return {
-        rank: 2,
+        rank: 4,
         html: `<span class="mnt-priority mnt-priority--today">${hrs <= 0 ? 'Servis danas' : `Danas ${hrs}h`}</span>`,
       };
     }
@@ -118,12 +141,12 @@ function priorityDescriptor(info) {
     const days = Math.ceil(diffMs / 86400000);
     if (days <= 7) {
       return {
-        rank: 3,
+        rank: 5,
         html: `<span class="mnt-priority mnt-priority--soon">Za ${days} d</span>`,
       };
     }
   }
-  return { rank: 4, html: '' };
+  return { rank: 6, html: '' };
 }
 
 /**
@@ -415,10 +438,19 @@ async function renderOperationalMachinesList(host, opts) {
       nextDueAt,
       archived: !!m.archived_at,
     });
+    /* Sub-row meta: proizvođač + model + tip — kompaktno, samo prvih 60ak chr. */
+    const subParts = [];
+    if (m.manufacturer || m.model) {
+      subParts.push([m.manufacturer, m.model].filter(Boolean).join(' '));
+    }
+    if (m.type) subParts.push(m.type);
     return {
       code: m.machine_code,
       name: m.name || m.machine_code,
       type: m.type || '',
+      manufacturer: m.manufacturer || '',
+      model: m.model || '',
+      subMeta: subParts.join(' · '),
       location: m.location || '',
       status: statusEff,
       archived: !!m.archived_at,
@@ -442,16 +474,45 @@ async function renderOperationalMachinesList(host, opts) {
     new Set(all.map(r => r.location).filter(Boolean)),
   ).sort((a, b) => a.localeCompare(b, 'sr', { sensitivity: 'base' }));
 
-  /* State (lokalno, preko zatvorice). Inicijalni chip se može pretdefinisati
-     URL parametrom `?chip=…` — koristi se kada Pregled linkuje na listu već
-     filtriranu (npr. KPI „Otvoreni kvarovi" → ?chip=kvar). */
-  const VALID_CHIPS = new Set(['sve', 'kasni', 'kvar', 'danas', 'preventiva', 'moje']);
-  const urlChip = new URLSearchParams(window.location.search).get('chip');
+  /* === Filter state — Faza 3 ============================================
+     Tri nezavisne grupe chipova (Status / Rok / Dodela) + skriveni
+     `incidentFilter` koji se pali samo iz URL-a (`?inc=1`) za KPI
+     „Otvoreni kvarovi" iz Pregleda. Svi filteri se kombinuju AND-om.
+
+     URL kontrola:
+       ?status=radi|smetnje|zastoj|odrzavanje
+       ?deadline=kasni|danas|7dana
+       ?assign=moje
+       ?inc=1
+     Backward compat (legacy `?chip=…` od Faze 2):
+       chip=kvar      → status=zastoj  (najjača akcija)
+       chip=kasni     → deadline=kasni
+       chip=danas     → deadline=danas
+       chip=preventiva→ deadline=7dana
+       chip=moje      → assign=moje
+  ====================================================================== */
+  const VALID_STATUS = new Set(['sve', 'radi', 'smetnje', 'zastoj', 'odrzavanje']);
+  const VALID_DEADLINE = new Set(['sve', 'kasni', 'danas', '7dana']);
+  const VALID_ASSIGN = new Set(['sve', 'moje']);
+  const sp = new URLSearchParams(window.location.search);
   const state = {
     search: '',
-    chip: urlChip && VALID_CHIPS.has(urlChip) ? urlChip : 'sve',
+    statusFilter: VALID_STATUS.has(sp.get('status')) ? sp.get('status') : 'sve',
+    deadlineFilter: VALID_DEADLINE.has(sp.get('deadline')) ? sp.get('deadline') : 'sve',
+    assignFilter: VALID_ASSIGN.has(sp.get('assign')) ? sp.get('assign') : 'sve',
+    incidentFilter: sp.get('inc') === '1',
     location: '',
   };
+  /* Legacy `?chip=` mapiranje — primenjuje se samo ako nova URL semantika
+     nije postavljena za odgovarajuću dimenziju. */
+  const legacyChip = sp.get('chip');
+  if (legacyChip) {
+    if (legacyChip === 'kvar' && state.statusFilter === 'sve') state.statusFilter = 'zastoj';
+    else if (legacyChip === 'kasni' && state.deadlineFilter === 'sve') state.deadlineFilter = 'kasni';
+    else if (legacyChip === 'danas' && state.deadlineFilter === 'sve') state.deadlineFilter = 'danas';
+    else if (legacyChip === 'preventiva' && state.deadlineFilter === 'sve') state.deadlineFilter = '7dana';
+    else if (legacyChip === 'moje' && state.assignFilter === 'sve') state.assignFilter = 'moje';
+  }
 
   function filterRows() {
     const now = new Date();
@@ -463,28 +524,45 @@ async function renderOperationalMachinesList(host, opts) {
     return all.filter(r => {
       if (state.location && r.location !== state.location) return false;
       if (q) {
-        const hay = `${r.code} ${r.name} ${r.type} ${r.location} ${r.responsibleName || ''}`.toLowerCase();
+        const hay = `${r.code} ${r.name} ${r.type} ${r.manufacturer} ${r.model} ${r.location} ${r.responsibleName || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      switch (state.chip) {
-        case 'kasni':
-          return r.overdueChecks > 0;
-        case 'kvar':
-          return r.status === 'down' || r.openIncidents > 0;
-        case 'danas':
-          return r.nextDueAt && r.nextDueAt <= eod && r.nextDueAt >= sod;
-        case 'preventiva':
-          return r.nextDueAt && r.nextDueAt <= weekEnd && r.status !== 'down';
-        case 'moje':
-          return !!myUid && r.responsibleUserId === myUid;
-        default:
-          return true;
+      /* Status grupa */
+      switch (state.statusFilter) {
+        case 'radi': if (r.status !== 'running') return false; break;
+        case 'smetnje': if (r.status !== 'degraded') return false; break;
+        case 'zastoj': if (r.status !== 'down') return false; break;
+        case 'odrzavanje': if (r.status !== 'maintenance') return false; break;
+        /* 'sve' — bez filtera */
       }
+      /* Rok grupa */
+      switch (state.deadlineFilter) {
+        case 'kasni':
+          if (r.overdueChecks <= 0) return false;
+          break;
+        case 'danas':
+          if (!r.nextDueAt || r.nextDueAt < sod || r.nextDueAt > eod) return false;
+          break;
+        case '7dana':
+          if (!r.nextDueAt || r.nextDueAt > weekEnd) return false;
+          break;
+      }
+      /* Dodela grupa */
+      if (state.assignFilter === 'moje' && (!myUid || r.responsibleUserId !== myUid)) {
+        return false;
+      }
+      /* URL-only: samo mašine sa otvorenim incidentima */
+      if (state.incidentFilter && r.openIncidents <= 0) return false;
+      return true;
     });
   }
 
-  /* Summary brojči — UVEK nad svim (ne nad filtriranim), da bude stabilan orijentir. */
-  const nBreakdowns = all.filter(r => r.status === 'down' || r.openIncidents > 0).length;
+  /* Brojači po dimenzijama — UVEK nad svim (ne nad filtriranim), da budu
+     stabilan orijentir bez obzira na trenutno aktivan filter. */
+  const nRunning = all.filter(r => r.status === 'running').length;
+  const nDegraded = all.filter(r => r.status === 'degraded').length;
+  const nDown = all.filter(r => r.status === 'down').length;
+  const nMaintCnt = all.filter(r => r.status === 'maintenance').length;
   const nLate = all.filter(r => r.overdueChecks > 0).length;
   const nToday = all.filter(r => {
     if (!r.nextDueAt) return false;
@@ -493,26 +571,69 @@ async function renderOperationalMachinesList(host, opts) {
     const eod = new Date(sod); eod.setHours(23, 59, 59, 999);
     return r.nextDueAt >= sod && r.nextDueAt <= eod;
   }).length;
+  const n7 = all.filter(r => {
+    if (!r.nextDueAt) return false;
+    const now = new Date();
+    const sod = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekEnd = new Date(sod); weekEnd.setDate(weekEnd.getDate() + 7); weekEnd.setHours(23, 59, 59, 999);
+    return r.nextDueAt <= weekEnd;
+  }).length;
   const nMine = myUid && hasResponsibleFeature
     ? all.filter(r => r.responsibleUserId === myUid).length
     : 0;
+  const nIncidents = all.reduce((a, r) => a + r.openIncidents, 0);
 
   const locOptions = [
     `<option value="">Sve lokacije</option>`,
     ...locations.map(l => `<option value="${escHtml(l)}">${escHtml(l)}</option>`),
   ].join('');
 
-  const chipDef = [
+  /* Chip definicije po grupama. „Sve" je prva u svakoj grupi i predstavlja
+     „bez filtera". Brojevi se prikazuju samo kad postoje (>0). */
+  const chipsStatus = [
+    { id: 'sve', label: 'Sve' },
+    { id: 'radi', label: `Radi${nRunning ? ` · ${nRunning}` : ''}` },
+    { id: 'smetnje', label: `Smetnje${nDegraded ? ` · ${nDegraded}` : ''}`, tone: nDegraded ? 'warn' : null },
+    { id: 'zastoj', label: `Zastoj${nDown ? ` · ${nDown}` : ''}`, tone: nDown ? 'down' : null },
+    { id: 'odrzavanje', label: `U održavanju${nMaintCnt ? ` · ${nMaintCnt}` : ''}` },
+  ];
+  const chipsDeadline = [
     { id: 'sve', label: 'Sve' },
     { id: 'kasni', label: `Kasni${nLate ? ` · ${nLate}` : ''}`, tone: nLate ? 'warn' : null },
-    { id: 'kvar', label: `Kvar${nBreakdowns ? ` · ${nBreakdowns}` : ''}`, tone: nBreakdowns ? 'down' : null },
     { id: 'danas', label: `Danas${nToday ? ` · ${nToday}` : ''}`, tone: nToday ? 'today' : null },
-    { id: 'preventiva', label: 'Preventiva' },
-    ...(myUid && hasResponsibleFeature ? [{ id: 'moje', label: `Moje${nMine ? ` · ${nMine}` : ''}` }] : []),
+    { id: '7dana', label: `7 dana${n7 ? ` · ${n7}` : ''}` },
   ];
+  const chipsAssign = myUid && hasResponsibleFeature
+    ? [
+        { id: 'sve', label: 'Sve' },
+        { id: 'moje', label: `Moje${nMine ? ` · ${nMine}` : ''}` },
+      ]
+    : null;
 
-  /* Katalog je sekundarna akcija na operativnom ekranu: ghost link ispod
-     glavnog reda, nikako prominentno crveno dugme — vidi UX preporuku 8. */
+  function chipGroupHtml(label, group, items, activeId) {
+    return `
+      <div class="mnt-chip-group">
+        <span class="mnt-chip-group-label">${escHtml(label)}</span>
+        <div class="mnt-chip-row" data-mnt-group="${group}">
+          ${items.map(c => {
+            const act = c.id === activeId ? ' mnt-chip--active' : '';
+            const tone = c.tone ? ` mnt-chip--${c.tone}` : '';
+            return `<button type="button" class="mnt-chip${act}${tone}" data-mnt-chip="${escHtml(c.id)}">${escHtml(c.label)}</button>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  /* „Sa otvorenim kvarovima" je URL-only filter (bez chipa); kada je aktivan,
+     prikazujemo ga kao removable badge iznad chip-grupa. */
+  const incidentBadgeHtml = state.incidentFilter
+    ? `<div class="mnt-active-filter">
+        <span class="mnt-badge mnt-badge--down">Sa otvorenim kvarovima${nIncidents ? ` · ${nIncidents}` : ''}</span>
+        <button type="button" class="mnt-active-filter-x" id="mntOpClearInc" title="Ukloni filter" aria-label="Ukloni filter">×</button>
+      </div>`
+    : '';
+
+  /* Katalog je sekundarna akcija: ghost tekst link u summary baru. */
   const adminCatalogLink = canEditCatalog
     ? `<button type="button" class="mnt-catalog-link" id="mntOpCatalogBtn" title="Otvori katalog mašina (admin uređivanje)">⚙ Katalog mašina →</button>`
     : '';
@@ -529,18 +650,14 @@ async function renderOperationalMachinesList(host, opts) {
         <select class="form-input mnt-loc-select" id="mntOpLoc" title="Filtriraj po lokaciji">${locOptions}</select>
         <button type="button" class="btn mnt-header-cta" id="mntOpReportBtn">+ Prijavi kvar</button>
       </div>
-      <div class="mnt-chip-row" id="mntOpChips">
-        ${chipDef.map(c => {
-          const act = c.id === state.chip ? ' mnt-chip--active' : '';
-          const tone = c.tone ? ` mnt-chip--${c.tone}` : '';
-          return `<button type="button" class="mnt-chip${act}${tone}" data-mnt-chip="${c.id}">${escHtml(c.label)}</button>`;
-        }).join('')}
+      ${incidentBadgeHtml}
+      <div class="mnt-chip-groups">
+        ${chipGroupHtml('Status', 'status', chipsStatus, state.statusFilter)}
+        ${chipGroupHtml('Rok', 'deadline', chipsDeadline, state.deadlineFilter)}
+        ${chipsAssign ? chipGroupHtml('Dodela', 'assign', chipsAssign, state.assignFilter) : ''}
       </div>
       <div class="mnt-summary-bar">
-        <div class="mnt-sum-item mnt-sum-item--down"><span class="mnt-sum-label">Kvarovi</span><span class="mnt-sum-val">${nBreakdowns}</span></div>
-        <div class="mnt-sum-item mnt-sum-item--late"><span class="mnt-sum-label">Kasni</span><span class="mnt-sum-val">${nLate}</span></div>
-        <div class="mnt-sum-item mnt-sum-item--today"><span class="mnt-sum-label">Danas</span><span class="mnt-sum-val">${nToday}</span></div>
-        <div class="mnt-sum-item"><span class="mnt-sum-label">Moje</span><span class="mnt-sum-val">${nMine}</span></div>
+        <span class="mnt-sum-meta" id="mntOpResultCount"></span>
         <span style="flex:1"></span>
         ${adminCatalogLink}
       </div>
@@ -554,44 +671,52 @@ async function renderOperationalMachinesList(host, opts) {
 
   function renderList() {
     const rows = filterRows();
+    /* Default sortiranje po hitnosti (priRank: 0=Zastoj … 6=Radi). U slučaju
+       izjednačenja — po nazivu (lokalna sortacija sr-Latn). */
     rows.sort((a, b) => {
       if (a.priRank !== b.priRank) return a.priRank - b.priRank;
       return a.name.localeCompare(b.name, 'sr', { sensitivity: 'base' });
     });
+
+    /* Brojač rezultata u summary baru. */
+    const cntEl = host.querySelector('#mntOpResultCount');
+    if (cntEl) {
+      const total = all.length;
+      cntEl.textContent = rows.length === total
+        ? `${total} ${total === 1 ? 'mašina' : 'mašina(e)'}`
+        : `${rows.length} od ${total}`;
+    }
+
     if (!rows.length) {
-      listHost.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Nema mašina za zadati filter.</p></div>`;
+      listHost.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Nema mašina koje odgovaraju trenutnim filterima. Probaj da klikneš „Sve" u svakoj grupi ili obriši pretragu.</p></div>`;
       return;
     }
     const rowsHtml = rows.map(r => {
       const path = buildMaintenanceMachinePath(r.code, 'pregled');
       const statusHtml = `<span class="${statusBadgeClass(r.status)}">${escHtml(statusLabel(r.status, r.archived))}</span>`;
       const ovrHtml = r.overrideReason
-        ? ` <span class="mnt-badge" title="${escHtml(r.overrideReason)}${r.overrideValidUntil ? ' (do ' + r.overrideValidUntil.replace('T', ' ').slice(0, 16) + ')' : ''}">PAUZA</span>`
+        ? ` <span class="mnt-badge mnt-badge--maintenance" title="${escHtml(r.overrideReason)}${r.overrideValidUntil ? ' (do ' + r.overrideValidUntil.replace('T', ' ').slice(0, 16) + ')' : ''}">PAUZA</span>`
         : '';
       const waitingParts = r.openIncidents > 0 && /deo|part/i.test(r.overrideReason || '')
         ? ` <span class="mnt-badge mnt-badge--degraded" title="Čeka deo">Čeka deo</span>`
         : '';
       const respHtml = r.responsibleName
-        ? `<span class="mnt-muted" title="Odgovorni">${escHtml(r.responsibleName)}</span>`
+        ? `<span title="Odgovorni">${escHtml(r.responsibleName)}</span>`
         : `<span class="mnt-muted">—</span>`;
       return `
         <tr class="mnt-ops-row" data-mnt-code="${escHtml(r.code)}" data-mnt-nav="${path}">
           <td class="mnt-c-code"><code>${escHtml(r.code)}</code></td>
           <td class="mnt-c-name">
             <div class="mnt-name-main">${escHtml(r.name)}</div>
-            ${r.type ? `<div class="mnt-name-sub">${escHtml(r.type)}</div>` : ''}
+            ${r.subMeta ? `<div class="mnt-name-sub">${escHtml(r.subMeta)}</div>` : ''}
           </td>
-          <td class="mnt-c-loc">${escHtml(r.location) || '<span class="mnt-muted">—</span>'}</td>
           <td class="mnt-c-status">${statusHtml}${ovrHtml}${waitingParts} ${r.priHtml}</td>
-          <td class="mnt-c-last"><span class="mnt-muted">${escHtml(relDate(r.lastCheckIso))}</span></td>
           <td class="mnt-c-next"><span class="mnt-muted">${escHtml(relDate(r.nextDueIso))}</span></td>
+          <td class="mnt-c-loc">${escHtml(r.location) || '<span class="mnt-muted">—</span>'}</td>
           <td class="mnt-c-resp">${respHtml}</td>
           <td class="mnt-c-act">
             <div class="mnt-quick-actions">
               <button type="button" class="mnt-qa mnt-qa--danger" data-mnt-op="report" title="Prijavi kvar">Kvar</button>
-              <button type="button" class="mnt-qa" data-mnt-op="check" title="Potvrdi kontrolu / pokreni servis">Servis</button>
-              <button type="button" class="mnt-qa" data-mnt-op="history" title="Istorija">Istorija</button>
-              <button type="button" class="mnt-qa mnt-qa--primary" data-mnt-op="detail" title="Detalj">Detalj</button>
             </div>
           </td>
         </tr>`;
@@ -600,26 +725,25 @@ async function renderOperationalMachinesList(host, opts) {
     const cardsHtml = rows.map(r => {
       const path = buildMaintenanceMachinePath(r.code, 'pregled');
       const statusHtml = `<span class="${statusBadgeClass(r.status)}">${escHtml(statusLabel(r.status, r.archived))}</span>`;
-      const ovrHtml = r.overrideReason ? `<span class="mnt-badge">PAUZA</span>` : '';
+      const ovrHtml = r.overrideReason ? `<span class="mnt-badge mnt-badge--maintenance">PAUZA</span>` : '';
       return `
         <article class="mnt-machine-card" data-mnt-code="${escHtml(r.code)}" data-mnt-nav="${path}">
           <header class="mnt-card-head">
             <div>
               <div class="mnt-card-name">${escHtml(r.name)}</div>
-              <div class="mnt-card-meta"><code>${escHtml(r.code)}</code>${r.location ? ' · ' + escHtml(r.location) : ''}</div>
+              <div class="mnt-card-meta">
+                <code>${escHtml(r.code)}</code>${r.subMeta ? ' · ' + escHtml(r.subMeta) : ''}${r.location ? ' · ' + escHtml(r.location) : ''}
+              </div>
             </div>
             <div class="mnt-card-status">${statusHtml}${ovrHtml} ${r.priHtml}</div>
           </header>
           <div class="mnt-card-body">
-            <div><span class="mnt-muted">Poslednja:</span> ${escHtml(relDate(r.lastCheckIso))}</div>
-            <div><span class="mnt-muted">Sledeći:</span> ${escHtml(relDate(r.nextDueIso))}</div>
+            <div><span class="mnt-muted">Sledeći rok:</span> ${escHtml(relDate(r.nextDueIso))}</div>
             ${r.responsibleName ? `<div><span class="mnt-muted">Odgovorni:</span> ${escHtml(r.responsibleName)}</div>` : ''}
           </div>
           <div class="mnt-card-actions">
             <button type="button" class="mnt-qa mnt-qa--danger" data-mnt-op="report">Kvar</button>
-            <button type="button" class="mnt-qa" data-mnt-op="check">Servis</button>
-            <button type="button" class="mnt-qa" data-mnt-op="history">Istorija</button>
-            <button type="button" class="mnt-qa mnt-qa--primary" data-mnt-op="detail">Detalj</button>
+            <button type="button" class="mnt-qa mnt-qa--primary" data-mnt-op="detail">Detalj →</button>
           </div>
         </article>`;
     }).join('');
@@ -630,10 +754,9 @@ async function renderOperationalMachinesList(host, opts) {
           <thead><tr>
             <th>Šifra</th>
             <th>Mašina</th>
-            <th>Lokacija</th>
             <th>Status</th>
-            <th>Poslednja</th>
-            <th>Sledeći</th>
+            <th>Sledeći rok</th>
+            <th>Lokacija</th>
             <th>Odgovorni</th>
             <th></th>
           </tr></thead>
@@ -711,14 +834,36 @@ async function renderOperationalMachinesList(host, opts) {
     state.location = locSel.value || '';
     renderList();
   });
-  host.querySelectorAll('[data-mnt-chip]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.chip = btn.getAttribute('data-mnt-chip') || 'sve';
-      host.querySelectorAll('[data-mnt-chip]').forEach(b =>
-        b.classList.toggle('mnt-chip--active', b === btn),
-      );
-      renderList();
+  /* Chipovi su grupisani po dimenzijama (Status / Rok / Dodela) — svaka
+     dimenzija je nezavisni single-select sa „Sve" kao reset opcijom. */
+  host.querySelectorAll('[data-mnt-group]').forEach(groupEl => {
+    const groupKey = groupEl.getAttribute('data-mnt-group');
+    const stateKey = groupKey === 'status'
+      ? 'statusFilter'
+      : groupKey === 'deadline'
+        ? 'deadlineFilter'
+        : groupKey === 'assign'
+          ? 'assignFilter'
+          : null;
+    if (!stateKey) return;
+    groupEl.querySelectorAll('[data-mnt-chip]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state[stateKey] = btn.getAttribute('data-mnt-chip') || 'sve';
+        groupEl.querySelectorAll('[data-mnt-chip]').forEach(b =>
+          b.classList.toggle('mnt-chip--active', b === btn),
+        );
+        renderList();
+      });
     });
+  });
+
+  /* „Sa otvorenim kvarovima" badge → klik na X ga uklanja i re-renderuje
+     listu. Sam badge se ne pojavljuje ponovo dok se URL ne promeni. */
+  host.querySelector('#mntOpClearInc')?.addEventListener('click', () => {
+    state.incidentFilter = false;
+    const wrap = host.querySelector('.mnt-active-filter');
+    if (wrap) wrap.remove();
+    renderList();
   });
 
   /* Header CTA: „Prijavi kvar" bez preseleksije → pita koju mašinu. */
@@ -954,28 +1099,28 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
         label: 'Otvoreni kvarovi',
         val: nOpenIncMachines,
         tone: 'down',
-        nav: '/maintenance/machines?chip=kvar',
+        nav: '/maintenance/machines?inc=1',
         title: 'Mašine sa otvorenim incidentima',
       },
       {
         label: 'U zastoju',
         val: nDown,
         tone: 'down',
-        nav: '/maintenance/machines?chip=kvar',
+        nav: '/maintenance/machines?status=zastoj',
         title: 'Mašine trenutno u zastoju',
       },
       {
         label: 'Kasni rokovi',
         val: nLate,
         tone: 'late',
-        nav: '/maintenance/machines?chip=kasni',
+        nav: '/maintenance/machines?deadline=kasni',
         title: 'Mašine sa prekoračenim preventivnim rokovima',
       },
       {
         label: 'Rokovi danas',
         val: nToday,
         tone: 'today',
-        nav: '/maintenance/machines?chip=danas',
+        nav: '/maintenance/machines?deadline=danas',
         title: 'Mašine kojima sledeći preventivni zadatak pada danas',
       },
     ];

@@ -728,13 +728,88 @@ button.mnt-kpi:active {
 .mnt-chip--active.mnt-chip--down { background: var(--red-bg); }
 .mnt-chip--active.mnt-chip--today { background: var(--blue-bg); }
 
-/* Mali operativni summary — 4 broja levo, profil desno. */
+/* Faza 3: chipovi grupisani po dimenzijama (Status / Rok / Dodela). Svaka
+   grupa je single-select, „Sve" je reset. Label opisuje osu, sami chipovi
+   su u istom redu sa labelom kad ima mesta, ispod nje na uskim ekranima. */
+.mnt-chip-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+
+.mnt-chip-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mnt-chip-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text2);
+  min-width: 56px;
+  flex-shrink: 0;
+}
+
+.mnt-chip-group .mnt-chip-row {
+  margin: 0;
+  flex: 1;
+}
+
+@media (max-width: 720px) {
+  .mnt-chip-group { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .mnt-chip-group-label { min-width: 0; }
+}
+
+/* Aktivni „incident" filter (URL-only, bez chipa) — uklonjivi badge. */
+.mnt-active-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 6px;
+  padding: 4px 6px 4px 10px;
+  background: var(--red-bg);
+  border: 1px solid color-mix(in srgb, var(--red) 50%, transparent);
+  border-radius: 999px;
+  width: fit-content;
+}
+
+.mnt-active-filter-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: var(--red);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mnt-active-filter-x:hover {
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+}
+
+/* Mali operativni summary — sada nosi samo brojač rezultata + admin link. */
 .mnt-summary-bar {
   display: flex;
   gap: 18px;
   align-items: center;
   flex-wrap: wrap;
   padding: 4px 2px 0;
+}
+
+.mnt-sum-meta {
+  font-size: 12px;
+  color: var(--text2);
 }
 
 .mnt-sum-item {
@@ -776,7 +851,9 @@ button.mnt-kpi:active {
 }
 
 .mnt-priority--down { color: var(--red); background: var(--red-bg); }
+.mnt-priority--warn { color: var(--orange); background: var(--orange-bg); }
 .mnt-priority--late { color: var(--orange); background: var(--orange-bg); }
+.mnt-priority--maint { color: var(--blue-bar); background: var(--blue-bg); }
 .mnt-priority--today { color: var(--blue-bar); background: var(--blue-bg); }
 .mnt-priority--soon { color: var(--text2); background: var(--surface3); }
 
@@ -790,11 +867,13 @@ button.mnt-kpi:active {
   padding: 10px 12px;
 }
 
-.mnt-ops-table .mnt-c-code { white-space: nowrap; }
+.mnt-ops-table .mnt-c-code { white-space: nowrap; width: 1%; }
+.mnt-ops-table .mnt-c-name { min-width: 220px; }
 .mnt-ops-table .mnt-c-name .mnt-name-main {
   font-weight: 600;
   color: var(--text);
   line-height: 1.25;
+  font-size: 14px;
 }
 
 .mnt-ops-table .mnt-c-name .mnt-name-sub {
@@ -803,9 +882,15 @@ button.mnt-kpi:active {
   margin-top: 2px;
 }
 
+.mnt-ops-table .mnt-c-status,
+.mnt-ops-table .mnt-c-next,
+.mnt-ops-table .mnt-c-loc,
+.mnt-ops-table .mnt-c-resp { white-space: nowrap; }
+
 .mnt-ops-table .mnt-c-act {
   text-align: right;
   white-space: nowrap;
+  width: 1%;
 }
 
 .mnt-quick-actions {
