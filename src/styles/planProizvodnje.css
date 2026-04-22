@@ -1183,6 +1183,41 @@
   cursor: help;
   margin-left: 6px;
 }
+/* Veliki primarni „⤴ Otvori PDF" CTA u headeru PDF sekcije.
+ * Radi i na mobile-u (gde iframe nije pouzdan), pa je vizuelno istaknuto
+ * dugme — disabled dok se resolveBigtehnDrawing ne završi (sprečava
+ * klik na dugme koje bi otvorilo prazan PDF). */
+.tpm-pdf-primary-btn {
+  background: linear-gradient(180deg, #4f9bff, #2a73d4);
+  border: 1px solid #2a73d4;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tpm-pdf-primary-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #6cabff, #3b85e6);
+  box-shadow: 0 2px 6px rgba(79, 155, 255, 0.35);
+  transform: translateY(-1px);
+}
+.tpm-pdf-primary-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+.tpm-pdf-primary-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+  filter: grayscale(0.4);
+}
+
+/* Backwards compat — neki drugi pozivioci možda još koriste staru klasu */
 .tpm-pdf-open-tab {
   background: var(--surface2);
   border: 1px solid var(--border2);
@@ -1198,6 +1233,7 @@
   color: var(--text);
   border-color: var(--blue-bar, #4f9bff);
 }
+
 .tpm-pdf-frame-wrap {
   position: relative;
   width: 100%;
@@ -1225,10 +1261,35 @@
   color: var(--text2);
   font-size: 13px;
   pointer-events: none;
+  text-align: center;
+  padding: 16px;
+  line-height: 1.4;
 }
 .tpm-pdf-msg.is-error {
   color: #fca5a5;
 }
+.tpm-pdf-msg.is-info {
+  color: var(--text2);
+}
+
+/* Verzija app-a u TP modal header-u (debug indikator). */
+.tpm-version {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text3, #888);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  vertical-align: middle;
+  cursor: help;
+}
+
 @media (max-width: 720px) {
-  .tpm-pdf-frame-wrap { height: 420px; }
+  .tpm-pdf-frame-wrap { height: 320px; }
+  .tpm-pdf-primary-btn { padding: 12px 18px; font-size: 15px; min-height: 44px; }
+  .tpm-pdf-header { flex-direction: column; align-items: stretch; gap: 10px; }
+  .tpm-pdf-header .tpm-pdf-primary-btn { width: 100%; justify-content: center; }
 }

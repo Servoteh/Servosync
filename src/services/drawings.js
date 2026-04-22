@@ -43,7 +43,14 @@ export const SIGNED_URL_TTL_SECONDS = 300;
  *                     isFallback: boolean } | null>}
  */
 export async function resolveBigtehnDrawing(brojCrteza) {
-  if (!getIsOnline() || !brojCrteza) return null;
+  if (!brojCrteza) {
+    console.warn('[drawings.resolve] missing brojCrteza');
+    return null;
+  }
+  if (!getIsOnline()) {
+    console.warn('[drawings.resolve] offline → cannot resolve', brojCrteza);
+    return null;
+  }
   const code = String(brojCrteza).trim();
   if (!code) return null;
 
@@ -56,6 +63,7 @@ export async function resolveBigtehnDrawing(brojCrteza) {
     p.set('limit', '1');
     const rows = await sbReq(`bigtehn_drawings_cache?${p.toString()}`);
     if (Array.isArray(rows) && rows[0]?.storage_path) {
+      console.info('[drawings.resolve] exact match', code, '→', rows[0].drawing_no);
       return {
         resolvedDrawingNo: rows[0].drawing_no || code,
         storagePath: rows[0].storage_path,
@@ -75,16 +83,26 @@ export async function resolveBigtehnDrawing(brojCrteza) {
   p.set('order', 'drawing_no.desc');
   p.set('limit', '50');
   const rows = await sbReq(`bigtehn_drawings_cache?${p.toString()}`);
-  if (!Array.isArray(rows) || rows.length === 0) return null;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    console.warn('[drawings.resolve] no rows in cache for', code, 'or revisions');
+    return null;
+  }
   const prefix = code + '_';
   const candidates = rows.filter(r => {
     const dn = String(r?.drawing_no || '');
     return dn === code || dn.startsWith(prefix);
   });
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) {
+    console.warn('[drawings.resolve] no matching revisions for', code, '— rows:', rows.map(r => r.drawing_no));
+    return null;
+  }
   /* Već sortirano `drawing_no.desc` → prvi je „najveći" sufiks (B > A). */
   const top = candidates[0];
-  if (!top.storage_path) return null;
+  if (!top.storage_path) {
+    console.warn('[drawings.resolve] candidate without storage_path', top);
+    return null;
+  }
+  console.info('[drawings.resolve] fallback revision', code, '→', top.drawing_no, '(from', candidates.length, 'candidates)');
   return {
     resolvedDrawingNo: top.drawing_no || code,
     storagePath: top.storage_path,
@@ -116,6 +134,10 @@ async function _signStoragePath(storagePath, expiresIn) {
   const token = user?._token || getSupabaseAnonKey();
   const apiKey = getSupabaseAnonKey();
   const baseUrl = getSupabaseUrl();
+  if (!baseUrl || !apiKey) {
+    console.error('[drawings.sign] missing Supabase config (baseUrl/apiKey)');
+    return null;
+  }
   try {
     const r = await fetch(
       `${baseUrl}/storage/v1/object/sign/${BIGTEHN_DRAWINGS_BUCKET}/${encodeURI(storagePath)}`,
@@ -130,16 +152,22 @@ async function _signStoragePath(storagePath, expiresIn) {
       },
     );
     if (!r.ok) {
-      console.error('[_signStoragePath] failed', r.status);
+      const txt = await r.text().catch(() => '');
+      console.error('[drawings.sign] HTTP', r.status, 'for', storagePath, '→', txt.slice(0, 300));
       return null;
     }
     const { signedURL, signedUrl } = await r.json();
-    /* PostgREST API menja casing tokom verzija; pokrij obe */
+    /* Storage v1 koristi `signedURL`, novije verzije `signedUrl`. */
     const rel = signedURL || signedUrl;
-    if (!rel) return null;
-    return baseUrl + '/storage/v1' + (rel.startsWith('/') ? rel : '/' + rel);
+    if (!rel) {
+      console.error('[drawings.sign] response missing signedURL/signedUrl', { storagePath });
+      return null;
+    }
+    const fullUrl = baseUrl + '/storage/v1' + (rel.startsWith('/') ? rel : '/' + rel);
+    console.info('[drawings.sign] OK', storagePath, '→', fullUrl.slice(0, 80) + '…');
+    return fullUrl;
   } catch (e) {
-    console.error('[_signStoragePath] exception', e);
+    console.error('[drawings.sign] exception', e);
     return null;
   }
 }
