@@ -132,34 +132,33 @@ export function maintHasFloorReadAccess() {
 /**
  * Da li trenutni korisnik može da vidi i uređuje osetljiva polja zaposlenog
  * (JMBG, adresa, broj računa, privatni telefon, kontakt osobe, deca)?
- * Sinhronizovano sa Postgres helperom `current_user_is_hr_or_admin()`.
+ * Sinhronizovano sa Postgres helperom `current_user_is_hr_or_admin()`
+ * (admin / hr / menadzment).
  */
 export function isHrOrAdmin() {
-  return state.role === 'hr' || state.role === 'admin';
+  return ['admin', 'hr', 'menadzment'].includes(state.role);
 }
 export function canManageUsers() {
   return isAdmin();
 }
 /**
  * Ko može da uđe u Kadrovska modul?
- *  - admin / hr: pun pristup svim tabovima (uz dalje provere canEditKadrovska /
- *    canAccessSalary / canEditKadrovskaGrid)
- *  - menadzment: OGRANIČEN pristup — vidi samo „Mesečni grid" (unos sati).
- *    Ne vidi Zarade, Zaposlene, Odsustva, Godišnji, Ugovore, Notifikacije,
- *    Izveštaje. UI (shared.js / index.js) forsira taj filter.
+ *  - admin / hr / menadzment: pun pristup svim tabovima (uz dalje provere
+ *    canEditKadrovska / canAccessSalary / canEditKadrovskaGrid).
+ *  - Ostali: nemaju pristup modulu.
  */
 export function canAccessKadrovska() {
   return isHR() || isAdmin() || state.role === 'menadzment';
 }
 /**
  * Kadrovska modul — CRUD nad zaposlenima / odsustvima / godišnjim / ugovorima.
- * Po dogovoru „svako kao HR" — bilo koja rola koja ima pristup modulu može
- * i da edituje, OSIM menadzment-a koji je read-only oko tih sekcija (on
- * menja samo mesečni grid → videti `canEditKadrovskaGrid`). Viewer ostaje
- * read-only.
+ * Po dogovoru „svako kao HR": admin / hr / menadzment / pm / leadpm imaju
+ * edit. Menadzment od ove iteracije ima pun edit nad svim sekcijama Kadrovske
+ * (osim Zarada — vidi `canAccessSalary`). Sinhronizovano sa Postgres
+ * funkcijom `has_edit_role()` (migracija add_menadzment_full_edit_kadrovska).
  */
 export function canEditKadrovska() {
-  return ['admin', 'leadpm', 'pm', 'hr'].includes(state.role);
+  return ['admin', 'leadpm', 'pm', 'hr', 'menadzment'].includes(state.role);
 }
 /**
  * Mesečni grid (unos sati / odsustva na nivou dana): zajedno sa HR-om i
@@ -181,9 +180,8 @@ export function canAccessSalary() {
   return state.role === 'admin';
 }
 /**
- * Plan Proizvodnje (Sprint F): šef mašinske obrade ('pm') i admin imaju
- * pun pristup; svi ostali authenticated samo READ. UI po roli odlučuje
- * disabled stanje na drag-drop / status / napomena dugmadima.
+ * Plan Proizvodnje: modul vide svi ulogovani; pun edit za admin / pm / menadzment
+ * (`canEditPlanProizvodnje`). Read-only: leadpm, hr, viewer.
  */
 export function canAccessPlanProizvodnje() {
   /* Svi koji su ulogovani vide modul (read-only za viewer/leadpm/hr). */

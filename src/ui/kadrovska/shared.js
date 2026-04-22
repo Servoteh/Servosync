@@ -13,15 +13,6 @@ import { escHtml } from '../../lib/dom.js';
 import { getAuth, canEdit, canAccessSalary } from '../../state/auth.js';
 import { kadrovskaState } from '../../state/kadrovska.js';
 
-/**
- * Da li tekuća rola ima samo ograničen pristup Kadrovskoj? Menadzment je
- * namerno limitiran na „Mesečni grid" (unos sati) — ne vidi Zarade,
- * Zaposlene, Odsustva, Godišnji, Ugovore, Notifikacije, Izveštaje.
- */
-function isKadrGridOnlyRole() {
-  return getAuth().role === 'menadzment';
-}
-
 /** Stranica jedne kartice u summary strip-u. */
 export function summaryChipHtml(label, value, tone) {
   const cls = tone ? 'kadr-summary-chip ' + tone : 'kadr-summary-chip';
@@ -96,24 +87,18 @@ export function employeeOptionsHtml({
 
 /** Tab bar sa badge-ovima. Active tab se kontroliše classList.add('active'). */
 export function kadrTabsHtml(activeTab) {
-  const gridOnly = isKadrGridOnlyRole();
-  const tabs = gridOnly
-    ? [
-        /* Menadzment vidi SAMO mesečni grid — ostali tabovi su skriveni. */
-        { id: 'grid', label: 'Mesečni grid', badgeId: 'kadrTabCountGrid' },
-      ]
-    : [
-        { id: 'employees', label: 'Zaposleni', badgeId: 'kadrTabCountEmployees' },
-        { id: 'absences', label: 'Odsustva', badgeId: 'kadrTabCountAbsences' },
-        { id: 'vacation', label: 'Godišnji odmor', badgeId: 'kadrTabCountVacation' },
-        { id: 'grid', label: 'Mesečni grid', badgeId: 'kadrTabCountGrid' },
-        { id: 'hours', label: 'Sati (pojedinačno)', badgeId: 'kadrTabCountHours' },
-        { id: 'contracts', label: 'Ugovori', badgeId: 'kadrTabCountContracts' },
-        /* Zarade su strogo admin-only; ostali role-i ih uopšte ne vide. */
-        ...(canAccessSalary() ? [{ id: 'salary', label: 'Zarade', badgeId: 'kadrTabCountSalary' }] : []),
-        { id: 'notifications', label: 'Notifikacije', badgeId: 'kadrTabCountNotif' },
-        { id: 'reports', label: 'Izveštaji', badgeId: 'kadrTabCountReports' },
-      ];
+  const tabs = [
+    { id: 'employees', label: 'Zaposleni', badgeId: 'kadrTabCountEmployees' },
+    { id: 'absences', label: 'Odsustva', badgeId: 'kadrTabCountAbsences' },
+    { id: 'vacation', label: 'Godišnji odmor', badgeId: 'kadrTabCountVacation' },
+    { id: 'grid', label: 'Mesečni grid', badgeId: 'kadrTabCountGrid' },
+    { id: 'hours', label: 'Sati (pojedinačno)', badgeId: 'kadrTabCountHours' },
+    { id: 'contracts', label: 'Ugovori', badgeId: 'kadrTabCountContracts' },
+    /* Zarade su strogo admin-only; ostale role (uključujući menadzment) ih ne vide. */
+    ...(canAccessSalary() ? [{ id: 'salary', label: 'Zarade', badgeId: 'kadrTabCountSalary' }] : []),
+    { id: 'notifications', label: 'Notifikacije', badgeId: 'kadrTabCountNotif' },
+    { id: 'reports', label: 'Izveštaji', badgeId: 'kadrTabCountReports' },
+  ];
   return `
     <div class="kadrovska-tabs" role="tablist" aria-label="Kadrovska - sekcije">
       ${tabs.map(t => `

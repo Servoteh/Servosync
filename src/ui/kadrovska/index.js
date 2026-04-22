@@ -13,7 +13,7 @@
  *   renderKadrovskaModule(rootEl);
  */
 
-import { canAccessKadrovska, canAccessSalary, canEdit, getAuth } from '../../state/auth.js';
+import { canAccessKadrovska, canAccessSalary, canEdit } from '../../state/auth.js';
 import { showToast } from '../../lib/dom.js';
 import { logout } from '../../services/auth.js';
 import { toggleTheme } from '../../lib/theme.js';
@@ -158,15 +158,6 @@ function switchTab(id) {
 function mountTabBody(id) {
   const host = rootEl?.querySelector('#kadrPanelHost');
   if (!host) return;
-
-  /* Menadzment je ograničen na „grid" tab — svaki pokušaj otvaranja drugog
-     taba (stari aktivni u storage-u, deep-link) se neutralizuje. */
-  if (getAuth().role === 'menadzment' && id !== 'grid') {
-    kadrovskaState.activeTab = 'grid';
-    setActiveKadrTab('grid');
-    mountTabBody('grid');
-    return;
-  }
 
   host.innerHTML = `<div class="kadr-panel active" id="kadrPanel-${id}" role="tabpanel" aria-label="${id}"></div>`;
   const panel = host.firstElementChild;
