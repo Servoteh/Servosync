@@ -31,6 +31,7 @@ Implementacija: `src/ui/lokacije/index.js` (`TABS`). Aktivni tab: `STORAGE_KEYS.
 | **Početna** | KPI: broj aktivnih lokacija, broj redova u `loc_item_placements` (do 500 za KPI), lista poslednjih premeštanja. Ako su lokacije i stavke prazne, **first-run** blok (koraci) za korisnike sa `canEdit()`, inače kratka poruka. |
 | **Lokacije** | Tabela ili stablo, pretraga (šifra/naziv/putanja), „Prikaži neaktivne”, akcije Izmeni / Aktiviraj ako `canEdit()`. |
 | **Stavke** | Trenutna zaduženja: kolone tabela, crtež (ID), nalog, lokacija, količina, status. Pretraga na serveru (ILIKE), paginacija 25/50/100/250, **Export CSV**. Klik na red → istorija te stavke. |
+| **Pregled po lokacijama** | Server-side izveštaj kroz RPC **`loc_report_parts_by_locations`** (join na BigTehn RN, kupac, projekat). Filteri: crtež/ID, broj naloga, TP (`item_ref_id`), pretraga lokacije, projekat. Sort po više kolona, paginacija 25/50/100/250, **Export CSV** (sve strane), per-row akcije: **Istorija** i **TP nalepnica**. |
 | **Istorija** | `loc_location_movements` sa filterima: pretraga (crtež ili nalog), striktan nalog, lokacija (od ili do), korisnik (vidljiv ako `loadUsersFromDb` vrati više od jednog korisnika), tip kretanja, datum od/do, reset, **Export CSV**, paginacija. |
 | **Sync** | Samo admin: poslednjih 100 redova outbound queue (status, movement id, vreme, greška). |
 
@@ -41,6 +42,10 @@ Implementacija: `src/ui/lokacije/index.js` (`TABS`). Aktivni tab: `STORAGE_KEYS.
 - **Skeniraj** — ako postoji kamera (`getUserMedia`); `scanModal.js` (ZXing lazy-load).
 - **Brzo premeštanje** — `modals.js`, ista poslovna logika bez kamere.
 - **Nova lokacija** · **Nalepnice polica** — samo `canEdit()`.
+
+**Nalepnice police** (`labelsPrint.js`): bira se **jedna polica** preko picker-a → browser print (Code128 nad `location_code`). Bulk štampa svih polica je uklonjena.
+
+**Nalepnice TP** (`labelsPrint.js`): poziva se iz reda u tabu „Pregled po lokacijama”. Modal nudi izbor RNZ ili kratkog barkoda preko encoder-a `formatBigTehnRnzBarcode` / `formatBigTehnShortBarcode` u `src/lib/barcodeParse.js` (round-trip sa `parseBigTehnBarcode`). Default je browser print; ako je postavljen `VITE_LABEL_PRINTER_PROXY_URL`, šalje payload na network printer proxy (`dispatchOptionalNetworkLabelPrint`).
 
 Kretanje uključuje **količinu** (v2) i **broj radnog naloga** (v3) gde je predviđeno u šemi; detalje vidi migracije ispod.
 
@@ -57,6 +62,8 @@ Kretanje uključuje **količinu** (v2) i **broj radnog naloga** (v3) gde je pred
 
 Evolucija: **v2** količina / višestruki placement — `add_loc_v2_quantity.sql` · **v3** `order_no` — `add_loc_v3_order_scope.sql` · **v4** `drawing_no` — `add_loc_v4_drawing_no.sql`.
 
+Izveštaj „Pregled po lokacijama” koristi RPC **`loc_report_parts_by_locations(...)`** (`add_loc_report_by_locations_rpc.sql`): `SECURITY INVOKER`, prazan rezultat ako nema `auth.uid()` ili ako `loc_auth_roles()` vrati prazno; `REVOKE FROM anon`, `GRANT EXECUTE TO authenticated`. Vraća `jsonb { total, rows }` sa joinovima na `bigtehn_work_orders_cache`, `bigtehn_customers_cache`, `projekt_bigtehn_rn`, `projects` i window sumom po (nalog, crtež/ID).
+
 Virtualne lokacije (npr. ugrađeno, proizvodnja, otpis) su običan red u `loc_locations` odgovarajućeg tipa; pomeranje = `TRANSFER` s količinom.
 
 **Redosled primene (tipično):**  
@@ -69,7 +76,7 @@ Jednokratni seed: `sql/seed/loc_seed_bigtehn_positions.sql`.
 ## Kod u repou
 
 `src/ui/lokacije/` — `index.js`, `modals.js`, `scanModal.js`, `labelsPrint.js`  
-`src/services/lokacije.js` · `src/state/lokacije.js` · `src/lib/lokacijeFilters.js`  
+`src/services/lokacije.js` (servis za RPC `loc_report_parts_by_locations` i `fetchAll…`) · `src/state/lokacije.js` (tab `report`, filteri, sort, paginacija) · `src/lib/lokacijeFilters.js` · `src/lib/barcodeParse.js` (parser + encoderi `formatBigTehnRnzBarcode`/`formatBigTehnShortBarcode`)  
 Mobilno: `src/ui/mobile/mobileHome.js`, `mobileLookup.js`, `mobileHistory.js`, `mobileBatch.js`  
 Stil: `src/styles/legacy.css` (prefiks `loc-`)  
 PWA: `docs/MOBILE.md`
