@@ -1112,6 +1112,15 @@
   color: var(--text);
   border-color: var(--blue-bar, #4f9bff);
 }
+/* Op # u redu bez prijava (kad expand button ne postoji) — diskretno
+   prikazan da korisnik ima referent broj operacije bez šire kolone. */
+.tpm-op-num {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--text3, #888);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  min-width: 18px;
+}
 
 /* Logs sub-row (collapsed by default) */
 .tpm-logs-row { display: none; }

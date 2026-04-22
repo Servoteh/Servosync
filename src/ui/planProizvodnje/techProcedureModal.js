@@ -86,6 +86,12 @@ function createModal(opts, onResolve) {
   `;
 
   function close() {
+    /* Revoke blob URL-a ako je iframe učitao PDF kao blob (memory cleanup) */
+    const pdfFrame = root.querySelector('[data-role="pdf-frame"]');
+    const blobUrl = pdfFrame?.dataset?.blobUrl;
+    if (blobUrl) {
+      try { URL.revokeObjectURL(blobUrl); } catch { /* noop */ }
+    }
     if (root.parentNode) root.parentNode.removeChild(root);
     document.removeEventListener('keydown', onKey);
     if (activeModal && activeModal.root === root) activeModal = null;
@@ -184,16 +190,57 @@ async function loadAndRender(root, workOrderId) {
               pdfMsg.classList.add('is-info');
             }
           } else {
-            /* Desktop: učitaj iframe sa signed URL-om. */
+            /* Desktop: BLOB-based iframe load.
+             *
+             * Zašto blob umesto direktnog signed URL-a u iframe:
+             *  - Cloudflare Pages naša domena ima X-Frame-Options: DENY u
+             *    `public/_headers`. Iako to NE bi trebalo da utiče na iframe
+             *    sa Supabase domena, neki browser PDF viewer-i (interni Chrome
+             *    PDF plugin) provere top-level iframe permissions + neki
+             *    extensions/AV blokiraju cross-origin PDF iframe.
+             *  - Supabase signed URL može vratiti `Content-Disposition:
+             *    attachment` u nekim verzijama Storage-a → browser sili
+             *    download umesto inline preview.
+             *
+             * Blob strategy: fetch PDF kao Blob, kreiraj `blob:` URL (isti
+             * origin kao naša app), postavi u iframe. Bypass-uje sve gore
+             * navedene check-ove. Trade-off: PDF se mora ceo skinuti pre
+             * prikaza (za naše ~100KB-1MB crteže to je instant).
+             */
             const url = await getBigtehnDrawingSignedUrl(resolved.resolvedDrawingNo);
-            if (url && pdfFrame) {
-              pdfFrame.src = url + '#toolbar=1&view=FitH';
-              pdfFrame.classList.add('is-loaded');
-              if (pdfMsg) pdfMsg.remove();
-              console.info('[tpm:pdf] iframe loaded for', resolved.resolvedDrawingNo);
-            } else if (pdfMsg) {
-              pdfMsg.textContent = `Signed URL nije generisan za „${resolved.resolvedDrawingNo}". Pogledaj Console (F12) za detalje (Storage HTTP status).`;
-              pdfMsg.classList.add('is-error');
+            if (!url) {
+              if (pdfMsg) {
+                pdfMsg.textContent = `Signed URL nije generisan za „${resolved.resolvedDrawingNo}". Pogledaj Console (F12) za detalje (Storage HTTP status).`;
+                pdfMsg.classList.add('is-error');
+              }
+            } else if (pdfFrame) {
+              try {
+                const r = await fetch(url);
+                if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
+                const blob = await r.blob();
+                console.info('[tpm:pdf] blob fetched', blob.size, 'bytes, type=', blob.type);
+                /* Force application/pdf type ako je blob.type prazan/wrong
+                   (neki Storage servera vraćaju octet-stream). */
+                const pdfBlob = blob.type === 'application/pdf'
+                  ? blob
+                  : blob.slice(0, blob.size, 'application/pdf');
+                const blobUrl = URL.createObjectURL(pdfBlob);
+                /* Cleanup prethodnog blob URL-a ako već postoji. */
+                if (pdfFrame.dataset.blobUrl) {
+                  URL.revokeObjectURL(pdfFrame.dataset.blobUrl);
+                }
+                pdfFrame.dataset.blobUrl = blobUrl;
+                pdfFrame.src = blobUrl + '#toolbar=1&view=FitH';
+                pdfFrame.classList.add('is-loaded');
+                if (pdfMsg) pdfMsg.remove();
+                console.info('[tpm:pdf] iframe loaded via blob for', resolved.resolvedDrawingNo);
+              } catch (e) {
+                console.error('[tpm:pdf] blob fetch failed', e);
+                if (pdfMsg) {
+                  pdfMsg.textContent = `PDF se ne može učitati u modal: ${escHtml(String(e?.message || e))}. Klikni „⤴ Otvori PDF" da ga otvoriš u novom tab-u.`;
+                  pdfMsg.classList.add('is-error');
+                }
+              }
             }
           }
         }
@@ -292,8 +339,6 @@ function renderOperations(operations, allLogs) {
         <thead>
           <tr>
             <th style="width:32px"></th>
-            <th title="Broj operacije">Op</th>
-            <th>Opis</th>
             <th>Mašina</th>
             <th class="tpm-num">Komada</th>
             <th class="tpm-num">Plan</th>
@@ -365,8 +410,15 @@ function renderOpRow(op, logs) {
   const lastFinished = op.last_finished_at ? formatDate(op.last_finished_at) : '—';
   const isNonMach = op.is_non_machining ? ' is-non-machining' : '';
 
+  /* Op # i Opis su sakriveni iz glavne tabele (preglednost na užim
+     ekranima). Korisnik vidi te podatke u tooltip-u prvog dugmeta
+     (▸ expand) i u expandable detalju (renderLogsRow → naslov
+     „Prijave za operaciju X").
+     Op# je ujedno tooltip na expand dugmetu; opis kratak u tooltipu
+     ekspand dugmeta da se ne izgubi kontekst. */
+  const opLabel = `Op ${op.operacija}${op.opis_rada ? ' — ' + op.opis_rada : ''}`;
   return `
-    <tr class="tpm-op-row${isNonMach}" data-op="${op.operacija}">
+    <tr class="tpm-op-row${isNonMach}" data-op="${op.operacija}" title="${escHtml(opLabel)}">
       <td class="tpm-cell-center">
         ${logs.length
           ? `<button type="button"
@@ -374,11 +426,9 @@ function renderOpRow(op, logs) {
                      data-action="toggle-logs"
                      data-op="${op.operacija}"
                      aria-expanded="false"
-                     title="${logs.length} prijav${logs.length === 1 ? 'a' : (logs.length < 5 ? 'e' : 'a')}">▸</button>`
-          : ''}
+                     title="${escHtml(opLabel)} — ${logs.length} prijav${logs.length === 1 ? 'a' : (logs.length < 5 ? 'e' : 'a')}">▸</button>`
+          : `<span class="tpm-op-num" title="${escHtml(opLabel)}">${escHtml(String(op.operacija))}</span>`}
       </td>
-      <td class="tpm-cell-strong tpm-num">${escHtml(String(op.operacija))}</td>
-      <td title="${escHtml(op.opis_rada || '')}">${escHtml(op.opis_rada || '—')}</td>
       <td>${machineLabel}</td>
       <td class="tpm-num">
         <span class="tpm-cell-strong">${escHtml(String(op.komada_done ?? 0))}</span>
@@ -396,7 +446,7 @@ function renderOpRow(op, logs) {
 function renderLogsRow(opNum, logs) {
   return `
     <tr class="tpm-logs-row" data-logs-for="${opNum}">
-      <td colspan="9">
+      <td colspan="7">
         <div class="tpm-logs-wrap">
           <div class="tpm-logs-title">Prijave za operaciju ${escHtml(String(opNum))} (${logs.length})</div>
           <table class="tpm-logs-table">
