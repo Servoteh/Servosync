@@ -526,9 +526,13 @@ export async function searchBigtehnWorkOrders(q, limit = 50) {
  * Po default-u vraća samo aktuelne, nezatvorene predmete
  * (`status='U TOKU' AND datum_zakljucenja IS NULL`) — usklađeno sa
  * dropdown-om „Predmet" u modulu Lokacije. Pretraga ide po broju predmeta,
- * nazivu, ugovoru i narudžbenici. JOIN sa `bigtehn_customers_cache` ide
- * preko PostgREST embedded select-a (`customer:bigtehn_customers_cache!inner`),
- * pa se ime komitenta vidi odmah u dropdown-u i listi.
+ * nazivu, ugovoru i narudžbenici.
+ *
+ * Komitent (`customer_name`) se DOVLAČI POSEBNIM UPITOM nad
+ * `bigtehn_customers_cache` jer u Supabase šemi NE postoji FK constraint
+ * između `bigtehn_items_cache.customer_id` i `bigtehn_customers_cache.id`,
+ * pa PostgREST embedded select (`customer:bigtehn_customers_cache(...)`)
+ * vraća 400 i sve pretrage padaju. Posebnim upitom je sigurno i brzo.
  *
  * @param {string} q  deo broja predmeta ili naziva (može biti '' za prvih `limit` aktuelnih)
  * @param {number} [limit=50]
@@ -536,15 +540,14 @@ export async function searchBigtehnWorkOrders(q, limit = 50) {
  *   - `onlyActive` (default `true`) — filter `status='U TOKU' AND datum_zakljucenja IS NULL`
  * @returns {Promise<object[]>}
  *   Svaki red: `{ id, broj_predmeta, naziv_predmeta, opis, status, broj_ugovora,
- *   broj_narudzbenice, rok_zavrsetka, modified_at, customer_name }`.
+ *   broj_narudzbenice, rok_zavrsetka, modified_at, customer_id, customer_name }`.
  */
 export async function searchBigtehnItems(q, limit = 50, { onlyActive = true } = {}) {
   const s = typeof q === 'string' ? q.trim() : '';
   const lim = Math.max(1, Math.min(Number(limit) || 50, 200));
   const sel =
     'id,broj_predmeta,naziv_predmeta,opis,status,department_code,broj_ugovora,broj_narudzbenice,' +
-    'rok_zavrsetka,modified_at,datum_zakljucenja,customer_id,' +
-    'customer:bigtehn_customers_cache(id,name,short_name)';
+    'rok_zavrsetka,modified_at,datum_zakljucenja,customer_id';
   const parts = [`select=${sel}`, `order=modified_at.desc.nullslast`, `limit=${lim}`];
   if (s) {
     const enc = encodeURIComponent(`*${s}*`);
@@ -559,10 +562,34 @@ export async function searchBigtehnItems(q, limit = 50, { onlyActive = true } = 
   const path = `bigtehn_items_cache?${parts.join('&')}`;
   const rows = await sbReq(path);
   if (!Array.isArray(rows)) return [];
-  return rows.map(r => ({
-    ...r,
-    customer_name: r.customer?.short_name || r.customer?.name || '',
-  }));
+
+  /* Dovuci samo komitente koje stvarno trebamo (deduped). Tihi fallback ako
+   * tabela nije dostupna — ime komitenta je kozmetički (UI svejedno radi). */
+  const custIds = Array.from(
+    new Set(rows.map(r => r.customer_id).filter(v => v != null)),
+  );
+  let custMap = new Map();
+  if (custIds.length) {
+    try {
+      const idList = custIds.join(',');
+      const custRows = await sbReq(
+        `bigtehn_customers_cache?select=id,name,short_name&id=in.(${idList})&limit=${custIds.length}`,
+      );
+      if (Array.isArray(custRows)) {
+        custMap = new Map(custRows.map(c => [c.id, c]));
+      }
+    } catch {
+      /* ignore — komitent je opcionalno polje za prikaz */
+    }
+  }
+
+  return rows.map(r => {
+    const c = r.customer_id != null ? custMap.get(r.customer_id) : null;
+    return {
+      ...r,
+      customer_name: c?.short_name || c?.name || '',
+    };
+  });
 }
 
 /**

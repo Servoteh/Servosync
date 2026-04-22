@@ -208,20 +208,34 @@ export function openPredmetScreen(opts = {}) {
   function hideDrop() { dropEl.style.display = 'none'; }
 
   async function refreshDrop(q) {
-    const rows = await searchBigtehnItems(q, 50);
-    if (!Array.isArray(rows) || rows.length === 0) {
-      dropEl.innerHTML = '<div class="loc-muted" style="padding:10px 12px">Nema rezultata.</div>';
-    } else {
-      dropEl.innerHTML = rows.map(renderItemRow).join('');
-      dropEl.querySelectorAll('[data-item-id]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = Number(btn.getAttribute('data-item-id'));
-          const it = rows.find(r => r.id === id);
-          if (it) selectItem(it);
-        });
-      });
-    }
+    dropEl.innerHTML = '<div class="loc-muted" style="padding:10px 12px">Učitavam predmete…</div>';
     showDrop();
+    let rows;
+    try {
+      rows = await searchBigtehnItems(q, 50);
+    } catch (err) {
+      console.error('[predmetScreen] searchBigtehnItems failed', err);
+      dropEl.innerHTML = `<div class="loc-warn" style="padding:10px 12px">Greška pretrage predmeta: ${escHtml(err?.message || String(err))}</div>`;
+      return;
+    }
+    if (!Array.isArray(rows) || rows.length === 0) {
+      const msg = q
+        ? 'Nema aktuelnih predmeta za zadati upit.'
+        : 'Nema aktuelnih predmeta (status „U TOKU").';
+      dropEl.innerHTML = `<div class="loc-muted" style="padding:10px 12px">${msg}</div>`;
+      return;
+    }
+    dropEl.innerHTML = rows.map(renderItemRow).join('');
+    dropEl.querySelectorAll('[data-item-id]').forEach(btn => {
+      /* mousedown se ispaljuje pre blur na input-u, pa stigne pre nego što
+       * document click handler proba da sakrije dropdown. */
+      btn.addEventListener('mousedown', ev => {
+        ev.preventDefault();
+        const id = Number(btn.getAttribute('data-item-id'));
+        const it = rows.find(r => r.id === id);
+        if (it) selectItem(it);
+      });
+    });
   }
 
   const onInputDeb = debounce(() => {
@@ -232,10 +246,15 @@ export function openPredmetScreen(opts = {}) {
   inputEl.addEventListener('focus', () => {
     void refreshDrop(inputEl.value);
   });
-  document.addEventListener('click', ev => {
+  function onDocClick(ev) {
+    if (!root.isConnected) {
+      document.removeEventListener('click', onDocClick);
+      return;
+    }
     if (!root.contains(ev.target)) return;
     if (ev.target !== inputEl && !dropEl.contains(ev.target)) hideDrop();
-  });
+  }
+  document.addEventListener('click', onDocClick);
 
   function selectItem(item) {
     selectedItem = item;
