@@ -7,7 +7,7 @@
  *   - Sistem (placeholder)
  *
  * Bezbednosna provera — ulaz u modul je već gated u router.js
- * (canManageUsers()), ali ovde duplo proveravamo i pokazujemo lock screen
+ * (canAccessPodesavanja()), ali ovde duplo proveravamo i pokazujemo lock screen
  * ako neko ipak dođe direktno (npr. preko sessionStorage state-a).
  *
  * Aktivni tab se persistuje u sessionStorage (SETTINGS_TAB), kao u legacy.
@@ -17,7 +17,7 @@ import { escHtml } from '../../lib/dom.js';
 import { ssGet, ssSet } from '../../lib/storage.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
 import { toggleTheme } from '../../lib/theme.js';
-import { onAuthChange, getAuth, canManageUsers } from '../../state/auth.js';
+import { onAuthChange, getAuth, canManageUsers, canAccessPodesavanja } from '../../state/auth.js';
 import { usersState } from '../../state/users.js';
 import { renderUsersTab, refreshUsers, wireUsersTab } from './usersTab.js';
 import { renderMastersTab } from './mastersTab.js';
@@ -41,12 +41,17 @@ const TABS = [
   { id: 'system', label: 'Sistem' },
 ];
 
+/** Menadžment vidi samo „Održ. profili”; admin sve tabove. */
+function _visibleTabs() {
+  return canManageUsers() ? TABS : TABS.filter(t => t.id === 'maint-profiles');
+}
+
 export async function renderPodesavanjaModule(mountEl, options = {}) {
   _mountEl = mountEl;
   _onLogoutCb = options.onLogout || null;
   _onBackToHubCb = options.onBackToHub || null;
   _activeTab = ssGet(SESSION_KEYS.SETTINGS_TAB, 'users') || 'users';
-  if (!TABS.some(t => t.id === _activeTab)) _activeTab = 'users';
+  if (!_visibleTabs().some(t => t.id === _activeTab)) _activeTab = _visibleTabs()[0]?.id || 'maint-profiles';
 
   _renderShell();
 
@@ -73,7 +78,7 @@ export function teardownPodesavanjaModule() {
 function _renderShell() {
   if (!_mountEl) return;
 
-  if (!canManageUsers()) {
+  if (!canAccessPodesavanja()) {
     _mountEl.innerHTML = _lockedScreenHtml();
     _mountEl.querySelector('#podBackBtn')?.addEventListener('click', () => _onBackToHubCb?.());
     _mountEl.querySelector('#podLogoutBtn')?.addEventListener('click', () => _onLogoutCb?.());
@@ -83,7 +88,7 @@ function _renderShell() {
   _mountEl.innerHTML = `
     ${_headerHtml()}
     <div class="kadrovska-tabs" role="tablist" aria-label="Podešavanja - sekcije">
-      ${TABS.map(t => `
+      ${_visibleTabs().map(t => `
         <button class="kadrovska-tab ${t.id === _activeTab ? 'active' : ''}"
                 role="tab"
                 aria-selected="${t.id === _activeTab}"
@@ -159,7 +164,7 @@ function _lockedScreenHtml() {
       <div class="auth-box" style="max-width:none;text-align:left">
         <div class="auth-brand">
           <div class="auth-title">🔒 Pristup zabranjen</div>
-          <div class="auth-subtitle">Podešavanja su dostupna samo korisnicima sa <strong>admin</strong> rolom.</div>
+          <div class="auth-subtitle">Podešavanja su dostupna samo korisnicima sa <strong>admin</strong> ili <strong>menadžment</strong> rolom u ERP-u.</div>
         </div>
         <p class="form-hint" style="margin-top:14px">Ako misliš da bi trebalo da imaš pristup, javi se nekom od admina ili HR-u da ti dodeli odgovarajuću rolu kroz Supabase SQL Editor.</p>
       </div>

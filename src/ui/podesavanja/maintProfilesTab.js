@@ -1,6 +1,6 @@
 /**
  * Podešavanja → Održavanje profili (maint_user_profiles).
- * Samo ERP admin (ulaz u modul već ograničen).
+ * Ulaz: ERP admin (svi tabovi) ili menadžment (samo ovaj tab); RLS u bazi.
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';

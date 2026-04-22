@@ -5,7 +5,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { getAuth } from '../../state/auth.js';
+import { isAdminOrMenadzment } from '../../state/auth.js';
 import {
   insertMaintTask,
   patchMaintTask,
@@ -30,7 +30,7 @@ const REQUIRED_ROLES = ['operator', 'technician', 'chief', 'management', 'admin'
  * @param {object|null} prof maint_user_profiles ili null
  */
 export function canManageMaintTasks(prof) {
-  if (getAuth().role === 'admin') return true;
+  if (isAdminOrMenadzment()) return true;
   return prof?.role === 'chief' || prof?.role === 'admin';
 }
 

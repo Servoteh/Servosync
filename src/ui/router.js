@@ -51,6 +51,7 @@ import {
   getAuth,
   canAccessKadrovska,
   canManageUsers,
+  canAccessPodesavanja,
   canAccessPlanProizvodnje,
   canAccessSastanci,
   canAccessLokacije,
@@ -590,8 +591,8 @@ function assertModuleAllowed(moduleId) {
     showToast('🔒 Kadrovska je dostupna samo HR/admin korisnicima');
     return false;
   }
-  if (moduleId === 'podesavanja' && !canManageUsers()) {
-    showToast('🔒 Podešavanja su dostupna samo admin korisnicima');
+  if (moduleId === 'podesavanja' && !canAccessPodesavanja()) {
+    showToast('🔒 Podešavanja su dostupna samo admin i menadžment korisnicima');
     return false;
   }
   if (moduleId === 'plan-proizvodnje' && !canAccessPlanProizvodnje()) {
@@ -740,7 +741,7 @@ function restoreOrShowHub() {
   const last = getStoredModule();
   if (last && MODULES.includes(last)) {
     if (last === 'kadrovska' && !canAccessKadrovska()) return showHub();
-    if (last === 'podesavanja' && !canManageUsers()) return showHub();
+    if (last === 'podesavanja' && !canAccessPodesavanja()) return showHub();
     if (last === 'plan-proizvodnje' && !canAccessPlanProizvodnje()) return showHub();
     if (last === 'lokacije-delova' && !canAccessLokacije()) return showHub();
     if (last === 'sastanci' && !canAccessSastanci()) return showHub();

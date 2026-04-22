@@ -4,7 +4,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { getAuth } from '../../state/auth.js';
+import { isAdminOrMenadzment } from '../../state/auth.js';
 import {
   upsertMaintMachineOverride,
   deleteMaintMachineOverride,
@@ -21,7 +21,7 @@ const STATUSES = [
  * @param {object|null} prof maint_user_profiles ili null
  */
 export function canManageMaintOverride(prof) {
-  if (getAuth().role === 'admin') return true;
+  if (isAdminOrMenadzment()) return true;
   return prof?.role === 'chief' || prof?.role === 'admin';
 }
 

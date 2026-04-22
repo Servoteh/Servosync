@@ -3,7 +3,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { getAuth, getCurrentUser } from '../../state/auth.js';
+import { getCurrentUser, isAdminOrMenadzment } from '../../state/auth.js';
 import {
   fetchIncidentById,
   fetchIncidentEvents,
@@ -23,13 +23,13 @@ const STATUSES = [
 ];
 
 function canEditIncidentFields(maintProf) {
-  const erp = getAuth().role === 'admin';
+  const erp = isAdminOrMenadzment();
   const r = maintProf?.role;
   return erp || ['technician', 'chief', 'admin'].includes(r);
 }
 
 function canCloseIncident(maintProf) {
-  const erp = getAuth().role === 'admin';
+  const erp = isAdminOrMenadzment();
   const r = maintProf?.role;
   return erp || r === 'chief' || r === 'admin';
 }

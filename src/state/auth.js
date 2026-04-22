@@ -112,6 +112,23 @@ export function isHR() {
 export function isAdminOrMenadzment() {
   return state.role === 'admin' || state.role === 'menadzment';
 }
+
+/**
+ * Modul Podešavanja: ERP admin ima sve tabove; menadžment vidi samo „Održ. profili”
+ * (upravljanje `maint_user_profiles` u skladu sa RLS).
+ */
+export function canAccessPodesavanja() {
+  return isAdminOrMenadzment();
+}
+
+/**
+ * Sinhronizovano sa `maint_has_floor_read_access()` u bazi — pregled cele fabrike
+ * bez obaveznog reda u `maint_user_profiles`. Koristi se da se ne prikaže
+ * pogrešno upozorenje „profil nije podešen” korisnicima koji već imaju širok pristup.
+ */
+export function maintHasFloorReadAccess() {
+  return ['admin', 'pm', 'leadpm', 'menadzment'].includes(state.role);
+}
 /**
  * Da li trenutni korisnik može da vidi i uređuje osetljiva polja zaposlenog
  * (JMBG, adresa, broj računa, privatni telefon, kontakt osobe, deca)?

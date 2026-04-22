@@ -10,7 +10,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { getAuth, isAdminOrMenadzment } from '../../state/auth.js';
+import { isAdminOrMenadzment } from '../../state/auth.js';
 import {
   fetchMaintMachines,
   insertMaintMachine,
@@ -53,7 +53,7 @@ const MACHINE_TYPE_SUGGESTIONS = [
  * @param {object|null} prof
  */
 export function canManageMaintCatalog(prof) {
-  if (getAuth().role === 'admin') return true;
+  if (isAdminOrMenadzment()) return true;
   const r = prof?.role;
   return r === 'chief' || r === 'admin';
 }

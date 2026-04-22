@@ -5,7 +5,7 @@
 import { escHtml, showToast } from '../../lib/dom.js';
 import { toggleTheme } from '../../lib/theme.js';
 import { logout } from '../../services/auth.js';
-import { getAuth, getCurrentUser } from '../../state/auth.js';
+import { getAuth, getCurrentUser, maintHasFloorReadAccess, isAdminOrMenadzment } from '../../state/auth.js';
 import { hasSupabaseConfig } from '../../services/supabase.js';
 import {
   fetchMaintMachineStatuses,
@@ -232,6 +232,9 @@ function severityLabelSr(sev) {
  */
 function profileInfoBannerHtml(prof) {
   if (prof) return '';
+  /* Korisnici sa `maint_has_floor_read_access` (admin/pm/leadpm/menadžment) već
+     vide sve mašine u RLS-u — baner o „nedostatku profila” bi bio pogrešan signal. */
+  if (maintHasFloorReadAccess()) return '';
   return `
     <div class="mnt-info-banner" role="note">
       <span class="mnt-info-banner-ico" aria-hidden="true">ℹ</span>
@@ -339,7 +342,7 @@ function bucketTaskDueDates(dues) {
 }
 
 function maintCanModerateNotes(prof) {
-  const erp = getAuth().role === 'admin';
+  const erp = isAdminOrMenadzment();
   const r = prof?.role;
   return erp || r === 'chief' || r === 'admin';
 }
@@ -347,7 +350,7 @@ function maintCanModerateNotes(prof) {
 /** Sadržaj / brisanje u skladu sa RLS (autor do 24h za operator/tehničar; šef/admin uvek). */
 function maintNoteBodyEditable(note, prof) {
   const uid = getCurrentUser()?.id;
-  const erp = getAuth().role === 'admin';
+  const erp = isAdminOrMenadzment();
   const r = prof?.role;
   if (erp || r === 'chief' || r === 'admin') return true;
   if (String(note.author) !== String(uid || '')) return false;
@@ -356,7 +359,7 @@ function maintNoteBodyEditable(note, prof) {
 }
 
 function maintCanAddNote(prof) {
-  const erp = getAuth().role === 'admin';
+  const erp = isAdminOrMenadzment();
   const r = prof?.role;
   return erp || ['operator', 'technician', 'chief', 'admin'].includes(r);
 }

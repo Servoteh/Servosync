@@ -6,12 +6,12 @@
  * (`supabase/functions/maint-notify-dispatch`) obrađuje queued/failed.
  * UI dozvoljava chief/admin (i ERP admin) da ručno vrate failed → queued.
  *
- * RLS za `maint_notification_log` (vidi `add_maintenance_module.sql`) dozvoljava
- * SELECT samo `maint_profile_role() IN ('chief','management','admin')` ili ERP admin.
+ * RLS za `maint_notification_log`: maint chief/management/admin profil ili
+ * ERP admin/menadžment (`maint_is_erp_admin_or_management`).
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { getAuth } from '../../state/auth.js';
+import { isAdminOrMenadzment } from '../../state/auth.js';
 import {
   fetchMaintNotifications,
   retryMaintNotification,
@@ -24,7 +24,7 @@ import { buildMaintenanceMachinePath } from '../../lib/appPaths.js';
  * @param {object|null} prof
  */
 export function canAccessMaintNotifications(prof) {
-  if (getAuth().role === 'admin') return true;
+  if (isAdminOrMenadzment()) return true;
   const r = prof?.role;
   return r === 'chief' || r === 'management' || r === 'admin';
 }
@@ -35,7 +35,7 @@ export function canAccessMaintNotifications(prof) {
  * @param {object|null} prof
  */
 export function canRetryMaintNotification(prof) {
-  if (getAuth().role === 'admin') return true;
+  if (isAdminOrMenadzment()) return true;
   const r = prof?.role;
   return r === 'chief' || r === 'admin';
 }

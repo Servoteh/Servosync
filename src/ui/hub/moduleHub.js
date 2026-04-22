@@ -8,13 +8,13 @@
  *   - Sastanci              [u pripremi]
  *   - Planiranje proizvodnje [aktivno — Sprint F]
  *   - Kadrovska             [aktivno za hr/admin]
- *   - Podešavanja           [aktivno samo za admin]
+ *   - Podešavanja           [admin: svi tabovi; menadžment: održ. profili]
  *
  * Logika vidljivosti:
  *   - Kadrovska je vidljiva svima ali "u pripremi" za role bez canAccessKadrovska
  *     (u legacy-ju je kartica vidljiva svima — toast-ova kontrola pristupa).
  *   - Plan Proizvodnje je aktivna za sve authenticated; pm/admin pišu, ostali read-only.
- *   - Podešavanja je SAKRIVENA za ne-admin korisnike (data-hidden).
+ *   - Podešavanja je sakrivena za korisnike koji nisu admin ni menadžment.
  *
  * onModuleSelect(moduleId): callback koji aktivira modul (Plan Montaže,
  * Plan Proizvodnje, Kadrovska, Podešavanja).
@@ -25,7 +25,7 @@ import { toggleTheme } from '../../lib/theme.js';
 import { logout } from '../../services/auth.js';
 import {
   getAuth,
-  canManageUsers,
+  canAccessPodesavanja,
   canAccessKadrovska,
   canEditPlanProizvodnje,
   canAccessSastanci,
@@ -35,7 +35,7 @@ import {
 
 export function renderModuleHub({ onModuleSelect, onLogout }) {
   const auth = getAuth();
-  const settingsHidden = !canManageUsers();
+  const settingsHidden = !canAccessPodesavanja();
 
   const container = document.createElement('div');
   container.className = 'module-hub';
@@ -67,7 +67,7 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
     <main class="hub-main">
       <div class="hub-intro">
         <h2>Dobrodošli nazad</h2>
-        <p>Izaberi modul sa kojim želiš da radiš. Aktivni moduli: <strong style="color:var(--text)">Plan Montaže</strong>, <strong style="color:var(--text)">Lokacije delova</strong>, <strong style="color:var(--text)">Održavanje mašina</strong> (skelet), <strong style="color:var(--text)">Planiranje proizvodnje</strong>, <strong style="color:var(--text)">Sastanci</strong> i <strong style="color:var(--text)">Kadrovska</strong>${canManageUsers() ? ' i <strong style="color:var(--text)">Podešavanja</strong>' : ''}.</p>
+        <p>Izaberi modul sa kojim želiš da radiš. Aktivni moduli: <strong style="color:var(--text)">Plan Montaže</strong>, <strong style="color:var(--text)">Lokacije delova</strong>, <strong style="color:var(--text)">Održavanje mašina</strong> (skelet), <strong style="color:var(--text)">Planiranje proizvodnje</strong>, <strong style="color:var(--text)">Sastanci</strong> i <strong style="color:var(--text)">Kadrovska</strong>${canAccessPodesavanja() ? ' i <strong style="color:var(--text)">Podešavanja</strong>' : ''}.</p>
       </div>
 
       <div class="hub-grid">
