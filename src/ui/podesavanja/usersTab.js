@@ -39,11 +39,24 @@ let _filters = { search: '', role: '', status: '' };
 
 /* ── PUBLIC ──────────────────────────────────────────────────────────── */
 
-/** Cache-first init. Online → DB sync. Vraca promise. */
+/**
+ * Cache-first init + uvek pokušava DB sync ako smo online.
+ *
+ * Ranije je postojao guard `if (usersState.loaded && !force) return;` koji je
+ * sprečavao re-fetch tokom sesije — to je značilo da, ako bi admin ručno
+ * promenio rolu nekom korisniku iz Supabase SQL Editor-a, ostali članovi tima
+ * koji su već otvorili Korisnici tab nisu videli izmenu dok god ne bi uradili
+ * full refresh stranice. Sada force=true forsira fresh fetch (klik na
+ * „Osveži”), a osnovni poziv (otvaranje tab-a) takođe re-fetch-uje ako smo
+ * online — cache iz localStorage se i dalje koristi za prvi paint dok DB
+ * sync stigne.
+ */
 export async function refreshUsers(force = false) {
-  if (usersState.loaded && !force) return;
   if (!usersState.items.length) {
     usersState.items = loadUsersCache();
+  }
+  if (usersState.loaded && !force && (!getIsOnline() || !hasSupabaseConfig())) {
+    return;
   }
   if (getIsOnline() && hasSupabaseConfig()) {
     const fresh = await loadUsersFromDb();
@@ -74,6 +87,7 @@ export function renderUsersTab() {
         <option value="inactive"${_filters.status === 'inactive' ? ' selected' : ''}>Neaktivni</option>
       </select>
       <div class="kadrovska-toolbar-spacer"></div>
+      <button type="button" class="btn btn-ghost" id="usersRefreshBtn" title="Osveži listu iz baze (force re-fetch)">↻ Osveži</button>
       <span class="kadrovska-count" id="usersCount">${_filtered().length} ${_filtered().length === 1 ? 'korisnik' : 'korisnika'}</span>
       <span class="kadrovska-info" style="font-size:12px;color:var(--text3);padding:6px 10px;border:1px solid var(--border);border-radius:6px;">
         ℹ Nove uloge se dodaju kroz Supabase SQL Editor
@@ -91,6 +105,7 @@ export function wireUsersTab(root, { onChange } = {}) {
   const search = root.querySelector('#usersSearch');
   const roleF = root.querySelector('#usersRoleFilter');
   const statusF = root.querySelector('#usersStatusFilter');
+  const refreshBtn = root.querySelector('#usersRefreshBtn');
 
   search?.addEventListener('input', () => {
     _filters.search = search.value;
@@ -103,6 +118,22 @@ export function wireUsersTab(root, { onChange } = {}) {
   statusF?.addEventListener('change', () => {
     _filters.status = statusF.value;
     _rerenderTableAndSummary(root);
+  });
+  refreshBtn?.addEventListener('click', async () => {
+    refreshBtn.disabled = true;
+    const orig = refreshBtn.textContent;
+    refreshBtn.textContent = '⟳ Osvežavam…';
+    try {
+      await refreshUsers(true);
+      _rerenderTableAndSummary(root);
+      showToast('✅ Lista osvežena');
+    } catch (e) {
+      console.error('[users] refresh err', e);
+      showToast('⚠ Greška pri osvežavanju');
+    } finally {
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = orig;
+    }
   });
 
   _wireTbody(root);
