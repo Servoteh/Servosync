@@ -26,6 +26,7 @@ import {
   rokUrgencyClass,
   getBigtehnDrawingSignedUrl,
 } from '../../services/planProizvodnje.js';
+import { resolveBigtehnDrawing } from '../../services/drawings.js';
 
 let activeModal = null;
 
@@ -125,19 +126,39 @@ async function loadAndRender(root, workOrderId) {
       });
     });
 
-    /* Inline PDF iframe ispod operacija — lazy load signed URL-a (signed URL
-       sprečava direktno embed-ovanje preko storage_path). */
+    /* Inline PDF iframe ispod operacija — lazy load signed URL-a.
+       Koristi `resolveBigtehnDrawing` za auto-revision fallback: ako je broj
+       crteža u BigTehn-u bez sufiksa (npr. „1133219") a u Storage-u postoje
+       samo revizije („_A", „_B"), automatski uzima najnoviju i obaveštava
+       korisnika u UI-u. */
     const pdfFrame = body.querySelector('[data-role="pdf-frame"]');
     const pdfMsg = body.querySelector('[data-role="pdf-msg"]');
-    if (pdfFrame && header?.has_bigtehn_drawing && header?.broj_crteza) {
+    const pdfTitleEl = body.querySelector('[data-role="pdf-title"]');
+    if (pdfFrame && header?.broj_crteza) {
       try {
-        const url = await getBigtehnDrawingSignedUrl(header.broj_crteza);
-        if (url) {
-          pdfFrame.src = url + '#toolbar=1&view=FitH';
-          pdfFrame.classList.add('is-loaded');
-          if (pdfMsg) pdfMsg.remove();
+        const resolved = await resolveBigtehnDrawing(header.broj_crteza);
+        if (resolved) {
+          /* Koristi rezolvovani drawing_no za signing (može se razlikovati
+             od originalnog zbog auto-revision fallback-a). */
+          const url = await getBigtehnDrawingSignedUrl(resolved.resolvedDrawingNo);
+          if (url) {
+            pdfFrame.src = url + '#toolbar=1&view=FitH';
+            pdfFrame.classList.add('is-loaded');
+            if (pdfMsg) pdfMsg.remove();
+            /* Ako je iskorišćena druga revizija, obavesti korisnika u
+               header-u PDF sekcije + zameni `data-broj` na link-dugmetu
+               „↗ Novi tab" da i taj link otvara TAČNU učitanu reviziju. */
+            if (resolved.isFallback && pdfTitleEl) {
+              pdfTitleEl.innerHTML = `📄 Crtež <strong>${escHtml(resolved.resolvedDrawingNo)}</strong> <span class="tpm-pdf-revnote" title="BigTehn šalje broj bez revizije; prikazana je najnovija dostupna revizija iz Bridge keša.">(najnovija revizija crteža ${escHtml(header.broj_crteza)})</span>`;
+            }
+            const openTabBtn = body.querySelector('.tpm-pdf-open-tab');
+            if (openTabBtn) openTabBtn.dataset.broj = resolved.resolvedDrawingNo;
+          } else if (pdfMsg) {
+            pdfMsg.textContent = `Greška: signed URL nije generisan za "${resolved.resolvedDrawingNo}".`;
+            pdfMsg.classList.add('is-error');
+          }
         } else if (pdfMsg) {
-          pdfMsg.textContent = `PDF crtež "${header.broj_crteza}" nije pronađen u Bridge cache-u.`;
+          pdfMsg.textContent = `PDF crtež "${header.broj_crteza}" (ni jedna revizija) nije pronađen u Bridge cache-u.`;
           pdfMsg.classList.add('is-error');
         }
       } catch (e) {
@@ -255,13 +276,16 @@ function renderOperations(operations, allLogs) {
 
 function renderPdfSection(h) {
   /* Inline PDF crtež ispod tabele operacija — šef vidi sve na jednom ekranu.
-     Ako nema crteža u BigTehn cache-u, sekcija se ne prikazuje. */
-  if (!h || !h.has_bigtehn_drawing || !h.broj_crteza) return '';
+     Renderujemo sekciju za svaki RN koji ima `broj_crteza`. Stvarna
+     dostupnost (exact ili fallback revizija) se rešava async u
+     `loadAndRender` preko `resolveBigtehnDrawing`. Ako ni jedna revizija
+     ne postoji, prikazaće se poruka u tpm-pdf-msg. */
+  if (!h || !h.broj_crteza) return '';
   const broj = h.broj_crteza;
   return `
     <section class="tpm-pdf-section">
       <div class="tpm-pdf-header">
-        <div class="tpm-pdf-title">📄 Crtež <strong>${escHtml(broj)}</strong></div>
+        <div class="tpm-pdf-title" data-role="pdf-title">📄 Crtež <strong>${escHtml(broj)}</strong></div>
         <button type="button" class="tpm-pdf-open-tab" data-action="open-bigtehn-drawing" data-broj="${escHtml(broj)}" title="Otvori u novom tab-u (zoom, štampa)">↗ Novi tab</button>
       </div>
       <div class="tpm-pdf-frame-wrap">

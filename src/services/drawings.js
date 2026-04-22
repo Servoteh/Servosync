@@ -29,27 +29,89 @@ export const BIGTEHN_DRAWINGS_BUCKET = 'bigtehn-drawings';
 export const SIGNED_URL_TTL_SECONDS = 300;
 
 /**
- * Vraća signed URL (default 5 min) za PDF crtež po broju crteža.
- * Vraća null ako broj nije poznat (cache prazan ili Bridge nije sinhronizovao
- * ili je `removed_at` postavljen).
+ * Rezoluje broj crteža na konkretan red iz `bigtehn_drawings_cache`.
  *
- * @param {string} brojCrteza  Naziv crteža (= naziv fajla bez .pdf), npr. "SC-12345"
+ * Strategija:
+ *   1) Exact match (`drawing_no = brojCrteza`)
+ *   2) Fallback: ako exact ne postoji, traži najnoviju reviziju
+ *      (`drawing_no LIKE 'brojCrteza_*'` → uzmi najveću po sortiranju DESC).
+ *      Ovo rešava čest slučaj gde BigTehn šalje broj bez sufiksa
+ *      (npr. „1133219") a u Storage-u postoje samo revizije
+ *      („1133219_A", „1133219_B").
+ *
+ * @returns {Promise<{ resolvedDrawingNo: string, storagePath: string,
+ *                     isFallback: boolean } | null>}
+ */
+export async function resolveBigtehnDrawing(brojCrteza) {
+  if (!getIsOnline() || !brojCrteza) return null;
+  const code = String(brojCrteza).trim();
+  if (!code) return null;
+
+  /* 1) Exact match */
+  {
+    const p = new URLSearchParams();
+    p.set('select', 'drawing_no,storage_path');
+    p.set('drawing_no', `eq.${code}`);
+    p.set('removed_at', 'is.null');
+    p.set('limit', '1');
+    const rows = await sbReq(`bigtehn_drawings_cache?${p.toString()}`);
+    if (Array.isArray(rows) && rows[0]?.storage_path) {
+      return {
+        resolvedDrawingNo: rows[0].drawing_no || code,
+        storagePath: rows[0].storage_path,
+        isFallback: false,
+      };
+    }
+  }
+
+  /* 2) Fallback: traži revizije (`{code}_X`).
+     PostgREST `like.foo*` mapira `*` → SQL `%`. Underscore (`_`) ostaje
+     SQL single-char wildcard, što odgovara našim sufiksima (`_A`, `_B`),
+     ali zbog sigurnosti dodatno filtriramo na klijentu. */
+  const p = new URLSearchParams();
+  p.set('select', 'drawing_no,storage_path');
+  p.set('drawing_no', `like.${code}*`);
+  p.set('removed_at', 'is.null');
+  p.set('order', 'drawing_no.desc');
+  p.set('limit', '50');
+  const rows = await sbReq(`bigtehn_drawings_cache?${p.toString()}`);
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const prefix = code + '_';
+  const candidates = rows.filter(r => {
+    const dn = String(r?.drawing_no || '');
+    return dn === code || dn.startsWith(prefix);
+  });
+  if (candidates.length === 0) return null;
+  /* Već sortirano `drawing_no.desc` → prvi je „najveći" sufiks (B > A). */
+  const top = candidates[0];
+  if (!top.storage_path) return null;
+  return {
+    resolvedDrawingNo: top.drawing_no || code,
+    storagePath: top.storage_path,
+    isFallback: top.drawing_no !== code,
+  };
+}
+
+/**
+ * Vraća signed URL (default 5 min) za PDF crtež po broju crteža.
+ * Sa auto-revision fallback-om: ako exact `brojCrteza` ne postoji u kešu,
+ * koristi najnoviju reviziju (npr. „1133219" → „1133219_B").
+ * Vraća null ako ni jedna revizija ne postoji.
+ *
+ * @param {string} brojCrteza  Naziv crteža (= naziv fajla bez .pdf)
  * @param {number} [expiresIn=SIGNED_URL_TTL_SECONDS]
  */
 export async function getBigtehnDrawingSignedUrl(brojCrteza, expiresIn = SIGNED_URL_TTL_SECONDS) {
-  if (!getIsOnline() || !brojCrteza) return null;
+  const resolved = await resolveBigtehnDrawing(brojCrteza);
+  if (!resolved) return null;
+  return await _signStoragePath(resolved.storagePath, expiresIn);
+}
 
-  /* 1) Lookup storage_path iz cache-a */
-  const params = new URLSearchParams();
-  params.set('select', 'storage_path');
-  params.set('drawing_no', `eq.${brojCrteza}`);
-  params.set('removed_at', 'is.null');
-  params.set('limit', '1');
-  const rows = await sbReq(`bigtehn_drawings_cache?${params.toString()}`);
-  const storagePath = Array.isArray(rows) && rows[0]?.storage_path;
-  if (!storagePath) return null;
-
-  /* 2) Sign */
+/**
+ * Helper koji potpisuje storage path → vraća apsolutni signed URL.
+ * Interna implementacija — ne export-ujemo da ne curi van modula.
+ */
+async function _signStoragePath(storagePath, expiresIn) {
   const user = getCurrentUser();
   const token = user?._token || getSupabaseAnonKey();
   const apiKey = getSupabaseAnonKey();
@@ -68,7 +130,7 @@ export async function getBigtehnDrawingSignedUrl(brojCrteza, expiresIn = SIGNED_
       },
     );
     if (!r.ok) {
-      console.error('[getBigtehnDrawingSignedUrl] failed', r.status);
+      console.error('[_signStoragePath] failed', r.status);
       return null;
     }
     const { signedURL, signedUrl } = await r.json();
@@ -77,7 +139,7 @@ export async function getBigtehnDrawingSignedUrl(brojCrteza, expiresIn = SIGNED_
     if (!rel) return null;
     return baseUrl + '/storage/v1' + (rel.startsWith('/') ? rel : '/' + rel);
   } catch (e) {
-    console.error('[getBigtehnDrawingSignedUrl] exception', e);
+    console.error('[_signStoragePath] exception', e);
     return null;
   }
 }
@@ -85,18 +147,51 @@ export async function getBigtehnDrawingSignedUrl(brojCrteza, expiresIn = SIGNED_
 /**
  * Vrati metapodatke jednog crteža po broju crteža (drawing_no).
  *
+ * Sa auto-revision fallback-om (isto kao `resolveBigtehnDrawing`):
+ *   1) Exact match na `drawing_no`.
+ *   2) Ako exact nema → najnovija revizija (`{drawingNo}_*`).
+ *
+ * Korisno u Plan Montaži dialogu „Veza sa" gde korisnik tipuje broj
+ * bez sufiksa (npr. „1133219") a u Bridge cache-u postoje samo revizije.
+ *
  * @param {string} drawingNo
- * @returns {Promise<{drawing_no:string, storage_path:string, file_name:string, mime_type:string|null, size_bytes:number|null}|null>}
+ * @returns {Promise<{drawing_no:string, storage_path:string, file_name:string, mime_type:string|null, size_bytes:number|null, _isFallback?:boolean}|null>}
  */
 export async function getDrawingByNumber(drawingNo) {
   if (!getIsOnline() || !drawingNo) return null;
-  const params = new URLSearchParams();
-  params.set('select', 'drawing_no,storage_path,file_name,mime_type,size_bytes');
-  params.set('drawing_no', `eq.${String(drawingNo)}`);
-  params.set('removed_at', 'is.null');
-  params.set('limit', '1');
-  const rows = await sbReq(`bigtehn_drawings_cache?${params.toString()}`);
-  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  const code = String(drawingNo).trim();
+  if (!code) return null;
+  const cols = 'drawing_no,storage_path,file_name,mime_type,size_bytes';
+
+  /* 1) Exact */
+  {
+    const p = new URLSearchParams();
+    p.set('select', cols);
+    p.set('drawing_no', `eq.${code}`);
+    p.set('removed_at', 'is.null');
+    p.set('limit', '1');
+    const rows = await sbReq(`bigtehn_drawings_cache?${p.toString()}`);
+    if (Array.isArray(rows) && rows[0]) {
+      return { ...rows[0], _isFallback: false };
+    }
+  }
+
+  /* 2) Fallback: najnovija revizija */
+  const p = new URLSearchParams();
+  p.set('select', cols);
+  p.set('drawing_no', `like.${code}*`);
+  p.set('removed_at', 'is.null');
+  p.set('order', 'drawing_no.desc');
+  p.set('limit', '50');
+  const rows = await sbReq(`bigtehn_drawings_cache?${p.toString()}`);
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const prefix = code + '_';
+  const top = rows.find(r => {
+    const dn = String(r?.drawing_no || '');
+    return dn === code || dn.startsWith(prefix);
+  });
+  if (!top) return null;
+  return { ...top, _isFallback: top.drawing_no !== code };
 }
 
 /**

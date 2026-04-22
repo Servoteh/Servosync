@@ -1176,6 +1176,13 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   color: #fbbf24;
 }
+.tpm-pdf-revnote {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 400;
+  cursor: help;
+  margin-left: 6px;
+}
 .tpm-pdf-open-tab {
   background: var(--surface2);
   border: 1px solid var(--border2);
