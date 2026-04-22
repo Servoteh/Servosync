@@ -31,6 +31,7 @@ import {
 import { openModelDialog } from './modelDialog.js';
 import { openDescriptionDialog } from './descriptionDialog.js';
 import { openLinkedDrawingsDialog } from './linkedDrawingsDialog.js';
+import { openDrawingPdf } from '../../services/drawings.js';
 import {
   STATUSES,
   CHECK_LABELS,
@@ -302,17 +303,23 @@ function _planRowHtml(row, i) {
     ? 'Opis dodeljen — klikni za izmenu'
     : 'Dodaj detaljan opis faze';
 
-  /* „Veza sa“ — povezani crteži za fazu (vidi `linkedDrawingsDialog.js`). */
+  /* „Veza sa" — povezani crteži za fazu.
+   * UX: svaki crtež se renderuje kao zaseban klikabilan chip (📄 SC-XXX) koji
+   * direktno otvara PDF u novom tabu. Pored njih je kompaktno ✏️ dugme koje
+   * otvara modal za dodavanje/uklanjanje (linkedDrawingsDialog.js). Ako lista
+   * još nije popunjena, prikazuje se samo "🔗 ＋ Veza sa" dugme za dodavanje. */
   const linkedNos = Array.isArray(row.linkedDrawings) ? row.linkedDrawings : [];
-  const linkedCount = linkedNos.length;
-  const linkedHasAny = linkedCount > 0;
-  const linkedPreview = linkedNos.slice(0, 5).join(', ')
-    + (linkedCount > 5 ? ', …' : '');
-  const linkedTitle = linkedHasAny
-    ? `Povezani crteži (${linkedCount}): ${linkedPreview}`
-    : (canEdit() ? 'Dodaj brojeve crteža potrebnih za ovu fazu' : 'Nema povezanih crteža');
-  const linkedLabel = linkedHasAny ? `Veza sa (${linkedCount})` : 'Veza sa';
-  const linkedClsExtra = linkedHasAny ? ' has-links' : '';
+  const linkedHasAny = linkedNos.length > 0;
+  const linkedChipsHtml = linkedNos.map(no => `
+    <button type="button" class="phase-linked-chip" data-row-action="open-drawing" data-drawing-no="${escHtml(no)}" title="Otvori PDF crteža u novom tabu">
+      <span class="plc-ic">📄</span><span class="plc-no">${escHtml(no)}</span>
+    </button>
+  `).join('');
+  const linkedManageHtml = linkedHasAny
+    ? `<button type="button" class="row-btn btn-linked-manage" data-row-action="linked" data-ri="${i}" title="Izmeni listu povezanih crteža">✏️</button>`
+    : (canEdit()
+      ? `<button type="button" class="row-btn btn-linked" data-row-action="linked" data-ri="${i}" title="Dodaj brojeve crteža potrebnih za ovu fazu"><span class="rb-ic">🔗</span>＋ Veza sa</button>`
+      : '');
   const dragHandle = canEdit()
     ? `<span class="row-drag-handle" data-drag-handle="${i}" title="Prevuci za promenu redosleda" aria-label="Prevuci za promenu redosleda">⋮⋮</span>`
     : '';
@@ -336,10 +343,13 @@ function _planRowHtml(row, i) {
             <span class="pdb-ic">📝</span><span class="pdb-lbl">opis</span>
           </button>
           <button type="button" class="row-btn btn-3d ${getPhaseModel(row.id) ? 'has-model' : ''}" data-row-action="model" data-ri="${i}" title="${getPhaseModel(row.id) ? '3D: ' + escHtml(getPhaseModel(row.id).name || 'model dodeljen') : '3D model (nema)'}">🧩 3D</button>
-          <button type="button" class="row-btn btn-linked${linkedClsExtra}" data-row-action="linked" data-ri="${i}" title="${escHtml(linkedTitle)}">
-            <span class="rb-ic">🔗</span>${escHtml(linkedLabel)}
-          </button>
         </div>
+        ${(linkedHasAny || canEdit()) ? `
+        <div class="phase-linked-row" aria-label="Povezani crteži">
+          ${linkedHasAny ? '<span class="phase-linked-label">🔗 Crteži:</span>' : ''}
+          ${linkedChipsHtml}
+          ${linkedManageHtml}
+        </div>` : ''}
       </td>
       <td class="td-loc">
         <select class="loc-select" data-field="loc" style="border-left:3px solid ${locColor}" ${dis}>${locOpts}</select>
@@ -550,6 +560,11 @@ function _wireTbody(root) {
       }
       else if (action === 'linked') {
         openLinkedDrawingsDialog(i, () => _onChangeRoot?.());
+        return;
+      }
+      else if (action === 'open-drawing') {
+        const no = btn.dataset.drawingNo;
+        if (no) openDrawingPdf(no);
         return;
       }
       _onChangeRoot?.();

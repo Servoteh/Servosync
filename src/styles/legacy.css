@@ -3508,7 +3508,7 @@ body.pdf-export .tg-wp-filter { display: none !important; }
    Plan Montaze - "Veza sa" (linked drawings) chip + dialog
    ────────────────────────────────────────────────────────────────────── */
 
-/* Chip u desktop tabeli (phase-meta-row), pored 3D dugmeta */
+/* Empty-state dugme „🔗 ＋ Veza sa" (kad faza još nema povezanih crteža) */
 .row-btn.btn-linked {
   background: var(--surface2);
   border: 1px solid var(--border2);
@@ -3521,16 +3521,71 @@ body.pdf-export .tg-wp-filter { display: none !important; }
   border-color: var(--accent);
   color: var(--accent);
 }
-.row-btn.btn-linked.has-links {
-  background: rgba(110, 200, 130, 0.18);
-  border-color: #4ba872;
-  color: #b6e7c4;
-  box-shadow: 0 0 0 1px rgba(110, 200, 130, 0.25) inset;
-}
 .row-btn.btn-linked .rb-ic {
   font-size: 11px;
   line-height: 1;
 }
+/* Kompaktno ✏️ dugme za izmenu liste kada su crteži već povezani */
+.row-btn.btn-linked-manage {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  padding: 2px 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.row-btn.btn-linked-manage:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Red sa chip-ovima ispod phase-meta-row (svaki chip = klikabilan PDF link) */
+.phase-linked-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border);
+}
+.phase-linked-row .phase-linked-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text3);
+  margin-right: 2px;
+}
+.phase-linked-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(110, 200, 130, 0.18);
+  border: 1px solid #4ba872;
+  color: #b6e7c4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: 0 0 0 1px rgba(110, 200, 130, 0.18) inset;
+}
+.phase-linked-chip:hover {
+  filter: brightness(1.15);
+  border-color: var(--accent);
+}
+.phase-linked-chip .plc-ic {
+  font-size: 11px;
+  line-height: 1;
+}
+.phase-linked-chip .plc-no {
+  letter-spacing: 0.02em;
+}
+
+/* Mobile card: chip „has-links" indicator (legacy — još koristi mobile) */
 .m-card-name-meta .row-btn.btn-linked.has-links {
   background: rgba(110, 200, 130, 0.18);
   border-color: #4ba872;
