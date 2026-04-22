@@ -31,6 +31,21 @@ export function setPhaseDescriptionSchemaSupported(v) {
   phaseDescriptionSchemaSupported = !!v;
 }
 
+/* Isti princip: ako DB nema `linked_drawings` jsonb kolonu (migracija
+   `add_phases_linked_drawings.sql` nije pokrenuta), isključujemo je za sesiju
+   da se ostali save-ovi ne ruše. */
+let phaseLinkedDrawingsSchemaSupported = true;
+export function setPhaseLinkedDrawingsSchemaSupported(v) {
+  phaseLinkedDrawingsSchemaSupported = !!v;
+}
+
+/* Isto za WP.assembly_drawing_no (migracija `add_wp_assembly_drawing.sql`).
+   Ako kolona ne postoji, isključujemo je za sesiju. */
+let wpAssemblyDrawingSchemaSupported = true;
+export function setWpAssemblyDrawingSchemaSupported(v) {
+  wpAssemblyDrawingSchemaSupported = !!v;
+}
+
 export function normalizePhaseType(t) {
   const v = String(t || '').toLowerCase();
   return v === 'electrical' || v === 'elektro' || v === 'e' ? 'electrical' : 'mechanical';
@@ -67,6 +82,9 @@ export function mapDbWP(d) {
     defaultLead: d.montage_lead_default || '',
     deadline: d.deadline || '',
     isActive: d.is_active !== false,
+    /* Glavni crtež sklopa za ceo WP („veza sa" na nivou naloga montaže).
+       Tolerantno: ako kolona još ne postoji u DB-u, ostaje ''. */
+    assemblyDrawingNo: typeof d.assembly_drawing_no === 'string' ? d.assembly_drawing_no : '',
     phases: [],
   };
 }
@@ -75,6 +93,11 @@ export function mapDbPhase(d) {
   /* phase_type kolona je opciona — fallback: detektuj iz imena faze. */
   const rawType = d.phase_type
     || (String(d.phase_name || '').toLowerCase().includes('elektro') ? 'electrical' : 'mechanical');
+  /* `linked_drawings` je niz stringova; tolerantno parsiraj — ako je bilo
+     kojom (legacy) greškom snimljen kao non-array, vrati []. */
+  const ld = Array.isArray(d.linked_drawings)
+    ? d.linked_drawings.filter(x => typeof x === 'string' && x.trim() !== '')
+    : [];
   return {
     id: d.id,
     projectId: d.project_id,
@@ -92,6 +115,7 @@ export function mapDbPhase(d) {
     blocker: d.blocker || '',
     description: d.description || '',
     type: normalizePhaseType(rawType),
+    linkedDrawings: ld,
   };
 }
 
@@ -112,7 +136,7 @@ export function buildProjectPayload(p) {
 }
 
 export function buildWPPayload(wp, projectId) {
-  return {
+  const base = {
     id: wp.id,
     project_id: projectId,
     rn_code: wp.rnCode,
@@ -126,6 +150,10 @@ export function buildWPPayload(wp, projectId) {
     is_active: wp.isActive,
     updated_at: new Date().toISOString(),
   };
+  if (wpAssemblyDrawingSchemaSupported) {
+    base.assembly_drawing_no = String(wp.assemblyDrawingNo || '').trim();
+  }
+  return base;
 }
 
 export function buildPhasePayload(ph, projectId, wpId, sortOrder) {
@@ -153,6 +181,17 @@ export function buildPhasePayload(ph, projectId, wpId, sortOrder) {
   }
   if (phaseDescriptionSchemaSupported) {
     base.description = ph.description || '';
+  }
+  if (phaseLinkedDrawingsSchemaSupported) {
+    /* Sanitize: niz stringova, trim, deduplicate (case-sensitive jer su
+       drawing_no tehnički ključevi). */
+    const seen = new Set();
+    const arr = Array.isArray(ph.linkedDrawings) ? ph.linkedDrawings : [];
+    base.linked_drawings = arr.reduce((acc, v) => {
+      const s = String(v == null ? '' : v).trim();
+      if (s && !seen.has(s)) { seen.add(s); acc.push(s); }
+      return acc;
+    }, []);
   }
   return base;
 }
@@ -195,7 +234,20 @@ export async function saveProjectToDb(proj) {
 
 export async function saveWorkPackageToDb(wp, projectId) {
   if (!getIsOnline() || !canEdit()) return null;
-  return await sbReq('work_packages', 'POST', buildWPPayload(wp, projectId));
+  let payload = buildWPPayload(wp, projectId);
+  let res = await sbReq('work_packages', 'POST', payload);
+  if (res === null && payload.assembly_drawing_no !== undefined && wpAssemblyDrawingSchemaSupported) {
+    /* Fallback: kolona `assembly_drawing_no` ne postoji — isključi je za sesiju
+       i probaj ponovo da save WP ne padne kompletno. */
+    setWpAssemblyDrawingSchemaSupported(false);
+    const { assembly_drawing_no, ...rest } = payload;
+    payload = rest;
+    res = await sbReq('work_packages', 'POST', payload);
+    if (res !== null) {
+      console.warn('[wp.assembly_drawing_no] Column not present in DB; skipping. Apply sql/migrations/add_wp_assembly_drawing.sql to enable.');
+    }
+  }
+  return res;
 }
 
 export async function savePhaseToDb(ph, projectId, wpId, sortOrder) {
@@ -216,9 +268,20 @@ export async function savePhaseToDb(ph, projectId, wpId, sortOrder) {
     /* Fallback: kolona `description` ne postoji — isključi je i probaj ponovo. */
     setPhaseDescriptionSchemaSupported(false);
     const { description, ...rest } = payload;
-    res = await sbReq('phases', 'POST', rest);
+    payload = rest;
+    res = await sbReq('phases', 'POST', payload);
     if (res !== null) {
       console.warn('[phase.description] Column not present in DB; skipping description. Apply sql/migrations/add_phase_description.sql to enable.');
+    }
+  }
+  if (res === null && payload.linked_drawings !== undefined && phaseLinkedDrawingsSchemaSupported) {
+    /* Fallback: kolona `linked_drawings` ne postoji — isključi je i probaj ponovo. */
+    setPhaseLinkedDrawingsSchemaSupported(false);
+    const { linked_drawings, ...rest } = payload;
+    payload = rest;
+    res = await sbReq('phases', 'POST', payload);
+    if (res !== null) {
+      console.warn('[phase.linked_drawings] Column not present in DB; skipping linked_drawings. Apply sql/migrations/add_phases_linked_drawings.sql to enable.');
     }
   }
   return res;

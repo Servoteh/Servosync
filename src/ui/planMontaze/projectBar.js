@@ -32,6 +32,8 @@ import {
   saveWorkPackageToDb,
   deleteProjectFromDb,
 } from '../../services/projects.js';
+import { openDrawingPdf } from '../../services/drawings.js';
+import { openWpAssemblyDrawingDialog } from './wpAssemblyDrawingDialog.js';
 
 let panelRoot = null;
 let onChangeCb = null;
@@ -69,6 +71,7 @@ export function wpTabsHtml() {
     .map(w => `<button type="button" class="wp-tab${w.id === planMontazeState.activeWpId ? ' active' : ''}" data-wp-id="${escHtml(w.id)}">${escHtml(w.name)} <span class="wp-code">${escHtml(w.rnCode)}</span></button>`)
     .join('');
   const canAdd = canEdit();
+  const activeWp = getActiveWP();
   return `
     <div class="wp-tabs-wrap">
       <div class="wp-tabs" role="tablist" aria-label="Pozicije projekta">${tabs}</div>
@@ -76,6 +79,35 @@ export function wpTabsHtml() {
         <button type="button" class="btn btn-ghost" id="wpAddBtn" title="Nova pozicija (Work Package)" ${canAdd ? '' : 'disabled'}>＋ Pozicija</button>
         <button type="button" class="btn btn-ghost" id="wpMetaBtn" title="Uredi meta podatke pozicije" ${canAdd ? '' : 'disabled'}>✏️ Meta</button>
       </div>
+    </div>
+    ${_wpAssemblyStripHtml(activeWp, canAdd)}
+  `;
+}
+
+/**
+ * Strip ispod WP tabova: prikazuje „Glavni crtež sklopa" za AKTIVNI WP.
+ *   - Ako je postavljen: chip sa brojem crteža (klik = otvori PDF) + ✏️ izmeni.
+ *   - Ako nije: prazan placeholder + ＋ Poveži (samo edit).
+ *   - Read-only role-ovi vide chip ali nemaju dugme za izmenu.
+ */
+function _wpAssemblyStripHtml(wp, editable) {
+  if (!wp) return '';
+  const no = String(wp.assemblyDrawingNo || '').trim();
+  const hasNo = no.length > 0;
+  const editBtn = editable
+    ? `<button type="button" class="btn btn-ghost wp-assembly-edit" id="wpAssemblyEditBtn" title="${hasNo ? 'Izmeni glavni crtež sklopa' : 'Poveži glavni crtež sklopa'}">${hasNo ? '✏️ Izmeni' : '＋ Poveži'}</button>`
+    : '';
+  const chip = hasNo
+    ? `<button type="button" class="wp-assembly-chip has-no" id="wpAssemblyOpenBtn" title="Otvori PDF u novom tabu">
+         <span class="wp-assembly-ic">📄</span>
+         <span class="wp-assembly-no">${escHtml(no)}</span>
+       </button>`
+    : `<span class="wp-assembly-chip empty" title="Nije postavljen glavni crtež sklopa">— nije postavljeno —</span>`;
+  return `
+    <div class="wp-assembly-strip" aria-label="Glavni crtež sklopa">
+      <span class="wp-assembly-label">🔗 Glavni crtež sklopa:</span>
+      ${chip}
+      ${editBtn}
     </div>
   `;
 }
@@ -229,5 +261,16 @@ export function wireProjectBar(root, { onChange, onEditWpMeta, onEditProjectMeta
   root.querySelector('#wpMetaBtn')?.addEventListener('click', () => {
     if (!getActiveWP()) { showToast('⚠ Nema aktivne pozicije'); return; }
     onEditWpMeta?.();
+  });
+
+  /* WP-level „Veza sa" — glavni crtež sklopa. */
+  root.querySelector('#wpAssemblyOpenBtn')?.addEventListener('click', () => {
+    const wp = getActiveWP();
+    const no = String(wp?.assemblyDrawingNo || '').trim();
+    if (no) openDrawingPdf(no);
+  });
+  root.querySelector('#wpAssemblyEditBtn')?.addEventListener('click', () => {
+    if (!getActiveWP()) { showToast('⚠ Nema aktivne pozicije'); return; }
+    openWpAssemblyDrawingDialog(() => onChangeCb?.());
   });
 }

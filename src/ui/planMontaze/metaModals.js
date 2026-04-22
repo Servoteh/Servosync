@@ -251,8 +251,9 @@ function _wpFormHtml(wp) {
       <label>Rok<input type="date" id="wpDeadline" value="${escHtml(wp.deadline || '')}"></label>
       <label>Podrazumevani odgovorni inženjer<select id="wpDefEng">${personOptionsHtml(ENGINEERS, wp.defaultEngineer)}</select></label>
       <label>Podrazumevani vođa montaže<select id="wpDefLead">${personOptionsHtml(VODJA, wp.defaultLead)}</select></label>
+      <label>Glavni crtež sklopa<input type="text" id="wpAssemblyDrawing" value="${escHtml(wp.assemblyDrawingNo || '')}" placeholder="npr. SC-12345" maxlength="120"></label>
     </div>
-    <div class="form-hint">Kada dodaš novu fazu, automatski dobija ove podrazumevane vrednosti. Postojeće faze se ne menjaju.</div>
+    <div class="form-hint">„Glavni crtež sklopa" je jedan broj crteža koji važi za <em>ceo</em> nalog montaže (sklop ili podsklop). Brojeve crteža za pojedinačne faze podešavaš kroz dugme „🔗 Veza sa" na samoj fazi.</div>
     <div class="form-actions">
       <button type="button" class="btn btn-ghost" id="wpApplyEmpty">↓ Primeni na prazne</button>
       <button type="button" class="btn btn-ghost" id="wpApplyAll">↓ Primeni na sve</button>
@@ -288,6 +289,18 @@ function _wireWpMeta(modal, wp) {
   bind('wpRnCode', 'rnCode');
   bind('wpLocation', 'location');
   bind('wpDeadline', 'deadline');
+
+  /* Glavni crtež sklopa: trim + sanity (max 120) sa porukom ako se prekorači. */
+  modal.querySelector('#wpAssemblyDrawing')?.addEventListener('change', (ev) => {
+    const raw = String(ev.target.value || '').trim();
+    if (raw.length > 120) {
+      showToast('⚠ Maks 120 znakova');
+      ev.target.value = wp.assemblyDrawingNo || '';
+      return;
+    }
+    wp.assemblyDrawingNo = raw;
+    persistAndRefresh();
+  });
 
   modal.querySelector('#wpDefEng')?.addEventListener('change', (ev) => {
     if (ev.target.value === '__add__') {

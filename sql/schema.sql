@@ -32,6 +32,7 @@ CREATE TABLE work_packages (
   deadline DATE,
   sort_order INT DEFAULT 0,
   is_active BOOLEAN DEFAULT true,
+  assembly_drawing_no TEXT NOT NULL DEFAULT '' CHECK (char_length(assembly_drawing_no) <= 120),
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -55,6 +56,8 @@ CREATE TABLE phases (
   blocker TEXT DEFAULT '',
   note TEXT DEFAULT '',
   phase_type TEXT DEFAULT 'mechanical' CHECK (phase_type IN ('mechanical','electrical')),
+  linked_drawings JSONB NOT NULL DEFAULT '[]'::jsonb
+    CHECK (jsonb_typeof(linked_drawings) = 'array'),
   sort_order INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
@@ -65,6 +68,7 @@ CREATE INDEX idx_phases_project ON phases(project_id);
 CREATE INDEX idx_phases_status ON phases(status);
 CREATE INDEX idx_phases_start ON phases(start_date) WHERE start_date IS NOT NULL;
 CREATE INDEX idx_phases_phase_type ON phases(phase_type);
+CREATE INDEX phases_linked_drawings_gin_idx ON phases USING gin (linked_drawings jsonb_path_ops);
 
 -- USER ROLES
 CREATE TABLE user_roles (

@@ -30,6 +30,7 @@ import {
 } from '../../state/planMontaze.js';
 import { openModelDialog } from './modelDialog.js';
 import { openDescriptionDialog } from './descriptionDialog.js';
+import { openLinkedDrawingsDialog } from './linkedDrawingsDialog.js';
 import {
   STATUSES,
   CHECK_LABELS,
@@ -300,6 +301,18 @@ function _planRowHtml(row, i) {
   const descTitle = hasDesc
     ? 'Opis dodeljen — klikni za izmenu'
     : 'Dodaj detaljan opis faze';
+
+  /* „Veza sa“ — povezani crteži za fazu (vidi `linkedDrawingsDialog.js`). */
+  const linkedNos = Array.isArray(row.linkedDrawings) ? row.linkedDrawings : [];
+  const linkedCount = linkedNos.length;
+  const linkedHasAny = linkedCount > 0;
+  const linkedPreview = linkedNos.slice(0, 5).join(', ')
+    + (linkedCount > 5 ? ', …' : '');
+  const linkedTitle = linkedHasAny
+    ? `Povezani crteži (${linkedCount}): ${linkedPreview}`
+    : (canEdit() ? 'Dodaj brojeve crteža potrebnih za ovu fazu' : 'Nema povezanih crteža');
+  const linkedLabel = linkedHasAny ? `Veza sa (${linkedCount})` : 'Veza sa';
+  const linkedClsExtra = linkedHasAny ? ' has-links' : '';
   const dragHandle = canEdit()
     ? `<span class="row-drag-handle" data-drag-handle="${i}" title="Prevuci za promenu redosleda" aria-label="Prevuci za promenu redosleda">⋮⋮</span>`
     : '';
@@ -323,6 +336,9 @@ function _planRowHtml(row, i) {
             <span class="pdb-ic">📝</span><span class="pdb-lbl">opis</span>
           </button>
           <button type="button" class="row-btn btn-3d ${getPhaseModel(row.id) ? 'has-model' : ''}" data-row-action="model" data-ri="${i}" title="${getPhaseModel(row.id) ? '3D: ' + escHtml(getPhaseModel(row.id).name || 'model dodeljen') : '3D model (nema)'}">🧩 3D</button>
+          <button type="button" class="row-btn btn-linked${linkedClsExtra}" data-row-action="linked" data-ri="${i}" title="${escHtml(linkedTitle)}">
+            <span class="rb-ic">🔗</span>${escHtml(linkedLabel)}
+          </button>
         </div>
       </td>
       <td class="td-loc">
@@ -530,6 +546,10 @@ function _wireTbody(root) {
       }
       else if (action === 'desc') {
         openDescriptionDialog(i, () => _onChangeRoot?.());
+        return;
+      }
+      else if (action === 'linked') {
+        openLinkedDrawingsDialog(i, () => _onChangeRoot?.());
         return;
       }
       _onChangeRoot?.();

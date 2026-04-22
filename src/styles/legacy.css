@@ -3504,3 +3504,296 @@ body.pdf-export .tg-group-hdr td {
 body.pdf-export .tg-filter-bar,
 body.pdf-export .tg-wp-filter { display: none !important; }
 
+/* ──────────────────────────────────────────────────────────────────────
+   Plan Montaze - "Veza sa" (linked drawings) chip + dialog
+   ────────────────────────────────────────────────────────────────────── */
+
+/* Chip u desktop tabeli (phase-meta-row), pored 3D dugmeta */
+.row-btn.btn-linked {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.row-btn.btn-linked:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.row-btn.btn-linked.has-links {
+  background: rgba(110, 200, 130, 0.18);
+  border-color: #4ba872;
+  color: #b6e7c4;
+  box-shadow: 0 0 0 1px rgba(110, 200, 130, 0.25) inset;
+}
+.row-btn.btn-linked .rb-ic {
+  font-size: 11px;
+  line-height: 1;
+}
+.m-card-name-meta .row-btn.btn-linked.has-links {
+  background: rgba(110, 200, 130, 0.18);
+  border-color: #4ba872;
+  color: #b6e7c4;
+}
+
+/* Mobile card: red sa povezanim crtežima ispod chipova */
+.m-card-linked {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 0 6px;
+  font-size: 11px;
+  color: var(--text2);
+  border-top: 1px dashed var(--border);
+  margin-top: 4px;
+}
+.m-card-linked .m-linked-label {
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+.m-card-linked .m-linked-list {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+.m-card-linked .m-linked-no {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dotted color-mix(in srgb, var(--accent) 60%, transparent);
+  padding: 0 1px;
+}
+.m-card-linked .m-linked-no:hover {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.m-card-linked .m-linked-empty {
+  color: var(--text3);
+  font-style: italic;
+}
+.m-card-linked .m-linked-edit {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  border-radius: 6px;
+  font-size: 11px;
+  padding: 2px 7px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.m-card-linked .m-linked-edit:hover {
+  background: var(--surface3);
+  color: var(--text);
+}
+
+/* Linked Drawings dialog (linkedDrawingsDialog.js) */
+.modal-panel.ld-panel {
+  max-width: 640px;
+  width: 95vw;
+}
+.ld-panel .ld-subtitle {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+.ld-panel .ld-section {
+  margin-top: 14px;
+}
+.ld-panel .ld-section:first-of-type {
+  margin-top: 0;
+}
+.ld-panel .ld-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+.ld-panel .ld-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 35vh;
+  overflow: auto;
+  padding: 2px;
+}
+.ld-panel .ld-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+}
+.ld-panel .ld-row.ld-row-warn {
+  border-color: color-mix(in srgb, var(--risk-med, #d4a000) 50%, transparent);
+  background: color-mix(in srgb, var(--risk-med, #d4a000) 10%, var(--surface2));
+}
+.ld-panel .ld-no-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  padding: 0;
+  font-size: 12px;
+  min-width: 0;
+}
+.ld-panel .ld-no-code {
+  font-family: var(--mono, monospace);
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.ld-panel .ld-no-btn:hover .ld-no-code {
+  text-decoration: underline;
+}
+.ld-panel .ld-meta-name {
+  color: var(--text2);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.ld-panel .ld-meta-loading,
+.ld-panel .ld-meta-warn {
+  font-size: 11px;
+  color: var(--text3);
+}
+.ld-panel .ld-meta-warn {
+  color: var(--risk-med, #d4a000);
+}
+.ld-panel .ld-btn-open,
+.ld-panel .ld-btn-remove {
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1;
+}
+.ld-panel .ld-btn-open:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.ld-panel .ld-btn-remove:hover {
+  border-color: var(--risk-high, #c44);
+  color: var(--risk-high, #c44);
+}
+.ld-panel .ld-empty {
+  font-size: 12px;
+  color: var(--text3);
+  font-style: italic;
+  padding: 8px 4px;
+}
+.ld-panel .ld-empty.ld-error {
+  color: var(--risk-high, #c44);
+  font-style: normal;
+}
+.ld-panel .ld-rn-row,
+.ld-panel .ld-manual-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.ld-panel .ld-rn-select,
+.ld-panel .ld-manual-input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 12px;
+  min-width: 0;
+}
+.ld-panel .ld-rn-select:focus,
+.ld-panel .ld-manual-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+@media (max-width: 600px) {
+  .ld-panel .ld-rn-row,
+  .ld-panel .ld-manual-row { flex-direction: column; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Plan Montaze — WP-level „Glavni crtež sklopa" strip ispod WP tabova
+   ────────────────────────────────────────────────────────────────────── */
+.wp-assembly-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  margin: 4px 0 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.wp-assembly-strip .wp-assembly-label {
+  font-weight: 600;
+  color: var(--text2);
+  white-space: nowrap;
+}
+.wp-assembly-strip .wp-assembly-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border2);
+  background: var(--surface);
+  color: var(--text2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  cursor: default;
+  text-decoration: none;
+}
+.wp-assembly-strip .wp-assembly-chip.has-no {
+  cursor: pointer;
+  background: rgba(110, 200, 130, 0.18);
+  border-color: #4ba872;
+  color: #b6e7c4;
+  box-shadow: 0 0 0 1px rgba(110, 200, 130, 0.25) inset;
+}
+.wp-assembly-strip .wp-assembly-chip.has-no:hover {
+  filter: brightness(1.12);
+  border-color: var(--accent);
+}
+.wp-assembly-strip .wp-assembly-chip.empty {
+  color: var(--text3);
+  font-style: italic;
+  font-family: inherit;
+}
+.wp-assembly-strip .wp-assembly-ic {
+  font-size: 12px;
+  line-height: 1;
+}
+.wp-assembly-strip .wp-assembly-no {
+  letter-spacing: 0.02em;
+}
+.wp-assembly-strip .wp-assembly-edit {
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .wp-assembly-strip { font-size: 11px; padding: 5px 8px; }
+  .wp-assembly-strip .wp-assembly-edit { margin-left: 0; }
+}
+

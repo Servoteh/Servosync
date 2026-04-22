@@ -96,6 +96,53 @@ export function deletePhaseModel(phaseId) {
 /* ── Mobile expand state (NIJE perzistovan — samo session in-memory) ── */
 export const expandedMobileCards = new Set();
 
+/* ─────────────────────────────────────────────────────────────────────
+   RN drawings cache — keš liste crteža po WP-u, da modal "Veza sa" ne
+   re-fetch-uje pri svakom otvaranju. Ključ: work_package_id (UUID),
+   vrednost: { data: Drawing[], fetchedAt: number(ms) }. TTL 60 s.
+   ───────────────────────────────────────────────────────────────────── */
+export const rnDrawingsCache = new Map();
+const RN_DRAWINGS_TTL_MS = 60 * 1000;
+
+/**
+ * Vrati cache-ovanu listu crteža za WP. Lazy-importuje servis da bi
+ * `state/planMontaze.js` ostao bez tvrde zavisnosti na services sloj.
+ *
+ * @param {string} workPackageId
+ * @param {{ force?: boolean }} [opts]
+ * @returns {Promise<Array<object>>}
+ */
+export async function getCachedDrawingsForWP(workPackageId, { force = false } = {}) {
+  if (!workPackageId) return [];
+  const now = Date.now();
+  if (!force) {
+    const hit = rnDrawingsCache.get(workPackageId);
+    if (hit && (now - hit.fetchedAt) < RN_DRAWINGS_TTL_MS) {
+      return hit.data;
+    }
+  }
+  /* Pronađi RN za WP iz aktivnih projekata. */
+  let rnCode = '';
+  for (const p of allData.projects || []) {
+    const wp = (p.workPackages || []).find(w => w.id === workPackageId);
+    if (wp) { rnCode = wp.rnCode || ''; break; }
+  }
+  if (!rnCode) {
+    rnDrawingsCache.set(workPackageId, { data: [], fetchedAt: now });
+    return [];
+  }
+  /* Lazy import (cikličnu zavisnost izbegavamo). */
+  const { listDrawingsForRnCode } = await import('../services/drawings.js');
+  const data = await listDrawingsForRnCode(rnCode);
+  rnDrawingsCache.set(workPackageId, { data, fetchedAt: now });
+  return data;
+}
+
+export function invalidateRnDrawingsCache(workPackageId) {
+  if (workPackageId) rnDrawingsCache.delete(workPackageId);
+  else rnDrawingsCache.clear();
+}
+
 /* ── Selekcija vertikale u Gantu (po view-u) ── */
 export const selectedDateIndices = {
   gantt: new Set(),
@@ -379,6 +426,7 @@ export function createBlankPhase(name, wp) {
     blocker: '',
     description: '',
     type: _normalizePhaseType(inferType),
+    linkedDrawings: [],
   };
 }
 
@@ -393,6 +441,8 @@ export function createBlankWP(name, rnCode, order) {
     defaultLead: '',
     deadline: '',
     isActive: true,
+    /* Glavni crtež sklopa za ceo WP („veza sa" naloga montaže). */
+    assemblyDrawingNo: '',
     phases: [],
   };
   wp.phases = DEFAULT_PHASES.map(n => createBlankPhase(n, wp));
@@ -436,6 +486,7 @@ export function bootstrapFromLocalCache() {
     planMontazeState.activeProjectId = allData.projects[0].id;
     planMontazeState.activeWpId = allData.projects[0].workPackages?.[0]?.id || null;
     allData.projects.forEach(ensureProjectLocations);
+    _ensurePhaseDefaults();
     return;
   }
   /* Migracija sa starog v5 ključa */
@@ -445,10 +496,26 @@ export function bootstrapFromLocalCache() {
     planMontazeState.activeProjectId = allData.projects[0].id;
     planMontazeState.activeWpId = allData.projects[0].workPackages?.[0]?.id || null;
     allData.projects.forEach(ensureProjectLocations);
+    _ensurePhaseDefaults();
     return;
   }
   /* Brand new */
   allData.projects = [createBlankProject('RN 9000', 'Kovačka linija')];
   planMontazeState.activeProjectId = allData.projects[0].id;
   planMontazeState.activeWpId = allData.projects[0].workPackages[0].id;
+}
+
+/**
+ * Garantuje default-e za polja faze koja su dodata kasnije (npr. `linkedDrawings`)
+ * — sprečava `undefined` kada se učita stariji local cache.
+ */
+function _ensurePhaseDefaults() {
+  for (const proj of allData.projects || []) {
+    for (const wp of proj.workPackages || []) {
+      if (typeof wp.assemblyDrawingNo !== 'string') wp.assemblyDrawingNo = '';
+      for (const ph of wp.phases || []) {
+        if (!Array.isArray(ph.linkedDrawings)) ph.linkedDrawings = [];
+      }
+    }
+  }
 }

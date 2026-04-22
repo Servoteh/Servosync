@@ -32,6 +32,8 @@ import {
 } from '../../state/planMontaze.js';
 import { openModelDialog } from './modelDialog.js';
 import { openDescriptionDialog } from './descriptionDialog.js';
+import { openLinkedDrawingsDialog } from './linkedDrawingsDialog.js';
+import { openDrawingPdf } from '../../services/drawings.js';
 import {
   STATUSES,
   CHECK_SHORT,
@@ -154,7 +156,21 @@ export function wireMobileCards(root, { onChange } = {}) {
         openDescriptionDialog(i, () => onChange?.());
         return;
       }
+      else if (action === 'linked') {
+        openLinkedDrawingsDialog(i, () => onChange?.());
+        return;
+      }
       onChange?.();
+    });
+  });
+
+  /* Klik na pojedinačni broj crteža (link u m-card-linked redu) → otvori PDF. */
+  wrap.querySelectorAll('[data-mlinked-no]').forEach(a => {
+    a.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const no = a.dataset.mlinkedNo;
+      if (no) openDrawingPdf(no);
     });
   });
 }
@@ -209,6 +225,23 @@ function _mobileCardHtml(row, i) {
   const hasDesc = !!(row.description && row.description.trim());
   const hasModel = !!getPhaseModel(row.id);
 
+  /* „Veza sa“ — povezani crteži (linked_drawings) */
+  const linkedNos = Array.isArray(row.linkedDrawings) ? row.linkedDrawings : [];
+  const linkedCount = linkedNos.length;
+  const linksHtml = linkedCount
+    ? linkedNos.map(no => `<a class="m-linked-no" data-stop data-mlinked-no="${escHtml(no)}" href="#" title="Otvori PDF u novom tabu">${escHtml(no)}</a>`).join(', ')
+    : '<span class="m-linked-empty">—</span>';
+  const editBtnHtml = _edit
+    ? `<button type="button" class="m-linked-edit" data-stop data-mrow-action="linked" data-ri="${i}" title="${linkedCount ? 'Izmeni listu crteža' : 'Dodaj povezane crteže'}">${linkedCount ? '✏️' : '＋'}</button>`
+    : '';
+  const linkedRowHtml = `
+    <div class="m-card-linked" data-stop>
+      <span class="m-linked-label">🔗 Veza sa:</span>
+      <span class="m-linked-list">${linksHtml}</span>
+      ${editBtnHtml}
+    </div>
+  `;
+
   /* Lokacija/person opcije */
   const locOpts = _locationOptionsHtml(row.loc);
   const engOpts = _personOptionsHtml(ENGINEERS, row.engineer);
@@ -258,6 +291,7 @@ function _mobileCardHtml(row, i) {
         </div>
         <div class="m-card-badges">${rI} ${rB}</div>
       </div>
+      ${linkedRowHtml}
       <div class="m-card-row" data-mcard-toggle>
         <div class="m-card-field"><span class="m-lbl">Poč:</span> ${formatDate(row.start) || '—'}</div>
         <div class="m-card-field"><span class="m-lbl">Kraj:</span> ${formatDate(row.end) || '—'}</div>
