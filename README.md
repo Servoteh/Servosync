@@ -8,7 +8,7 @@ Modularna Vite + vanilla JS aplikacija za:
 
 Backend: Supabase (Auth + Postgres + RLS).
 
-**Lokacije delova:** [docs/Lokacije_modul.md](docs/Lokacije_modul.md) · **Kadrovska:** [docs/Kadrovska_modul.md](docs/Kadrovska_modul.md) · **Planiranje proizvodnje:** [docs/Planiranje_proizvodnje_modul.md](docs/Planiranje_proizvodnje_modul.md)
+**Plan Montaže:** [docs/Plan_montaze_modul.md](docs/Plan_montaze_modul.md) · **Lokacije delova:** [docs/Lokacije_modul.md](docs/Lokacije_modul.md) · **Kadrovska:** [docs/Kadrovska_modul.md](docs/Kadrovska_modul.md) · **Planiranje proizvodnje:** [docs/Planiranje_proizvodnje_modul.md](docs/Planiranje_proizvodnje_modul.md)
 
 ---
 
@@ -83,6 +83,28 @@ sql/migrations/              # SQL migracije (ručno izvršavanje u Supabase SQL
    npm run build      # → dist/
    npm run preview    # statički preview dist-a na :4173
    ```
+
+### Android (Capacitor) — APK za magacin / Lokacije (`/m`)
+
+Mobilna aplikacija je **Capacitor** omotač oko istog Vite `dist/` kao web
+(`capacitor.config.json`, folder `android/`). Nema posebnog „Android“
+biznis-koda — sve je u `src/` + `npm run build`.
+
+**Za Gradle build APK potreban je JDK 11 ili noviji** (preporuka: **JDK 17
+LTS**). Android Gradle Plugin 8.x **ne radi na Java 8**; `assembleDebug`
+će pasti sa porukom tipa *Dependency requires at least JVM runtime version
+11*. Provera: `java -version` (mora biti 11+, ne `1.8.x`).
+
+Na Windows-u podesi `JAVA_HOME` na JDK 17 i ponovo otvori terminal, zatim:
+
+```bash
+npm run build
+npx cap sync android
+cd android
+.\gradlew.bat assembleDebug
+```
+
+Debug APK obično: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ---
 
