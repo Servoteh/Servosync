@@ -25,6 +25,7 @@ import {
   renderPoMasiniTab,
   teardownPoMasiniTab,
 } from './poMasiniTab.js';
+import { findDeptForMachineCode } from './departments.js';
 import {
   renderZauzetostTab,
   teardownZauzetostTab,
@@ -33,11 +34,9 @@ import {
   renderPregledTab,
   teardownPregledTab,
 } from './pregledTab.js';
-import { resolveDepartmentSlug } from './departments.js';
-import { loadMachines } from '../../services/planProizvodnje.js';
 
-const STORAGE_KEY_LAST_MACHINE    = 'plan-proizvodnje:last-machine';
-const STORAGE_KEY_LAST_DEPARTMENT = 'plan-proizvodnje:last-department';
+const STORAGE_KEY_LAST_MACHINE = 'plan-proizvodnje:last-machine';
+const STORAGE_KEY_LAST_DEPT    = 'plan-proizvodnje:last-department';
 
 const TABS = [
   {
@@ -140,30 +139,15 @@ export function renderPlanProizvodnjeModule(mountEl, { onBackToHub, onLogout }) 
 
 function renderTabBody(host, { canEdit, mountEl, onBackToHub, onLogout }) {
   /* Callback koji "Zauzetost" i "Pregled" tabovi koriste za skok u
-     "Po mašini" sa preselektovanom mašinom.
-     Pored upisa `last-machine`, postavlja i `last-department` na slug
-     odeljenja izabrane mašine — tako se tab odeljenja u „Po mašini"
-     automatski prebacuje, pa korisnik vidi mašinu u dropdown-u (u
-     suprotnom, ako je trenutno aktivan tab na drugom odeljenju, mašina
-     bi bila van filtera i izgledalo bi kao da je nestala).
-     Mašine koje ne mapiraju ni u jednu od fiksnih kategorija pripadaju
-     `ostalo` — i tab se otvara na njemu (ne na 'sve'), da je vizuelni
-     refleks klika konzistentan.
-     Lookup mašine: best-effort fetch (loadMachines koristi cache na
-     supabase strani za `bigtehn_machines_cache`); ako padne, samo se
-     preskače dept-update, mašina se i dalje preselektuje. */
-  const jumpToPoMasini = async (machineCode) => {
+     "Po mašini" sa preselektovanom mašinom. */
+  const jumpToPoMasini = (machineCode) => {
     if (machineCode) {
       localStorage.setItem(STORAGE_KEY_LAST_MACHINE, machineCode);
-      try {
-        const machines = await loadMachines();
-        const m = (machines || []).find(x => x.rj_code === machineCode);
-        if (m) {
-          const slug = resolveDepartmentSlug(m.departmentName);
-          localStorage.setItem(STORAGE_KEY_LAST_DEPARTMENT, slug);
-        }
-      } catch (e) {
-        console.warn('[pp] jumpToPoMasini: nije uspeo lookup odeljenja', e);
+      /* V2: postavi i odeljenje (tab) u kome ta mašina živi, da „Po mašini"
+         odmah otvori odgovarajući tab + drill-down (a ne 'sve' default). */
+      const deptSlug = findDeptForMachineCode(machineCode);
+      if (deptSlug) {
+        localStorage.setItem(STORAGE_KEY_LAST_DEPT, deptSlug);
       }
     }
     if (activeTab !== 'po-masini') {
