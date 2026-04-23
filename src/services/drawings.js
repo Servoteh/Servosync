@@ -78,6 +78,97 @@ export function isPlaceholderDrawingNo(brojCrteza) {
   return sanitizeDrawingNo(brojCrteza) === null;
 }
 
+/**
+ * Batch provera: koji od datih brojeva crteža POSTOJE u Bridge keš-u
+ * (exact match ili bilo koja revizija — `{code}_*`).
+ *
+ * Korisno za UI da prikaže 📄 PDF dugme SAMO za crteže koji su realno
+ * u Bridge keš-u (nema smisla ponuditi „otvori PDF" za fajl koji ne
+ * postoji — korisnik dobije zbunjujuću poruku posle klika).
+ *
+ * Implementacija:
+ *   - Sanitizuje sve ulazne vrednosti (skida tačke, razmake) i odbacuje
+ *     placeholdere (`.`, `..`, prazno).
+ *   - Razdeli unique sanitizovane brojeve u batch-eve od 50, šalje za
+ *     svaki batch jedan PostgREST query sa `or=(in.(...), like.X*, like.Y*)`.
+ *   - Za svaki vraćeni `drawing_no`, izvuče bazu (skidanje sufiksa
+ *     `_<alfanum>`) i ako je u traženom skupu, mark-uje kao postojeći.
+ *
+ * @param {Array<string|null|undefined>} brojCrtezaArr — sirov input iz BigTehn-a
+ * @returns {Promise<Set<string>>} skup SANITIZOVANIH brojeva za koje POSTOJI fajl
+ */
+export async function findExistingDrawings(brojCrtezaArr) {
+  if (!getIsOnline()) return new Set();
+  if (!Array.isArray(brojCrtezaArr) || brojCrtezaArr.length === 0) return new Set();
+
+  /* 1) Sanitizuj + ukloni duplikate i placeholder vrednosti. */
+  const requested = new Set();
+  for (const v of brojCrtezaArr) {
+    const s = sanitizeDrawingNo(v);
+    if (s) requested.add(s);
+  }
+  if (requested.size === 0) return new Set();
+
+  const codes = Array.from(requested);
+  const found = new Set();
+
+  /* 2) Batch po 50 — drži URL ispod ~4 KB (PostgREST/CF limit ~8 KB). */
+  const BATCH = 50;
+  for (let i = 0; i < codes.length; i += BATCH) {
+    const chunk = codes.slice(i, i + BATCH);
+    const chunkSet = new Set(chunk);
+
+    /* PostgREST OR: exact-in + like za svaku reviziju. */
+    const inList = chunk
+      .map(c => encodeURIComponent(c))
+      .join(',');
+    const orParts = [`drawing_no.in.(${inList})`];
+    for (const c of chunk) {
+      /* `like.X*` → `X%` u SQL. Underscore u SQL-u je single-char wildcard
+         (matchuje `_A`, `_B`, ali i bilo šta single-char), pa dodatno
+         filtriramo client-side. */
+      orParts.push(`drawing_no.like.${encodeURIComponent(c + '_')}*`);
+    }
+    const params = new URLSearchParams();
+    params.set('select', 'drawing_no');
+    params.set('removed_at', 'is.null');
+    params.set('or', `(${orParts.join(',')})`);
+    params.set('limit', '5000');
+
+    let rows;
+    try {
+      rows = await sbReq(`bigtehn_drawings_cache?${params.toString()}`);
+    } catch (e) {
+      console.warn('[drawings.findExisting] batch failed', { from: i, size: chunk.length, e });
+      continue;
+    }
+    if (!Array.isArray(rows)) continue;
+
+    for (const r of rows) {
+      const dn = String(r?.drawing_no || '');
+      if (!dn) continue;
+      /* Exact match? */
+      if (chunkSet.has(dn)) {
+        found.add(dn);
+        continue;
+      }
+      /* Revizija? — split na poslednje "_": ako je sufiks alfanumerički
+         (uključujući prazan: `1117721_`), baza mora biti u traženom skupu. */
+      const idx = dn.lastIndexOf('_');
+      if (idx > 0) {
+        const base = dn.slice(0, idx);
+        const suffix = dn.slice(idx + 1);
+        if (/^[A-Z0-9]*$/i.test(suffix) && chunkSet.has(base)) {
+          found.add(base);
+        }
+      }
+    }
+  }
+
+  console.info('[drawings.findExisting]', requested.size, 'requested →', found.size, 'found,', requested.size - found.size, 'missing');
+  return found;
+}
+
 export async function resolveBigtehnDrawing(brojCrteza) {
   const code = sanitizeDrawingNo(brojCrteza);
   if (!code) {

@@ -30,7 +30,7 @@ import {
   plannedSeconds,
   getBigtehnDrawingSignedUrl,
 } from '../../services/planProizvodnje.js';
-import { sanitizeDrawingNo, isPlaceholderDrawingNo } from '../../services/drawings.js';
+import { sanitizeDrawingNo, isPlaceholderDrawingNo, findExistingDrawings } from '../../services/drawings.js';
 import { openDrawingManager } from './drawingManager.js';
 import { openTechProcedureModal } from './techProcedureModal.js';
 
@@ -181,6 +181,12 @@ async function refreshOperations() {
   setRefreshSpinner(true);
   try {
     state.rows = await loadOperationsForMachine(state.selectedMachine);
+    /* Pre-resolve: koji crteži REALNO imaju PDF u Bridge keš-u (exact match
+       ili neka revizija). Ovo je jedan batch query (~50 brojeva po požaru),
+       i mark-uje svaki red sa `_hasPdf` da UI zna da li uopšte renderuje
+       📄 PDF dugme. Ako request padne, fail-safe je `_hasPdf=true` (ostavi
+       dugme — bolje je dati korisniku opciju nego sakriti). */
+    await annotateRowsWithPdfAvailability(state.rows);
   } catch (e) {
     console.error('[pp] loadOperationsForMachine failed', e);
     state.rows = [];
@@ -192,6 +198,31 @@ async function refreshOperations() {
 
   renderTable();
   setCounter(state.rows.length);
+}
+
+async function annotateRowsWithPdfAvailability(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  const sanitizedList = rows
+    .map(r => sanitizeDrawingNo(r.broj_crteza))
+    .filter(Boolean);
+  if (sanitizedList.length === 0) {
+    rows.forEach(r => { r._hasPdf = false; });
+    return;
+  }
+  let existing;
+  try {
+    existing = await findExistingDrawings(sanitizedList);
+  } catch (e) {
+    console.warn('[pp] findExistingDrawings failed → fail-open (prikazuje PDF dugme svuda)', e);
+    rows.forEach(r => {
+      r._hasPdf = !isPlaceholderDrawingNo(r.broj_crteza);
+    });
+    return;
+  }
+  for (const r of rows) {
+    const san = sanitizeDrawingNo(r.broj_crteza);
+    r._hasPdf = !!san && existing.has(san);
+  }
 }
 
 function renderEmptyTable(htmlMsg) {
@@ -268,13 +299,13 @@ function rowHtml(r) {
     r.customer_short || r.customer_name || (r.customer_id ? `#${r.customer_id}` : '—');
 
   /* Broj crteža: BigTehn često ima garbage/dirty vrednosti (`.`, `..`,
-     `1109245.` sa trailing tačkom itd.). Sanitizujemo za prikaz i odluku
-     da li uopšte prikazati 📄 PDF dugme. Ako je placeholder/empty,
-     dugme se NE renderuje (besmisleno je); prikaz pokazuje originalnu
-     vrednost ili `—`. */
+     `1109245.` sa trailing tačkom itd.). Sanitizujemo za prikaz, a
+     `_hasPdf` (set u `annotateRowsWithPdfAvailability` posle učitavanja)
+     odlučuje da li uopšte prikazati 📄 PDF dugme. Tako korisnik vidi
+     dugme SAMO za crteže koji realno imaju PDF u Bridge keš-u. */
   const brojRaw = r.broj_crteza || '';
   const brojSan = sanitizeDrawingNo(brojRaw);
-  const isPlaceholder = isPlaceholderDrawingNo(brojRaw);
+  const showPdfBtn = !!r._hasPdf;
   const brojDisplay = brojSan || (brojRaw && brojRaw.trim() ? brojRaw : '—');
   const brojTooltip = brojSan && brojSan !== brojRaw.trim()
     ? `${brojSan} (BigTehn: "${brojRaw}")`
@@ -324,7 +355,7 @@ function rowHtml(r) {
       <td class="pp-cell-muted pp-cell-drawing" title="${escHtml(brojTooltip)}">
         <div class="pp-drawing-cell">
           <span class="pp-drawing-no">${escHtml(brojDisplay)}</span>
-          ${!isPlaceholder
+          ${showPdfBtn
             ? `<button type="button"
                        class="pp-drawing-pdf-icon"
                        data-action="open-bigtehn-drawing"
