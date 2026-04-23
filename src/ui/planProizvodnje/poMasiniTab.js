@@ -531,6 +531,7 @@ async function onOpenBigtehnDrawing(btn) {
   const brojRaw = btn.dataset.brojRaw || '';
   const broj = (btn.dataset.broj && sanitizeDrawingNo(btn.dataset.broj)) || sanitizeDrawingNo(brojRaw) || btn.dataset.broj;
   if (!broj) return;
+  console.log('[pp-pdf] klik', { broj, brojRaw: brojRaw || undefined, ver: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '?' });
   const tab = window.open('about:blank', '_blank');
   if (!tab) {
     showToast('Pop-up blokiran. Dozvoli pop-up za ovaj sajt.');
@@ -538,6 +539,7 @@ async function onOpenBigtehnDrawing(btn) {
   }
   try {
     const resolved = await resolveBigtehnDrawing(broj);
+    console.log('[pp-pdf] resolve', { broj, ok: !!resolved?.storagePath, path: resolved?.storagePath });
     if (!resolved?.storagePath) {
       tab.close();
       const cleaned = brojRaw && brojRaw.trim() !== broj
@@ -550,11 +552,12 @@ async function onOpenBigtehnDrawing(btn) {
       return;
     }
     const url = await signBigtehnDrawingsStoragePath(resolved.storagePath);
+    console.log('[pp-pdf] sign', { ok: !!url });
     if (!url) {
       tab.close();
       showToast(
         'Storage nije mogao da potpiše PDF (proveri da si prijavljen, ili prava na bucket bigtehn-drawings). ' +
-        'Ako se greška ponavlja, otvori konzolu (F12) i traži [drawings.sign].',
+        'U konzoli (F12) uključi sve nivoe poruka i traži: pp-pdf ili drawings.sign',
       );
       return;
     }

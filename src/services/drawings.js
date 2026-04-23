@@ -180,7 +180,7 @@ export async function findExistingDrawings(brojCrtezaArr) {
     }
   }
 
-  console.info('[drawings.findExisting]', requested.size, 'requested →', found.size, 'found,', requested.size - found.size, 'missing');
+  console.log('[drawings.findExisting]', requested.size, '→', found.size, 'found');
   return found;
 }
 
@@ -194,6 +194,7 @@ export async function resolveBigtehnDrawing(brojCrteza) {
     console.warn('[drawings.resolve] offline → cannot resolve', code);
     return null;
   }
+  console.log('[drawings.resolve] start', code);
 
   /* 1) Exact match na sanitizovan code */
   {
@@ -204,7 +205,7 @@ export async function resolveBigtehnDrawing(brojCrteza) {
     p.set('limit', '1');
     const rows = await sbReq(`bigtehn_drawings_cache?${p.toString()}`);
     if (Array.isArray(rows) && rows[0]?.storage_path) {
-      console.info('[drawings.resolve] exact match', code, '→', rows[0].drawing_no);
+      console.log('[drawings.resolve] exact', code, '→', rows[0].drawing_no);
       return {
         resolvedDrawingNo: rows[0].drawing_no || code,
         storagePath: rows[0].storage_path,
@@ -243,7 +244,7 @@ export async function resolveBigtehnDrawing(brojCrteza) {
     console.warn('[drawings.resolve] candidate without storage_path', top);
     return null;
   }
-  console.info('[drawings.resolve] fallback revision', code, '→', top.drawing_no, '(from', candidates.length, 'candidates)');
+  console.log('[drawings.resolve] revision', code, '→', top.drawing_no);
   return {
     resolvedDrawingNo: top.drawing_no || code,
     storagePath: top.storage_path,
@@ -327,6 +328,8 @@ async function _signStoragePath(storagePath, expiresIn) {
   const token = user?._token || getSupabaseAnonKey();
   const apiKey = getSupabaseAnonKey();
   const baseUrl = getSupabaseUrl();
+  /* console.log (ne .info) — u Chrome-u „Info” nivo često bude isključen u filteru. */
+  console.log('[drawings.sign] start', { path: storagePath, hasUserJwt: !!user?._token });
   if (!baseUrl || !apiKey) {
     console.error('[drawings.sign] missing Supabase config (baseUrl/apiKey)');
     return null;
@@ -353,9 +356,10 @@ async function _signStoragePath(storagePath, expiresIn) {
       const relB = _pickStorageSignRelativeUrl(jBatch);
       const fullB = _absoluteSignedUrl(baseUrl, relB);
       if (fullB) {
-        console.info('[drawings.sign] OK (batch)', storagePath, '→', fullB.slice(0, 88) + '…');
+        console.log('[drawings.sign] OK batch', storagePath);
         return fullB;
       }
+      console.log('[drawings.sign] batch 200 ali prazan signedUrl — telo:', jBatch);
     } else {
       const tb = await rBatch.text().catch(() => '');
       console.warn('[drawings.sign] batch HTTP', rBatch.status, tb.slice(0, 240));
@@ -385,7 +389,7 @@ async function _signStoragePath(storagePath, expiresIn) {
       console.error('[drawings.sign] response missing signed URL', { storagePath, j });
       return null;
     }
-    console.info('[drawings.sign] OK (legacy)', storagePath, '→', fullUrl.slice(0, 88) + '…');
+    console.log('[drawings.sign] OK legacy', storagePath);
     return fullUrl;
   } catch (e) {
     console.error('[drawings.sign] exception', e);
