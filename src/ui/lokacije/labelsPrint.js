@@ -392,12 +392,14 @@ function buildTechLabelHtmlBlock(spec, index = 0) {
  * print dijalogu isključiti „Headers and footers" za TSC profil.
  */
 const TECH_LABEL_CSS = `
-  /* @page postavljen NAMERNO na 38mm umesto fizičkih 40.30mm — Chrome
-   * koristi @page za page-break računanje. Ako sadržaj pređe @page visinu
-   * ZA SAMO PIKSEL, Chrome pravi novu stranu → sledeća fizička nalepnica
-   * dobija pola sadržaja. Sa 38mm imamo ~2.3mm rezerve za browser
-   * line-height/rendering toleranciju. */
-  @page { size: 80mm 38mm; margin: 0; }
+  /* @page postavljen NAMERNO na 77mm × 38mm umesto fizičkih 80.34 × 40.30:
+   *   - 38mm visine: rezerva 2.3mm da Chrome line-height varijacije
+   *     ne izazovu page break (vidi commit ac68565).
+   *   - 77mm širine: Chrome tada renderuje sadržaj u prvih 77mm fizičke
+   *     nalepnice, ostavljajući ~3mm desno — operater javio da se
+   *     prethodna verzija lepila o desnu fizičku ivicu (kalibracija
+   *     stampaca uvek malo offset-uje udesno). */
+  @page { size: 77mm 38mm; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin:0; padding:0; font-family: 'Arial', 'Liberation Sans', sans-serif; color:#000; background:#fff; }
   .toolbar {
@@ -411,7 +413,7 @@ const TECH_LABEL_CSS = `
    * Padding levo/desno = 2mm — IDENTICNO sa barkod quiet zone-om, tako da
    * tekst NIKAD ne moze da bude siri od barkoda (poravnati levi i desni rub). */
   .label {
-    width: 80mm; height: 38mm; max-height: 38mm;
+    width: 77mm; height: 38mm; max-height: 38mm;
     padding: 0.4mm 2mm; /* top/bottom 0.4mm = 0.0157", left/right 2mm = align sa barkodom */
     display: flex; flex-direction: column;
     gap: 0.2mm;

@@ -133,11 +133,13 @@ export function buildTspLabelProgram(spec) {
    */
 
   /* PAD_LEFT je IDENTICAN sa BC_X (2mm) tako da levi rub teksta i barkoda
-   * budu poravnati. RIGHT_HALF_X = 41mm (centar nalepnice).
-   * Tekst nikad ne sme biti siri od barkoda (~76mm), pa je truncFit na
-   * desnim celijama postavljen tako da staju u 36mm. */
+   * budu poravnati. RIGHT_HALF_X = 38mm (pomereno 3mm levo od centra
+   * jer printer kalibracija blago offset-uje udesno; operater javio
+   * da se sadrzaj lepio za desnu fizicku ivicu).
+   * Tekst nikad ne sme biti siri od ~74mm (umesto 76mm), pa je truncFit
+   * na desnim celijama smanjen na 24 chars (sa 28). */
   const PAD_LEFT = mm(2);
-  const RIGHT_HALF_X = mm(41);
+  const RIGHT_HALF_X = mm(38);
 
   /* ─ Visina budžeta (40.30mm fizički):
    *   y=0.5mm pad
@@ -152,33 +154,33 @@ export function buildTspLabelProgram(spec) {
 
   /* ─ Red 1: Broj Predmeta (levo, naglašen) | Komitent (desno) ─ */
   if (f.brojPredmeta) {
-    lines.push(`TEXT ${PAD_LEFT},${mm(0.5)},"4",0,1,1,${tsplStr(truncFit(f.brojPredmeta, 18))}`);
+    lines.push(`TEXT ${PAD_LEFT},${mm(0.5)},"4",0,1,1,${tsplStr(truncFit(f.brojPredmeta, 16))}`);
   }
   if (f.komitent) {
-    lines.push(`TEXT ${RIGHT_HALF_X},${mm(1.2)},"2",0,1,1,${tsplStr(truncFit(f.komitent, 28))}`);
+    lines.push(`TEXT ${RIGHT_HALF_X},${mm(1.2)},"2",0,1,1,${tsplStr(truncFit(f.komitent, 24))}`);
   }
 
-  /* ─ Red 2: Naziv predmeta (full width) ─ */
+  /* ─ Red 2: Naziv predmeta (full width, max ~74mm = ~58 char na font "2") ─ */
   if (f.nazivPredmeta) {
-    lines.push(`TEXT ${PAD_LEFT},${mm(4.5)},"2",0,1,1,${tsplStr(truncFit(f.nazivPredmeta, 60))}`);
+    lines.push(`TEXT ${PAD_LEFT},${mm(4.5)},"2",0,1,1,${tsplStr(truncFit(f.nazivPredmeta, 58))}`);
   }
 
   /* ─ Red 3: Naziv dela (full width) ─ */
   if (f.nazivDela) {
-    lines.push(`TEXT ${PAD_LEFT},${mm(7)},"2",0,1,1,${tsplStr(truncFit(f.nazivDela, 60))}`);
+    lines.push(`TEXT ${PAD_LEFT},${mm(7)},"2",0,1,1,${tsplStr(truncFit(f.nazivDela, 58))}`);
   }
 
   /* ─ Red 4: Broj crteža (levo) | Materijal (desno) ─ */
   if (f.brojCrteza) {
-    lines.push(`TEXT ${PAD_LEFT},${mm(9.5)},"2",0,1,1,${tsplStr('Crtez: ' + truncFit(f.brojCrteza, 18))}`);
+    lines.push(`TEXT ${PAD_LEFT},${mm(9.5)},"2",0,1,1,${tsplStr('Crtez: ' + truncFit(f.brojCrteza, 16))}`);
   }
   if (f.materijal) {
-    lines.push(`TEXT ${RIGHT_HALF_X},${mm(9.5)},"2",0,1,1,${tsplStr(truncFit(f.materijal, 28))}`);
+    lines.push(`TEXT ${RIGHT_HALF_X},${mm(9.5)},"2",0,1,1,${tsplStr(truncFit(f.materijal, 24))}`);
   }
 
   /* ─ Red 5: Količina (levo) | Datum (desno) ─ */
   if (f.kolicina) {
-    lines.push(`TEXT ${PAD_LEFT},${mm(12)},"2",0,1,1,${tsplStr('Kol: ' + truncFit(f.kolicina, 18))}`);
+    lines.push(`TEXT ${PAD_LEFT},${mm(12)},"2",0,1,1,${tsplStr('Kol: ' + truncFit(f.kolicina, 16))}`);
   }
   if (f.datum) {
     lines.push(`TEXT ${RIGHT_HALF_X},${mm(12)},"2",0,1,1,${tsplStr(f.datum)}`);
