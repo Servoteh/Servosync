@@ -97,6 +97,20 @@ export function isPlaceholderDrawingNo(brojCrteza) {
  * @param {Array<string|null|undefined>} brojCrtezaArr — sirov input iz BigTehn-a
  * @returns {Promise<Set<string>>} skup SANITIZOVANIH brojeva za koje POSTOJI fajl
  */
+/** PostgREST: vrednost u zagradi mora biti u dvostrukim navodnicima ako sadrži `.`, `/`, itd. */
+function postgrestQuotedAtom(s) {
+  return `"${String(s).replace(/"/g, '""')}"`;
+}
+
+/** `like` filter za prefix `{code}_` + SQL `%` (PostgREST `*` na kraju). */
+function postgrestLikeRevPrefix(code) {
+  const p = String(code) + '_';
+  if (/^[0-9A-Za-z_-]+$/.test(p)) {
+    return `${p}*`;
+  }
+  return `${postgrestQuotedAtom(p)}*`;
+}
+
 export async function findExistingDrawings(brojCrtezaArr) {
   if (!getIsOnline()) return new Set();
   if (!Array.isArray(brojCrtezaArr) || brojCrtezaArr.length === 0) return new Set();
@@ -118,19 +132,19 @@ export async function findExistingDrawings(brojCrtezaArr) {
     const chunk = codes.slice(i, i + BATCH);
     const chunkSet = new Set(chunk);
 
-    /* PostgREST OR: exact-in + like za svaku reviziju. */
-    const inList = chunk
-      .map(c => encodeURIComponent(c))
-      .join(',');
+    /* PostgREST OR: exact-in + like za svaku reviziju.
+       VAŽNO: NE koristiti encodeURIComponent() na delovima `or` vrednosti — ceo
+       query-string enkoduje URLSearchParams JEDNOM. Duplo enkodovanje (`%2F`
+       → `%252F`) lomi filter za crteže sa kosom crtom (`2.04-2081/4`) i
+       čitav batch pada → UI misli da nema PDF-ova ili daje pogrešne flag-ove. */
+    const inList = chunk.map(postgrestQuotedAtom).join(',');
     const orParts = [`drawing_no.in.(${inList})`];
     for (const c of chunk) {
-      /* `like.X*` → `X%` u SQL. Underscore u SQL-u je single-char wildcard
-         (matchuje `_A`, `_B`, ali i bilo šta single-char), pa dodatno
-         filtriramo client-side. */
-      orParts.push(`drawing_no.like.${encodeURIComponent(c + '_')}*`);
+      /* Prefix `{code}_` + wildcard (isti smisao kao resolveBigtehnDrawing). */
+      orParts.push(`drawing_no.like.${postgrestLikeRevPrefix(c)}`);
     }
     const params = new URLSearchParams();
-    params.set('select', 'drawing_no');
+    params.set('select', 'drawing_no,storage_path');
     params.set('removed_at', 'is.null');
     params.set('or', `(${orParts.join(',')})`);
     params.set('limit', '5000');
@@ -146,7 +160,8 @@ export async function findExistingDrawings(brojCrtezaArr) {
 
     for (const r of rows) {
       const dn = String(r?.drawing_no || '');
-      if (!dn) continue;
+      const sp = String(r?.storage_path || '').trim();
+      if (!dn || !sp) continue;
       /* Exact match? */
       if (chunkSet.has(dn)) {
         found.add(dn);
