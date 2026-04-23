@@ -57,6 +57,7 @@ import {
   barcodeForPlacementRow,
 } from './labelsPrint.js';
 import { renderPredmetTab } from './predmetTab.js';
+import { renderLabelsPrintPage, resetLabelsPrintPageState } from './labelsPrintPage.js';
 import { openTechProcedureModal } from '../planProizvodnje/techProcedureModal.js';
 
 /* Jeftina provera može li kamera — bez uvoza barcode modula (koji vuče ZXing).
@@ -74,6 +75,7 @@ const TABS = [
   { id: 'browse', label: 'Lokacije' },
   { id: 'items', label: 'Stavke' },
   { id: 'report', label: 'Pregled po lokacijama' },
+  { id: 'labels', label: '🏷 Štampa nalepnica' },
   { id: 'history', label: 'Istorija' },
   { id: 'sync', label: 'Sync', adminOnly: true },
 ];
@@ -928,6 +930,15 @@ async function renderPanel(host, tabId) {
     return;
   }
 
+  if (tabId === 'labels') {
+    /* „Štampa nalepnica" — multi-select predmeti + TP queue + batch print.
+     * Reuse-uje BigTehn search RPC-ove i `printTechProcessLabelsBatch`.
+     * Ne zovemo locToolbarHtml jer ovaj tab ima sopstveni „Štampaj N
+     * nalepnica" CTA + svoj layout (vidi `labelsPrintPage.js`). */
+    await renderLabelsPrintPage(host, { onRefresh: refreshLocPanel });
+    return;
+  }
+
   if (tabId === 'browse') {
     const locs = await fetchLocations({ activeOnly: !showInactiveLocations });
     const canEditLocs = canEdit();
@@ -1689,4 +1700,6 @@ export function teardownLokacijeModule() {
   mountRef = null;
   locPanelHost = null;
   historyUsersCache = null;
+  /* In-memory queue za štampu nalepnica nestaje pri logout-u modula. */
+  resetLabelsPrintPageState();
 }

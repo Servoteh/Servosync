@@ -1,6 +1,18 @@
 /**
  * Nalepnice — priprema podataka, print-ready HTML, štampa u pregledaču (Ctrl+P).
  * Opcioni LAN adapter: `VITE_LABEL_PRINTER_PROXY_URL` (POST JSON) za TSC gateway.
+ *
+ * **Layout TP nalepnice (80×50mm portrait, redizajn 2026-04):**
+ *   - Tekst gore (8 polja, key:value, kompaktno)
+ *   - Horizontalni CODE128 barkod dole, FULL WIDTH minus 2mm quiet zone svake strane
+ *   - `@page { margin: 0 }` da Chrome NE doda datum / URL / page-num u sam label
+ *   - Operater jednom u Chrome print dijalogu isključi „Headers and footers" za TSC printer
+ *
+ * **TSC ML340P (300 DPI) — clean path:**
+ *   Ako je `VITE_LABEL_PRINTER_PROXY_URL` postavljen, šaljemo JSON koji UZ
+ *   `payload.fields` sadrži i `payload.tspl2` — raw TSPL2 program kojim
+ *   lokalni agent piše direktno u TCP 9100 na štampač (zaobilazi browser
+ *   print headers/footers u potpunosti). Vidi `src/lib/tspl2.js`.
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
@@ -10,6 +22,7 @@ import {
   searchBigtehnWorkOrdersForItem,
 } from '../../services/lokacije.js';
 import { formatBigTehnRnzBarcode, formatBigTehnShortBarcode } from '../../lib/barcodeParse.js';
+import { buildTspLabelProgram, buildTspShelfLabelProgram } from '../../lib/tspl2.js';
 
 const SHELF_TYPES = ['SHELF', 'RACK', 'BIN'];
 
@@ -185,9 +198,20 @@ export async function printShelfLabelsToBrowserWindow(locs) {
   if (w.document.readyState === 'complete') runWhenReady();
   else w.addEventListener('load', runWhenReady, { once: true });
 
+  let tspl2 = '';
+  try {
+    tspl2 = locs
+      .map(l => buildTspShelfLabelProgram({ location_code: l.location_code, name: l.name, copies: 1 }))
+      .join('');
+  } catch (e) {
+    console.warn('[labels/shelf] TSPL2 build failed:', e);
+  }
   void dispatchOptionalNetworkLabelPrint({
     mode: 'shelf',
-    payload: { locations: locs.map(l => ({ id: l.id, code: l.location_code, name: l.name })) },
+    payload: {
+      locations: locs.map(l => ({ id: l.id, code: l.location_code, name: l.name })),
+      tspl2,
+    },
   });
 }
 
@@ -314,11 +338,98 @@ export async function openShelfLabelsPrintPicker() {
 }
 
 /**
- * Štampa jednu nalepnicu za tehnološki postupak. Layout odgovara uzorku
- * koji magacin već koristi (slika dostavljena uz zahtev): 8 tekstualnih
- * polja + Code128 barkod (RNZ format kompatibilan sa postojećim skenerima).
+ * Generiše HTML stranu za jednu TP nalepnicu (80×50mm portrait, tekst gore +
+ * horizontalni barkod dole full-width). Izdvojeno radi reuse-a u batch
+ * štampi (više nalepnica u jednom otisku — vidi `printTechProcessLabelsBatch`).
  *
- * Polja (`spec.fields`):
+ * Layout:
+ *   - `@page { size: 80mm 50mm; margin: 0 }` — kritično da Chrome NE doda
+ *     datum / URL / naslov / broj strane u sam label (operater takođe mora
+ *     jednom u print dijalogu isključiti „Headers and footers").
+ *   - `.label` element je `page-break-after: always` — svaki label ide na
+ *     svoju fizičku nalepnicu u rolni.
+ *
+ * @param {{ fields: object, barcodeValue: string }} spec
+ * @param {number} index 0-based redni broj nalepnice u batch-u (za jedinstveni `id` SVG-a)
+ * @returns {string}
+ */
+function buildTechLabelHtmlBlock(spec, index = 0) {
+  const f = spec?.fields || {};
+  const row = (label, value, opts = {}) => {
+    const v = value == null || value === '' ? '—' : String(value);
+    return `<div class="lbl-row${opts.small ? ' lbl-small' : ''}${opts.big ? ' lbl-big' : ''}"><span class="lbl-k">${escHtml(label)}:</span> <span class="lbl-v">${escHtml(v)}</span></div>`;
+  };
+  return `<div class="label" data-bc-idx="${index}">
+    <div class="lbl-meta">
+      ${row('RN', f.brojPredmeta, { big: true })}
+      ${row('Komitent', f.komitent)}
+      ${row('Predmet', f.nazivPredmeta)}
+      ${row('Deo', f.nazivDela)}
+      ${row('Crtež', f.brojCrteza)}
+      ${row('Količina', f.kolicina)}
+      ${row('Materijal', f.materijal)}
+      ${row('Datum', f.datum, { small: true })}
+    </div>
+    <div class="lbl-bc"><svg id="bc_${index}"></svg></div>
+  </div>`;
+}
+
+/**
+ * CSS koji se reuse-uje za TP nalepnice — sve dimenzije u mm da bi
+ * @page i printer dimenzije bile predvidljive (px ↔ mm konverzija u
+ * Chrome-u zavisi od zoom i system DPI, mm je apsolutno).
+ *
+ * Kritično: `@page { margin: 0 }` + `body { margin: 0 }` + prazan
+ * `<title>` značajno smanjuje šansu da Chrome ubaci browser headers
+ * (datum/URL/page-number) na sam label. Operater takođe MORA jednom u
+ * print dijalogu isključiti „Headers and footers" za TSC profil.
+ */
+const TECH_LABEL_CSS = `
+  @page { size: 80mm 50mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; font-family: 'Arial', 'Liberation Sans', sans-serif; color:#000; background:#fff; }
+  .toolbar {
+    position: sticky; top: 0; z-index: 10;
+    padding: 8px 12px; background:#eef; font-size:12px; border-bottom:1px solid #99c;
+  }
+  .toolbar button { margin-left:8px; padding:4px 10px; cursor:pointer; }
+  .toolbar .hint { color:#444; margin-left:12px; }
+  .label {
+    width: 80mm; height: 50mm;
+    padding: 1.5mm 2mm 1mm;
+    display: flex; flex-direction: column;
+    gap: 0.5mm;
+    page-break-after: always;
+    break-after: page;
+    overflow: hidden;
+  }
+  .label:last-child { page-break-after: auto; break-after: auto; }
+  .lbl-meta { display: flex; flex-direction: column; gap: 0.2mm; flex: 0 0 auto; }
+  .lbl-row { font-size: 7.2pt; line-height: 1.15; word-break: break-word; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lbl-row .lbl-k { font-weight: 700; }
+  .lbl-row .lbl-v { font-weight: 500; }
+  .lbl-small { font-size: 6.4pt; }
+  .lbl-big { font-size: 11pt; line-height: 1.1; margin-bottom: 0.4mm; }
+  .lbl-bc {
+    flex: 1 1 auto; min-height: 18mm;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 0.5mm;
+    padding: 0 2mm; /* quiet zone leva i desna strana */
+  }
+  .lbl-bc svg { width: 100%; height: 100%; max-height: 22mm; }
+  @media print {
+    .toolbar { display: none !important; }
+    body { margin:0; padding:0; }
+    .label { border: 0; }
+  }
+`;
+
+/**
+ * Štampa jednu ili više TP nalepnica u jednom prozoru (svaka na svoj papir).
+ * Layout: tekst gore (RN, komitent, predmet, deo, crtež, količina, materijal,
+ * datum), CODE128 barkod dole — full-width minus 2mm quiet zone svake strane.
+ *
+ * Polja (`fields`):
  *   - brojPredmeta   → wo.ident_broj (npr. „7351/1088")
  *   - komitent       → bigtehn_customers_cache.name
  *   - nazivPredmeta  → bigtehn_items_cache.naziv_predmeta
@@ -327,18 +438,31 @@ export async function openShelfLabelsPrintPicker() {
  *   - kolicina       → „<print_qty>/<komada_rn>" (npr. „1/1")
  *   - materijal      → wo.materijal
  *   - datum          → DD-MM-YY (lokalno)
- * `spec.barcodeValue` — RNZ string iz `formatBigTehnRnzBarcode(...)`.
+ * `barcodeValue` — RNZ string iz `formatBigTehnRnzBarcode(...)`.
  *
- * @param {{
+ * @param {Array<{
  *   fields: {
  *     brojPredmeta?: string, komitent?: string, nazivPredmeta?: string,
  *     nazivDela?: string, brojCrteza?: string, kolicina?: string,
  *     materijal?: string, datum?: string,
  *   },
  *   barcodeValue: string,
- * }} spec
+ *   copies?: number,
+ * }>} specs
  */
-export async function printTechProcessLabelWindow(spec) {
+export async function printTechProcessLabelsBatch(specs) {
+  if (!Array.isArray(specs) || !specs.length) {
+    showToast('⚠ Nema nalepnica za štampu');
+    return;
+  }
+
+  /* Razvi `copies` u flat listu: ako spec ima copies=3, ide 3x u listu. */
+  const flat = [];
+  for (const s of specs) {
+    const n = Math.max(1, Math.floor(Number(s?.copies) || 1));
+    for (let i = 0; i < n; i++) flat.push(s);
+  }
+
   const mod = await import('jsbarcode');
   const JsBarcode = mod.default || mod;
   const w = window.open('', '_blank');
@@ -346,74 +470,77 @@ export async function printTechProcessLabelWindow(spec) {
     showToast('⚠ Dozvoli pop-up');
     return;
   }
-  const f = spec?.fields || {};
-  const row = (label, value, opts = {}) => {
-    const v = value == null || value === '' ? '—' : String(value);
-    return `<div class="lbl-row${opts.small ? ' lbl-small' : ''}"><span class="lbl-k">${escHtml(label)}:</span> <span class="lbl-v">${escHtml(v)}</span></div>`;
-  };
-  w.document.write(`<!DOCTYPE html><html lang="sr-Latn"><head><meta charset="UTF-8"><title>Nalepnica TP — ${escHtml(f.brojPredmeta || '')}</title>
-  <style>
-    @page { size: 80mm 50mm; margin: 1mm; }
-    * { box-sizing: border-box; }
-    html, body { margin:0; padding:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#000; background:#fff; }
-    .toolbar { padding: 8px 12px; background:#eef; font-size:12px; border-bottom:1px solid #99c; }
-    .toolbar button { margin-left:8px; padding:4px 10px; cursor:pointer; }
-    .label {
-      width: 78mm; min-height: 48mm;
-      padding: 1.5mm 2mm;
-      display: grid; grid-template-columns: 28mm 1fr; gap: 2mm;
-      align-items: center;
-      border: 0;
-    }
-    .lbl-bc { display: flex; align-items: center; justify-content: center; }
-    .lbl-bc svg { width: 27mm; height: 46mm; transform: rotate(90deg); transform-origin: center; }
-    .lbl-meta { display: flex; flex-direction: column; gap: 0.6mm; min-width: 0; }
-    .lbl-row { font-size: 8.2pt; line-height: 1.2; word-break: break-word; }
-    .lbl-row .lbl-k { font-weight: 700; }
-    .lbl-row .lbl-v { font-weight: 500; }
-    .lbl-small { font-size: 7.4pt; }
-    @media print { .toolbar { display: none; } .label { border: 0; } }
-  </style></head><body>
+
+  const labelsHtml = flat.map((s, i) => buildTechLabelHtmlBlock(s, i)).join('');
+  const totalCount = flat.length;
+  const firstRn = String(flat[0]?.fields?.brojPredmeta || '');
+
+  /* Prazan <title> da Chrome ne odštampa „Nalepnica TP — 7351/1088" u
+   * gornjem-levom uglu papira (deo „datum i naslov na sredini papira"
+   * problema o kome operater govori). */
+  w.document.write(`<!DOCTYPE html><html lang="sr-Latn"><head><meta charset="UTF-8"><title> </title>
+  <style>${TECH_LABEL_CSS}</style></head><body>
   <div class="toolbar">
-    Nalepnica TP <strong>${escHtml(f.brojPredmeta || '')}</strong>.
-    Pritisni <strong>Ctrl + P</strong> za štampu.
+    <strong>${totalCount}</strong> nalepnic${totalCount === 1 ? 'a' : totalCount < 5 ? 'e' : 'a'}${firstRn ? ` (prva: <strong>${escHtml(firstRn)}</strong>)` : ''}.
     <button onclick="window.print()">Štampaj</button>
     <button onclick="window.close()">Zatvori</button>
+    <span class="hint">U Chrome dijalogu ▸ <em>More settings</em> ▸ isključi <em>Headers and footers</em> i postavi marginu na <em>None</em> (samo prvi put po štampaču).</span>
   </div>
-  <div class="label">
-    <div class="lbl-bc"><svg id="bc"></svg></div>
-    <div class="lbl-meta">
-      ${row('Broj predmeta', f.brojPredmeta)}
-      ${row('Komitent', f.komitent)}
-      ${row('Naziv predmeta', f.nazivPredmeta)}
-      ${row('Naziv dela', f.nazivDela)}
-      ${row('Broj crteža', f.brojCrteza)}
-      ${row('Količina', f.kolicina)}
-      ${row('Materijal', f.materijal)}
-      ${row('Datum', f.datum, { small: true })}
-    </div>
-  </div>
+  ${labelsHtml}
   </body></html>`);
   w.document.close();
+
   const run = () => {
-    const svg = w.document.getElementById('bc');
-    if (svg && spec.barcodeValue) {
-      JsBarcode(svg, String(spec.barcodeValue).trim(), {
-        format: 'CODE128',
-        displayValue: false,
-        margin: 0,
-        height: 60,
-        width: 1.4,
-      });
-    }
+    flat.forEach((s, i) => {
+      const svg = w.document.getElementById(`bc_${i}`);
+      if (!svg || !s.barcodeValue) return;
+      try {
+        JsBarcode(svg, String(s.barcodeValue).trim(), {
+          format: 'CODE128',
+          displayValue: false,
+          margin: 0,
+          height: 80,
+          width: 2.2,
+          background: '#ffffff',
+          lineColor: '#000000',
+        });
+      } catch (e) {
+        console.error('[labels/tp] JsBarcode render failed for', s.barcodeValue, e);
+      }
+    });
   };
   if (w.document.readyState === 'complete') run();
   else w.addEventListener('load', run, { once: true });
 
+  /* TSPL2 paralelno — ako proxy postoji, šalje raw program direktno
+   * štampaču (zaobilazi sve browser print artifacts). Browser print
+   * ostaje kao fallback / preview. */
+  let tspl2 = '';
+  try {
+    tspl2 = flat
+      .map(s => buildTspLabelProgram({ fields: s.fields, barcodeValue: s.barcodeValue, copies: 1 }))
+      .join('');
+  } catch (e) {
+    console.warn('[labels/tp] TSPL2 build failed:', e);
+  }
   void dispatchOptionalNetworkLabelPrint({
-    mode: 'tech_process',
-    payload: { barcode: spec.barcodeValue, fields: spec.fields },
+    mode: 'tech_process_batch',
+    count: totalCount,
+    payload: {
+      labels: flat.map(s => ({ barcode: s.barcodeValue, fields: s.fields })),
+      tspl2,
+    },
   });
+}
+
+/**
+ * Backward-compatible single-label API. Pozivi iz starog koda
+ * (`printTechProcessLabelWindow({fields, barcodeValue})`) i dalje rade.
+ *
+ * @param {{ fields: object, barcodeValue: string }} spec
+ */
+export async function printTechProcessLabelWindow(spec) {
+  return printTechProcessLabelsBatch([spec]);
 }
 
 export function barcodeForPlacementRow(p) {
@@ -445,18 +572,22 @@ function todayStrDDMMYY() {
 }
 
 /**
- * Modal za štampu nalepnice za tehnološki postupak — usklađen sa zahtevom:
+ * Modal za štampu nalepnice za tehnološki postupak.
  *
- *   1. Combobox „Predmet" — pretraga BigTehn `bigtehn_items_cache` (samo
- *      aktuelni: status='U TOKU' AND datum_zakljucenja IS NULL).
- *   2. Po izboru predmeta, učita se lista TP-ova (otvoreni RN-ovi za taj
- *      predmet) sa pretragom unutar liste.
- *   3. Korisnik bira TP iz liste (validacija — bez slobodnog unosa, jer
- *      naknadno skeniranje ne bi pronašlo zapis ako ga nema u BigTehn-u).
- *   4. Korisnik unosi količinu za štampu (može biti manja od ukupne).
- *   5. Štampa nalepnicu sa svim poljima (Broj predmeta, Komitent, Naziv
- *      predmeta, Naziv dela, Broj crteža, Količina, Materijal, Datum) +
- *      Code128 RNZ barkod (postojeći standard koji skener već čita).
+ * Tok (refaktor 2026-04 — Task 3a):
+ *
+ *   1. Predmet picker — pretraga BigTehn `bigtehn_items_cache` (samo aktuelni).
+ *   2. Po izboru Predmeta → učita se lista TP-ova (otvoreni RN-ovi).
+ *   3. Po izboru TP-a iz liste → **lista se sklopi**, prikaže se „selected
+ *      panel" sa Predmetom + TP brojem + nazivom dela. Operater jasno vidi
+ *      šta će biti odštampano.
+ *   4. Klik na selected panel ili „↻ Promeni TP" → lista se ponovo otvara
+ *      i izabrani TP se briše (clean slate, bez zaostalih polja).
+ *   5. Količina + Štampa.
+ *
+ * Tastature:
+ *   - Esc — zatvara modal (bind kroz `bindEsc`)
+ *   - Enter (kad je TP izabran) — pokreće Štampa
  */
 export async function openTechProcessLabelPrintModal() {
   const id = 'locModalTpLabel';
@@ -477,13 +608,20 @@ export async function openTechProcessLabelPrintModal() {
             <span class="loc-muted loc-filter-hint">Lista uključuje samo nezatvorene predmete iz BigTehn-a (status „U TOKU").</span>
           </div>
           <div id="tpSelectedPredmet" class="loc-muted" style="margin:6px 0 12px;padding:8px 10px;border:1px dashed var(--border2,#ccc);border-radius:6px;display:none"></div>
-          <div id="tpTpsBlock" style="display:none">
+
+          <div id="tpTpsPickBlock" style="display:none">
             <label class="loc-filter-field"><span>Tehnološki postupak (RN)</span>
               <input type="search" id="tpTpQ" class="loc-search-input" placeholder="Filter po ident_broju, crtežu ili nazivu dela…" autocomplete="off" />
             </label>
-            <div id="tpTpList" class="loc-list" style="max-height:220px;overflow:auto;border:1px solid var(--border2,#eee);border-radius:6px;margin-top:6px"></div>
-            <p class="loc-muted" style="font-size:12px;margin:6px 2px 0">TP mora biti izabran iz liste — bez slobodnog unosa. Skener naknadno može da pročita samo barkode koji odgovaraju zapisima u BigTehn-u.</p>
+            <div id="tpTpList" class="loc-list" style="max-height:260px;overflow:auto;border:1px solid var(--border2,#eee);border-radius:6px;margin-top:6px"></div>
+            <p class="loc-muted" style="font-size:12px;margin:6px 2px 0">TP mora biti izabran iz liste — bez slobodnog unosa. Skener kasnije čita samo barkode koji odgovaraju zapisima u BigTehn-u.</p>
           </div>
+
+          <div id="tpSelectedTp" class="loc-tp-selected" role="button" tabindex="0"
+            style="display:none;margin:6px 0 0;padding:12px 14px;border:2px solid var(--accent,#2b6cb0);border-radius:8px;background:var(--surface2,#f4f8ff);cursor:pointer"
+            title="Klikni da promeniš TP (lista se ponovo otvara, trenutni izbor se briše)">
+          </div>
+
           <div id="tpQtyBlock" style="display:none;margin-top:14px">
             <label class="loc-filter-field"><span>Količina za štampu</span>
               <input type="number" id="tpPrintQty" class="loc-search-input" min="1" step="1" value="1" inputmode="numeric" />
@@ -491,7 +629,7 @@ export async function openTechProcessLabelPrintModal() {
             <span class="loc-muted loc-filter-hint" id="tpQtyHint"></span>
           </div>
           <hr style="border:none;border-top:1px solid var(--border2,#eee);margin:14px 0" />
-          <div id="tpPreview" class="loc-muted" style="min-height:64px"></div>
+          <div id="tpPreview" class="loc-muted" style="min-height:48px"></div>
           <div class="kadr-modal-actions">
             <button type="button" class="btn btn-primary" id="tpDoPrint" disabled>Štampaj nalepnicu</button>
             <button type="button" class="btn" id="tpCancel">Zatvori</button>
@@ -504,9 +642,10 @@ export async function openTechProcessLabelPrintModal() {
   const inputPredmet = overlay.querySelector('#tpPredmetQ');
   const dropPredmet = overlay.querySelector('#tpPredmetDrop');
   const selectedPredmetEl = overlay.querySelector('#tpSelectedPredmet');
-  const tpsBlock = overlay.querySelector('#tpTpsBlock');
+  const tpsPickBlock = overlay.querySelector('#tpTpsPickBlock');
   const tpQ = overlay.querySelector('#tpTpQ');
   const tpListEl = overlay.querySelector('#tpTpList');
+  const tpSelectedEl = overlay.querySelector('#tpSelectedTp');
   const qtyBlock = overlay.querySelector('#tpQtyBlock');
   const qtyInput = overlay.querySelector('#tpPrintQty');
   const qtyHint = overlay.querySelector('#tpQtyHint');
@@ -581,7 +720,9 @@ export async function openTechProcessLabelPrintModal() {
     selectedPredmetEl.innerHTML = `
       <div><strong>Predmet ${escHtml(item.broj_predmeta || '')}</strong> · ${escHtml(item.naziv_predmeta || '')}</div>
       <div style="font-size:12px">Komitent: <strong>${escHtml(item.customer_name || '—')}</strong></div>`;
-    tpsBlock.style.display = 'block';
+    /* Pri promeni Predmeta — pokaži TP picker, sakri selected TP panel i kvantitet */
+    tpsPickBlock.style.display = 'block';
+    tpSelectedEl.style.display = 'none';
     qtyBlock.style.display = 'none';
     tpListEl.innerHTML = '<p class="loc-muted" style="padding:10px">Učitavam tehnološke postupke…</p>';
     try {
@@ -624,10 +765,7 @@ export async function openTechProcessLabelPrintModal() {
       btn.addEventListener('click', () => {
         const tpId = Number(btn.getAttribute('data-tp-id'));
         const wo = tpsCache.find(x => x.id === tpId);
-        if (!wo) return;
-        tpListEl.querySelectorAll('[data-tp-id]').forEach(b => b.classList.remove('is-active'));
-        btn.classList.add('is-active');
-        selectTp(wo);
+        if (wo) selectTp(wo);
       });
     });
   }
@@ -636,15 +774,71 @@ export async function openTechProcessLabelPrintModal() {
 
   function selectTp(wo) {
     selectedTp = wo;
+    /* Sklopi listu, otvori selected panel + kvantitet (Task 3a). */
+    tpsPickBlock.style.display = 'none';
+    tpSelectedEl.style.display = 'block';
+    tpSelectedEl.innerHTML = `
+      <div style="display:flex;gap:12px;align-items:flex-start;justify-content:space-between">
+        <div style="min-width:0;flex:1">
+          <div style="font-size:11px;color:var(--text2,#666);text-transform:uppercase;letter-spacing:0.5px">Izabrani TP</div>
+          <div style="font-size:16px;font-weight:700;margin-top:2px">${escHtml(String(wo.ident_broj || ''))}</div>
+          <div style="font-size:13px;margin-top:2px">${escHtml(String(wo.naziv_dela || '—'))}</div>
+          <div class="loc-muted" style="font-size:12px;margin-top:4px">
+            Crtež: <strong>${escHtml(String(wo.broj_crteza || '—'))}</strong>
+            ${wo.materijal ? ` · Materijal: <strong>${escHtml(String(wo.materijal))}</strong>` : ''}
+            ${wo.komada != null ? ` · Komada po RN: <strong>${escHtml(String(wo.komada))}</strong>` : ''}
+          </div>
+        </div>
+        <button type="button" class="btn btn-xs" id="tpChangeTp"
+          title="Otvori listu TP-ova ponovo (briše trenutni izbor)">↻ Promeni TP</button>
+      </div>`;
+    /* Klik bilo gde u panelu (osim na ↻ dugmetu — ono ima isti efekat) reotvara listu. */
+    tpSelectedEl.onclick = (ev) => {
+      ev.stopPropagation();
+      reopenTpList();
+    };
+    tpSelectedEl.onkeydown = (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        reopenTpList();
+      }
+    };
+    /* Kvantitet — default 1, max = komada po RN-u */
     qtyBlock.style.display = 'block';
     const max = Number(wo.komada) || 1;
-    qtyInput.value = String(Math.min(1, max));
-    qtyInput.max = String(max);
+    qtyInput.value = '1';
+    qtyInput.max = String(Math.max(1, max));
     qtyHint.textContent = `Ukupna količina po RN: ${max}. Možeš uneti manju vrednost ako se štampa parcijalno.`;
     updatePreview();
+    /* Fokusiraj kvantitet input — operater po pravilu samo pritisne Enter */
+    setTimeout(() => qtyInput.focus(), 0);
+  }
+
+  function reopenTpList() {
+    /* Clean slate: briši trenutni TP, vrati TP picker, sakri kvantitet i preview */
+    selectedTp = null;
+    tpSelectedEl.style.display = 'none';
+    tpSelectedEl.innerHTML = '';
+    tpsPickBlock.style.display = 'block';
+    qtyBlock.style.display = 'none';
+    qtyInput.value = '1';
+    qtyHint.textContent = '';
+    updatePreview();
+    /* Vrati listu na pun set (bez filtera) i fokusiraj search */
+    tpQ.value = '';
+    renderTpList('');
+    setTimeout(() => tpQ.focus(), 0);
   }
 
   qtyInput.addEventListener('input', () => updatePreview());
+
+  /* Enter na Količina input-u → odmah Štampa (kad je TP izabran). */
+  qtyInput.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter' && !btnPrint.disabled) {
+      ev.preventDefault();
+      btnPrint.click();
+    }
+  });
 
   function updatePreview() {
     if (!selectedPredmet || !selectedTp) {
@@ -666,9 +860,7 @@ export async function openTechProcessLabelPrintModal() {
     const totalQty = Number(selectedTp.komada) || printQty;
     previewEl.innerHTML = `
       <div><strong>Barkod (RNZ):</strong> <code>${escHtml(bc)}</code></div>
-      <div style="margin-top:6px"><strong>Broj predmeta:</strong> ${escHtml(idb)} · <strong>Crtež:</strong> ${escHtml(selectedTp.broj_crteza || '—')}</div>
-      <div><strong>Naziv dela:</strong> ${escHtml(selectedTp.naziv_dela || '—')}</div>
-      <div><strong>Količina:</strong> ${printQty}/${totalQty} · <strong>Materijal:</strong> ${escHtml(selectedTp.materijal || '—')}</div>`;
+      <div style="margin-top:4px"><strong>Količina:</strong> ${printQty}/${totalQty} nalepnic${printQty === 1 ? 'a' : printQty < 5 ? 'e' : 'a'}</div>`;
     btnPrint.disabled = false;
   }
 
@@ -685,19 +877,22 @@ export async function openTechProcessLabelPrintModal() {
     }
     const printQty = Math.max(1, Number(qtyInput.value) || 1);
     const totalQty = Number(selectedTp.komada) || printQty;
-    await printTechProcessLabelWindow({
-      barcodeValue: bc,
-      fields: {
-        brojPredmeta: idb,
-        komitent: selectedPredmet.customer_name || '',
-        nazivPredmeta: selectedPredmet.naziv_predmeta || '',
-        nazivDela: selectedTp.naziv_dela || '',
-        brojCrteza: selectedTp.broj_crteza || '',
-        kolicina: `${printQty}/${totalQty}`,
-        materijal: selectedTp.materijal || '',
-        datum: todayStrDDMMYY(),
+    await printTechProcessLabelsBatch([
+      {
+        barcodeValue: bc,
+        copies: printQty,
+        fields: {
+          brojPredmeta: idb,
+          komitent: selectedPredmet.customer_name || '',
+          nazivPredmeta: selectedPredmet.naziv_predmeta || '',
+          nazivDela: selectedTp.naziv_dela || '',
+          brojCrteza: selectedTp.broj_crteza || '',
+          kolicina: `${printQty}/${totalQty}`,
+          materijal: selectedTp.materijal || '',
+          datum: todayStrDDMMYY(),
+        },
       },
-    });
+    ]);
     close();
   });
 
