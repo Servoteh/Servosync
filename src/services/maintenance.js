@@ -5,6 +5,7 @@
 
 import { sbReq, getSupabaseUrl, getSupabaseAnonKey } from './supabase.js';
 import { getCurrentUser } from '../state/auth.js';
+import { parseSupabaseStorageSignResponse, absolutizeSupabaseStorageSignedPath } from './drawings.js';
 
 const MAINT_FILES_BUCKET = 'maint-machine-files';
 
@@ -925,24 +926,38 @@ export async function getMaintMachineFileSignedUrl(storagePath, expiresSec = 300
   const token = user?._token || getSupabaseAnonKey();
   const apiKey = getSupabaseAnonKey();
   const baseUrl = getSupabaseUrl();
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'apikey': apiKey,
+    'Content-Type': 'application/json',
+  };
   try {
-    const r = await fetch(
-      `${baseUrl}/storage/v1/object/sign/${MAINT_FILES_BUCKET}/${encodeURI(storagePath)}`,
+    const rBatch = await fetch(
+      `${baseUrl}/storage/v1/object/sign/${MAINT_FILES_BUCKET}`,
       {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + token,
-          'apikey': apiKey,
-          'Content-Type': 'application/json',
-        },
+        headers,
+        body: JSON.stringify({ expiresIn: expiresSec, paths: [storagePath] }),
+      },
+    );
+    if (rBatch.ok) {
+      const j = await rBatch.json().catch(() => null);
+      const rel = parseSupabaseStorageSignResponse(j);
+      const full = absolutizeSupabaseStorageSignedPath(baseUrl, rel);
+      if (full) return full;
+    }
+    const r = await fetch(
+      `${baseUrl}/storage/v1/object/sign/${MAINT_FILES_BUCKET}/${encodeURIComponent(storagePath)}`,
+      {
+        method: 'POST',
+        headers,
         body: JSON.stringify({ expiresIn: expiresSec }),
       },
     );
     if (!r.ok) return null;
-    const { signedURL, signedUrl } = await r.json();
-    const rel = signedURL || signedUrl;
-    if (!rel) return null;
-    return baseUrl + '/storage/v1' + (rel.startsWith('/') ? rel : '/' + rel);
+    const j = await r.json().catch(() => null);
+    const rel = parseSupabaseStorageSignResponse(j);
+    return absolutizeSupabaseStorageSignedPath(baseUrl, rel);
   } catch (e) {
     console.error('[getMaintMachineFileSignedUrl]', e);
     return null;

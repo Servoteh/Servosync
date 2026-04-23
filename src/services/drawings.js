@@ -263,7 +263,59 @@ export async function resolveBigtehnDrawing(brojCrteza) {
 export async function getBigtehnDrawingSignedUrl(brojCrteza, expiresIn = SIGNED_URL_TTL_SECONDS) {
   const resolved = await resolveBigtehnDrawing(brojCrteza);
   if (!resolved) return null;
-  return await _signStoragePath(resolved.storagePath, expiresIn);
+  return await signBigtehnDrawingsStoragePath(resolved.storagePath, expiresIn);
+}
+
+/**
+ * Potpisuje postojeći `storage_path` u bucket-u `bigtehn-drawings` (bez lookup-a
+ * u `bigtehn_drawings_cache`). Koristi istu logiku kao `getBigtehnDrawingSignedUrl`
+ * posle resolve koraka.
+ *
+ * @param {string} storagePath  npr. `1061228_B.pdf`
+ * @param {number} [expiresIn]
+ * @returns {Promise<string|null>}
+ */
+export async function signBigtehnDrawingsStoragePath(storagePath, expiresIn = SIGNED_URL_TTL_SECONDS) {
+  return await _signStoragePath(storagePath, expiresIn);
+}
+
+/**
+ * Izvlači relativni signed path iz JSON odgovora Storage API-ja.
+ * Novije verzije ponekad vraćaju **niz** `[{ signedUrl, error, path }]`
+ * umesto `{ signedURL }` — staro `const { signedURL } = await r.json()` onda
+ * uvek daje `undefined` i PDF „nikad ne radi“.
+ */
+function _pickStorageSignRelativeUrl(json) {
+  if (json == null) return null;
+  if (Array.isArray(json)) {
+    const row = json[0];
+    if (row?.error) {
+      console.warn('[drawings.sign] API row error', row.error, row.path);
+    }
+    return row?.signedURL || row?.signedUrl || null;
+  }
+  if (typeof json === 'object') {
+    if (json.signedURL || json.signedUrl) {
+      return json.signedURL || json.signedUrl;
+    }
+    if (json.data != null) return _pickStorageSignRelativeUrl(json.data);
+  }
+  return null;
+}
+
+function _absoluteSignedUrl(baseUrl, rel) {
+  if (!rel) return null;
+  if (/^https?:\/\//i.test(rel)) return rel;
+  return baseUrl + '/storage/v1' + (rel.startsWith('/') ? rel : '/' + rel);
+}
+
+/** Za ostale servise koji ručno zovu `/storage/v1/object/sign/…`. */
+export function parseSupabaseStorageSignResponse(json) {
+  return _pickStorageSignRelativeUrl(json);
+}
+
+export function absolutizeSupabaseStorageSignedPath(baseUrl, rel) {
+  return _absoluteSignedUrl(baseUrl, rel);
 }
 
 /**
@@ -279,33 +331,61 @@ async function _signStoragePath(storagePath, expiresIn) {
     console.error('[drawings.sign] missing Supabase config (baseUrl/apiKey)');
     return null;
   }
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'apikey': apiKey,
+    'Content-Type': 'application/json',
+  };
   try {
-    const r = await fetch(
-      `${baseUrl}/storage/v1/object/sign/${BIGTEHN_DRAWINGS_BUCKET}/${encodeURI(storagePath)}`,
+    /* 1) Preferirano: `POST /object/sign/{bucket}` sa `{ paths: [...] }` — isto
+       kao `createSignedUrls` u SDK-u; izbegava probleme sa enkodiranjem putanje
+       u samom URL-u. */
+    const rBatch = await fetch(
+      `${baseUrl}/storage/v1/object/sign/${BIGTEHN_DRAWINGS_BUCKET}`,
       {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + token,
-          'apikey': apiKey,
-          'Content-Type': 'application/json',
-        },
+        headers,
+        body: JSON.stringify({ expiresIn, paths: [storagePath] }),
+      },
+    );
+    if (rBatch.ok) {
+      const jBatch = await rBatch.json().catch(() => null);
+      const relB = _pickStorageSignRelativeUrl(jBatch);
+      const fullB = _absoluteSignedUrl(baseUrl, relB);
+      if (fullB) {
+        console.info('[drawings.sign] OK (batch)', storagePath, '→', fullB.slice(0, 88) + '…');
+        return fullB;
+      }
+    } else {
+      const tb = await rBatch.text().catch(() => '');
+      console.warn('[drawings.sign] batch HTTP', rBatch.status, tb.slice(0, 240));
+    }
+
+    /* 2) Fallback: legacy `POST /object/sign/{bucket}/{path}` */
+    const r = await fetch(
+      `${baseUrl}/storage/v1/object/sign/${BIGTEHN_DRAWINGS_BUCKET}/${encodeURIComponent(storagePath)}`,
+      {
+        method: 'POST',
+        headers,
         body: JSON.stringify({ expiresIn }),
       },
     );
     if (!r.ok) {
       const txt = await r.text().catch(() => '');
       console.error('[drawings.sign] HTTP', r.status, 'for', storagePath, '→', txt.slice(0, 300));
+      if (!user?._token) {
+        console.warn('[drawings.sign] nema korisničkog JWT — bucket bigtehn-drawings dozvoljava samo authenticated');
+      }
       return null;
     }
-    const { signedURL, signedUrl } = await r.json();
-    /* Storage v1 koristi `signedURL`, novije verzije `signedUrl`. */
-    const rel = signedURL || signedUrl;
-    if (!rel) {
-      console.error('[drawings.sign] response missing signedURL/signedUrl', { storagePath });
+    const j = await r.json().catch(() => null);
+    const rel = _pickStorageSignRelativeUrl(j);
+    const fullUrl = _absoluteSignedUrl(baseUrl, rel);
+    if (!fullUrl) {
+      console.error('[drawings.sign] response missing signed URL', { storagePath, j });
       return null;
     }
-    const fullUrl = baseUrl + '/storage/v1' + (rel.startsWith('/') ? rel : '/' + rel);
-    console.info('[drawings.sign] OK', storagePath, '→', fullUrl.slice(0, 80) + '…');
+    console.info('[drawings.sign] OK (legacy)', storagePath, '→', fullUrl.slice(0, 88) + '…');
     return fullUrl;
   } catch (e) {
     console.error('[drawings.sign] exception', e);

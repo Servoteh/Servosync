@@ -18,9 +18,17 @@ import {
   getCurrentUser,
   getIsOnline,
 } from '../state/auth.js';
+import {
+  BIGTEHN_DRAWINGS_BUCKET,
+  getBigtehnDrawingSignedUrl as _getBigtehnDrawingSignedUrlShared,
+  parseSupabaseStorageSignResponse,
+  absolutizeSupabaseStorageSignedPath,
+} from './drawings.js';
 
 const DRAWINGS_BUCKET = 'production-drawings';
-const BIGTEHN_DRAWINGS_BUCKET = 'bigtehn-drawings';
+/* BIGTEHN_DRAWINGS_BUCKET izvučen u services/drawings.js (shared sa Plan Montaže
+ * → polje „Veza sa“). Re-export ispod radi backward-compat. */
+export { BIGTEHN_DRAWINGS_BUCKET };
 
 /* ── Konstante ── */
 
@@ -521,16 +529,31 @@ export async function getDrawingSignedUrl(storagePath, expiresIn = 300) {
   const token = user?._token || getSupabaseAnonKey();
   const apiKey = getSupabaseAnonKey();
   const baseUrl = getSupabaseUrl();
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'apikey': apiKey,
+    'Content-Type': 'application/json',
+  };
   try {
-    const r = await fetch(
-      `${baseUrl}/storage/v1/object/sign/${DRAWINGS_BUCKET}/${encodeURI(storagePath)}`,
+    const rBatch = await fetch(
+      `${baseUrl}/storage/v1/object/sign/${DRAWINGS_BUCKET}`,
       {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + token,
-          'apikey': apiKey,
-          'Content-Type': 'application/json',
-        },
+        headers,
+        body: JSON.stringify({ expiresIn, paths: [storagePath] }),
+      },
+    );
+    if (rBatch.ok) {
+      const j = await rBatch.json().catch(() => null);
+      const rel = parseSupabaseStorageSignResponse(j);
+      const full = absolutizeSupabaseStorageSignedPath(baseUrl, rel);
+      if (full) return full;
+    }
+    const r = await fetch(
+      `${baseUrl}/storage/v1/object/sign/${DRAWINGS_BUCKET}/${encodeURIComponent(storagePath)}`,
+      {
+        method: 'POST',
+        headers,
         body: JSON.stringify({ expiresIn }),
       },
     );
@@ -538,11 +561,9 @@ export async function getDrawingSignedUrl(storagePath, expiresIn = 300) {
       console.error('[getDrawingSignedUrl] failed', r.status);
       return null;
     }
-    const { signedURL, signedUrl } = await r.json();
-    /* API menja casing tokom verzija; pokrij obe */
-    const rel = signedURL || signedUrl;
-    if (!rel) return null;
-    return baseUrl + '/storage/v1' + (rel.startsWith('/') ? rel : '/' + rel);
+    const j = await r.json().catch(() => null);
+    const rel = parseSupabaseStorageSignResponse(j);
+    return absolutizeSupabaseStorageSignedPath(baseUrl, rel);
   } catch (e) {
     console.error('[getDrawingSignedUrl] exception', e);
     return null;
@@ -554,6 +575,10 @@ export async function getDrawingSignedUrl(storagePath, expiresIn = 300) {
  *
  * Bridge sinhronizuje fajlove iz C:\PDMExport\PDFImportovano u Supabase
  * bucket "bigtehn-drawings". Frontend samo otvara signed URL-ove.
+ *
+ * NAPOMENA: stvarna implementacija sada živi u `src/services/drawings.js`
+ * (shared sloj) jer je isti helper potreban i Plan Montaži (polje „Veza sa“).
+ * Ovde ostaje thin re-export radi backward-compat sa postojećim importima.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -564,48 +589,7 @@ export async function getDrawingSignedUrl(storagePath, expiresIn = 300) {
  * @param {number} [expiresIn=300] Trajanje URL-a u sekundama (default 5 min)
  */
 export async function getBigtehnDrawingSignedUrl(brojCrteza, expiresIn = 300) {
-  if (!getIsOnline() || !brojCrteza) return null;
-
-  /* 1) Lookup storage_path iz cache-a */
-  const params = new URLSearchParams();
-  params.set('select', 'storage_path');
-  params.set('drawing_no', `eq.${brojCrteza}`);
-  params.set('removed_at', 'is.null');
-  params.set('limit', '1');
-  const rows = await sbReq(`bigtehn_drawings_cache?${params.toString()}`);
-  const storagePath = Array.isArray(rows) && rows[0]?.storage_path;
-  if (!storagePath) return null;
-
-  /* 2) Sign */
-  const user = getCurrentUser();
-  const token = user?._token || getSupabaseAnonKey();
-  const apiKey = getSupabaseAnonKey();
-  const baseUrl = getSupabaseUrl();
-  try {
-    const r = await fetch(
-      `${baseUrl}/storage/v1/object/sign/${BIGTEHN_DRAWINGS_BUCKET}/${encodeURI(storagePath)}`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + token,
-          'apikey': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ expiresIn }),
-      },
-    );
-    if (!r.ok) {
-      console.error('[getBigtehnDrawingSignedUrl] failed', r.status);
-      return null;
-    }
-    const { signedURL, signedUrl } = await r.json();
-    const rel = signedURL || signedUrl;
-    if (!rel) return null;
-    return baseUrl + '/storage/v1' + (rel.startsWith('/') ? rel : '/' + rel);
-  } catch (e) {
-    console.error('[getBigtehnDrawingSignedUrl] exception', e);
-    return null;
-  }
+  return _getBigtehnDrawingSignedUrlShared(brojCrteza, expiresIn);
 }
 
 /* ────────────────────────────────────────────────────────────────────────

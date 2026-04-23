@@ -28,9 +28,14 @@ import {
   rokUrgencyClass,
   formatSecondsHm,
   plannedSeconds,
-  getBigtehnDrawingSignedUrl,
 } from '../../services/planProizvodnje.js';
-import { sanitizeDrawingNo, isPlaceholderDrawingNo, findExistingDrawings } from '../../services/drawings.js';
+import {
+  sanitizeDrawingNo,
+  isPlaceholderDrawingNo,
+  findExistingDrawings,
+  resolveBigtehnDrawing,
+  signBigtehnDrawingsStoragePath,
+} from '../../services/drawings.js';
 import { openDrawingManager } from './drawingManager.js';
 import { openTechProcedureModal } from './techProcedureModal.js';
 
@@ -523,8 +528,8 @@ async function onOpenDrawings(btn) {
  * window. Ako fetch ne uspe, zatvori window i prikaži toast.
  */
 async function onOpenBigtehnDrawing(btn) {
-  const broj = btn.dataset.broj;
-  const brojRaw = btn.dataset.brojRaw || broj;
+  const brojRaw = btn.dataset.brojRaw || '';
+  const broj = (btn.dataset.broj && sanitizeDrawingNo(btn.dataset.broj)) || sanitizeDrawingNo(brojRaw) || btn.dataset.broj;
   if (!broj) return;
   const tab = window.open('about:blank', '_blank');
   if (!tab) {
@@ -532,20 +537,24 @@ async function onOpenBigtehnDrawing(btn) {
     return;
   }
   try {
-    const url = await getBigtehnDrawingSignedUrl(broj);
-    if (!url) {
+    const resolved = await resolveBigtehnDrawing(broj);
+    if (!resolved?.storagePath) {
       tab.close();
-      /* Razlikujemo dva slučaja:
-         (a) sanitizovan broj se RAZLIKUJE od BigTehn vrednosti — verovatno
-             trailing dot/whitespace; korisnik vidi obe verzije.
-         (b) sanitizovan broj == BigTehn vrednost — Bridge sync nije pokrio
-             ovaj fajl (treba rerun bridge_sync ili crtež fakat ne postoji u PDM-u). */
       const cleaned = brojRaw && brojRaw.trim() !== broj
-        ? ` (BigTehn ima "${brojRaw}", traženo "${broj}")`
+        ? ` (BigTehn: "${brojRaw}", traženo: "${broj}")`
         : '';
       showToast(
         `PDF crtež "${broj}"${cleaned} nije u Bridge keš-u. ` +
         `Pokreni Bridge sync ili proveri da li PDF postoji u PDM-u.`,
+      );
+      return;
+    }
+    const url = await signBigtehnDrawingsStoragePath(resolved.storagePath);
+    if (!url) {
+      tab.close();
+      showToast(
+        'Storage nije mogao da potpiše PDF (proveri da si prijavljen, ili prava na bucket bigtehn-drawings). ' +
+        'Ako se greška ponavlja, otvori konzolu (F12) i traži [drawings.sign].',
       );
       return;
     }
