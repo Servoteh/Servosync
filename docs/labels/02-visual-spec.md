@@ -1,158 +1,180 @@
 # Lokacije — nalepnice za TP: visual & print spec (Task 2)
 
-> Sledi audit iz `01-encoding-audit.md`. Ovde dokumentujemo **layout, dimenzije, štampu i resenje za "datum/naslov u sredini papira"**.
+> Sledi audit iz `01-encoding-audit.md`. Ovde dokumentujemo **layout, dimenzije, štampu i razlog zašto NE šaljemo SIZE komandu štampaču**.
 
 ---
 
-## 1. Hardver
+## 1. Hardver i printer-side konfiguracija
 
 | Stavka | Vrednost |
 |---|---|
 | Štampač | **TSC ML340P** |
+| Firmware | A2.15 EZD (vidi web admin: `http://192.168.70.20`) |
 | Rezolucija | **300 DPI** = 11.81 dots/mm |
-| Print engine | Termal transfer (ribbon) |
+| Print engine | **Direct-Thermal** (NEMA ribbon — termo papir) |
 | Native jezik | **TSPL / TSPL2** (preferirano) ili Windows GDI driver |
 | Konekcija | **LAN, raw TCP port 9100** (preferirano) ili USB |
-| Stock dimenzije | **80mm × 50mm portrait**, gap 3mm između nalepnica |
-| Max print width | 4.27" (108mm) — naša nalepnica koristi 80mm |
+| **Paper Width (configured)** | **80.34 mm** |
+| **Paper Height (configured)** | **40.30 mm** |
+| Gap Size (configured) | 3.05 mm |
+| Sensor Type | Continuous (gap) |
 
-## 2. Dimenzije nalepnice (mm)
+> **Konfiguracija je urađena jednom kroz TSC web admin** (http://192.168.70.20 ▸ Configuration ▸ Media). **NE smemo** da je menjamo iz klijenta.
 
-```
-┌────────────────── 80 mm ────────────────┐
-│ 1.5mm padding gore                      │
-│ ┌────────────────────────────────────┐  │
-│ │ RN: 7351/1088               11pt   │  │ ← ~26mm "tekst zona"
-│ │ Komitent: ...                7.2pt │  │
-│ │ Predmet: ...                 7.2pt │  │
-│ │ Deo: ...                     7.2pt │  │
-│ │ Crtež: 1130927               7.2pt │  │
-│ │ Količina: 5/96               7.2pt │  │
-│ │ Materijal: Č.4732 FI30X30    7.2pt │  │
-│ │ Datum: 23-04-26              6.4pt │  │
-│ ├────────────────────────────────────┤  │ ← granica
-│ │ ║║│║║║│║║│║║│║║║║│║║│║║│║║│║║║║│║│ │  │ ← ~22mm "barkod zona"
-│ │ ║║│║║║│║║│║║│║║║║│║║│║║│║║│║║║║│║│ │  │   CODE128, full width
-│ └────────────────────────────────────┘  │   minus 2mm quiet zone
-│ 1.0mm padding dole                      │   svake strane
-└─────────────────────────────────────────┘
-                  50 mm
-```
+## 2. Zašto NE šaljemo `SIZE` / `GAP` / `DENSITY` komande
 
-| Sekcija | Visina | Širina | Napomena |
-|---|---|---|---|
-| Padding gore | 1.5mm | full | |
-| Tekst zona | ~25mm | 76mm | 8 redova, font 6.4–11pt |
-| Barkod zona | ~22mm | 76mm | quiet zone 2mm svake strane |
-| Padding dole | 1.0mm | full | |
+Operater je javio: *„kada saljem print, ovo na slici dva mu je poslato kao izmena sa stampaca... Da ne saljemo izmene formata stampacu jer ga blokiramo, mora da ostane tako."*
 
-## 3. Barkod parametri (CODE128)
-
-| Parametar | JsBarcode (browser) | TSPL2 (TSC) |
-|---|---|---|
-| Module width | `width: 2.2 px` | `narrow=2 dots` (~0.17mm) |
-| Wide bar ratio | n/a (CODE128 je binarni) | `wide=4 dots` |
-| Visina | `height: 80 px` (~22mm na 300dpi) | `height = 18mm × 11.81 ≈ 213 dots` |
-| Quiet zone | 2mm CSS padding oko `<svg>` | manuelno: `BC_X = 2mm` |
-| Human readable | OFF (browser) | ON (TSPL2 — backup za vizuelno čitanje) |
-| Subset | Auto (CODE128 Auto) | `128M` (auto-switch CODE-A/B/C) |
-
-### Linijska poređenja sa starim layout-om
-
-| Metrika | Stari (rotirani 90° levo) | Novi (horizontalan dole) | Faktor |
-|---|---|---|---|
-| Linearna širina barkoda | ~27mm | **~76mm** | **2.81×** |
-| Visina barkoda | ~46mm | ~22mm | 0.48× |
-| Module width (CODE128) | ~0.10mm | **~0.28mm** | **2.80×** |
-| Površina barkoda | 1242mm² | 1672mm² | 1.35× |
-| **Skener „scan length"** | ~27mm | **~76mm** | **2.81×** |
-
-→ "5× veća površina" iz prompt-a nije bukvalno fizički moguća na 80×50mm stock-u (cela nalepnica je 4000mm²), ali **dvostruko veći module width + skoro 3× duža scan zona** je dramatičan boost koji stiže do duha zahteva: skener može da pročita kod sa **veće udaljenosti i pod oštrijim uglom** nego ranije. To je metrika koja zaista bitna na proizvodnoj liniji.
-
-### Quiet zone compliance
-
-CODE128 standard zahteva quiet zone od **10× module width**:
-- Browser: 2.2 px module → 22 px quiet zone. SVG je u 76mm = ~890 px (na 300dpi printeru). 22/890 = 2.5% širine = ~1.9mm. Mi imamo 2.0mm — **ispunjavamo standard**.
-- TSPL2: 2 dots module → 20 dots = ~1.7mm quiet zone. Naš `BC_X=2mm` daje **2mm slobodno levo** + ostatak širine = ~2mm desno → **ispunjavamo standard**.
-
-## 4. Suppression browser print headers/footers
-
-**Problem koji operater opisuje:** *"datum i naslov na sredini papira"*.
-
-**Uzrok:** Chrome/Edge default print podešavanja dodaju 4 header/footer linije na svaku stranicu:
-- Gornji-levi: `<title>` HTML elementa
-- Gornji-desni: URL stranice
-- Donji-levi: trenutni datum/vreme
-- Donji-desni: broj strane (1/1)
-
-Pošto je @page = label = 80×50mm fizička nalepnica, ti header/footer-i upadaju **u sam label area** umesto u marginu.
-
-**Rešenje (3 sloja):**
-
-1. **CSS (`@page { margin: 0 }`)** — `src/ui/lokacije/labelsPrint.js` `TECH_LABEL_CSS` konstanta. Sa nultom marginom Chrome u nekim verzijama prestaje da renderuje header/footer; u drugim ne — nepouzdano samo sa CSS-om.
-
-2. **Prazan `<title>`** — postavili smo `<title> </title>` (jedan razmak). Time bar header gore-levo prikazuje samo razmak. URL gornji-desni i datum donji-levi i dalje mogu biti prisutni.
-
-3. **Operater jednom isključi „Headers and footers"** u Chrome print dijalogu:
-   - Otvori Chrome print dijalog (`Ctrl+P`)
-   - „More settings" (Više podešavanja) ▸
-   - **„Headers and footers" ▸ OFF** ✓
-   - „Margins" ▸ **None** ✓
-   - „Background graphics" ▸ ON (po želji, ne utiče na barkod)
-   - Klikni „Save" — Chrome pamti per-printer-profile. Sledeći put kad bira TSC ML340P u Destination dropdown-u, ova podešavanja su default-ovana.
-
-   Toolbar nove print stranice ima eksplicitan `hint` text koji ovo objašnjava operateru.
-
-4. **TSPL2 raw path (preferirano za TSC ML340P)** — kompletan zaobilazak browsera:
-   - Postaviti env var `VITE_LABEL_PRINTER_PROXY_URL=http://192.168.x.x:8765/print` u `.env.local`
-   - Lokalni proxy agent (mali Node ili Python servis) na PC-u u istoj LAN-i:
-     ```js
-     // primer: pseudo-Node agent
-     app.post('/print', (req, res) => {
-       const tspl2 = req.body.payload?.tspl2 || '';
-       if (!tspl2) return res.status(400).json({ ok: false });
-       const sock = net.createConnection({ host: PRINTER_IP, port: 9100 });
-       sock.write(tspl2);
-       sock.end(() => res.json({ ok: true }));
-     });
-     ```
-   - Sa ovim path-om, browser print prozor je samo **vizualni preview** — pravi otisak ide direktno preko TCP-a, header-i se NE pojavljuju, layout je piksel-precizan.
-
-## 5. TSPL2 program — referenca
-
-Generiše se iz `src/lib/tspl2.js` `buildTspLabelProgram(spec)`. Primer izlaznog programa za RN `7351/1088`:
+Šta se događalo: prethodna verzija TSPL2 generatora je u svaki print job slala:
 
 ```
 SIZE 80 mm, 50 mm
 GAP 3 mm, 0 mm
 DIRECTION 1
-REFERENCE 0,0
-OFFSET 0 mm
-SET TEAR ON
 DENSITY 8
 SPEED 4
 CODEPAGE 1252
+SET TEAR ON
+```
+
+TSC ML340P **prihvata** ove komande, ali ih ne ignoriše — on PIŠE preko trenutne web-admin konfiguracije. Pošto je prethodna verzija slala POGREŠNU visinu (50mm umesto 40.30mm), štampač je ulazio u kalibracioni loop kad ne može da nađe gap na očekivanoj poziciji → blocked stanje, traži manuelni reset.
+
+**Pravilo (encode-only mode):**
+
+Iz klijenta šaljemo SAMO komande koje crtaju sadržaj:
+
+| Komanda | Funkcija | Bezbedno? |
+|---|---|---|
+| `CLS` | Briše print buffer pre crtanja | ✓ (ne menja konfiguraciju) |
+| `TEXT x,y,...` | Crta tekst u tekućoj orijentaciji | ✓ |
+| `BARCODE x,y,...` | Crta barkod | ✓ |
+| `PRINT n,m` | Šalje buffer štampaču | ✓ |
+| ~~`SIZE`~~ | ~~Postavlja paper size~~ | ✗ **ZABRANJENO** |
+| ~~`GAP`~~ | ~~Postavlja gap između nalepnica~~ | ✗ **ZABRANJENO** |
+| ~~`DENSITY`~~ | ~~Print density~~ | ✗ **ZABRANJENO** |
+| ~~`SPEED`~~ | ~~Print speed~~ | ✗ **ZABRANJENO** |
+| ~~`CODEPAGE`~~ | ~~Encoding~~ | ✗ **ZABRANJENO** |
+| ~~`DIRECTION`~~ | ~~Orientation~~ | ✗ **ZABRANJENO** |
+| ~~`REFERENCE`~~ | ~~Origin offset~~ | ✗ **ZABRANJENO** |
+| ~~`SET TEAR`~~ | ~~Tear-off mode~~ | ✗ **ZABRANJENO** |
+
+Generator (`src/lib/tspl2.js`) ovo enforce-uje; testovi (`tests/lib/tspl2.test.js`) verifikuju da NIJEDNA "format change" komanda nije prisutna u izlazu.
+
+**Kada se promeni format nalepnice u pogonu** (npr. nova rolna 100×60mm) — operater ide u TSC web admin i menja Paper Width / Height → klik Set. Klijentski kod NE intervenira.
+
+## 3. Dimenzije nalepnice (mm)
+
+```
+┌──────────────────── 80 mm ────────────────────┐
+│ 1mm padding gore                              │
+│                                               │
+│ 7351/1088              Jugoimport SDPR        │ y=1.0mm,  red 1: RN | Komitent
+│ Perun – automatski punjac                     │ y=5.5mm,  red 2: Naziv predmeta
+│ PRIGUSENJE 1 40/22 - KONUS                    │ y=8.5mm,  red 3: Naziv dela
+│ Crtez: 1130927         C.4732 FI30X30         │ y=11.5mm, red 4: Crtez | Materijal
+│ Kol: 1/96              23-04-26               │ y=14.5mm, red 5: Kolicina | Datum
+│                                               │
+│ ║║│║║║│║║│║║│║║║║│║║│║║│║║│║║║║│║║│║║│║║│║║│ │ y=17.0mm, h=20mm
+│ ║║│║║║│║║│║║│║║║║│║║│║║│║║│║║║║│║║│║║│║║│║║│ │ CODE128 full-width
+│                                               │
+└───────────────────────────────────────────────┘
+                  40.3 mm
+```
+
+| Sekcija | y (mm) | h (mm) | Font (TSPL2) | CSS font-size |
+|---|---|---|---|---|
+| Padding gore | 0 | 1.0 | – | – |
+| Red 1: RN | 1.0 | 4.0 | "4" (24×32 dots) — naglašen | 11pt bold |
+| Red 1: Komitent | 2.0 | 3.0 | "2" (12×20 dots) | 7pt |
+| Red 2: Naziv predmeta | 5.5 | 2.5 | "2" | 7pt |
+| Red 3: Naziv dela | 8.5 | 2.5 | "2" | 7pt |
+| Red 4: Crtez/Materijal | 11.5 | 2.5 | "2" | 7pt |
+| Red 5: Količina/Datum | 14.5 | 2.5 | "2" | 7pt |
+| Barkod | 17.0 | 20.0 | – (CODE128 128M) | – |
+| Padding dole | 37.0 | 3.3 | – | – |
+
+Total korišćena visina: 37mm; rezerva: 3.3mm (za toleranciju štampe i gap-detekciju).
+
+## 4. Barkod parametri (CODE128)
+
+| Parametar | JsBarcode (browser) | TSPL2 (TSC) |
+|---|---|---|
+| Module width | `width: 2.2 px` | `narrow=2 dots` (~0.17mm) |
+| Wide bar ratio | n/a (CODE128 binary) | `wide=4 dots` |
+| Visina | `height: 80 px` (CSS scale-uje na ~20mm) | `height = 20mm × 11.81 ≈ 236 dots` |
+| Quiet zone | 2mm CSS padding oko `<svg>` | manuelno: `BC_X = 2mm` |
+| Human readable | OFF | OFF (RN je već u Redu 1) |
+| Subset | Auto (CODE128 Auto) | `128M` (auto-switch CODE-A/B/C) |
+| Rotation | 0 (horizontalno) | 0 |
+
+**Quiet zone compliance:** CODE128 standard zahteva 10× module width. Sa narrow=2 dots → 20 dots = ~1.7mm minimum quiet zone. Mi imamo 2mm svake strane → **PASS**.
+
+## 5. Suppression browser print headers/footers
+
+Problem: Chrome/Edge default print podešavanja dodaju `<title>` + URL + datum + page-num na svaku stranicu. Pošto je `@page = label = 80×40mm`, ti header-i upadaju u sam label area.
+
+Rešenje (3 sloja):
+
+1. **CSS** — `@page { size: 80mm 40mm; margin: 0 }` u `TECH_LABEL_CSS` (`src/ui/lokacije/labelsPrint.js`). Sa nultom marginom Chrome u nekim verzijama izostavlja header/footer; nepouzdano samo sa CSS-om.
+2. **Prazan `<title>`** — postavili smo `<title> </title>` (jedan razmak) u open-uvon prozoru.
+3. **Operater jednom isključi „Headers and footers" u Chrome print dijalogu:**
+   - Otvori Chrome print dijalog (`Ctrl+P`)
+   - „More settings" ▸
+   - **„Headers and footers" ▸ OFF** ✓
+   - „Margins" ▸ **None** ✓
+   - „Background graphics" ▸ ON (po želji)
+   - Klikni „Save as default" — Chrome pamti per-printer-profile
+
+Toolbar nove print stranice ima eksplicitan hint operateru.
+
+4. **TSPL2 raw path (preferirano za TSC ML340P)** — kompletan zaobilazak browsera. Postavi `VITE_LABEL_PRINTER_PROXY_URL` u `.env.local` na endpoint lokalnog proxy agenta koji prima JSON i piše `payload.tspl2` direktno na TCP `192.168.70.20:9100`. Sa ovim path-om, browser print prozor je samo vizualni preview — pravi otisak ide raw, headeri se NE pojavljuju.
+
+Pseudo-Node primer agenta:
+
+```js
+import express from 'express';
+import net from 'net';
+const app = express();
+app.use(express.json({ limit: '256kb' }));
+app.post('/print', (req, res) => {
+  const tspl2 = req.body?.payload?.tspl2 || '';
+  if (!tspl2) return res.status(400).json({ ok: false, error: 'missing tspl2' });
+  const sock = net.createConnection({ host: '192.168.70.20', port: 9100 });
+  sock.on('connect', () => sock.end(tspl2));
+  sock.on('error', e => res.status(502).json({ ok: false, error: String(e) }));
+  sock.on('close', () => res.json({ ok: true, bytes: tspl2.length }));
+});
+app.listen(8765, () => console.log('TSPL2 proxy on :8765'));
+```
+
+## 6. TSPL2 program — referenca
+
+Generiše se iz `src/lib/tspl2.js` `buildTspLabelProgram(spec)`. Primer izlaznog programa za RN `7351/1088`:
+
+```
 CLS
-TEXT 18,18,"4",0,1,1,"RN: 7351/1088"
-TEXT 18,83,"3",0,1,1,"Komitent: Jugoimport SDPR"
-TEXT 18,130,"2",0,1,1,"Predmet: Perun - automatski punjac"
-TEXT 18,171,"2",0,1,1,"Deo: PRIGUSENJE 1 40/22 - KONUS"
-TEXT 18,213,"3",0,1,1,"Crtez: 1130927  |  Kol: 1/96"
-TEXT 18,260,"2",0,1,1,"Mat: C.4732 FI30X30  |  Dat: 23-04-26"
-BARCODE 24,307,"128M",213,2,0,2,4,"RNZ:0:7351/1088:0:0"
+TEXT 18,12,"4",0,1,1,"7351/1088"
+TEXT 496,24,"2",0,1,1,"Jugoimport SDPR"
+TEXT 18,65,"2",0,1,1,"Perun - automatski punjac"
+TEXT 18,100,"2",0,1,1,"PRIGUSENJE 1 40/22 - KONUS"
+TEXT 18,136,"2",0,1,1,"Crtez: 1130927"
+TEXT 496,136,"2",0,1,1,"C.4732 FI30X30"
+TEXT 18,171,"2",0,1,1,"Kol: 1/96"
+TEXT 496,171,"2",0,1,1,"23-04-26"
+BARCODE 24,201,"128M",236,0,0,2,4,"RNZ:0:7351/1088:0:0"
 PRINT 1,1
 ```
 
-Ključno za TSC firmware:
-- **Codepage 1252** (Western European) — naši dijakritici (š, č, ć, ž, đ) se transliterišu u ASCII pre slanja jer ML340P firmware default-uje na CP850. Vidi `asciiTranslit()` u `tspl2.js`. Ako u budućnosti pređemo na CP1250, transliteracija se može isključiti.
-- **`128M`** (CODE128 Auto-mode) — automatski bira CODE-B (alfanumerički) ili CODE-C (numerički) zavisno od sadržaja. Naš payload `RNZ:0:7351/1088:0:0` ima mešavinu pa završava u CODE-B mode-u (efikasno).
-- **`narrow=2, wide=4`** — daje gust ali oštar barkod na 300dpi. Ako je potrebno čak i veće, povećaj `narrow` na 3 (modul ≈ 0.25mm umesto 0.17mm).
+Napomene:
+- **Bez `CODEPAGE`** — Naši dijakritici (š, č, ć, ž, đ) se transliterišu u ASCII pre slanja (vidi `asciiTranslit()`). Štampač koristi ono što je već konfigurisano u admin-u; mi ne intervenišemo.
+- **`128M`** (CODE128 Auto-mode) — automatski bira CODE-B/C zavisno od sadržaja.
+- **`narrow=2, wide=4`** — gust ali oštar barkod na 300dpi. Ako bude potreba za većom vidljivošću sa daljine, povećati `narrow` na 3.
 
-## 6. Test scan plan
+## 7. Test scan plan
 
-Operater treba da prošeta barkod kroz **proizvodni skener** (taj koji magacin već koristi) **iz različitih udaljenosti** (15cm, 30cm, 50cm) i **uglova** (frontalno, ±15°, ±30°). Beleži:
+Operater treba da prošeta barkod kroz proizvodni skener iz različitih udaljenosti i uglova. Beleži (✓/✗):
 
-| Udaljenost / Ugao | Stara nalepnica | Nova nalepnica (browser) | Nova (TSPL2) |
+| Udaljenost / Ugao | Stara nalepnica | Nova (browser) | Nova (TSPL2) |
 |---|---|---|---|
 | 15cm / 0° | ✓/✗ | ✓/✗ | ✓/✗ |
 | 30cm / 0° | ✓/✗ | ✓/✗ | ✓/✗ |
@@ -160,17 +182,17 @@ Operater treba da prošeta barkod kroz **proizvodni skener** (taj koji magacin v
 | 15cm / 30° | ✓/✗ | ✓/✗ | ✓/✗ |
 | 30cm / 30° | ✓/✗ | ✓/✗ | ✓/✗ |
 
-Cilj: nova nalepnica čita **najmanje** podjednako dobro kao stara na svim kombinacijama. Idealno: čitaj sa veće udaljenosti zbog 2.8× šireg module width-a.
+Cilj: nova nalepnica čita najmanje podjednako dobro kao stara.
 
-## 7. Verdict & next steps
+## 8. Verdict & next steps
 
-- ✓ Layout redizajn implementiran (`labelsPrint.js`, funkcija `printTechProcessLabelsBatch`).
-- ✓ TSPL2 generator implementiran (`src/lib/tspl2.js`).
+- ✓ Layout redizajn za **80×40mm** stock implementiran (`labelsPrint.js`, funkcija `printTechProcessLabelsBatch` + `buildTechLabelHtmlBlock`).
+- ✓ TSPL2 generator u **encode-only mode** (`src/lib/tspl2.js`) — **NE šalje SIZE/GAP/DENSITY**.
 - ✓ Browser print suppression — CSS + UI hint operateru.
 - ⏳ **Operater treba** jednom da konfiguriše Chrome (Headers and footers OFF) za TSC profil.
-- ⏳ **IT/operater treba** da postavi local proxy agent + `VITE_LABEL_PRINTER_PROXY_URL` ako želimo da idemo punu TSPL2 putanju (preporučeno za produkciju).
-- ⏳ **Operater treba** da odštampa 5 testnih nalepnica (3× browser, 2× TSPL2 ako proxy radi) i izvrši scan plan iz tačke 6 pre nego što stara putanja bude potpuno zatvorena.
+- ⏳ **IT/operater treba** da postavi local proxy agent + `VITE_LABEL_PRINTER_PROXY_URL` ako želimo punu TSPL2 putanju (preporučeno za produkciju).
+- ⏳ **Operater treba** da odštampa 5 testnih nalepnica (3× browser, 2× TSPL2 ako proxy radi) i izvrši scan plan iz tačke 7.
 
 ---
 
-*Author: Cursor agent (na zahtev Nenad Jarakovic), 2026-04-23. Sledeći deliverable: Task 3b (multi-select print page).*
+*Author: Cursor agent (na zahtev Nenad Jarakovic), 2026-04-23. Revizija nakon utvrđivanja stvarnih dimenzija stock-a (80.34×40.30mm) i printer-side config constraint-a.*

@@ -338,16 +338,16 @@ export async function openShelfLabelsPrintPicker() {
 }
 
 /**
- * Generiše HTML stranu za jednu TP nalepnicu (80×50mm portrait, tekst gore +
- * horizontalni barkod dole full-width). Izdvojeno radi reuse-a u batch
- * štampi (više nalepnica u jednom otisku — vidi `printTechProcessLabelsBatch`).
+ * Generiše HTML stranu za jednu TP nalepnicu (80×40mm portrait — stvarna
+ * dimenzija stoka konfigurisana u TSC ML340P preko admin-a 192.168.70.20).
  *
- * Layout:
- *   - `@page { size: 80mm 50mm; margin: 0 }` — kritično da Chrome NE doda
- *     datum / URL / naslov / broj strane u sam label (operater takođe mora
- *     jednom u print dijalogu isključiti „Headers and footers").
- *   - `.label` element je `page-break-after: always` — svaki label ide na
- *     svoju fizičku nalepnicu u rolni.
+ * Layout (po specifikaciji operatera):
+ *   - Red 1: Broj Predmeta (levo, naglašen) | Komitent (desno)
+ *   - Red 2: Naziv predmeta (full width)
+ *   - Red 3: Naziv dela (full width)
+ *   - Red 4: Br. crteža (levo) | Materijal (desno)
+ *   - Red 5: Količina (levo) | Datum (desno)
+ *   - Barkod ispod (full width, ~20mm visine)
  *
  * @param {{ fields: object, barcodeValue: string }} spec
  * @param {number} index 0-based redni broj nalepnice u batch-u (za jedinstveni `id` SVG-a)
@@ -355,29 +355,36 @@ export async function openShelfLabelsPrintPicker() {
  */
 function buildTechLabelHtmlBlock(spec, index = 0) {
   const f = spec?.fields || {};
-  const row = (label, value, opts = {}) => {
-    const v = value == null || value === '' ? '—' : String(value);
-    return `<div class="lbl-row${opts.small ? ' lbl-small' : ''}${opts.big ? ' lbl-big' : ''}"><span class="lbl-k">${escHtml(label)}:</span> <span class="lbl-v">${escHtml(v)}</span></div>`;
+  const cell = (label, value, opts = {}) => {
+    const v = value == null || value === '' ? '' : String(value);
+    if (!v) return '';
+    if (opts.bare) return `<span class="lbl-v">${escHtml(v)}</span>`;
+    return `<span class="lbl-k">${escHtml(label)}:</span> <span class="lbl-v">${escHtml(v)}</span>`;
   };
   return `<div class="label" data-bc-idx="${index}">
     <div class="lbl-meta">
-      ${row('RN', f.brojPredmeta, { big: true })}
-      ${row('Komitent', f.komitent)}
-      ${row('Predmet', f.nazivPredmeta)}
-      ${row('Deo', f.nazivDela)}
-      ${row('Crtež', f.brojCrteza)}
-      ${row('Količina', f.kolicina)}
-      ${row('Materijal', f.materijal)}
-      ${row('Datum', f.datum, { small: true })}
+      <div class="lbl-row lbl-row-split">
+        <span class="lbl-cell lbl-rn">${escHtml(f.brojPredmeta || '')}</span>
+        <span class="lbl-cell lbl-cell-right">${escHtml(f.komitent || '')}</span>
+      </div>
+      <div class="lbl-row lbl-row-full">${escHtml(f.nazivPredmeta || '')}</div>
+      <div class="lbl-row lbl-row-full">${escHtml(f.nazivDela || '')}</div>
+      <div class="lbl-row lbl-row-split">
+        <span class="lbl-cell">${cell('Crtež', f.brojCrteza)}</span>
+        <span class="lbl-cell lbl-cell-right">${cell('', f.materijal, { bare: true })}</span>
+      </div>
+      <div class="lbl-row lbl-row-split">
+        <span class="lbl-cell">${cell('Kol', f.kolicina)}</span>
+        <span class="lbl-cell lbl-cell-right">${cell('', f.datum, { bare: true })}</span>
+      </div>
     </div>
     <div class="lbl-bc"><svg id="bc_${index}"></svg></div>
   </div>`;
 }
 
 /**
- * CSS koji se reuse-uje za TP nalepnice — sve dimenzije u mm da bi
- * @page i printer dimenzije bile predvidljive (px ↔ mm konverzija u
- * Chrome-u zavisi od zoom i system DPI, mm je apsolutno).
+ * CSS za TP nalepnice — stvarna dimenzija stock-a u TSC ML340P pogonu:
+ * **80mm × 40mm** (po web admin-u: Paper Width 80.34, Paper Height 40.30).
  *
  * Kritično: `@page { margin: 0 }` + `body { margin: 0 }` + prazan
  * `<title>` značajno smanjuje šansu da Chrome ubaci browser headers
@@ -385,7 +392,7 @@ function buildTechLabelHtmlBlock(spec, index = 0) {
  * print dijalogu isključiti „Headers and footers" za TSC profil.
  */
 const TECH_LABEL_CSS = `
-  @page { size: 80mm 50mm; margin: 0; }
+  @page { size: 80mm 40mm; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin:0; padding:0; font-family: 'Arial', 'Liberation Sans', sans-serif; color:#000; background:#fff; }
   .toolbar {
@@ -395,28 +402,37 @@ const TECH_LABEL_CSS = `
   .toolbar button { margin-left:8px; padding:4px 10px; cursor:pointer; }
   .toolbar .hint { color:#444; margin-left:12px; }
   .label {
-    width: 80mm; height: 50mm;
-    padding: 1.5mm 2mm 1mm;
+    width: 80mm; height: 40mm;
+    padding: 1mm 1.5mm 0.5mm;
     display: flex; flex-direction: column;
-    gap: 0.5mm;
+    gap: 0.3mm;
     page-break-after: always;
     break-after: page;
     overflow: hidden;
   }
   .label:last-child { page-break-after: auto; break-after: auto; }
-  .lbl-meta { display: flex; flex-direction: column; gap: 0.2mm; flex: 0 0 auto; }
-  .lbl-row { font-size: 7.2pt; line-height: 1.15; word-break: break-word; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .lbl-row .lbl-k { font-weight: 700; }
-  .lbl-row .lbl-v { font-weight: 500; }
-  .lbl-small { font-size: 6.4pt; }
-  .lbl-big { font-size: 11pt; line-height: 1.1; margin-bottom: 0.4mm; }
+  .lbl-meta { display: flex; flex-direction: column; gap: 0.1mm; flex: 0 0 auto; }
+  .lbl-row {
+    font-size: 7pt; line-height: 1.1;
+    display: flex; gap: 4mm;
+    overflow: hidden;
+    height: 3mm;
+  }
+  .lbl-row-full { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lbl-row-split { display: flex; justify-content: space-between; align-items: baseline; }
+  .lbl-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 50%; }
+  .lbl-cell-right { text-align: right; }
+  .lbl-rn { font-size: 11pt; font-weight: 700; line-height: 1; flex: 1 1 auto; }
+  .lbl-row-split:first-child { height: 4.5mm; align-items: center; }
+  .lbl-k { font-weight: 700; }
+  .lbl-v { font-weight: 500; }
   .lbl-bc {
-    flex: 1 1 auto; min-height: 18mm;
+    flex: 1 1 auto; min-height: 16mm;
     display: flex; align-items: center; justify-content: center;
     margin-top: 0.5mm;
     padding: 0 2mm; /* quiet zone leva i desna strana */
   }
-  .lbl-bc svg { width: 100%; height: 100%; max-height: 22mm; }
+  .lbl-bc svg { width: 100%; height: 100%; max-height: 20mm; }
   @media print {
     .toolbar { display: none !important; }
     body { margin:0; padding:0; }

@@ -16,27 +16,37 @@ describe('buildTspLabelProgram', () => {
     barcodeValue: 'RNZ:0:7351/1088:0:0',
   };
 
-  it('generates a valid TSPL2 program with required setup commands', () => {
+  it('generates a valid TSPL2 program with only render commands (no SIZE/GAP/DENSITY)', () => {
     const out = buildTspLabelProgram(baseSpec);
-    expect(out).toContain('SIZE 80 mm, 50 mm');
-    expect(out).toContain('GAP 3 mm, 0 mm');
-    expect(out).toContain('DIRECTION 1');
+    /* Po dogovoru sa proizvodnjom: štampač je već konfigurisan u web admin-u
+     * za 80.34×40.30mm, slanje SIZE/GAP/DENSITY/SPEED/CODEPAGE komandi mu prepisuje
+     * postavke i blokira ga. Šaljemo SAMO render komande. */
     expect(out).toContain('CLS');
     expect(out).toContain('PRINT 1,1');
-    expect(out).toContain('CODEPAGE 1252');
+    expect(out).toMatch(/^[\s\S]*BARCODE/);
+    /* Ne sme da postoji NIJEDNA "format change" komanda: */
+    expect(out).not.toContain('SIZE');
+    expect(out).not.toContain('GAP');
+    expect(out).not.toContain('DIRECTION');
+    expect(out).not.toContain('DENSITY');
+    expect(out).not.toContain('SPEED');
+    expect(out).not.toContain('CODEPAGE');
+    expect(out).not.toContain('REFERENCE');
+    expect(out).not.toContain('OFFSET');
+    expect(out).not.toContain('SET TEAR');
   });
 
   it('embeds the RNZ barcode value verbatim in BARCODE command', () => {
     const out = buildTspLabelProgram(baseSpec);
-    expect(out).toMatch(/BARCODE [\d]+,[\d]+,"128M",[\d]+,2,0,2,4,"RNZ:0:7351\/1088:0:0"/);
+    expect(out).toMatch(/BARCODE [\d]+,[\d]+,"128M",[\d]+,0,0,2,4,"RNZ:0:7351\/1088:0:0"/);
   });
 
   it('transliterates Serbian diacritics to ASCII for TEXT fields', () => {
     const out = buildTspLabelProgram(baseSpec);
     /* Č → C, š → s, ž → z, ć → c, đ → dj */
-    expect(out).toContain('"Mat: C.4732 FI30X30  |  Dat: 23-04-26"');
-    expect(out).toContain('"Deo: PRIGUSENJE 1 40/22 - KONUS"');
-    expect(out).toMatch(/Predmet: Perun (-|–) automatski punjac/);
+    expect(out).toContain('"C.4732 FI30X30"');
+    expect(out).toContain('"PRIGUSENJE 1 40/22 - KONUS"');
+    expect(out).toMatch(/Perun (-|–)? ?automatski punjac/);
     /* Ne sme da ostane original sa dijakriticima */
     expect(out).not.toMatch(/Č\.4732/);
     expect(out).not.toMatch(/PRIGUŠENJE/);
@@ -59,21 +69,21 @@ describe('buildTspLabelProgram', () => {
       barcodeValue: 'RNZ:0:9000/522:0:0',
     };
     const out = buildTspLabelProgram(sparse);
-    expect(out).toContain('"RN: 9000/522"');
-    expect(out).not.toMatch(/Komitent/);
-    expect(out).not.toMatch(/Materijal|Mat:/);
+    expect(out).toContain('"9000/522"');
+    /* Sparse: nema komitenta, materijala, kolicine, datuma — pa NIJEDNOG TEXT-a sa tim sadržajem */
+    expect(out).not.toMatch(/Mat:|Crtez:|Kol:/);
     /* Barkod uvek mora biti prisutan */
     expect(out).toContain('BARCODE');
   });
 
   it('escapes embedded double quotes by replacing with single quotes', () => {
     const out = buildTspLabelProgram({
-      fields: { brojPredmeta: 'TEST "QUOTE"' },
+      fields: { brojPredmeta: 'TEST"X' },
       barcodeValue: 'RNZ:0:1/1:0:0',
     });
     /* Posle escape-a, dupli navodnici postaju jednostruki da TSPL2 parser
      * ne prekine string parametra. */
-    expect(out).toContain("\"RN: TEST 'QUOTE'\"");
+    expect(out).toContain("\"TEST'X\"");
   });
 
   it('terminates each command with CRLF (TSC firmware requires it)', () => {
@@ -81,16 +91,31 @@ describe('buildTspLabelProgram', () => {
     expect(out.endsWith('\r\n')).toBe(true);
     expect(out).toContain('\r\n');
   });
+
+  it('places barcode roughly in lower half (y >= ~16mm) so 5-row text zona ima mesta gore', () => {
+    const out = buildTspLabelProgram(baseSpec);
+    const m = out.match(/BARCODE \d+,(\d+),"128M"/);
+    expect(m).not.toBeNull();
+    const yDots = Number(m[1]);
+    /* 16mm * 11.81 ≈ 189 dots */
+    expect(yDots).toBeGreaterThanOrEqual(180);
+    /* 22mm * 11.81 ≈ 260 dots — barkod ne sme da padne ispod sredine 40.3mm nalepnice */
+    expect(yDots).toBeLessThan(260);
+  });
 });
 
 describe('buildTspShelfLabelProgram', () => {
-  it('generates valid program for shelf label', () => {
+  it('generates valid program for shelf label without size-changing commands', () => {
     const out = buildTspShelfLabelProgram({ location_code: 'MAG-1.A.03', name: 'Polica A03' });
-    expect(out).toContain('SIZE 80 mm, 50 mm');
+    expect(out).toContain('CLS');
     expect(out).toContain('"MAG-1.A.03"');
     expect(out).toContain('"Polica A03"');
     expect(out).toMatch(/BARCODE [\d]+,[\d]+,"128M"/);
     expect(out).toContain('PRINT 1,1');
+    /* Ne sme menjati štampač konfiguraciju: */
+    expect(out).not.toContain('SIZE');
+    expect(out).not.toContain('GAP');
+    expect(out).not.toContain('DENSITY');
   });
 
   it('throws if location_code missing', () => {
