@@ -22,8 +22,10 @@ import { formatDate } from '../../lib/date.js';
 import {
   loadMachines,
   loadOperationsForMachine,
+  loadAllOpenOperations,
   upsertOverlay,
   reorderOverlays,
+  summarizeByMachine,
   STATUS_CYCLE_NEXT,
   rokUrgencyClass,
   formatSecondsHm,
@@ -39,9 +41,12 @@ import {
 import { openDrawingManager } from './drawingManager.js';
 import { openTechProcedureModal } from './techProcedureModal.js';
 import {
-  MACHINE_GROUPS,
+  MACHINE_GROUPS_ROW_1,
+  MACHINE_GROUPS_ROW_2,
   countMachinesPerGroup,
   filterMachinesByGroup,
+  getMachineGroup,
+  machineGroupLabel,
   sortMachinesByGroupOrder,
 } from '../../lib/machineGroups.js';
 
@@ -49,13 +54,25 @@ import {
 const STORAGE_KEY_LAST_MACHINE = 'plan-proizvodnje:last-machine';
 const STORAGE_KEY_MACHINE_GROUP = 'plan-proizvodnje:machine-group';
 
+/**
+ * View modovi:
+ *   'all-flat'      — chip "Sve": flat tabela svih otvorenih operacija
+ *                     iz cele firme (loadAllOpenOperations).
+ *   'group-cards'   — chip != 'Sve' i mašina nije izabrana: grid kartica
+ *                     mašina iz grupe (svaka kartica = mašina + brojač
+ *                     otvorenih operacija).
+ *   'machine-table' — chip != 'Sve' i mašina izabrana (klikom na karticu):
+ *                     tabela operacija te mašine (postojeće ponašanje).
+ */
 const state = {
   host: null,
   canEdit: false,
   machines: [],          /* [{rj_code, name, no_procedure, department_id}] */
-  selectedMachine: null, /* string rj_code */
+  selectedMachine: null, /* string rj_code (samo kad je mode=machine-table) */
   selectedGroup: 'all',  /* chip-bar filter */
-  rows: [],              /* trenutne operacije */
+  mode: 'all-flat',      /* 'all-flat' | 'group-cards' | 'machine-table' */
+  rows: [],              /* operacije (smisao zavisi od mode-a) */
+  machineSummary: [],    /* summarizeByMachine(allOpen) — za kartice */
   loading: false,
   error: null,
   /* drag-drop */
@@ -68,40 +85,50 @@ export async function renderPoMasiniTab(host, { canEdit }) {
   state.host = host;
   state.canEdit = !!canEdit;
 
-  state.selectedMachine =
-    state.selectedMachine
-    || localStorage.getItem(STORAGE_KEY_LAST_MACHINE)
-    || null;
-
   state.selectedGroup =
     localStorage.getItem(STORAGE_KEY_MACHINE_GROUP) || 'all';
 
-  /* Inicijalni HTML — mašine se učitavaju asinhrono. Chip-bar dolazi iznad
-     glavnog toolbar-a, jer je grupa kontekst za sve ostalo. */
+  /* Default mode izvedeno iz selectedGroup-a; mašinu vraćamo iz LS-a samo
+     ako će da se prikaže (group != 'all'). */
+  if (state.selectedGroup === 'all') {
+    state.mode = 'all-flat';
+    state.selectedMachine = null;
+  } else {
+    state.selectedMachine =
+      state.selectedMachine
+      || localStorage.getItem(STORAGE_KEY_LAST_MACHINE)
+      || null;
+    state.mode = state.selectedMachine ? 'machine-table' : 'group-cards';
+  }
+
+  /* Inicijalni HTML — chip-bar (2 reda) + breadcrumb + body. Brojač
+     "X operacija" stoji u desnom ćošku iznad svega (zajednički za sve
+     mode-ove). */
   host.innerHTML = `
-    <div class="mg-chipbar" id="ppGroupChipbar" role="tablist" aria-label="Filter mašina po grupi">
-      <span class="mg-chipbar-label">Grupa:</span>
-      <div class="mg-chipbar-scroll" id="ppGroupChipbarScroll">
-        <span class="pp-cell-muted">Učitavanje grupa…</span>
+    <div class="mg-chipbar mg-chipbar-multi" id="ppGroupChipbar" role="tablist" aria-label="Filter mašina po grupi">
+      <div class="mg-chipbar-rows">
+        <div class="mg-chipbar-row" id="ppGroupChipbarRow1">
+          <span class="pp-cell-muted">Učitavanje grupa…</span>
+        </div>
+        <div class="mg-chipbar-row" id="ppGroupChipbarRow2"></div>
+      </div>
+      <div class="mg-chipbar-meta">
+        <span class="mg-ops-counter" id="ppOpsCounter">— operacija</span>
+        ${state.canEdit ? '' : '<span class="pp-readonly-badge">🔒 Read-only</span>'}
       </div>
     </div>
 
-    <div class="pp-toolbar">
-      <span class="pp-toolbar-label">Mašina:</span>
-      <select class="pp-machine-select" id="ppMachineSelect" disabled>
-        <option>Učitavanje…</option>
-      </select>
-      <button class="pp-refresh-btn" id="ppRefreshBtn" disabled title="Osvezi listu operacija">
+    <div class="pp-subbar" id="ppSubbar">
+      <div class="pp-breadcrumb" id="ppBreadcrumb"></div>
+      <div class="pp-toolbar-spacer"></div>
+      <button class="pp-refresh-btn" id="ppRefreshBtn" title="Osveži podatke">
         <span aria-hidden="true">↻</span> Osveži
       </button>
-      <div class="pp-toolbar-spacer"></div>
-      <span class="pp-counter" id="ppCounter">— operacija</span>
-      ${state.canEdit ? '' : '<span class="pp-readonly-badge">🔒 Read-only</span>'}
     </div>
 
     <div id="ppErrorBox"></div>
 
-    <div class="pp-table-wrap" id="ppTableWrap">
+    <div class="pp-body-wrap" id="ppBodyWrap">
       <div class="pp-state">
         <div class="pp-state-icon">⏳</div>
         <div class="pp-state-title">Učitavanje mašina…</div>
@@ -109,36 +136,27 @@ export async function renderPoMasiniTab(host, { canEdit }) {
     </div>
   `;
 
-  /* Wire toolbar */
-  const machineSel = host.querySelector('#ppMachineSelect');
-  const refreshBtn = host.querySelector('#ppRefreshBtn');
-  machineSel.addEventListener('change', () => {
-    state.selectedMachine = machineSel.value || null;
-    if (state.selectedMachine) {
-      localStorage.setItem(STORAGE_KEY_LAST_MACHINE, state.selectedMachine);
-    }
-    refreshOperations();
-  });
-  refreshBtn.addEventListener('click', () => {
+  host.querySelector('#ppRefreshBtn').addEventListener('click', () => {
     if (state.loading) return;
-    refreshOperations({ force: true });
+    void refreshForMode({ force: true });
   });
 
-  /* Učitaj mašine */
-  await loadMachineSelect();
+  /* Učitaj mašine + (po potrebi) sve operacije za mode all-flat / kartice */
+  await loadMachinesAndPrime();
 }
 
 export function teardownPoMasiniTab() {
   state.host = null;
   state.machines = [];
   state.rows = [];
+  state.machineSummary = [];
   state.dragRowKey = null;
   state.error = null;
 }
 
-/* ── Mašine ── */
+/* ── Mašine + chip-bar + render router ── */
 
-async function loadMachineSelect() {
+async function loadMachinesAndPrime() {
   try {
     state.machines = await loadMachines();
   } catch (e) {
@@ -147,67 +165,128 @@ async function loadMachineSelect() {
     setError('Greška pri učitavanju mašina iz Supabase-a.');
   }
 
-  const sel = state.host?.querySelector('#ppMachineSelect');
-  const btn = state.host?.querySelector('#ppRefreshBtn');
-  if (!sel) return;
-
   if (state.machines.length === 0) {
-    sel.innerHTML = '<option>Nema mašina (pokreni Bridge sync)</option>';
-    sel.disabled = true;
-    if (btn) btn.disabled = true;
-    renderEmptyTable('Nijedna mašina nije pronađena u <code>bigtehn_machines_cache</code>.');
     renderGroupChipbar();
+    renderBreadcrumb();
+    renderEmpty('Nijedna mašina nije pronađena u <code>bigtehn_machines_cache</code>.');
+    setOpsCounter(0);
     return;
   }
 
   renderGroupChipbar();
-  populateMachineSelect();
-  if (btn) btn.disabled = false;
-
-  /* Vrati prethodno izabranu mašinu ako još postoji u listi (i u trenutnoj
-     grupi). Ako mašina pripada nekoj drugoj grupi, ne menjamo grupu — samo
-     je odznačimo. */
-  const filtered = filterMachinesByGroup(state.machines, state.selectedGroup);
-  const picked = state.selectedMachine
-    && filtered.some(m => m.rj_code === state.selectedMachine);
-  if (picked) {
-    sel.value = state.selectedMachine;
-    await refreshOperations();
-  } else {
-    state.selectedMachine = null;
-    renderEmptyTable('Izaberi mašinu iz dropdown-a iznad da vidiš njene otvorene operacije.');
-    setCounter(null);
-  }
+  renderBreadcrumb();
+  await refreshForMode();
 }
 
 /**
- * Render chip-bar grupisanja iznad toolbar-a. Klik na chip filtrira
- * dropdown mašina i (ako trenutno izabrana mašina nije u toj grupi)
- * resetuje izbor mašine. Default „Sve" je redovan brojač = ukupno.
+ * Refresh sadržaja po trenutnom mode-u. Force=true znači uvek povući svežu
+ * porciju (ignoriši ev. cache).
  */
+async function refreshForMode({ force = false } = {}) {
+  if (state.mode === 'all-flat')      return refreshAllFlat({ force });
+  if (state.mode === 'group-cards')   return refreshGroupCards({ force });
+  if (state.mode === 'machine-table') return refreshMachineTable({ force });
+}
+
+async function refreshAllFlat() {
+  state.loading = true;
+  setError(null);
+  setRefreshSpinner(true);
+  try {
+    const all = await loadAllOpenOperations();
+    state.rows = Array.isArray(all) ? all : [];
+    state.machineSummary = summarizeByMachine(state.rows);
+    await annotateRowsWithPdfAvailability(state.rows);
+  } catch (e) {
+    console.error('[pp] loadAllOpenOperations failed', e);
+    state.rows = [];
+    state.machineSummary = [];
+    setError('Greška pri učitavanju operacija (svih). Pogledaj konzolu (DevTools).');
+  } finally {
+    state.loading = false;
+    setRefreshSpinner(false);
+  }
+  renderTable({ contextLabel: 'sve mašine' });
+  setOpsCounter(state.rows.length);
+}
+
+async function refreshGroupCards({ force = false } = {}) {
+  /* Za kartice nam treba summary po mašini iz svih otvorenih operacija.
+     Ako smo u prethodnom koraku već povukli all (force=false i imamo
+     summary) — preskoči mrežu. */
+  state.loading = true;
+  setError(null);
+  setRefreshSpinner(true);
+  try {
+    if (force || !state.machineSummary.length) {
+      const all = await loadAllOpenOperations();
+      state.rows = Array.isArray(all) ? all : [];
+      state.machineSummary = summarizeByMachine(state.rows);
+    }
+  } catch (e) {
+    console.error('[pp] loadAllOpenOperations (cards) failed', e);
+    state.machineSummary = [];
+    setError('Greška pri učitavanju zauzetosti mašina.');
+  } finally {
+    state.loading = false;
+    setRefreshSpinner(false);
+  }
+  renderGroupCards();
+}
+
+async function refreshMachineTable() {
+  if (!state.selectedMachine) {
+    /* Defenzivno — ako nema mašine, vrati se na kartice. */
+    state.mode = 'group-cards';
+    renderBreadcrumb();
+    return refreshGroupCards();
+  }
+  state.loading = true;
+  setError(null);
+  setRefreshSpinner(true);
+  try {
+    state.rows = await loadOperationsForMachine(state.selectedMachine);
+    await annotateRowsWithPdfAvailability(state.rows);
+  } catch (e) {
+    console.error('[pp] loadOperationsForMachine failed', e);
+    state.rows = [];
+    setError('Greška pri učitavanju operacija. Pogledaj konzolu (DevTools).');
+  } finally {
+    state.loading = false;
+    setRefreshSpinner(false);
+  }
+  renderTable({ contextLabel: machineLabel(state.selectedMachine) });
+  setOpsCounter(state.rows.length);
+}
+
+function machineLabel(rjCode) {
+  const m = state.machines.find((x) => x.rj_code === rjCode);
+  return m ? `${m.name} (${rjCode})` : rjCode;
+}
+
+/* ── Chip-bar (2 reda) ── */
+
 function renderGroupChipbar() {
-  const host = state.host?.querySelector('#ppGroupChipbarScroll');
+  renderChipbarRow(MACHINE_GROUPS_ROW_1, '#ppGroupChipbarRow1');
+  renderChipbarRow(MACHINE_GROUPS_ROW_2, '#ppGroupChipbarRow2');
+}
+
+function renderChipbarRow(groups, sel) {
+  const host = state.host?.querySelector(sel);
   if (!host) return;
   const counts = countMachinesPerGroup(state.machines);
-  /* Sakrij grupe koje su prazne (zero), izuzev "Sve" — uvek je vidljiva. */
-  const visible = MACHINE_GROUPS.filter(
-    (g) => g.id === 'all' || (counts.get(g.id) || 0) > 0,
-  );
-  host.innerHTML = visible
-    .map((g) => {
-      const n = counts.get(g.id) || 0;
-      const isActive = g.id === state.selectedGroup;
-      return `
-        <button type="button" role="tab"
-                class="mg-chip${isActive ? ' is-active' : ''}"
-                data-group-id="${escHtml(g.id)}"
-                aria-selected="${isActive ? 'true' : 'false'}"
-                title="${escHtml(g.label)} — ${n} mašina">
-          ${escHtml(g.label)} <span class="mg-chip-count">${n}</span>
-        </button>`;
-    })
-    .join('');
-
+  host.innerHTML = groups.map((g) => {
+    const n = counts.get(g.id) || 0;
+    const isActive = g.id === state.selectedGroup;
+    return `
+      <button type="button" role="tab"
+              class="mg-chip${isActive ? ' is-active' : ''}"
+              data-group-id="${escHtml(g.id)}"
+              aria-selected="${isActive ? 'true' : 'false'}"
+              title="${escHtml(g.label)} — ${n} mašina">
+        ${escHtml(g.label)}<span class="mg-chip-count">${n}</span>
+      </button>`;
+  }).join('');
   host.querySelectorAll('button[data-group-id]').forEach((btn) => {
     btn.addEventListener('click', () => onSelectGroup(btn.dataset.groupId));
   });
@@ -216,96 +295,125 @@ function renderGroupChipbar() {
 function onSelectGroup(groupId) {
   if (!groupId || groupId === state.selectedGroup) return;
   state.selectedGroup = groupId;
-  try {
-    localStorage.setItem(STORAGE_KEY_MACHINE_GROUP, groupId);
-  } catch { /* SSR/private mode safe */ }
-  renderGroupChipbar();
-  populateMachineSelect();
-
-  const sel = state.host?.querySelector('#ppMachineSelect');
-  const filtered = filterMachinesByGroup(state.machines, state.selectedGroup);
-  if (
-    state.selectedMachine
-    && filtered.some(m => m.rj_code === state.selectedMachine)
-  ) {
-    /* Trenutno izabrana mašina i dalje je u grupi — ostaje. */
-    if (sel) sel.value = state.selectedMachine;
-    return;
-  }
-  /* Izabrana mašina nije više u grupi (ili nije bila izabrana) — resetuj. */
   state.selectedMachine = null;
-  state.rows = [];
-  if (sel) sel.value = '';
-  renderEmptyTable('Izaberi mašinu iz nove grupe da vidiš njene operacije.');
-  setCounter(null);
+  try { localStorage.setItem(STORAGE_KEY_MACHINE_GROUP, groupId); }
+  catch { /* SSR/private mode safe */ }
+  state.mode = groupId === 'all' ? 'all-flat' : 'group-cards';
+  renderGroupChipbar();
+  renderBreadcrumb();
+  void refreshForMode();
 }
 
-/**
- * Popuni `<select>` listom mašina po trenutnoj grupi. Unutar grupe sortira
- * po prirodnom redosledu (rj_code numerički), procedural mašine ispred
- * non-procedural ako ih ima i jedan i drugi tip.
- */
-function populateMachineSelect() {
-  const sel = state.host?.querySelector('#ppMachineSelect');
-  if (!sel) return;
-  const filtered = sortMachinesByGroupOrder(
+/* ── Breadcrumb ── */
+
+function renderBreadcrumb() {
+  const host = state.host?.querySelector('#ppBreadcrumb');
+  if (!host) return;
+  const groupLbl = machineGroupLabel(state.selectedGroup);
+  if (state.mode === 'all-flat') {
+    host.innerHTML = `<span class="pp-bc-current">📋 ${escHtml(groupLbl)} · sve operacije</span>`;
+    return;
+  }
+  if (state.mode === 'group-cards') {
+    host.innerHTML = `<span class="pp-bc-current">🛠 ${escHtml(groupLbl)} · izaberi mašinu</span>`;
+    return;
+  }
+  /* machine-table */
+  host.innerHTML = `
+    <button type="button" class="pp-bc-link" id="ppBcBack" title="Nazad na listu mašina u grupi">
+      ← ${escHtml(groupLbl)}
+    </button>
+    <span class="pp-bc-sep">›</span>
+    <span class="pp-bc-current">${escHtml(machineLabel(state.selectedMachine))}</span>
+  `;
+  host.querySelector('#ppBcBack')?.addEventListener('click', () => {
+    state.selectedMachine = null;
+    state.rows = [];
+    state.mode = 'group-cards';
+    renderBreadcrumb();
+    void refreshForMode();
+  });
+}
+
+/* ── Kartice mašina (mode group-cards) ── */
+
+function renderGroupCards() {
+  const wrap = state.host?.querySelector('#ppBodyWrap');
+  if (!wrap) return;
+  const inGroup = sortMachinesByGroupOrder(
     filterMachinesByGroup(state.machines, state.selectedGroup),
   );
-  const procedural = filtered.filter((m) => !m.no_procedure);
-  const nonProcedural = filtered.filter((m) => m.no_procedure);
-
-  if (filtered.length === 0) {
-    sel.innerHTML = '<option value="">— nema mašina u izabranoj grupi —</option>';
-    sel.disabled = true;
+  if (inGroup.length === 0) {
+    wrap.innerHTML = `
+      <div class="pp-state">
+        <div class="pp-state-icon">🛠</div>
+        <div class="pp-state-title">Nema mašina u grupi „${escHtml(machineGroupLabel(state.selectedGroup))}"</div>
+        <div class="pp-state-hint">Izaberi drugu grupu iz chip-bar-a.</div>
+      </div>`;
+    setOpsCounter(0);
     return;
   }
-  sel.disabled = false;
-  sel.innerHTML = `
-    <option value="">— izaberi mašinu —</option>
-    ${procedural.length ? `<optgroup label="Mašine">
-      ${procedural.map(m =>
-        `<option value="${escHtml(m.rj_code)}">${escHtml(m.name)} (${escHtml(m.rj_code)})</option>`,
-      ).join('')}
-    </optgroup>` : ''}
-    ${nonProcedural.length ? `<optgroup label="Ostalo (kontrola, kooperacija…)">
-      ${nonProcedural.map(m =>
-        `<option value="${escHtml(m.rj_code)}">${escHtml(m.name)} (${escHtml(m.rj_code)})</option>`,
-      ).join('')}
-    </optgroup>` : ''}
-  `;
+  /* Brojači po mašini iz machineSummary (ako je učitan); fallback 0. */
+  const summaryByCode = new Map(
+    (state.machineSummary || []).map((s) => [s.machineCode, s]),
+  );
+  let totalOps = 0;
+  const cardsHtml = inGroup.map((m) => {
+    const s = summaryByCode.get(m.rj_code);
+    const ops = s?.totalOps || 0;
+    const overdue = s?.overdueOps || 0;
+    const today = s?.todayOps || 0;
+    const soon = s?.soonOps || 0;
+    totalOps += ops;
+    const urgentBadges = [];
+    if (overdue) urgentBadges.push(`<span class="pp-card-badge pp-badge-overdue" title="Kasni">${overdue}</span>`);
+    if (today)   urgentBadges.push(`<span class="pp-card-badge pp-badge-today" title="Rok danas">${today}</span>`);
+    if (soon)    urgentBadges.push(`<span class="pp-card-badge pp-badge-soon" title="Rok ≤3 dana">${soon}</span>`);
+    return `
+      <button type="button" class="pp-machine-card${ops === 0 ? ' is-empty' : ''}"
+              data-machine="${escHtml(m.rj_code)}"
+              title="${escHtml(m.name)} (${escHtml(m.rj_code)})">
+        <div class="pp-card-head">
+          <span class="pp-card-code">${escHtml(m.rj_code)}</span>
+          ${m.no_procedure ? '<span class="pp-card-tag">no-proc</span>' : ''}
+        </div>
+        <div class="pp-card-name">${escHtml(m.name || '')}</div>
+        <div class="pp-card-foot">
+          <span class="pp-card-ops"><strong>${ops}</strong> ${plural(ops, 'operacija', 'operacije', 'operacija')}</span>
+          <span class="pp-card-badges">${urgentBadges.join('')}</span>
+        </div>
+      </button>`;
+  }).join('');
+  wrap.innerHTML = `<div class="pp-machine-grid">${cardsHtml}</div>`;
+  wrap.querySelectorAll('button[data-machine]').forEach((btn) => {
+    btn.addEventListener('click', () => onPickMachine(btn.dataset.machine));
+  });
+  /* "X operacija" za grupu = suma operacija po mašinama u grupi. */
+  setOpsCounter(totalOps);
 }
 
-/* ── Operacije ── */
-
-async function refreshOperations() {
-  if (!state.selectedMachine) {
-    renderEmptyTable('Izaberi mašinu da vidiš njene operacije.');
-    setCounter(null);
-    return;
-  }
-  state.loading = true;
-  setError(null);
-  setRefreshSpinner(true);
-  try {
-    state.rows = await loadOperationsForMachine(state.selectedMachine);
-    /* Pre-resolve: koji crteži REALNO imaju PDF u Bridge keš-u (exact match
-       ili neka revizija). Ovo je jedan batch query (~50 brojeva po požaru),
-       i mark-uje svaki red sa `_hasPdf` da UI zna da li uopšte renderuje
-       📄 PDF dugme. Ako request padne, fail-safe je `_hasPdf=true` (ostavi
-       dugme — bolje je dati korisniku opciju nego sakriti). */
-    await annotateRowsWithPdfAvailability(state.rows);
-  } catch (e) {
-    console.error('[pp] loadOperationsForMachine failed', e);
-    state.rows = [];
-    setError('Greška pri učitavanju operacija. Pogledaj konzolu (DevTools) za detalje.');
-  } finally {
-    state.loading = false;
-    setRefreshSpinner(false);
-  }
-
-  renderTable();
-  setCounter(state.rows.length);
+function onPickMachine(rjCode) {
+  if (!rjCode) return;
+  state.selectedMachine = rjCode;
+  try { localStorage.setItem(STORAGE_KEY_LAST_MACHINE, rjCode); }
+  catch { /* ignore */ }
+  state.mode = 'machine-table';
+  renderBreadcrumb();
+  void refreshForMode();
 }
+
+function renderEmpty(htmlMsg) {
+  const wrap = state.host?.querySelector('#ppBodyWrap');
+  if (!wrap) return;
+  wrap.innerHTML = `
+    <div class="pp-state">
+      <div class="pp-state-icon">🛠</div>
+      <div class="pp-state-title">Nema operacija za prikaz</div>
+      <div class="pp-state-hint">${htmlMsg}</div>
+    </div>`;
+}
+
+/* ── Operacije: anotacija PDF availability (deli mode all-flat i machine-table) ── */
 
 async function annotateRowsWithPdfAvailability(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return;
@@ -332,26 +440,15 @@ async function annotateRowsWithPdfAvailability(rows) {
   }
 }
 
-function renderEmptyTable(htmlMsg) {
-  const wrap = state.host?.querySelector('#ppTableWrap');
-  if (!wrap) return;
-  wrap.innerHTML = `
-    <div class="pp-state">
-      <div class="pp-state-icon">🛠</div>
-      <div class="pp-state-title">Nema operacija za prikaz</div>
-      <div class="pp-state-hint">${htmlMsg}</div>
-    </div>
-  `;
-}
-
-function renderTable() {
-  const wrap = state.host?.querySelector('#ppTableWrap');
+function renderTable({ contextLabel = '' } = {}) {
+  const wrap = state.host?.querySelector('#ppBodyWrap');
   if (!wrap) return;
 
   if (state.rows.length === 0) {
-    renderEmptyTable(
-      'Sve operacije za ovu mašinu su završene ili nisu još kreirane u BigTehn-u.<br>Pokušaj <strong>Osveži</strong> ili izaberi drugu mašinu.',
-    );
+    const msg = state.mode === 'all-flat'
+      ? 'Trenutno nema otvorenih operacija u celoj firmi (ili Bridge još nije sinhronizovao podatke).'
+      : `Sve operacije za ${escHtml(contextLabel || 'ovu mašinu')} su završene ili još nisu kreirane u BigTehn-u.<br>Pokušaj <strong>Osveži</strong> ili izaberi drugu mašinu.`;
+    renderEmpty(msg);
     return;
   }
 
@@ -363,29 +460,44 @@ function renderTable() {
    *  - „Crtež" prikazuje broj u prvom redu i klikabilnu 📄 ikonu ispod
    *    (u drugom redu) — vidi `pp-drawing-cell` blok u rowHtml.
    */
+  /* U mode "all-flat" drag-drop nema smisla (mešali bi se RN-ovi različitih
+     mašina), pa se onemogući. Takođe sortiramo po roku da bude pregledno. */
+  const allowDrag = state.canEdit && state.mode === 'machine-table';
+  const rowsToRender = state.mode === 'all-flat'
+    ? state.rows.slice().sort((a, b) => {
+        /* overdue najpre, onda najraniji rok, pa po RN identbroju */
+        const ra = a.rok_izrade ? Date.parse(a.rok_izrade) : 8.64e15;
+        const rb = b.rok_izrade ? Date.parse(b.rok_izrade) : 8.64e15;
+        if (ra !== rb) return ra - rb;
+        return String(a.rn_ident_broj || '').localeCompare(String(b.rn_ident_broj || ''), 'sr', { numeric: true });
+      })
+    : state.rows;
+
   wrap.innerHTML = `
-    <table class="pp-table" data-readonly="${state.canEdit ? 'false' : 'true'}">
-      <thead>
-        <tr>
-          <th title="Drag-drop redosled" style="width:28px"></th>
-          <th title="Prioritet (drag-drop)" style="width:48px">Pri</th>
-          <th>RN</th>
-          <th>Crtež</th>
-          <th>Deo</th>
-          <th class="pp-col-customer">Kupac</th>
-          <th>Rok</th>
-          <th class="pp-cell-num" title="Urađeno / Ukupno komada">Done / Plan</th>
-          <th class="pp-cell-num" title="Tehnološko / Stvarno vreme">T / R</th>
-          <th>Status</th>
-          <th style="min-width:200px">Šefova napomena</th>
-          <th title="Skice / slike">📎</th>
-          <th>Mašina</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${state.rows.map(rowHtml).join('')}
-      </tbody>
-    </table>
+    <div class="pp-table-wrap">
+      <table class="pp-table" data-readonly="${allowDrag ? 'false' : 'true'}">
+        <thead>
+          <tr>
+            ${allowDrag ? '<th title="Drag-drop redosled" style="width:28px"></th>' : '<th style="width:0;padding:0"></th>'}
+            <th title="Prioritet (drag-drop)" style="width:48px">Pri</th>
+            <th>RN</th>
+            <th>Crtež</th>
+            <th>Deo</th>
+            <th class="pp-col-customer">Kupac</th>
+            <th>Rok</th>
+            <th class="pp-cell-num" title="Urađeno / Ukupno komada">Done / Plan</th>
+            <th class="pp-cell-num" title="Tehnološko / Stvarno vreme">T / R</th>
+            <th>Status</th>
+            <th style="min-width:200px">Šefova napomena</th>
+            <th title="Skice / slike">📎</th>
+            <th>Mašina</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsToRender.map((r) => rowHtml(r, { allowDrag })).join('')}
+        </tbody>
+      </table>
+    </div>
   `;
 
   wireRows(wrap);
@@ -395,7 +507,8 @@ function rowKey(r) {
   return `${r.work_order_id}-${r.line_id}`;
 }
 
-function rowHtml(r) {
+function rowHtml(r, opts = {}) {
+  const allowDrag = opts.allowDrag !== false && state.canEdit;
   const urgency = rokUrgencyClass(r.rok_izrade);
   const rokLabel = r.rok_izrade ? formatDate(r.rok_izrade) : '—';
   const status = r.local_status || 'waiting';
@@ -449,8 +562,10 @@ function rowHtml(r) {
       data-wo="${r.work_order_id}"
       data-line="${r.line_id}"
       class="${r.is_non_machining ? 'is-non-machining' : ''}${isReassigned ? ' is-reassigned' : ''}${urgentClass}"
-      ${state.canEdit ? 'draggable="true"' : ''}>
-      <td class="pp-drag-handle" title="${state.canEdit ? 'Prevuci za prioritet' : 'Drag dostupan samo za pm/admin'}">⠿</td>
+      ${allowDrag ? 'draggable="true"' : ''}>
+      ${allowDrag
+        ? `<td class="pp-drag-handle" title="Prevuci za prioritet">⠿</td>`
+        : '<td style="width:0;padding:0"></td>'}
       <td class="pp-cell-center">${urgentBadgeHtml}${priCell}</td>
       <td class="pp-cell-strong" title="RN ${escHtml(r.rn_ident_broj || '')}">
         ${escHtml(r.rn_ident_broj || '—')}
@@ -787,7 +902,7 @@ async function onReassign(btn) {
     }
     showToast('✓ Vraćeno na originalnu mašinu — operacija će nestati iz ove liste');
     /* Operacija sada ne pripada izabranoj mašini → refresh */
-    refreshOperations();
+    void refreshForMode({ force: true });
     return;
   }
 
@@ -828,7 +943,7 @@ async function onReassign(btn) {
     }
     showToast(`✓ Operacija premeštena na ${newMachine}`);
     /* Operacija sada pripada drugoj mašini → nestaje iz trenutne liste */
-    refreshOperations();
+    void refreshForMode({ force: true });
   });
   /* Click anywhere else cancels */
   select.addEventListener('blur', () => {
@@ -915,7 +1030,7 @@ function wireDragDrop(wrap) {
     );
     if (res === null) {
       showToast('⚠ Redosled nije sačuvan — osvežavam');
-      refreshOperations();
+      void refreshForMode({ force: true });
       return;
     }
     /* Sinhronizuj sort vrednosti u state-u */
@@ -926,8 +1041,8 @@ function wireDragDrop(wrap) {
 
 /* ── Toolbar helpers ── */
 
-function setCounter(n) {
-  const el = state.host?.querySelector('#ppCounter');
+function setOpsCounter(n) {
+  const el = state.host?.querySelector('#ppOpsCounter');
   if (!el) return;
   if (n == null) el.textContent = '— operacija';
   else el.textContent = `${n} ${plural(n, 'operacija', 'operacije', 'operacija')}`;

@@ -4,159 +4,149 @@
  * Source of truth: `bigtehn_machines_cache` (rj_code, name, department_id,
  * no_procedure). Bridge sync (BigTehn → Supabase) puni tu tabelu, a ovde u
  * čisto klijentskoj mapi tih ~100 mašina grupišemo u proizvodne kategorije
- * koje šef mašinske obrade prepoznaje (Glodanje, Borverci, Struganje…).
+ * koje šef mašinske obrade prepoznaje.
  *
  * Zašto klijentska mapa, a ne nova SQL tabela:
  *   - Zero-touch baza: ne diramo BigTehn šemu niti novu app-tabelu — sve
  *     već postoji u poljima `department_id` i `rj_code`.
  *   - Brz feedback loop: promena grupe = jedan commit + Vite HMR, bez
  *     migracije.
- *   - Mali broj grupa (16 + Ostalo) — overkill je raditi DB CRUD UI za to.
  *   - Lako za testiranje (čista funkcija + statičan input iz baze).
  *
- * Pravila grupisanja:
- *   - Grupišemo prevashodno po `department_id` (npr. '02' = Struganje).
- *   - Tri izuzetka su rečnik koji menadžment koristi a ne stoji čisto u
- *     odeljenju:
- *       1. „Borverci"   — po `rj_code` (TOS WHN 13: '3.21' i '3.22'),
- *          inače bi se izgubili u 22 mašine glodanja.
- *       2. „Zavarivanje" — `rj_code` koji počinje sa '4.2' / '4.3' / '4.4'
- *          (MIG-MAG, REL, TIG); odeljenje 04 inače meša bravarske i
- *          bušilice.
- *       3. „Bušenje"    — `rj_code` '4.1' (Savijanje), '4.11', '4.12'
- *          (manuelno + radijalna bušilica).
+ * ── Grupe (iteracija 2) ─────────────────────────────────────────────────
+ * Dva reda u UI chip-bar-u. Redosled i imena potvrđeni sa korisnikom:
  *
- *   - Sve što ne uđe ni u jednu grupu hvata fallback „Ostalo" da nijedna
- *     mašina nikad ne bude nevidljiva.
+ *   Red 1:  Sve │ Glodanje │ Struganje │ Brušenje │ Erodiranje │ Ažistiranje
+ *   Red 2:  Sečenje i savijanje │ Bravarsko │ Farbanje i površinska zaštita │
+ *           CAM programiranje │ Ostalo
  *
- * Redosled u UI je proizvodno-tehnološki tok od najčešćih operacija
- * (glodanje) do najređih (kooperacija). „Sve" je default.
+ * Mapa mašina → grupa (po redu):
+ *   glodanje            — dept '03' (SVE, uklj. 3.21/3.22 TOS WHN 13)
+ *   struganje           — dept '02'
+ *   brusenje            — dept '06'
+ *   erodiranje          — dept '10' (Sodick, Charmilles, probijačica)
+ *   azistiranje         — rj_code '8.2' (SAMO ručni radovi–ažistiranje)
+ *   secenje_savijanje   — dept '01' (testera, makaze, gas, voda, plazma, laser)
+ *                         + dept '15' (Apkant Hammerle)
+ *   bravarsko           — rj_code 4.1, 4.11, 4.12 (savijanje + bušilice) +
+ *                         4.2, 4.3, 4.4 (zavarivanje MIG-MAG, REL, TIG)
+ *   farbanje            — dept '05' + rj_code '5.11'
+ *   cam                 — dept '17' (CAM glodanje, CAM struganje)
+ *   ostalo              — fallback: Termička obrada (dept 07), 3D štampa
+ *                         (dept 21), Kooperacija/Nabavka (9.0/9.1), Opšti
+ *                         nalog (0.0), Graviranje (5.9/6.8), Ispravljanje
+ *                         (7.5), Štos (3.50), kontrola (8.1/8.3/8.4) itd.
  *
  * Public API:
- *   MACHINE_GROUPS                 — niz konfigova {id, label, match}
+ *   MACHINE_GROUPS                 — niz konfigova {id, label, row, match}
+ *   MACHINE_GROUPS_ROW_1 / ROW_2   — pomoćni pre-filter za UI 2-redni bar
  *   getMachineGroup(machine)       — vrati id grupe za jednu mašinu
- *   filterMachinesByGroup(machines, groupId)   — filtriraj listu
- *   countMachinesPerGroup(machines)            — Map<groupId, broj>
- *   sortMachinesByGroupOrder(machines)         — sort po redosledu grupa
+ *   filterMachinesByGroup(machines, groupId)
+ *   countMachinesPerGroup(machines)
+ *   sortMachinesByGroupOrder(machines)
+ *   machineGroupLabel(groupId)
  */
 
-/** rj_code-ovi koji se tretiraju kao Borverci (subset glodanja). */
-const BORVER_RJ_CODES = new Set(['3.21', '3.22']);
-
-/** rj_code-ovi za Bušenje (i Bravari/Savijanje koji idu uz njih). */
-const BUSENJE_RJ_CODES = new Set(['4.1', '4.11', '4.12']);
-
-/** rj_code prefiks za Zavarivanje (MIG-MAG, REL, TIG). */
-function isZavarivanjeRj(rj) {
-  return /^4\.(2|3|4)(\D|$)/.test(rj || '');
-}
+/** rj_code-ovi bravarske grupe (savijanje + bušenje + zavarivanje). */
+const BRAVARSKO_RJ_CODES = new Set([
+  '4.1', '4.11', '4.12',
+  '4.2', '4.3', '4.4',
+]);
 
 /**
  * Konfiguracija grupa. Redosled u nizu = redosled u UI chip-bar-u.
+ *
  * `match(machine)` mora biti čista funkcija nad poljima `rj_code` i
- * `department_id`. Prva grupa koja vrati true uzima mašinu — zato je redosled
- * bitan: specifične grupe (Borverci) idu pre širih (Glodanje).
+ * `department_id`. Prva grupa (osim 'all' i 'ostalo') koja vrati true
+ * uzima mašinu — zato je redosled bitan i specifične grupe idu pre širih.
+ *
+ * `row` (1 ili 2) govori UI-ju u kom redu chip-bar-a renderovati.
  */
 export const MACHINE_GROUPS = [
+  /* ── Red 1 ─────────────────────────────────────────────────────────── */
   {
     id: 'all',
     label: 'Sve',
+    row: 1,
     match: () => true,
   },
   {
     id: 'glodanje',
     label: 'Glodanje',
-    match: (m) =>
-      m?.department_id === '03' &&
-      !BORVER_RJ_CODES.has(String(m?.rj_code || '')),
-  },
-  {
-    id: 'borverci',
-    label: 'Borverci',
-    match: (m) => BORVER_RJ_CODES.has(String(m?.rj_code || '')),
+    row: 1,
+    match: (m) => m?.department_id === '03',
   },
   {
     id: 'struganje',
     label: 'Struganje',
+    row: 1,
     match: (m) => m?.department_id === '02',
-  },
-  {
-    id: 'erodiranje',
-    label: 'Erodiranje',
-    match: (m) => m?.department_id === '10',
   },
   {
     id: 'brusenje',
     label: 'Brušenje',
+    row: 1,
     match: (m) => m?.department_id === '06',
   },
   {
-    id: 'secenje',
-    label: 'Sečenje',
-    match: (m) => m?.department_id === '01',
+    id: 'erodiranje',
+    label: 'Erodiranje',
+    row: 1,
+    match: (m) => m?.department_id === '10',
   },
   {
-    id: 'apkant',
-    label: 'Apkant presa',
-    match: (m) => m?.department_id === '15',
+    id: 'azistiranje',
+    label: 'Ažistiranje',
+    row: 1,
+    match: (m) => String(m?.rj_code || '') === '8.2',
+  },
+
+  /* ── Red 2 ─────────────────────────────────────────────────────────── */
+  {
+    id: 'secenje_savijanje',
+    label: 'Sečenje i savijanje',
+    row: 2,
+    /* Dept 01 = sečenje (testera, makaze, gas, voda, plazma, laser),
+       dept 15 = Apkant presa (Hammerle 3100/4100). */
+    match: (m) =>
+      m?.department_id === '01' || m?.department_id === '15',
   },
   {
-    id: 'busenje',
-    label: 'Bušenje / Bravari',
-    match: (m) => BUSENJE_RJ_CODES.has(String(m?.rj_code || '')),
-  },
-  {
-    id: 'zavarivanje',
-    label: 'Zavarivanje',
-    match: (m) => isZavarivanjeRj(String(m?.rj_code || '')),
-  },
-  {
-    id: 'termicka',
-    label: 'Termička obrada',
-    match: (m) => m?.department_id === '07',
+    id: 'bravarsko',
+    label: 'Bravarsko',
+    row: 2,
+    match: (m) => BRAVARSKO_RJ_CODES.has(String(m?.rj_code || '')),
   },
   {
     id: 'farbanje',
-    label: 'Farbanje / Površinska zaštita',
+    label: 'Farbanje i površinska zaštita',
+    row: 2,
     match: (m) =>
       m?.department_id === '05' || String(m?.rj_code || '') === '5.11',
   },
   {
-    id: 'montaza',
-    label: 'Montaža / Kontrola',
-    match: (m) => m?.department_id === '08',
-  },
-  {
-    id: '3d',
-    label: '3D štampanje',
-    match: (m) => m?.department_id === '21',
-  },
-  {
     id: 'cam',
-    label: 'CAM Programiranje',
+    label: 'CAM programiranje',
+    row: 2,
     match: (m) => m?.department_id === '17',
-  },
-  {
-    id: 'kooperacija',
-    label: 'Kooperacija / Nabavka',
-    match: (m) => {
-      const rj = String(m?.rj_code || '');
-      return rj === '9.0' || rj === '9.1';
-    },
   },
   {
     id: 'ostalo',
     label: 'Ostalo',
-    match: () => true,
+    row: 2,
+    match: () => true, /* fallback hvata sve što nije uhvaćeno gore */
   },
 ];
+
+export const MACHINE_GROUPS_ROW_1 = MACHINE_GROUPS.filter((g) => g.row === 1);
+export const MACHINE_GROUPS_ROW_2 = MACHINE_GROUPS.filter((g) => g.row === 2);
 
 const GROUP_BY_ID = new Map(MACHINE_GROUPS.map((g) => [g.id, g]));
 const GROUP_ORDER = new Map(MACHINE_GROUPS.map((g, i) => [g.id, i]));
 
 /* Specifične grupe (sve osim 'all' i 'ostalo') po redosledu — koristimo
  * ih za rezolvuciju kojoj grupi mašina pripada. „Sve" hvata sve i ne sme
- * biti deo te rezolucije, „Ostalo" je fallback na kraju. */
+ * biti deo rezolucije, „Ostalo" je fallback na kraju. */
 const SPECIFIC_GROUPS = MACHINE_GROUPS.filter(
   (g) => g.id !== 'all' && g.id !== 'ostalo',
 );
@@ -194,7 +184,7 @@ export function filterMachinesByGroup(machines, groupId) {
 
 /**
  * Broj mašina po grupi. Mašina ulazi u tačno jednu specifičnu grupu (ili
- * 'ostalo'). Grupa 'all' je ukupno (uvek = machines.length).
+ * 'ostalo'). Grupa 'all' je ukupno.
  *
  * @param {Array<object>} machines
  * @returns {Map<string, number>}
@@ -212,11 +202,8 @@ export function countMachinesPerGroup(machines) {
 
 /**
  * Sort mašina tako da se prvo prikazuju mašine iz „prirodne" tehnološke
- * grupe po redosledu definicije (Glodanje, Borverci, Struganje…), pa onda
- * po `rj_code` natural-sort unutar grupe.
- *
- * Ovo se koristi i za dropdown mašina i za listu chip-ova — da se vizuelno
- * poklapa redosled.
+ * grupe po redosledu definicije, pa onda po `rj_code` natural-sort unutar
+ * grupe.
  *
  * @param {Array<object>} machines
  * @returns {Array<object>}

@@ -50,6 +50,47 @@
 }
 .mg-chipbar-scroll::-webkit-scrollbar { display: none; }
 
+/* Multi-row chipbar (2 reda + meta sa brojačem desno). Korisnik je tražio
+ * dva reda jer je broj grupa veći od onog što staje u jedan red i da postoji
+ * vizuelna podela primarnih (mašinski tehnološke obrade) od sekundarnih
+ * (površina, programiranje, ostalo). */
+.mg-chipbar-multi {
+  align-items: stretch;
+  padding: 10px 14px;
+  gap: 14px;
+}
+.mg-chipbar-rows {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.mg-chipbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.mg-chipbar-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+.mg-ops-counter {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  background: color-mix(in srgb, var(--blue-bar, #4f9bff) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--blue-bar, #4f9bff) 35%, transparent);
+  padding: 6px 12px;
+  border-radius: 8px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .mg-chip {
   display: inline-flex;
   align-items: center;
@@ -127,6 +168,155 @@
   min-width: 220px;
   cursor: pointer;
 }
+
+/* ── Sub-bar (breadcrumb + Osveži dugme) ────────────────────────────── */
+.pp-subbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  min-height: 40px;
+}
+.pp-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.pp-bc-current { font-weight: 600; }
+.pp-bc-sep { color: var(--text3, var(--text2)); }
+.pp-bc-link {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.pp-bc-link:hover {
+  background: var(--surface3);
+  border-color: var(--blue-bar, #4f9bff);
+}
+
+/* Body wrapper za sva 3 mode-a (all-flat tabela, kartice, machine-table). */
+.pp-body-wrap { min-height: 200px; }
+
+/* ── Kartice mašina (mode group-cards) ──────────────────────────────── */
+.pp-machine-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  padding: 4px 2px;
+}
+.pp-machine-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  transition: border-color 0.12s, background 0.12s, transform 0.12s;
+  min-height: 110px;
+}
+.pp-machine-card:hover {
+  border-color: var(--blue-bar, #4f9bff);
+  background: color-mix(in srgb, var(--blue-bar, #4f9bff) 6%, var(--surface));
+  transform: translateY(-1px);
+}
+.pp-machine-card.is-empty {
+  opacity: 0.55;
+}
+.pp-machine-card.is-empty:hover {
+  opacity: 0.85;
+  transform: none;
+}
+.pp-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pp-card-code {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  background: var(--surface2);
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.4px;
+}
+.pp-card-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text3, var(--text2));
+  background: color-mix(in srgb, var(--text2) 12%, transparent);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+.pp-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pp-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+}
+.pp-card-ops {
+  font-size: 12px;
+  color: var(--text2);
+}
+.pp-card-ops strong {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-right: 3px;
+}
+.pp-card-badges {
+  display: inline-flex;
+  gap: 3px;
+}
+.pp-card-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pp-badge-overdue { background: color-mix(in srgb, #ef4444 22%, transparent); color: #fca5a5; }
+.pp-badge-today   { background: color-mix(in srgb, #f59e0b 22%, transparent); color: #fbbf24; }
+.pp-badge-soon    { background: color-mix(in srgb, #fde047 22%, transparent); color: #facc15; }
 .pp-machine-select:focus {
   outline: 2px solid color-mix(in srgb, var(--blue-bar, #4f9bff) 50%, transparent);
   border-color: var(--blue-bar, #4f9bff);

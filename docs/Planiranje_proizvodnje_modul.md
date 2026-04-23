@@ -34,7 +34,19 @@ Modul: `sessionStorage` / hub modul **`plan-proizvodnje`**, `src/ui/planProizvod
 | **Zauzetost mašina** | Zbirno: otvorene operacije i planirano vreme po mašini; skok u „Po mašini” | `zauzetostTab.js` |
 | **Pregled svih** | Matrica mašina × narednih radnih dana; skok u „Po mašini” | `pregledTab.js` |
 
-Iznad svakog taba je **chip-bar grupisanja mašina** (Glodanje, Borverci, Struganje, Erodiranje, Brušenje, Sečenje, Apkant, Bušenje, Zavarivanje, Termička, Farbanje, Montaža, 3D, CAM, Kooperacija, Ostalo). Klik filtrira dropdown / tabelu / matricu i pamti se u `localStorage` ključem **`plan-proizvodnje:machine-group`** zajednički za sva 3 taba (jednom izabrano = primenjeno svuda). Definicija grupa: **`src/lib/machineGroups.js`** — klijentska mapa nad postojećim poljima `bigtehn_machines_cache.department_id` i `rj_code`, bez SQL migracije.
+Iznad svakog taba je **chip-bar grupisanja mašina u 2 reda**:
+
+- **Red 1**: Sve · Glodanje · Struganje · Brušenje · Erodiranje · Ažistiranje
+- **Red 2**: Sečenje i savijanje · Bravarsko · Farbanje i površinska zaštita · CAM programiranje · Ostalo
+
+Definicija grupa: **`src/lib/machineGroups.js`** — klijentska mapa nad postojećim poljima `bigtehn_machines_cache.department_id` i `rj_code`, bez SQL migracije. Izbor grupe se pamti u `localStorage` (`plan-proizvodnje:machine-group`) i **deli između sva 3 taba**.
+
+U **gornjem desnom uglu** chip-bar-a stoji veliki brojač **„X operacija"** — broj operacija u trenutnom prikazu (zavisi od chip-a i, u tabu „Po mašini", od izabrane mašine).
+
+Tab **„Po mašini"** ima 3 stanja:
+- **chip „Sve"** → flat tabela svih otvorenih operacija u celoj firmi (`loadAllOpenOperations`), sortirano po roku. Drag-drop je onemogućen (besmislen u kros-mašinskom prikazu).
+- **chip grupa, mašina nije izabrana** → grid kartica mašina iz grupe; svaka kartica pokazuje broj otvorenih operacija + bedževe za hitno (overdue/today/soon).
+- **chip grupa, mašina izabrana** → tabela operacija te mašine (postojeće ponašanje sa drag-drop, status, REASSIGN). Iznad tabele je breadcrumb sa „← Nazad na grupu".
 
 Pomoćni moduli: **`drawingManager.js`** (upload/lista/signed URL za `production-drawings`), **`techProcedureModal.js`** (detalji operacije / BigTehn kontekst gde je predviđeno).
 

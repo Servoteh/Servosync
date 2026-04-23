@@ -25,7 +25,8 @@ import {
   buildDeadlineMatrix,
 } from '../../services/planProizvodnje.js';
 import {
-  MACHINE_GROUPS,
+  MACHINE_GROUPS_ROW_1,
+  MACHINE_GROUPS_ROW_2,
   countMachinesPerGroup,
   getMachineGroup,
 } from '../../lib/machineGroups.js';
@@ -57,10 +58,15 @@ export async function renderPregledTab(host, { canEdit, onJumpToPoMasini } = {})
   state.group  = localStorage.getItem(STORAGE_KEY_GROUP)  || 'all';
 
   host.innerHTML = `
-    <div class="mg-chipbar" id="pmGroupChipbar" role="tablist" aria-label="Filter mašina po grupi">
-      <span class="mg-chipbar-label">Grupa:</span>
-      <div class="mg-chipbar-scroll" id="pmGroupChipbarScroll">
-        <span class="pp-cell-muted">Učitavanje grupa…</span>
+    <div class="mg-chipbar mg-chipbar-multi" id="pmGroupChipbar" role="tablist" aria-label="Filter mašina po grupi">
+      <div class="mg-chipbar-rows">
+        <div class="mg-chipbar-row" id="pmGroupChipbarRow1">
+          <span class="pp-cell-muted">Učitavanje grupa…</span>
+        </div>
+        <div class="mg-chipbar-row" id="pmGroupChipbarRow2"></div>
+      </div>
+      <div class="mg-chipbar-meta">
+        <span class="mg-ops-counter" id="pmOpsCounter">— operacija</span>
       </div>
     </div>
 
@@ -160,13 +166,15 @@ function setRefreshSpinning(on) {
 }
 
 function renderGroupChipbar() {
-  const host = state.host?.querySelector('#pmGroupChipbarScroll');
+  renderChipbarRow(MACHINE_GROUPS_ROW_1, '#pmGroupChipbarRow1');
+  renderChipbarRow(MACHINE_GROUPS_ROW_2, '#pmGroupChipbarRow2');
+}
+
+function renderChipbarRow(groups, sel) {
+  const host = state.host?.querySelector(sel);
   if (!host) return;
   const counts = countMachinesPerGroup(state.machinesAll);
-  const visible = MACHINE_GROUPS.filter(
-    (g) => g.id === 'all' || (counts.get(g.id) || 0) > 0,
-  );
-  host.innerHTML = visible.map((g) => {
+  host.innerHTML = groups.map((g) => {
     const n = counts.get(g.id) || 0;
     const isActive = g.id === state.group;
     return `
@@ -175,7 +183,7 @@ function renderGroupChipbar() {
               data-group-id="${escHtml(g.id)}"
               aria-selected="${isActive ? 'true' : 'false'}"
               title="${escHtml(g.label)} — ${n} mašina">
-        ${escHtml(g.label)} <span class="mg-chip-count">${n}</span>
+        ${escHtml(g.label)}<span class="mg-chip-count">${n}</span>
       </button>`;
   }).join('');
   host.querySelectorAll('button[data-group-id]').forEach((btn) => {
@@ -198,6 +206,7 @@ function renderMatrix() {
   const errBox = host.querySelector('#pmErrorBox');
   const wrap   = host.querySelector('#pmTableWrap');
   const counter = host.querySelector('#pmCounter');
+  const opsCounter = host.querySelector('#pmOpsCounter');
 
   errBox.innerHTML = state.error
     ? `<div class="pp-error">${escHtml(state.error)}</div>`
@@ -218,6 +227,10 @@ function renderMatrix() {
   });
 
   counter.textContent = `${machines.length} mašina · ${days.length} dana`;
+  if (opsCounter) {
+    const totalOps = machines.reduce((s, m) => s + (m.totalOps || 0), 0);
+    opsCounter.textContent = `${totalOps} operacija`;
+  }
 
   if (!machines.length) {
     wrap.innerHTML = `

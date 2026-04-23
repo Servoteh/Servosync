@@ -21,7 +21,8 @@ import {
   formatSecondsHm,
 } from '../../services/planProizvodnje.js';
 import {
-  MACHINE_GROUPS,
+  MACHINE_GROUPS_ROW_1,
+  MACHINE_GROUPS_ROW_2,
   countMachinesPerGroup,
   getMachineGroup,
 } from '../../lib/machineGroups.js';
@@ -145,10 +146,15 @@ export async function renderZauzetostTab(host, { canEdit, onJumpToPoMasini } = {
   state.group  = localStorage.getItem(STORAGE_KEY_GROUP)  || 'all';
 
   host.innerHTML = `
-    <div class="mg-chipbar" id="zmGroupChipbar" role="tablist" aria-label="Filter mašina po grupi">
-      <span class="mg-chipbar-label">Grupa:</span>
-      <div class="mg-chipbar-scroll" id="zmGroupChipbarScroll">
-        <span class="pp-cell-muted">Učitavanje grupa…</span>
+    <div class="mg-chipbar mg-chipbar-multi" id="zmGroupChipbar" role="tablist" aria-label="Filter mašina po grupi">
+      <div class="mg-chipbar-rows">
+        <div class="mg-chipbar-row" id="zmGroupChipbarRow1">
+          <span class="pp-cell-muted">Učitavanje grupa…</span>
+        </div>
+        <div class="mg-chipbar-row" id="zmGroupChipbarRow2"></div>
+      </div>
+      <div class="mg-chipbar-meta">
+        <span class="mg-ops-counter" id="zmOpsCounter">— operacija</span>
       </div>
     </div>
 
@@ -162,7 +168,7 @@ export async function renderZauzetostTab(host, { canEdit, onJumpToPoMasini } = {
         <span aria-hidden="true">↻</span> Osveži
       </button>
       <div class="pp-toolbar-spacer"></div>
-      <span class="pp-counter" id="zmCounter">— mašina · — operacija</span>
+      <span class="pp-counter" id="zmCounter">— mašina</span>
     </div>
 
     <div id="zmErrorBox"></div>
@@ -251,13 +257,15 @@ function setRefreshSpinning(on) {
 }
 
 function renderGroupChipbar() {
-  const host = state.host?.querySelector('#zmGroupChipbarScroll');
+  renderChipbarRow(MACHINE_GROUPS_ROW_1, '#zmGroupChipbarRow1');
+  renderChipbarRow(MACHINE_GROUPS_ROW_2, '#zmGroupChipbarRow2');
+}
+
+function renderChipbarRow(groups, sel) {
+  const host = state.host?.querySelector(sel);
   if (!host) return;
   const counts = countMachinesPerGroup(state.machinesAll);
-  const visible = MACHINE_GROUPS.filter(
-    (g) => g.id === 'all' || (counts.get(g.id) || 0) > 0,
-  );
-  host.innerHTML = visible.map((g) => {
+  host.innerHTML = groups.map((g) => {
     const n = counts.get(g.id) || 0;
     const isActive = g.id === state.group;
     return `
@@ -266,7 +274,7 @@ function renderGroupChipbar() {
               data-group-id="${escHtml(g.id)}"
               aria-selected="${isActive ? 'true' : 'false'}"
               title="${escHtml(g.label)} — ${n} mašina">
-        ${escHtml(g.label)} <span class="mg-chip-count">${n}</span>
+        ${escHtml(g.label)}<span class="mg-chip-count">${n}</span>
       </button>`;
   }).join('');
   host.querySelectorAll('button[data-group-id]').forEach((btn) => {
@@ -289,6 +297,7 @@ function renderTable() {
   const errBox = host.querySelector('#zmErrorBox');
   const wrap   = host.querySelector('#zmTableWrap');
   const counter = host.querySelector('#zmCounter');
+  const opsCounter = host.querySelector('#zmOpsCounter');
 
   errBox.innerHTML = state.error
     ? `<div class="pp-error">${escHtml(state.error)}</div>`
@@ -307,7 +316,8 @@ function renderTable() {
   const totalMach = data.length;
   const totalOps  = data.reduce((s, r) => s + r.totalOps, 0);
   const totalPlanned = data.reduce((s, r) => s + r.plannedSec, 0);
-  counter.textContent = `${totalMach} mašina · ${totalOps} ops · ${formatSecondsHm(totalPlanned)} plan`;
+  counter.textContent = `${totalMach} mašina · ${formatSecondsHm(totalPlanned)} plan`;
+  if (opsCounter) opsCounter.textContent = `${totalOps} operacija`;
 
   if (!data.length) {
     wrap.innerHTML = `
