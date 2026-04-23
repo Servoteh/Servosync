@@ -133,13 +133,11 @@ export function buildTspLabelProgram(spec) {
    */
 
   /* PAD_LEFT je IDENTICAN sa BC_X (2mm) tako da levi rub teksta i barkoda
-   * budu poravnati. RIGHT_HALF_X = 38mm (pomereno 3mm levo od centra
-   * jer printer kalibracija blago offset-uje udesno; operater javio
-   * da se sadrzaj lepio za desnu fizicku ivicu).
-   * Tekst nikad ne sme biti siri od ~74mm (umesto 76mm), pa je truncFit
-   * na desnim celijama smanjen na 24 chars (sa 28). */
+   * budu poravnati. RIGHT_HALF_X = 41mm (centar nalepnice).
+   * TSPL2 path ne ide kroz Chrome i ne pati od istog kalibracionog
+   * offseta kao browser print, pa koristimo prave 80mm reference. */
   const PAD_LEFT = mm(2);
-  const RIGHT_HALF_X = mm(38);
+  const RIGHT_HALF_X = mm(41);
 
   /* ─ Visina budžeta (40.30mm fizički):
    *   y=0.5mm pad

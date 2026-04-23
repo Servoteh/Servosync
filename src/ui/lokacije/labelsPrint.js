@@ -392,16 +392,16 @@ function buildTechLabelHtmlBlock(spec, index = 0) {
  * print dijalogu isključiti „Headers and footers" za TSC profil.
  */
 const TECH_LABEL_CSS = `
-  /* @page postavljen NAMERNO na 77mm × 38mm umesto fizičkih 80.34 × 40.30:
-   *   - 38mm visine: rezerva 2.3mm da Chrome line-height varijacije
-   *     ne izazovu page break (vidi commit ac68565).
-   *   - 77mm širine: Chrome tada renderuje sadržaj u prvih 77mm fizičke
-   *     nalepnice, ostavljajući ~3mm desno — operater javio da se
-   *     prethodna verzija lepila o desnu fizičku ivicu (kalibracija
-   *     stampaca uvek malo offset-uje udesno). */
-  @page { size: 77mm 38mm; margin: 0; }
+  /* @page = fizicka veličina nalepnice (80mm × 38mm; 38 a ne 40.30 da Chrome
+   * line-height varijacije ne izazovu page-break, vidi commit ac68565). */
+  @page { size: 80mm 38mm; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin:0; padding:0; font-family: 'Arial', 'Liberation Sans', sans-serif; color:#000; background:#fff; }
+  /* CSS varijabla --print-scale = ono sto bi operater inace morao da
+   * kuca u Chrome print dijalog ▸ Custom scale. Promeni ovde ako treba
+   * fino podesavanje (npr. 0.93 ako je previse pomeren u levo, 0.97
+   * ako jos uvek udara o desnu ivicu). */
+  :root { --print-scale: 0.95; }
   .toolbar {
     position: sticky; top: 0; z-index: 10;
     padding: 8px 12px; background:#eef; font-size:12px; border-bottom:1px solid #99c;
@@ -413,13 +413,18 @@ const TECH_LABEL_CSS = `
    * Padding levo/desno = 2mm — IDENTICNO sa barkod quiet zone-om, tako da
    * tekst NIKAD ne moze da bude siri od barkoda (poravnati levi i desni rub). */
   .label {
-    width: 77mm; height: 38mm; max-height: 38mm;
+    width: 80mm; height: 38mm; max-height: 38mm;
     padding: 0.4mm 2mm; /* top/bottom 0.4mm = 0.0157", left/right 2mm = align sa barkodom */
     display: flex; flex-direction: column;
     gap: 0.2mm;
     page-break-after: always;
     break-after: page;
     overflow: hidden;
+    /* Programski Chrome "Custom scale 95%" — operater javio da rucni
+     * 95% scale resi problem da se sadrzaj lepi za desnu fizicku ivicu.
+     * Sa zoom u CSS-u to je auto: nema potrebe da se rucno podesava
+     * pri svakom print-u. Promeni --print-scale gore ako treba drugi %. */
+    zoom: var(--print-scale);
   }
   .label:last-child { page-break-after: auto; break-after: auto; }
   .lbl-meta { display: flex; flex-direction: column; gap: 0; flex: 0 0 auto; max-height: 14mm; overflow: hidden; }
