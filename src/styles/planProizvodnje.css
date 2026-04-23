@@ -32,7 +32,12 @@
   border-radius: 8px;
   font: inherit;
   font-size: 14px;
-  min-width: 220px;
+  /* Auto-grow do prirodne sirine najduze opcije, sa donjim limitom 280px
+   * (da na praznim/jednoslovnim mašinama ne budu mikro select), gornjim
+   * 640px (da ekstremno dug naziv ne preteca toolbar). */
+  width: auto;
+  min-width: 280px;
+  max-width: 640px;
   cursor: pointer;
 }
 .pp-machine-select:focus {
