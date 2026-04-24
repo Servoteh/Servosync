@@ -11,6 +11,21 @@ import { isHrOrAdmin, getIsOnline } from '../state/auth.js';
 
 /* ── CONFIG (singleton) ──────────────────────────────────────────── */
 
+/**
+ * @typedef {Object} KadrNotificationConfig
+ * @property {number}   id
+ * @property {boolean}  enabled
+ * @property {number}   medicalLeadDays
+ * @property {number}   contractLeadDays
+ * @property {boolean}  birthdayEnabled
+ * @property {boolean}  workAnniversaryEnabled
+ * @property {boolean}  childBirthdayEnabled
+ * @property {string[]} whatsappRecipients
+ * @property {string[]} emailRecipients
+ * @property {?string}  updatedAt
+ * @property {string}   updatedBy
+ */
+
 function mapDbConfig(c) {
   return {
     id: c.id,
@@ -19,6 +34,7 @@ function mapDbConfig(c) {
     contractLeadDays: Number(c.contract_lead_days ?? 30),
     birthdayEnabled: !!c.birthday_enabled,
     workAnniversaryEnabled: !!c.work_anniversary_enabled,
+    childBirthdayEnabled: !!c.child_birthday_enabled,
     whatsappRecipients: Array.isArray(c.whatsapp_recipients) ? c.whatsapp_recipients : [],
     emailRecipients: Array.isArray(c.email_recipients) ? c.email_recipients : [],
     updatedAt: c.updated_at || null,
@@ -41,6 +57,7 @@ export async function updateHrNotifConfig(cfg) {
     contract_lead_days: Number(cfg.contractLeadDays ?? 30),
     birthday_enabled: !!cfg.birthdayEnabled,
     work_anniversary_enabled: !!cfg.workAnniversaryEnabled,
+    child_birthday_enabled: !!cfg.childBirthdayEnabled,
     whatsapp_recipients: Array.isArray(cfg.whatsappRecipients) ? cfg.whatsappRecipients : [],
     email_recipients: Array.isArray(cfg.emailRecipients) ? cfg.emailRecipients : [],
     updated_at: new Date().toISOString(),

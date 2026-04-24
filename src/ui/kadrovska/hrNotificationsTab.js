@@ -36,6 +36,7 @@ const TYPE_LABELS = {
   medical_expiring: 'Lekarski ističe',
   contract_expiring: 'Ugovor ističe',
   birthday: 'Rođendan',
+  child_birthday: 'Rođendan deteta',
   work_anniversary: 'Godišnjica rada',
 };
 const STATUS_LABELS = {
@@ -260,6 +261,7 @@ async function openSettingsModal() {
   const cfg = cachedConfig || {
     enabled: true, medicalLeadDays: 30, contractLeadDays: 30,
     birthdayEnabled: false, workAnniversaryEnabled: false,
+    childBirthdayEnabled: false,
     whatsappRecipients: [], emailRecipients: [],
   };
 
@@ -284,7 +286,10 @@ async function openSettingsModal() {
               <input type="number" id="cfgCon" min="1" max="365" value="${cfg.contractLeadDays}">
             </div>
             <div class="emp-field col-full">
-              <label><input type="checkbox" id="cfgBday" ${cfg.birthdayEnabled ? 'checked' : ''}> Šalji poruke za rođendane</label>
+              <label><input type="checkbox" id="cfgBday" ${cfg.birthdayEnabled ? 'checked' : ''}> 🎂 Rođendani zaposlenih</label>
+            </div>
+            <div class="emp-field col-full">
+              <label><input type="checkbox" id="cfgChildBday" ${cfg.childBirthdayEnabled ? 'checked' : ''}> 🎂 Rođendani dece zaposlenih</label>
             </div>
             <div class="emp-field col-full">
               <label><input type="checkbox" id="cfgAnn" ${cfg.workAnniversaryEnabled ? 'checked' : ''}> Šalji poruke za godišnjice rada</label>
@@ -331,6 +336,7 @@ async function submitConfig() {
     medicalLeadDays: parseInt(document.getElementById('cfgMed').value, 10) || 30,
     contractLeadDays: parseInt(document.getElementById('cfgCon').value, 10) || 30,
     birthdayEnabled: document.getElementById('cfgBday').checked,
+    childBirthdayEnabled: document.getElementById('cfgChildBday').checked,
     workAnniversaryEnabled: document.getElementById('cfgAnn').checked,
     whatsappRecipients: splitLines(document.getElementById('cfgWa').value)
       .filter(s => /^\+?\d{6,20}$/.test(s.replace(/\s+/g, ''))),
