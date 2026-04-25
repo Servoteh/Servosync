@@ -6,26 +6,33 @@ Ovaj folder sadrži draft backend osnov za modul **Praćenje proizvodnje**. SQL 
 
 - `20260425124400__pracenje_proizvodnje_init.sql` — up migracija: šeme, enumi, core/pdm/production tabele, indeksi, view-ovi, RPC funkcije, helperi, audit triggeri, RLS politike, seed odeljenja i komentari.
 - `20260425124400__pracenje_proizvodnje_init.down.sql` — rollback migracija u obrnutom redosledu.
+- `20260425143000__pracenje_proizvodnje_public_wrappers.sql` — hotfix: `public.*` SQL wrapperi za 8 RPC-a iz `production` šeme + `public` view-ovi za `core.odeljenje`, `core.radnik`, `production.v_operativna_aktivnost`, `production.prijava_rada`, `production.operativna_aktivnost_blok_istorija`. Bez ovih objekata Supabase PostgREST (koji izlaže samo `public`) nije mogao da pronađe RPC/tabele, pa je `canEditPracenje()` u UI-u tiho vraćao `false` i admin-i su dobijali read-only iako im je RLS dozvoljavao izmene.
+- `20260425143000__pracenje_proizvodnje_public_wrappers.down.sql` — rollback hotfix-a.
 - `../seeds/pracenje_proizvodnje_test.sql` — minimalni test fixture za jedan RN.
 
 ## Redosled pokretanja
 
 1. Pregledati `20260425124400__pracenje_proizvodnje_init.sql`.
 2. Pokrenuti up migraciju ručno.
-3. Pokrenuti test seed:
+3. Pregledati `20260425143000__pracenje_proizvodnje_public_wrappers.sql` i pokrenuti je (bez ovog koraka modul radi samo kao read-only za sve korisnike, jer PostgREST ne nalazi RPC-e i tabele u `production`/`core` šemi).
+4. Pokrenuti test seed:
 
 ```sql
 \i supabase/seeds/pracenje_proizvodnje_test.sql
 ```
 
-4. Uraditi smoke test RPC-a:
+5. Uraditi smoke test RPC-a (preko `public.*` wrappera koje koristi UI):
 
 ```sql
-select production.get_pracenje_rn('55555555-5555-5555-5555-555555555501');
+select public.get_pracenje_rn('55555555-5555-5555-5555-555555555501');
 
-select production.get_operativni_plan(
+select public.get_operativni_plan(
   p_rn_id => '55555555-5555-5555-5555-555555555501'
 );
+
+-- Provera prava admin korisnika:
+set local request.jwt.claims = '{"role":"authenticated","email":"<admin-email>"}';
+select public.can_edit_pracenje(NULL, '55555555-5555-5555-5555-555555555501');
 ```
 
 Očekivani oblik outputa:
@@ -36,9 +43,10 @@ Očekivani oblik outputa:
 
 ## Rollback
 
-Rollback se vrti ručno:
+Rollback se vrti ručno, u obrnutom redosledu od pokretanja:
 
 ```sql
+\i supabase/migrations/20260425143000__pracenje_proizvodnje_public_wrappers.down.sql
 \i supabase/migrations/20260425124400__pracenje_proizvodnje_init.down.sql
 ```
 
