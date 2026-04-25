@@ -129,8 +129,15 @@ Skripta u `scripts/backfill-production-cache.js` povlači kompletan set podataka
 - `dbo.tRN` → `public.bigtehn_work_orders_cache`
 - `dbo.tStavkeRN` → `public.bigtehn_work_order_lines_cache`
 - `dbo.tTehPostupak` → `public.bigtehn_tech_routing_cache`
+- `dbo.tTehPostupak` (`IDVrstaKvaliteta` 1/2) → `public.bigtehn_rework_scrap_cache`
 
 Default režim je `--scope=open`: bez filtera “poslednjih 30 dana”, ali samo za RN-ove koji nisu završeni (`StatusRN` nije `true`). To je najbrži i najbezbedniji sync za ekran “Po mašini”. Ako treba cela istorija, koristi `--scope=all`.
+
+Posle uspešnog `tech` sync-a skripta poziva Supabase RPC
+`mark_in_progress_from_tech_routing()`. Time se operacije koje imaju BigTehn
+prijavu komada automatski prebacuju u lokalni MES status `in_progress`, ali samo
+ako overlay ne postoji ili je trenutno `waiting`; `blocked` i `completed` se ne
+menjaju.
 
 ```bash
 cd workers/loc-sync-mssql
@@ -151,6 +158,9 @@ Korisne opcije za ciljano pokretanje:
 ```bash
 # Samo operacije i prijave, bez RN header-a
 node scripts/backfill-production-cache.js --tables=lines,tech --scope=open
+
+# Samo G4 skart/dorada signal iz BigTehn kvaliteta
+node scripts/backfill-production-cache.js --tables=rework-scrap --scope=open
 
 # Test prvih 1000 redova po tabeli
 node scripts/backfill-production-cache.js --scope=open --limit=1000 --dry-run

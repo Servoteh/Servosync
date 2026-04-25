@@ -280,6 +280,23 @@
   outline: 2px solid color-mix(in srgb, var(--blue-bar, #4f9bff) 50%, transparent);
   border-color: var(--blue-bar, #4f9bff);
 }
+.pp-rework-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+  white-space: nowrap;
+}
+.pp-rework-filter input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #f97316;
+}
 .pp-toolbar-spacer { flex: 1; }
 .pp-counter {
   font-size: 13px;
@@ -528,6 +545,7 @@
 }
 .pp-readiness,
 .pp-hitno-badge,
+.pp-rework-badge,
 .pp-pin-badge {
   display: inline-flex;
   align-items: center;
@@ -559,6 +577,16 @@
   color: #ddd6fe;
   background: color-mix(in srgb, #8b5cf6 18%, transparent);
   border-color: color-mix(in srgb, #8b5cf6 36%, transparent);
+}
+.pp-rework-badge.is-rework {
+  color: #fed7aa;
+  background: color-mix(in srgb, #f97316 20%, transparent);
+  border-color: color-mix(in srgb, #f97316 36%, transparent);
+}
+.pp-rework-badge.is-scrap {
+  color: #fecaca;
+  background: color-mix(in srgb, #dc2626 22%, transparent);
+  border-color: color-mix(in srgb, #dc2626 40%, transparent);
 }
 .pp-mini-action {
   border: 1px solid var(--border2);

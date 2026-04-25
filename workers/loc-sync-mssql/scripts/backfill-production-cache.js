@@ -5,6 +5,7 @@
  *   - dbo.tRN           -> public.bigtehn_work_orders_cache
  *   - dbo.tStavkeRN     -> public.bigtehn_work_order_lines_cache
  *   - dbo.tTehPostupak  -> public.bigtehn_tech_routing_cache
+ *   - dbo.tTehPostupak  -> public.bigtehn_rework_scrap_cache (G4, kvalitet 1/2)
  *
  * Periodični eksterni Bridge može imati vremenski prozor (npr. 30 dana).
  * Ova skripta namerno čita po ID-u bez date filtera i upsertuje cache tabele.
@@ -71,7 +72,7 @@ function boolEnv(name, fallback) {
   return String(v).toLowerCase() === 'true' || v === '1';
 }
 
-const TABLE_ORDER = ['work-orders', 'lines', 'tech'];
+const TABLE_ORDER = ['work-orders', 'lines', 'tech', 'rework-scrap'];
 
 function parseArgs(argv) {
   const out = {
@@ -207,6 +208,28 @@ function mapTechRow(r) {
   };
 }
 
+function mapReworkScrapRow(r) {
+  return {
+    id: Number(r.IDPostupka),
+    work_order_id: nullableNum(r.IDRN),
+    item_id: nullableNum(r.IDPredmet),
+    ident_broj: textOrNull(r.IdentBroj),
+    varijanta: numOr(r.Varijanta),
+    operacija: numOr(r.Operacija),
+    machine_code: textOrNull(r.RJgrupaRC),
+    worker_id: nullableNum(r.SifraRadnika),
+    quality_type_id: nullableNum(r.IDVrstaKvaliteta),
+    pieces: numOr(r.Komada),
+    prn_timer_seconds: nullableNum(r.PrnTimer),
+    started_at: iso(r.DatumIVremeUnosa),
+    finished_at: iso(r.DatumIVremeZavrsetka),
+    is_completed: boolOr(r.ZavrsenPostupak),
+    dorada_operacije: numOr(r.DoradaOperacije),
+    napomena: textOrNull(r.Napomena),
+    synced_at: new Date().toISOString(),
+  };
+}
+
 const SOURCES = {
   'work-orders': {
     target: 'bigtehn_work_orders_cache',
@@ -292,6 +315,33 @@ const SOURCES = {
     openWhere: 'ISNULL(rn.StatusRN, 0) = 0',
     map: mapTechRow,
   },
+  'rework-scrap': {
+    target: 'bigtehn_rework_scrap_cache',
+    idCol: 'IDPostupka',
+    from: 'dbo.tTehPostupak src',
+    selectCols: [
+      'src.IDPostupka',
+      'src.SifraRadnika',
+      'src.IDPredmet',
+      'src.IdentBroj',
+      'src.Varijanta',
+      'src.PrnTimer',
+      'src.DatumIVremeUnosa',
+      'src.Operacija',
+      'src.RJgrupaRC',
+      'src.Komada',
+      'src.DatumIVremeZavrsetka',
+      'src.ZavrsenPostupak',
+      'CAST(src.Napomena AS NVARCHAR(MAX)) AS Napomena',
+      'src.IDRN',
+      'src.IDVrstaKvaliteta',
+      'src.DoradaOperacije',
+    ],
+    joinForOpen: 'INNER JOIN dbo.tRN rn ON rn.IDRN = src.IDRN',
+    openWhere: 'ISNULL(rn.StatusRN, 0) = 0 AND src.IDVrstaKvaliteta IN (1, 2)',
+    extraWhere: 'src.IDVrstaKvaliteta IN (1, 2)',
+    map: mapReworkScrapRow,
+  },
 };
 
 function createSupabaseServiceClient() {
@@ -331,6 +381,7 @@ function fromClause(src, scope) {
 function whereClause(src, scope) {
   const parts = [`src.${src.idCol} > @LastId`];
   if (scope === 'open' && src.openWhere) parts.push(src.openWhere);
+  else if (src.extraWhere) parts.push(src.extraWhere);
   return parts.join(' AND ');
 }
 
@@ -420,6 +471,20 @@ async function syncOneTable(sql, pool, sb, tableKey, args) {
   return { table: tableKey, seen, upserted };
 }
 
+async function runPostProductionSyncRpc(sb, args) {
+  if (args.dryRun) return null;
+  if (!args.tables.includes('tech')) return null;
+
+  logger.info('post-sync rpc starting', { rpc: 'mark_in_progress_from_tech_routing' });
+  const { data, error } = await sb.rpc('mark_in_progress_from_tech_routing');
+  if (error) throw new Error(`mark_in_progress_from_tech_routing failed: ${error.message}`);
+  logger.info('post-sync rpc complete', {
+    rpc: 'mark_in_progress_from_tech_routing',
+    result: data,
+  });
+  return data;
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -444,7 +509,8 @@ async function main() {
     for (const tableKey of args.tables) {
       results.push(await syncOneTable(sql, pool, sb, tableKey, args));
     }
-    logger.info('production backfill complete', { results, dry_run: args.dryRun });
+    const postSync = await runPostProductionSyncRpc(sb, args);
+    logger.info('production backfill complete', { results, post_sync: postSync, dry_run: args.dryRun });
   } finally {
     await pool.close();
   }

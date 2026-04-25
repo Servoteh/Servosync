@@ -81,6 +81,7 @@ import { getCurrentRole } from '../../state/auth.js';
 const LS_LAST_MACHINE = 'plan-proizvodnje:last-machine';
 const LS_LAST_DEPT    = 'plan-proizvodnje:last-department';
 const LS_RN_FILTER    = 'plan-proizvodnje:filter-rn:po-masini';
+const LS_REWORK_FILTER = 'plan-proizvodnje:filter-rework:po-masini';
 
 /* ── Local state (po instanci taba — postoji jedan u svakom trenutku) ── */
 const state = {
@@ -95,6 +96,7 @@ const state = {
   allMachines: [],     /* [{rj_code, name, no_procedure, department_id}] iz loadMachines() */
   rows: [],            /* trenutne operacije (za izabranu mašinu ili dept) */
   rnFilter: '',
+  reworkOnly: false,
   rnFilterTimer: null,
   selectedRowKeys: new Set(),
 
@@ -118,6 +120,7 @@ export async function renderPoMasiniTab(host, { canEdit }) {
     if (!getDepartment(state.selectedDeptSlug)) state.selectedDeptSlug = 'sve';
   }
   state.rnFilter = localStorage.getItem(LS_RN_FILTER) || '';
+  state.reworkOnly = localStorage.getItem(LS_REWORK_FILTER) === 'true';
 
   /* Skeleton: tabovi + toolbar + body. Mašine se učitavaju asinhrono. */
   host.innerHTML = `
@@ -565,6 +568,7 @@ function renderToolbarDrillDown(dept) {
       <span aria-hidden="true">↻</span> Osveži
     </button>
     ${renderBulkReassignButton()}
+    ${renderReworkFilterHtml()}
     ${renderRnFilterHtml()}
     <div class="pp-toolbar-spacer"></div>
     <span class="pp-counter" id="ppCounter">— operacija</span>
@@ -597,6 +601,7 @@ function renderToolbarOperations(dept, opts = {}) {
       <span aria-hidden="true">↻</span> Osveži
     </button>
     ${renderBulkReassignButton()}
+    ${renderReworkFilterHtml()}
     ${renderRnFilterHtml()}
     <div class="pp-toolbar-spacer"></div>
     <span class="pp-counter" id="ppCounter">— operacija</span>
@@ -608,6 +613,7 @@ function renderToolbarOperations(dept, opts = {}) {
     await refreshOperationsForDept(dept, { force: true });
   });
   wireBulkReassignButton();
+  wireReworkFilter();
   wireRnFilter();
 }
 
@@ -619,6 +625,25 @@ function renderRnFilterHtml() {
              placeholder="RN ili crtež…" autocomplete="off">
     </label>
   `;
+}
+
+function renderReworkFilterHtml() {
+  return `
+    <label class="pp-rework-filter" title="Prikaži samo operacije sa sistemskim DORADA/SKART signalom">
+      <input type="checkbox" id="ppReworkFilter" ${state.reworkOnly ? 'checked' : ''}>
+      <span>Dorada/skart</span>
+    </label>
+  `;
+}
+
+function wireReworkFilter() {
+  const input = state.host?.querySelector('#ppReworkFilter');
+  if (!input) return;
+  input.addEventListener('change', () => {
+    state.reworkOnly = !!input.checked;
+    localStorage.setItem(LS_REWORK_FILTER, state.reworkOnly ? 'true' : 'false');
+    renderTable({ allowDragDrop: canDragInCurrentView() });
+  });
 }
 
 function renderBulkReassignButton() {
@@ -779,7 +804,10 @@ function renderTable({ allowDragDrop }) {
     })();
   if (!wrap) return;
 
-  const filteredRows = filterOperationsByRnOrDrawing(state.rows, state.rnFilter);
+  let filteredRows = filterOperationsByRnOrDrawing(state.rows, state.rnFilter);
+  if (state.reworkOnly) {
+    filteredRows = filteredRows.filter(r => r.is_rework || r.is_scrap);
+  }
   const filterActive = !!String(state.rnFilter || '').trim();
   const visibleKeys = new Set(filteredRows.map(rowKey));
   for (const key of Array.from(state.selectedRowKeys)) {
@@ -803,6 +831,10 @@ function renderTable({ allowDragDrop }) {
     if (filterActive && state.rows.length > 0) {
       title = 'Nema rezultata za filter';
       hint = `Nema operacija koje sadrže <strong>${escHtml(state.rnFilter.trim())}</strong> u RN-u ili broju crteža.`;
+    }
+    if (state.reworkOnly && state.rows.length > 0 && !filterActive) {
+      title = 'Nema dorade/skarta';
+      hint = 'Za trenutno izabrani prikaz nema operacija sa sistemskim DORADA/SKART signalom.';
     }
     wrap.innerHTML = `
       <div class="pp-state">
@@ -903,6 +935,7 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
   const hitnoHtml = r.is_urgent
     ? `<span class="pp-hitno-badge" title="${escHtml(r.urgency_reason || 'RN je ručno označen kao HITNO')}">HITNO</span>`
     : '';
+  const reworkHtml = renderReworkScrapBadges(r);
 
   /* F.5c: HITNE pozicije — overdue (kasni) i today (rok je danas) dobijaju
      crveni leftborder, suptilno crveni background i ⚠ ikonu pre prioriteta.
@@ -975,6 +1008,7 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
       <td>
         <div class="pp-readiness-stack">
           ${readinessHtml}
+          ${reworkHtml}
           ${hitnoHtml}
           ${isManualPinned ? '<span class="pp-pin-badge" title="Ručni prioritet">PIN</span>' : ''}
         </div>
@@ -1093,6 +1127,19 @@ function renderPlanFooter(rows) {
       </tr>
     </tfoot>
   `;
+}
+
+function renderReworkScrapBadges(row) {
+  const parts = [];
+  if (row.is_rework) {
+    const pieces = Number(row.rework_pieces) || 0;
+    parts.push(`<span class="pp-rework-badge is-rework" title="Dorada komada: ${escHtml(String(pieces))}">DORADA${pieces ? ` ${escHtml(String(pieces))}` : ''}</span>`);
+  }
+  if (row.is_scrap) {
+    const pieces = Number(row.scrap_pieces) || 0;
+    parts.push(`<span class="pp-rework-badge is-scrap" title="Skart komada: ${escHtml(String(pieces))}">SKART${pieces ? ` ${escHtml(String(pieces))}` : ''}</span>`);
+  }
+  return parts.join('');
 }
 
 function statusLabel(s) {
