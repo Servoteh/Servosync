@@ -45,6 +45,10 @@ import {
   clearUrgent,
   pinToTop,
   unpin,
+  reassignLine,
+  bulkReassignLines,
+  machineGroupSlugForCode,
+  machineGroupLabel,
   reorderOverlays,
   STATUS_CYCLE_NEXT,
   rokUrgencyClass,
@@ -71,6 +75,7 @@ import {
   machineMatchesDept,
   machineFallsIntoOstalo,
 } from './departments.js';
+import { getCurrentRole } from '../../state/auth.js';
 
 /* ── LocalStorage ključevi (UX) ── */
 const LS_LAST_MACHINE = 'plan-proizvodnje:last-machine';
@@ -91,6 +96,7 @@ const state = {
   rows: [],            /* trenutne operacije (za izabranu mašinu ili dept) */
   rnFilter: '',
   rnFilterTimer: null,
+  selectedRowKeys: new Set(),
 
   /* UI flags */
   loading: false,
@@ -141,6 +147,7 @@ export function teardownPoMasiniTab() {
   state.allMachines = [];
   state.rows = [];
   state.dragRowKey = null;
+  state.selectedRowKeys = new Set();
   if (state.rnFilterTimer) clearTimeout(state.rnFilterTimer);
   state.rnFilterTimer = null;
   state.error = null;
@@ -557,6 +564,7 @@ function renderToolbarDrillDown(dept) {
     <button class="pp-refresh-btn" id="ppRefreshBtn" title="Osvezi listu operacija">
       <span aria-hidden="true">↻</span> Osveži
     </button>
+    ${renderBulkReassignButton()}
     ${renderRnFilterHtml()}
     <div class="pp-toolbar-spacer"></div>
     <span class="pp-counter" id="ppCounter">— operacija</span>
@@ -588,6 +596,7 @@ function renderToolbarOperations(dept, opts = {}) {
     <button class="pp-refresh-btn" id="ppRefreshBtn" title="Osvezi listu operacija">
       <span aria-hidden="true">↻</span> Osveži
     </button>
+    ${renderBulkReassignButton()}
     ${renderRnFilterHtml()}
     <div class="pp-toolbar-spacer"></div>
     <span class="pp-counter" id="ppCounter">— operacija</span>
@@ -598,6 +607,7 @@ function renderToolbarOperations(dept, opts = {}) {
     if (state.loading) return;
     await refreshOperationsForDept(dept, { force: true });
   });
+  wireBulkReassignButton();
   wireRnFilter();
 }
 
@@ -609,6 +619,26 @@ function renderRnFilterHtml() {
              placeholder="RN ili crtež…" autocomplete="off">
     </label>
   `;
+}
+
+function renderBulkReassignButton() {
+  if (!state.canEdit) return '';
+  return `
+    <button type="button"
+            class="pp-refresh-btn pp-bulk-reassign-btn"
+            id="ppBulkReassignBtn"
+            disabled
+            title="Premesti izabrane operacije">
+      Premesti izabrane (0)
+    </button>
+  `;
+}
+
+function wireBulkReassignButton() {
+  const btn = state.host?.querySelector('#ppBulkReassignBtn');
+  if (!btn) return;
+  btn.addEventListener('click', () => openReassignDialog(getSelectedRows(), { bulk: true }));
+  updateBulkReassignButton();
 }
 
 function wireRnFilter() {
@@ -751,6 +781,11 @@ function renderTable({ allowDragDrop }) {
 
   const filteredRows = filterOperationsByRnOrDrawing(state.rows, state.rnFilter);
   const filterActive = !!String(state.rnFilter || '').trim();
+  const visibleKeys = new Set(filteredRows.map(rowKey));
+  for (const key of Array.from(state.selectedRowKeys)) {
+    if (!visibleKeys.has(key)) state.selectedRowKeys.delete(key);
+  }
+  updateBulkReassignButton();
   setCounter(filteredRows.length, { total: state.rows.length });
 
   if (filteredRows.length === 0) {
@@ -791,6 +826,12 @@ function renderTable({ allowDragDrop }) {
     <table class="pp-table" data-readonly="${state.canEdit ? 'false' : 'true'}">
       <thead>
         <tr>
+          <th class="pp-cell-center" title="Izaberi redove za bulk REASSIGN" style="width:34px">
+            <input type="checkbox"
+                   data-action="select-all-rows"
+                   ${state.canEdit ? '' : 'disabled'}
+                   ${filteredRows.length > 0 && filteredRows.every(r => state.selectedRowKeys.has(rowKey(r))) ? 'checked' : ''}>
+          </th>
           <th title="Drag-drop redosled" style="width:28px"></th>
           <th title="Redni broj u trenutnoj listi (drag-drop menja redosled)" style="width:48px">R.br.</th>
           <th>RN</th>
@@ -889,6 +930,13 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
       data-line="${r.line_id}"
       class="${r.is_non_machining ? 'is-non-machining' : ''}${isReassigned ? ' is-reassigned' : ''}${urgentClass}${r.is_urgent ? ' is-g2-urgent' : ''}${isManualPinned ? ' is-manual-pinned' : ''}"
       ${draggable ? 'draggable="true"' : ''}>
+      <td class="pp-cell-center">
+        <input type="checkbox"
+               data-action="select-row"
+               ${state.selectedRowKeys.has(rowKey(r)) ? 'checked' : ''}
+               ${state.canEdit ? '' : 'disabled'}
+               title="Izaberi za bulk REASSIGN">
+      </td>
       <td class="pp-drag-handle" title="${draggable
         ? 'Prevuci za prioritet'
         : (state.canEdit
@@ -1037,7 +1085,7 @@ function renderPlanFooter(rows) {
   return `
     <tfoot>
       <tr class="pp-total-row">
-        <td colspan="16">
+        <td colspan="17">
           <strong>Σ planirano vreme:</strong>
           <span class="pp-total-value">${escHtml(label)}</span>
           <span class="pp-total-hint">za trenutno prikazane redove</span>
@@ -1062,6 +1110,14 @@ function statusLabel(s) {
  * ──────────────────────────────────────────────────────────────────────── */
 
 function wireRows(wrap, { allowDragDrop }) {
+  wrap.querySelectorAll('input[data-action="select-row"]').forEach(input => {
+    input.addEventListener('change', () => onToggleRowSelection(input));
+  });
+
+  wrap.querySelectorAll('input[data-action="select-all-rows"]').forEach(input => {
+    input.addEventListener('change', () => onToggleAllRowsSelection(input));
+  });
+
   wrap.querySelectorAll('button[data-action="cycle-status"]').forEach(btn => {
     btn.addEventListener('click', () => onCycleStatus(btn));
   });
@@ -1107,6 +1163,36 @@ function wireRows(wrap, { allowDragDrop }) {
   if (allowDragDrop && state.canEdit) {
     wireDragDrop(wrap);
   }
+}
+
+function onToggleRowSelection(input) {
+  const tr = input.closest('tr');
+  if (!tr?.dataset.key) return;
+  if (input.checked) state.selectedRowKeys.add(tr.dataset.key);
+  else state.selectedRowKeys.delete(tr.dataset.key);
+  updateBulkReassignButton();
+}
+
+function onToggleAllRowsSelection(input) {
+  const filteredRows = filterOperationsByRnOrDrawing(state.rows, state.rnFilter);
+  if (input.checked) {
+    filteredRows.forEach(r => state.selectedRowKeys.add(rowKey(r)));
+  } else {
+    filteredRows.forEach(r => state.selectedRowKeys.delete(rowKey(r)));
+  }
+  renderTable({ allowDragDrop: canDragInCurrentView() });
+}
+
+function getSelectedRows() {
+  return state.rows.filter(r => state.selectedRowKeys.has(rowKey(r)));
+}
+
+function updateBulkReassignButton() {
+  const btn = state.host?.querySelector('#ppBulkReassignBtn');
+  if (!btn) return;
+  const count = getSelectedRows().length;
+  btn.textContent = `Premesti izabrane (${count})`;
+  btn.disabled = !state.canEdit || count === 0;
 }
 
 async function onToggleCamReady(input) {
@@ -1388,10 +1474,10 @@ async function onReassign(btn) {
     && row.assigned_machine_code !== row.original_machine_code;
   if (isReassigned) {
     btn.disabled = true;
-    const res = await upsertOverlay({
-      work_order_id: woId,
-      line_id: lineId,
-      patch: { assigned_machine_code: null },
+    const res = await reassignLine({
+      workOrderId: woId,
+      lineId,
+      targetMachine: null,
     });
     btn.disabled = false;
     if (res === null) {
@@ -1404,48 +1490,158 @@ async function onReassign(btn) {
     return;
   }
 
-  /* Prikazi inline select */
-  const cell = tr.querySelector('.pp-machine-cell');
-  if (!cell) return;
-  if (cell.querySelector('.pp-reassign-select')) return; /* već otvoren */
+  await openReassignDialog([row], { bulk: false });
+}
 
-  const select = document.createElement('select');
-  select.className = 'pp-reassign-select';
-  select.innerHTML = `
-    <option value="">— izaberi mašinu —</option>
-    ${state.allMachines
-      .filter(m => m.rj_code !== row.original_machine_code)
-      .map(m => `<option value="${escHtml(m.rj_code)}">${escHtml(m.name)} (${escHtml(m.rj_code)})</option>`)
-      .join('')}
+export function canShowForceReassign(role = getCurrentRole()) {
+  return role === 'admin' || role === 'menadzment';
+}
+
+function buildReassignCandidates(rows, force) {
+  const sourceGroups = new Set(rows.map(r => machineGroupSlugForCode(r.assigned_machine_code || r.original_machine_code)));
+  const sourceGroup = sourceGroups.size === 1 ? Array.from(sourceGroups)[0] : null;
+  const originalCodes = new Set(rows.map(r => r.original_machine_code).filter(Boolean));
+  return state.allMachines.filter(m => {
+    if (!m?.rj_code || originalCodes.has(m.rj_code)) return false;
+    if (force) return true;
+    return sourceGroup && machineGroupSlugForCode(m.rj_code) === sourceGroup;
+  });
+}
+
+async function openReassignDialog(rows, { bulk }) {
+  if (!state.canEdit) return;
+  const selectedRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  if (selectedRows.length === 0) return;
+
+  const forceAllowed = canShowForceReassign();
+  const sourceGroups = new Set(selectedRows.map(r => machineGroupSlugForCode(r.assigned_machine_code || r.original_machine_code)));
+  const sourceGroup = sourceGroups.size === 1 ? Array.from(sourceGroups)[0] : null;
+  const mixedGroups = sourceGroups.size > 1;
+  const title = bulk
+    ? `Premesti ${selectedRows.length} operacija`
+    : `Premesti RN ${selectedRows[0].rn_ident_broj || '?'} / op. ${selectedRows[0].operacija || '?'}`;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'pp-reassign-modal-backdrop';
+  overlay.innerHTML = `
+    <div class="pp-reassign-modal" role="dialog" aria-modal="true" aria-label="${escHtml(title)}">
+      <div class="pp-reassign-modal-head">
+        <strong>${escHtml(title)}</strong>
+        <button type="button" class="pp-modal-close" data-action="close">×</button>
+      </div>
+      <div class="pp-reassign-modal-body">
+        <p class="pp-modal-hint">
+          Izvorna grupa:
+          <strong>${mixedGroups ? 'mešane grupe' : escHtml(machineGroupLabel(sourceGroup))}</strong>
+        </p>
+        ${mixedGroups
+          ? `<div class="pp-warning">Izabrane operacije su iz različitih vrsta mašina. Standardni bulk je blokiran; force mogu samo admin/menadžment uz razlog.</div>`
+          : ''}
+        ${forceAllowed
+          ? `<label class="pp-force-row">
+               <input type="checkbox" data-action="force-toggle">
+               Forsiraj drugu vrstu mašine
+             </label>`
+          : ''}
+        <label class="pp-reassign-field">
+          <span>Ciljna mašina</span>
+          <select data-action="target-machine"></select>
+        </label>
+        <label class="pp-reassign-field pp-force-reason" hidden>
+          <span>Razlog forsiranja</span>
+          <textarea data-action="force-reason" rows="3" placeholder="Npr. mašina nije dostupna, posao kompatibilan..."></textarea>
+        </label>
+        <div class="pp-modal-error" data-role="error"></div>
+      </div>
+      <div class="pp-reassign-modal-foot">
+        <button type="button" class="pp-refresh-btn" data-action="close">Otkaži</button>
+        <button type="button" class="pp-refresh-btn pp-modal-primary" data-action="submit">Premesti</button>
+      </div>
+    </div>
   `;
-  cell.appendChild(select);
-  select.focus();
+  document.body.appendChild(overlay);
 
-  select.addEventListener('change', async () => {
-    const newMachine = select.value || null;
-    select.disabled = true;
-    if (!newMachine) {
-      select.remove();
+  const close = () => overlay.remove();
+  const forceToggle = overlay.querySelector('[data-action="force-toggle"]');
+  const select = overlay.querySelector('[data-action="target-machine"]');
+  const reasonWrap = overlay.querySelector('.pp-force-reason');
+  const reasonInput = overlay.querySelector('[data-action="force-reason"]');
+  const errorEl = overlay.querySelector('[data-role="error"]');
+  const submit = overlay.querySelector('[data-action="submit"]');
+
+  const renderOptions = () => {
+    const force = !!forceToggle?.checked;
+    const candidates = buildReassignCandidates(selectedRows, force);
+    select.innerHTML = `
+      <option value="">— izaberi mašinu —</option>
+      ${candidates.map(m => `
+        <option value="${escHtml(m.rj_code)}">
+          ${escHtml(m.name || '')} (${escHtml(m.rj_code)}) · ${escHtml(machineGroupLabel(machineGroupSlugForCode(m.rj_code)))}
+        </option>
+      `).join('')}
+    `;
+    if (reasonWrap) reasonWrap.hidden = !force;
+    if (mixedGroups && !force) {
+      errorEl.textContent = forceAllowed
+        ? 'Uključi force za mešane grupe ili izaberi operacije iz iste vrste mašine.'
+        : 'Bulk REASSIGN zahteva da sve izabrane operacije pripadaju istoj vrsti mašina.';
+      submit.disabled = true;
+    } else {
+      errorEl.textContent = '';
+      submit.disabled = false;
+    }
+  };
+
+  overlay.querySelectorAll('[data-action="close"]').forEach(btn => btn.addEventListener('click', close));
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) close();
+  });
+  forceToggle?.addEventListener('change', renderOptions);
+  renderOptions();
+
+  submit.addEventListener('click', async () => {
+    const targetMachine = select.value || null;
+    const force = !!forceToggle?.checked;
+    const reason = String(reasonInput?.value || '').trim();
+    if (!targetMachine) {
+      errorEl.textContent = 'Izaberi ciljnu mašinu.';
       return;
     }
-    const res = await upsertOverlay({
-      work_order_id: woId,
-      line_id: lineId,
-      patch: { assigned_machine_code: newMachine },
-    });
-    select.disabled = false;
+    if (force && reason.length < 3) {
+      errorEl.textContent = 'Razlog forsiranja je obavezan (min 3 karaktera).';
+      return;
+    }
+    submit.disabled = true;
+    const res = bulk
+      ? await bulkReassignLines({
+          pairs: selectedRows.map(r => ({ wo: r.work_order_id, line: r.line_id })),
+          targetMachine,
+          force,
+          reason,
+        })
+      : await reassignLine({
+          workOrderId: selectedRows[0].work_order_id,
+          lineId: selectedRows[0].line_id,
+          targetMachine,
+          force,
+          reason,
+        });
     if (res === null) {
-      showToast('⚠ Premestanje nije uspelo');
-      select.remove();
+      submit.disabled = false;
+      errorEl.textContent = force
+        ? 'Premestanje nije uspelo. Proveri prava i razlog forsiranja.'
+        : 'Premestanje nije uspelo. Ciljna mašina verovatno nije ista vrsta.';
       return;
     }
-    showToast(`✓ Operacija premeštena na ${newMachine}`);
+    selectedRows.forEach(r => state.selectedRowKeys.delete(rowKey(r)));
+    close();
+    showToast(bulk
+      ? `✓ Premešteno ${selectedRows.length} operacija na ${targetMachine}`
+      : `✓ Operacija premeštena na ${targetMachine}`);
     await refreshAfterReassign();
   });
-  /* Click anywhere else cancels */
-  select.addEventListener('blur', () => {
-    setTimeout(() => select.parentElement && select.remove(), 150);
-  });
+
+  select.focus();
 }
 
 /**
