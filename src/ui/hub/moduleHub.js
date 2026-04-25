@@ -67,7 +67,7 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
     <main class="hub-main">
       <div class="hub-intro">
         <h2>Dobrodošli nazad</h2>
-        <p>Izaberi modul sa kojim želiš da radiš. Aktivni moduli: <strong style="color:var(--text)">Plan Montaže</strong>, <strong style="color:var(--text)">Lokacije delova</strong>, <strong style="color:var(--text)">Održavanje mašina</strong> (skelet), <strong style="color:var(--text)">Planiranje proizvodnje</strong>, <strong style="color:var(--text)">Sastanci</strong> i <strong style="color:var(--text)">Kadrovska</strong>${canAccessPodesavanja() ? ' i <strong style="color:var(--text)">Podešavanja</strong>' : ''}.</p>
+        <p>Izaberi modul sa kojim želiš da radiš. Aktivni moduli: <strong style="color:var(--text)">Plan Montaže</strong>, <strong style="color:var(--text)">Lokacije delova</strong>, <strong style="color:var(--text)">Održavanje mašina</strong> (skelet), <strong style="color:var(--text)">Planiranje proizvodnje</strong>, <strong style="color:var(--text)">Praćenje proizvodnje</strong>, <strong style="color:var(--text)">Sastanci</strong> i <strong style="color:var(--text)">Kadrovska</strong>${canAccessPodesavanja() ? ' i <strong style="color:var(--text)">Podešavanja</strong>' : ''}.</p>
       </div>
 
       <div class="hub-grid">
@@ -118,6 +118,16 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
           <div class="hub-card-footer">
             <span class="hub-card-cta">${canEditPlanProizvodnje() ? 'Otvori →' : 'Pregled (read-only)'}</span>
             <span class="hub-card-badge badge-active">Aktivno</span>
+          </div>
+        </button>
+
+        <button type="button" class="hub-card" data-module="pracenje-proizvodnje" aria-label="Otvori Praćenje proizvodnje">
+          <div class="hub-card-icon" aria-hidden="true">▣</div>
+          <div class="hub-card-title">Praćenje proizvodnje</div>
+          <div class="hub-card-desc">Live pregled RN-a po pozicijama i operativni plan aktivnosti po odeljenjima. Vezano na production RPC-je iz Faza 2 osnove.</div>
+          <div class="hub-card-footer">
+            <span class="hub-card-cta">Otvori →</span>
+            <span class="hub-card-badge badge-active">Skelet</span>
           </div>
         </button>
 

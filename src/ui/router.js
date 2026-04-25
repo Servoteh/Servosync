@@ -30,6 +30,10 @@ import {
   teardownPlanProizvodnjeModule,
 } from './planProizvodnje/index.js';
 import {
+  renderPracenjeProizvodnjeModule,
+  teardownPracenjeProizvodnjeModule,
+} from './pracenjeProizvodnje/index.js';
+import {
   renderSastanciModule,
   teardownSastanciModule,
 } from './sastanci/index.js';
@@ -66,6 +70,7 @@ const MODULES = [
   'plan-montaze',
   'lokacije-delova',
   'plan-proizvodnje',
+  'pracenje-proizvodnje',
   'kadrovska',
   'sastanci',
   'podesavanja',
@@ -91,6 +96,9 @@ function clearMount(leavingScreen) {
   if (ls === 'plan-proizvodnje') {
     try { teardownPlanProizvodnjeModule(); } catch (e) { /* ignore */ }
   }
+  if (ls === 'pracenje-proizvodnje') {
+    try { teardownPracenjeProizvodnjeModule(); } catch (e) { /* ignore */ }
+  }
   if (ls === 'sastanci') {
     try { teardownSastanciModule(); } catch (e) { /* ignore */ }
   }
@@ -113,6 +121,7 @@ function clearMount(leavingScreen) {
     'plan-active',
     'module-plan',
     'module-plan-proizvodnje',
+    'module-pracenje-proizvodnje',
     'module-lokacije',
     'module-sastanci',
     'module-odrzavanje-masina',
@@ -247,6 +256,9 @@ function showModulePlaceholder(moduleId, options = {}) {
     /* Koristimo isti kadrovska body class jer modul deli layout primitive-e
        (kadrovska-section, kadrovska-header, kadrovska-tabs). */
     document.body.classList.add('kadrovska-active', 'module-plan-proizvodnje');
+  }
+  if (moduleId === 'pracenje-proizvodnje') {
+    document.body.classList.add('kadrovska-active', 'module-pracenje-proizvodnje');
   }
   if (moduleId === 'sastanci') {
     document.body.classList.add('kadrovska-active', 'module-sastanci');
@@ -386,6 +398,38 @@ function showModulePlaceholder(moduleId, options = {}) {
         </div>
       `;
       const back = mountEl.querySelector('#ppErrBackBtn');
+      back?.addEventListener('click', () => showHub());
+    }
+    return;
+  }
+
+  /* Praćenje proizvodnje — Faza 2 vertikalni isečak nad production RPC-jima. */
+  if (moduleId === 'pracenje-proizvodnje') {
+    try {
+      renderPracenjeProizvodnjeModule(mountEl, {
+        onBackToHub: () => showHub(),
+        onLogout: () => {
+          resetKadrovskaState();
+          showLogin();
+        },
+      });
+    } catch (e) {
+      console.error('[router] Praćenje Proizvodnje render failed', e);
+      mountEl.innerHTML = `
+        <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px">
+          <div class="auth-box" style="max-width:640px">
+            <div class="auth-brand">
+              <div class="auth-title">Greška u Praćenje proizvodnje modulu</div>
+              <div class="auth-subtitle">${(e && e.message) || String(e)}</div>
+            </div>
+            <pre style="background:var(--surface3,#222);padding:12px;border-radius:6px;font-family:var(--mono,monospace);font-size:11px;color:var(--text2,#ccc);text-align:left;overflow:auto;max-height:280px">${(e && e.stack) || ''}</pre>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn" id="pracenjeErrBackBtn">← Nazad na hub</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const back = mountEl.querySelector('#pracenjeErrBackBtn');
       back?.addEventListener('click', () => showHub());
     }
     return;
@@ -599,6 +643,10 @@ function assertModuleAllowed(moduleId) {
     showToast('🔒 Plan Proizvodnje zahteva validnu autentifikaciju');
     return false;
   }
+  if (moduleId === 'pracenje-proizvodnje' && !getAuth().user) {
+    showToast('🔒 Praćenje proizvodnje zahteva validnu autentifikaciju');
+    return false;
+  }
   if (moduleId === 'sastanci' && !canAccessSastanci()) {
     showToast('🔒 Sastanci zahtevaju validnu autentifikaciju');
     return false;
@@ -743,6 +791,7 @@ function restoreOrShowHub() {
     if (last === 'kadrovska' && !canAccessKadrovska()) return showHub();
     if (last === 'podesavanja' && !canAccessPodesavanja()) return showHub();
     if (last === 'plan-proizvodnje' && !canAccessPlanProizvodnje()) return showHub();
+    if (last === 'pracenje-proizvodnje' && !getAuth().user) return showHub();
     if (last === 'lokacije-delova' && !canAccessLokacije()) return showHub();
     if (last === 'sastanci' && !canAccessSastanci()) return showHub();
     if (last === 'odrzavanje-masina' && !canAccessMaintenance()) return showHub();
