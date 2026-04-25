@@ -64,7 +64,7 @@ Korisnikov cilj — **upis minimalnog seta polja iz Supabase nazad u MSSQL** —
 
 ### 1.3 Inbound (MSSQL → Supabase) — eksterni Bridge (van repo-a)
 
-**Ovaj proces nije u repo-u.** Tragovi:
+**Ovaj proces nije u repo-u.** Pristup host mašini (LAN) i lokalna radna kopija `servoteh-bridge` su opisani u [servoteh-bridge-vm.md](./servoteh-bridge-vm.md). Tragovi:
 
 | Trag | Citat |
 |---|---|
