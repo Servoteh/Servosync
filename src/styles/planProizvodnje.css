@@ -482,6 +482,36 @@
 .pp-status.s-blocked     { background: color-mix(in srgb, #ef4444 25%, transparent); color: #fca5a5; border-color: color-mix(in srgb, #ef4444 40%, transparent); }
 .pp-status.s-completed   { background: color-mix(in srgb, #10b981 25%, transparent); color: #6ee7b7; border-color: color-mix(in srgb, #10b981 40%, transparent); cursor: default; }
 
+.pp-cam-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pp-cam-ready input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: #22c55e;
+}
+.pp-cam-ready:has(input:checked) {
+  border-color: color-mix(in srgb, #22c55e 45%, transparent);
+  background: color-mix(in srgb, #22c55e 14%, var(--surface2));
+  color: #86efac;
+}
+.pp-cam-ready:has(input:disabled) {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 /* Dugmad u headeru tabele */
 .pp-refresh-btn {
   background: var(--surface2);
@@ -730,6 +760,7 @@
 .zm-pill-soon    { background: color-mix(in srgb, #fde047 22%, transparent); color: #facc15; }
 .zm-pill-reassign{ background: color-mix(in srgb, #3b82f6 22%, transparent); color: #93c5fd; }
 .zm-pill-nonmach { background: color-mix(in srgb, #94a3b8 22%, transparent); color: #cbd5e1; font-style: italic; }
+.zm-pill-cam     { background: color-mix(in srgb, #22c55e 22%, transparent); color: #86efac; }
 
 .zm-hint {
   font-size: 12px;

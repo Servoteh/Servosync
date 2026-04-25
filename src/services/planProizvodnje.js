@@ -488,6 +488,27 @@ export async function upsertOverlay({ work_order_id, line_id, patch }) {
 }
 
 /**
+ * Toggle "CAM spreman" za jednu operaciju.
+ *
+ * @param {number} work_order_id
+ * @param {number} line_id
+ * @param {boolean} ready
+ */
+export async function setCamReady(work_order_id, line_id, ready) {
+  const user = getCurrentUser();
+  const email = user?.email || null;
+  return await upsertOverlay({
+    work_order_id,
+    line_id,
+    patch: {
+      cam_ready: !!ready,
+      cam_ready_at: ready ? new Date().toISOString() : null,
+      cam_ready_by: ready ? email : null,
+    },
+  });
+}
+
+/**
  * Bulk reorder posle drag-drop. Šalje se ARRAY overlay payload-a;
  * Postgres UPSERT po unique (work_order_id, line_id) pravi/ažurira sve
  * u jednoj REST round-trip.
@@ -879,7 +900,7 @@ export function filterOperationsByRnOrDrawing(rows, query) {
  *
  * Output (mapa) → array sa sledećom strukturom:
  *   {
- *     machineCode, totalOps, drawingsCount,
+ *     machineCode, totalOps, drawingsCount, camReadyOps,
  *     overdueOps, todayOps, soonOps, warnOps, okOps, noDeadlineOps,
  *     plannedSec, realSec, nonMachiningOps,
  *     reassignedInOps  // operacije koje su REASSIGNED u ovu mašinu
@@ -905,11 +926,13 @@ export function summarizeByMachine(rows) {
         plannedSec: 0, realSec: 0,
         nonMachiningOps: 0,
         reassignedInOps: 0,
+        camReadyOps: 0,
       };
       byMachine.set(mc, s);
     }
     s.totalOps += 1;
     if (r.broj_crteza) s.drawingsSet.add(String(r.broj_crteza));
+    if (r.cam_ready) s.camReadyOps += 1;
     if (r.is_non_machining) s.nonMachiningOps += 1;
     if (r.assigned_machine_code) s.reassignedInOps += 1;
     s.plannedSec += plannedSeconds(r);
@@ -976,6 +999,7 @@ export function nextWorkingDays(numWorkingDays = 5, fromDate = new Date()) {
  *       {
  *         machineCode,
  *         totalOps,
+ *         camReadyOps,
  *         buckets: {
  *           overdue: N,           // rok < danas
  *           '2026-04-21': N,      // rok je tog dana
@@ -999,13 +1023,14 @@ export function buildDeadlineMatrix(rows, numWorkingDays = 5) {
     if (!mc) continue;
     let m = byMachine.get(mc);
     if (!m) {
-      m = { machineCode: mc, totalOps: 0, buckets: {
+      m = { machineCode: mc, totalOps: 0, camReadyOps: 0, buckets: {
         overdue: 0, future: 0, noDeadline: 0,
       } };
       for (const d of days) m.buckets[d.date] = 0;
       byMachine.set(mc, m);
     }
     m.totalOps += 1;
+    if (r.cam_ready) m.camReadyOps += 1;
     const rok = r.rok_izrade ? isoDay(new Date(r.rok_izrade)) : null;
     if (!rok) {
       m.buckets.noDeadline += 1;

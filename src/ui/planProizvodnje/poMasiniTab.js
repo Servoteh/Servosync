@@ -39,6 +39,7 @@ import {
   loadOperationsForMachine,
   loadOperationsForDept,
   upsertOverlay,
+  setCamReady,
   reorderOverlays,
   STATUS_CYCLE_NEXT,
   rokUrgencyClass,
@@ -792,6 +793,7 @@ function renderTable({ allowDragDrop }) {
           <th>Deo</th>
           <th class="pp-col-customer">Kupac</th>
           <th>Rok</th>
+          <th class="pp-cell-center" title="CAM program spreman">CAM</th>
           <th class="pp-cell-num" title="Urađeno / Ukupno komada">Done / Plan</th>
           <th class="pp-cell-num" title="Tehnološko / Stvarno vreme">T / R</th>
           <th>Status</th>
@@ -904,6 +906,15 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
           ${escHtml(rokLabel)}
         </span>
       </td>
+      <td class="pp-cell-center">
+        <label class="pp-cam-ready" title="${r.cam_ready ? 'CAM program je spreman' : 'Označi da je CAM program spreman'}">
+          <input type="checkbox"
+                 data-action="toggle-cam-ready"
+                 ${r.cam_ready ? 'checked' : ''}
+                 ${state.canEdit ? '' : 'disabled'}>
+          <span>CAM</span>
+        </label>
+      </td>
       <td class="pp-cell-num">
         <span class="pp-cell-strong">${escHtml(String(r.komada_done ?? 0))}</span>
         <span class="pp-cell-muted"> / ${escHtml(String(r.komada_total ?? 0))}</span>
@@ -976,7 +987,7 @@ function renderPlanFooter(rows) {
   return `
     <tfoot>
       <tr class="pp-total-row">
-        <td colspan="13">
+        <td colspan="14">
           <strong>Σ planirano vreme:</strong>
           <span class="pp-total-value">${escHtml(label)}</span>
           <span class="pp-total-hint">za trenutno prikazane redove</span>
@@ -1005,6 +1016,10 @@ function wireRows(wrap, { allowDragDrop }) {
     btn.addEventListener('click', () => onCycleStatus(btn));
   });
 
+  wrap.querySelectorAll('input[data-action="toggle-cam-ready"]').forEach(input => {
+    input.addEventListener('change', () => onToggleCamReady(input));
+  });
+
   wrap.querySelectorAll('textarea[data-action="edit-note"]').forEach(ta => {
     let originalVal = ta.value;
     ta.addEventListener('focus', () => { originalVal = ta.value; });
@@ -1030,6 +1045,30 @@ function wireRows(wrap, { allowDragDrop }) {
   if (allowDragDrop && state.canEdit) {
     wireDragDrop(wrap);
   }
+}
+
+async function onToggleCamReady(input) {
+  if (!state.canEdit) return;
+  const tr = input.closest('tr');
+  const woId = Number(tr?.dataset.wo);
+  const lineId = Number(tr?.dataset.line);
+  const row = state.rows.find(r => r.work_order_id === woId && r.line_id === lineId);
+  if (!row) return;
+
+  const next = !!input.checked;
+  const prev = !!row.cam_ready;
+  input.disabled = true;
+  const res = await setCamReady(woId, lineId, next);
+  if (res === null) {
+    input.checked = prev;
+    input.disabled = false;
+    showToast('⚠ CAM status nije sačuvan');
+    return;
+  }
+  row.cam_ready = next;
+  row.cam_ready_at = next ? new Date().toISOString() : null;
+  input.disabled = false;
+  showToast(next ? '✓ CAM označen kao spreman' : '✓ CAM status skinut');
 }
 
 async function onOpenDrawings(btn) {

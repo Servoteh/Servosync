@@ -73,6 +73,16 @@ const COLUMNS = [
     html: (r) => `<span class="zm-num">${r.drawingsCount}</span>`,
   },
   {
+    key: 'camReadyOps',
+    label: 'CAM',
+    sortable: true,
+    align: 'right',
+    accessor: (r) => r.camReadyOps,
+    html: (r) => r.camReadyOps > 0
+      ? `<span class="zm-pill zm-pill-cam" title="CAM spremno">${r.camReadyOps}</span>`
+      : '<span class="zm-muted">–</span>',
+  },
+  {
     key: 'hot',
     label: 'Hitno',
     sortable: true,
@@ -315,6 +325,7 @@ function renderTable() {
       <td class="zm-td zm-td-left"><strong>UKUPNO</strong></td>
       <td class="zm-td zm-td-right"><strong>${totalOps}</strong></td>
       <td class="zm-td zm-td-right"><strong>${data.reduce((s, r) => s + r.drawingsCount, 0)}</strong></td>
+      <td class="zm-td zm-td-right"><strong>${data.reduce((s, r) => s + r.camReadyOps, 0)}</strong></td>
       <td class="zm-td zm-td-right"><strong>${data.reduce((s, r) => s + r.overdueOps + r.todayOps, 0)}</strong></td>
       <td class="zm-td zm-td-right"><strong>${formatSecondsHm(totalPlanned)}</strong></td>
       <td class="zm-td zm-td-right"><strong>${formatSecondsHm(data.reduce((s, r) => s + r.realSec, 0))}</strong></td>

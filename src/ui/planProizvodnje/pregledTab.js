@@ -228,6 +228,9 @@ function renderMatrix() {
         <td class="pm-td-machine">
           <div class="zm-machine-code">${escHtml(m.machineCode)}</div>
           <div class="zm-machine-name">${escHtml(m.machineName || '')}</div>
+          ${m.camReadyOps > 0
+            ? `<span class="zm-pill zm-pill-cam" title="CAM spremno">${m.camReadyOps} CAM</span>`
+            : ''}
         </td>
         <td class="pm-td-total"><span class="zm-num zm-num-strong">${m.totalOps}</span></td>
         <td class="pm-cell pm-cell-overdue${m.buckets.overdue > 0 ? ' is-clickable' : ''}"
