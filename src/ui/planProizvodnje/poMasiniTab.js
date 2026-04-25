@@ -739,7 +739,7 @@ function renderTable({ allowDragDrop }) {
       <thead>
         <tr>
           <th title="Drag-drop redosled" style="width:28px"></th>
-          <th title="Prioritet (drag-drop)" style="width:48px">Pri</th>
+          <th title="Redni broj u trenutnoj listi (drag-drop menja redosled)" style="width:48px">R.br.</th>
           <th>RN</th>
           <th>Crtež</th>
           <th>Deo</th>
@@ -754,7 +754,7 @@ function renderTable({ allowDragDrop }) {
         </tr>
       </thead>
       <tbody>
-        ${state.rows.map(r => rowHtml(r, { allowDragDrop })).join('')}
+        ${state.rows.map((r, i) => rowHtml(r, { allowDragDrop, rowNo: i + 1 })).join('')}
       </tbody>
     </table>
   `;
@@ -766,7 +766,7 @@ function rowKey(r) {
   return `${r.work_order_id}-${r.line_id}`;
 }
 
-function rowHtml(r, { allowDragDrop }) {
+function rowHtml(r, { allowDragDrop, rowNo }) {
   const urgency = rokUrgencyClass(r.rok_izrade);
   const rokLabel = r.rok_izrade ? formatDate(r.rok_izrade) : '—';
   const status = r.local_status || 'waiting';
@@ -792,10 +792,8 @@ function rowHtml(r, { allowDragDrop }) {
   const noteVal = r.shift_note || '';
   const noteId = `note-${r.work_order_id}-${r.line_id}`;
 
-  const sortVal = r.shift_sort_order;
-  const priCell = sortVal != null
-    ? `<span class="pp-pri">${escHtml(String(sortVal))}</span>`
-    : `<span class="pp-pri is-empty" title="Nije rangirano">–</span>`;
+  const rowNoLabel = String(Number(rowNo) || 0).padStart(2, '0');
+  const priCell = `<span class="pp-pri" title="Redni broj u trenutnoj listi">${escHtml(rowNoLabel)}</span>`;
 
   /* F.5c: HITNE pozicije — overdue (kasni) i today (rok je danas) dobijaju
      crveni leftborder, suptilno crveni background i ⚠ ikonu pre prioriteta.
