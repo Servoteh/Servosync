@@ -7,9 +7,20 @@ import { STORAGE_KEYS } from '../lib/constants.js';
 
 /* Whitelist legitimnih tab ID-jeva — sprečava da korumpirana LS vrednost dovede
  * do praznog panela (renderPanel ima if-grane po tabId-u). */
-const VALID_TABS = new Set(['dashboard', 'predmet', 'browse', 'items', 'report', 'history', 'sync']);
+const VALID_TABS = new Set([
+  'dashboard',
+  'predmet',
+  'browse',
+  'items',
+  'report',
+  'labels',
+  'definitions',
+  'history',
+  'sync',
+]);
 const DEFAULT_TAB = 'dashboard';
 
+const VALID_BROWSE_KIND_FILTERS = new Set(['', 'hall', 'shelf', 'other']);
 const VALID_LOCATION_FILTERS = new Set(['all', 'with', 'without']);
 
 /* Veličine stranice za items paginator — striktan whitelist da se LS ne koristi kao XSS vektor. */
@@ -19,6 +30,7 @@ const DEFAULT_PAGE_SIZE = 50;
 const state = {
   activeTab: DEFAULT_TAB,
   browseFilter: '',
+  browseKindFilter: '',
   itemsFilter: '',
   itemsPage: 0,
   itemsPageSize: DEFAULT_PAGE_SIZE,
@@ -92,6 +104,10 @@ export function loadLokacijeTabFromStorage() {
 
 export function setBrowseFilter(v) {
   state.browseFilter = normalizeFilter(v);
+}
+
+export function setBrowseKindFilter(v) {
+  state.browseKindFilter = VALID_BROWSE_KIND_FILTERS.has(v) ? v : '';
 }
 
 export function setItemsFilter(v) {

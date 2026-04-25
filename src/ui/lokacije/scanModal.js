@@ -9,6 +9,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
+import { getLocationKind } from '../../lib/lokacijeTypes.js';
 import {
   fetchItemPlacements,
   fetchLocations,
@@ -692,16 +693,14 @@ export async function openScanMoveModal({
    * može odlučiti da promeni kategoriju (npr. "ipak ide u škart").
    */
   function populateToSelect() {
-    const SHELF = new Set(['SHELF', 'RACK', 'BIN']);
-    const HALL = new Set(['WAREHOUSE', 'PRODUCTION', 'ASSEMBLY', 'FIELD', 'TEMP']);
     const shelves = [];
     const halls = [];
     const others = [];
     for (const l of state.locs) {
       if (l.is_active === false) continue;
-      const t = String(l.location_type || '').toUpperCase();
-      if (SHELF.has(t)) shelves.push(l);
-      else if (HALL.has(t)) halls.push(l);
+      const kind = getLocationKind(l.location_type);
+      if (kind === 'shelf') shelves.push(l);
+      else if (kind === 'hall') halls.push(l);
       else others.push(l);
     }
     const renderGroup = (label, items) => {

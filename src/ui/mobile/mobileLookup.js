@@ -24,17 +24,13 @@
  */
 
 import { escHtml } from '../../lib/dom.js';
+import { isHallType, isShelfType } from '../../lib/lokacijeTypes.js';
 import {
   fetchPlacementsByDrawing,
   fetchLocations,
   resolveDrawingNoForPlacement,
 } from '../../services/lokacije.js';
 import { openScanMoveModal } from '../lokacije/scanModal.js';
-
-/** Tipovi koje UI tretira kao "POLICA" (konkretno fizičko mesto na polici). */
-const SHELF_TYPES = new Set(['SHELF', 'RACK', 'BIN']);
-/** Tipovi koje UI tretira kao "HALA" (veći prostor, root ili intermedijar). */
-const HALL_TYPES = new Set(['WAREHOUSE', 'PRODUCTION', 'ASSEMBLY', 'FIELD', 'TEMP']);
 
 function fmtAgo(iso) {
   if (!iso) return '';
@@ -73,7 +69,7 @@ function fmtDate(iso) {
 function resolveLocPath(loc, locMap) {
   if (!loc) return { hall: '—', shelf: '', kind: 'unknown' };
   const type = String(loc.location_type || '').toUpperCase();
-  if (SHELF_TYPES.has(type)) {
+  if (isShelfType(type)) {
     /* Polica — hala je parent (ako postoji). */
     const parent = loc.parent_id ? locMap.get(loc.parent_id) : null;
     const hall = parent
@@ -82,7 +78,7 @@ function resolveLocPath(loc, locMap) {
     const shelf = `${loc.location_code} — ${loc.name || ''}`.trim();
     return { hall, shelf, kind: 'shelf' };
   }
-  if (HALL_TYPES.has(type)) {
+  if (isHallType(type)) {
     const hall = `${loc.location_code} — ${loc.name || ''}`.trim();
     return { hall, shelf: '', kind: 'hall' };
   }

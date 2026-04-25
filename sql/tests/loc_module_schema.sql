@@ -7,7 +7,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(34);
+SELECT plan(37);
 
 -- ── Enumi postoje i sadrže očekivane vrednosti ─────────────────────────
 SELECT has_type('public', 'loc_type_enum', 'enum loc_type_enum postoji');
@@ -89,6 +89,17 @@ SELECT has_function('public', 'loc_mark_sync_failed', ARRAY['uuid', 'text'], 'lo
 -- ── Trigger funkcije ───────────────────────────────────────────────────
 SELECT has_function('public', 'loc_locations_guard_and_path', 'trigger fn loc_locations_guard_and_path');
 SELECT has_function('public', 'loc_after_movement_insert', 'trigger fn loc_after_movement_insert');
+SELECT has_function('public', 'loc_locations_audit', ARRAY['integer'], 'RPC loc_locations_audit(integer)');
+SELECT has_function('public', 'loc_locations_enforce_business_hierarchy', 'trigger fn loc_locations_enforce_business_hierarchy');
+SELECT ok(
+  EXISTS (
+    SELECT 1
+      FROM pg_views
+     WHERE schemaname = 'public'
+       AND viewname = 'loc_location_hierarchy_issues'
+  ),
+  'view loc_location_hierarchy_issues postoji'
+);
 
 SELECT * FROM finish();
 ROLLBACK;

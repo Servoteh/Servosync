@@ -10,7 +10,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(11);
+SELECT plan(13);
 
 -- ── 1) Root lokacija: depth=0, path_cached = code ──────────────────────
 DO $$
@@ -152,6 +152,24 @@ BEGIN
 END $$;
 
 SELECT pass('TRANSFER posle INITIAL_PLACEMENT ne baca na trigger-u');
+
+-- ── 9) Poslovna hijerarhija: polica mora imati HALU, a HALA mora biti root ──
+SELECT throws_ok(
+  $$INSERT INTO public.loc_locations (location_code, name, location_type) VALUES ('TEST-ORPHAN-SHELF', 'Orphan shelf', 'SHELF')$$,
+  NULL,
+  NULL,
+  'POLICA bez roditeljske HALE baca exception'
+);
+
+SELECT throws_ok(
+  format(
+    $$INSERT INTO public.loc_locations (location_code, name, location_type, parent_id) VALUES ('TEST-NESTED-HALL', 'Nested hall', 'WAREHOUSE', %L)$$,
+    current_setting('test.alt_id')::uuid
+  ),
+  NULL,
+  NULL,
+  'HALA sa parent_id baca exception'
+);
 
 SELECT * FROM finish();
 ROLLBACK;

@@ -351,6 +351,19 @@ export async function fetchAllMovements({
 }
 
 /**
+ * Istorija definisanja i izmena master lokacija (`loc_locations`).
+ * Čita se kroz SECURITY DEFINER RPC zato što generički `audit_log` sadrži i
+ * osetljive tabele, pa RLS ostaje admin-only za direktan pristup.
+ *
+ * @param {{ limit?: number }} [opts]
+ * @returns {Promise<object[]|null>}
+ */
+export async function fetchLocationDefinitionsAudit({ limit = 100 } = {}) {
+  const l = Math.max(1, Math.min(Number(limit) || 100, 300));
+  return sbReq('rpc/loc_locations_audit', 'POST', { p_limit: l }, { upsert: false });
+}
+
+/**
  * Sva premeštanja za jednu stavku (istorija, najnovija prva). Ako je `orderNo`
  * string (uklj. prazan `''`), scope-uje se na taj nalog — inače se vraća sve
  * po svim nalozima datog crteža.
@@ -709,8 +722,8 @@ export async function fetchBridgeSyncStatus() {
 }
 
 /**
- * Nova master lokacija (RLS: admin / leadpm / pm).
- * @param {{ location_code: string, name: string, location_type: string, parent_id?: string|null }} row
+ * Nova master lokacija (RLS: admin / leadpm / pm / menadzment).
+ * @param {{ location_code: string, name: string, location_type: string, parent_id?: string|null, capacity_note?: string|null, notes?: string|null }} row
  * @returns {Promise<object|null>}
  */
 export async function createLocation(row) {
@@ -722,6 +735,8 @@ export async function createLocation(row) {
       name: row.name,
       location_type: row.location_type,
       parent_id: row.parent_id || null,
+      capacity_note: row.capacity_note || null,
+      notes: row.notes || null,
       is_active: true,
     },
     { upsert: false },

@@ -17,7 +17,7 @@ Praćenje **gde se koja stavka nalazi** (magacin, police, WIP, virtuelne lokacij
 | **Ko vidi modul** | Svi ulogovani korisnici — `canAccessLokacije()` u `src/state/auth.js` |
 | **Hub / router** | `sessionStorage` modul `lokacije-delova` · `src/ui/router.js` |
 | **Tab „Sync”** | Samo **admin** (`canViewLokacijeSync()`) — čitanje `loc_sync_outbound_events` (RLS: `loc_is_admin()`) |
-| **Master lokacija** (nova, izmena, aktivacija) i **nalepnice** | Dugmici za `canEdit()`: `admin`, `leadpm`, `pm`, `menadzment` — usklađeno sa RLS: **`loc_can_manage_locations()`** uključuje iste uloge (migracija `add_loc_menadzment_manage_locations.sql` ako starija baza nema `menadzment`) |
+| **Master lokacija** (hale/police: nova, izmena, aktivacija), **istorija definicija** i **nalepnice** | Dugmici za `canEdit()`: `admin`, `leadpm`, `pm`, `menadzment` — usklađeno sa RLS: **`loc_can_manage_locations()`** uključuje iste uloge (migracija `add_loc_menadzment_manage_locations.sql` ako starija baza nema `menadzment`) |
 | **Skeniraj / Brzo premeštanje** | Svi ulogovani (pokret preko `loc_create_movement`, `GRANT` za `authenticated`) |
 
 ---
@@ -29,10 +29,11 @@ Implementacija: `src/ui/lokacije/index.js` (`TABS`). Aktivni tab: `STORAGE_KEYS.
 | Tab | Sadržaj |
 |-----|---------|
 | **Početna** | KPI: broj aktivnih lokacija, broj redova u `loc_item_placements` (do 500 za KPI), lista poslednjih premeštanja. Ako su lokacije i stavke prazne, **first-run** blok (koraci) za korisnike sa `canEdit()`, inače kratka poruka. |
-| **Lokacije** | Tabela ili stablo, pretraga (šifra/naziv/putanja), „Prikaži neaktivne”, akcije Izmeni / Aktiviraj ako `canEdit()`. |
+| **Lokacije** | Šifarnik **HALA → POLICA**: tabela ili stablo, filter poslovnog tipa (sve/HALE/POLICE/ostalo), pretraga (šifra/naziv/putanja), „Prikaži neaktivne”, akcije Izmeni / Aktiviraj ako `canEdit()`. |
 | **Stavke** | Trenutna zaduženja: kolone tabela, crtež (ID), nalog, lokacija, količina, status. Pretraga na serveru (ILIKE), paginacija 25/50/100/250, **Export CSV**. Klik na red → istorija te stavke. |
 | **Pregled po lokacijama** | Server-side izveštaj kroz RPC **`loc_report_parts_by_locations`** (v2: join na BigTehn RN, kupac, projekat, materijal, dimenzija, težina, rok, status_rn, revizija). Filteri: crtež/ID/`broj_crteza` (BigTehn), broj naloga ili `ident_broj`, TP (`item_ref_id`), pretraga lokacije, projekat. Sort po više kolona uklj. **Rok**, paginacija 25/50/100/250, **Export CSV** (proširen na 23 kolone), per-row akcije: **Istorija**, **📋 RN/TP** (otvara `openTechProcedureModal`) i **TP nalepnica**. |
-| **Istorija** | `loc_location_movements` sa filterima: pretraga (crtež ili nalog), striktan nalog, lokacija (od ili do), korisnik (vidljiv ako `loadUsersFromDb` vrati više od jednog korisnika), tip kretanja, datum od/do, reset, **Export CSV**, paginacija. |
+| **Istorija definicija** | Samo role sa `canEdit()`: audit izmena šifarnika `loc_locations` (ko/kada/šta je definisao ili promenio). Čita se kroz RPC `loc_locations_audit`, ne direktno iz generičkog `audit_log`. |
+| **Istorija premeštanja** | `loc_location_movements` sa filterima: pretraga (crtež ili nalog), striktan nalog, lokacija (od ili do), korisnik (vidljiv ako `loadUsersFromDb` vrati više od jednog korisnika), tip kretanja, datum od/do, reset, **Export CSV**, paginacija. |
 | **Sync** | Samo admin: poslednjih 100 redova outbound queue (status, movement id, vreme, greška). |
 
 ---
@@ -57,7 +58,7 @@ Kretanje uključuje **količinu** (v2) i **broj radnog naloga** (v3) gde je pred
 
 | Tabela | Uloga |
 |--------|--------|
-| `loc_locations` | Master hijerarhija |
+| `loc_locations` | Master hijerarhija: HALA (`WAREHOUSE`, `PRODUCTION`, `ASSEMBLY`, `FIELD`, `TEMP`) → POLICA (`SHELF`, `RACK`, `BIN`) |
 | `loc_location_movements` | Istorija; insert samo kroz `loc_create_movement` |
 | `loc_item_placements` | Trenutno stanje (trigger) |
 | `loc_sync_outbound_events` | Outbound queue (worker) |
@@ -68,10 +69,12 @@ Izveštaj „Pregled po lokacijama” koristi RPC **`loc_report_parts_by_locatio
 
 BRIDGE sync (MSSQL → Supabase): tabele `bigtehn_*_cache` puni eksterni servis; banner na **Početna** tabu Lokacija prikazuje upozorenje ako su `production_work_orders/_lines/_tech_routing` stariji od 6h, `catalog_items` stariji od 36h ili `production_bigtehn_drawings` stariji od 7 dana (zasnovano na `bridge_sync_log.finished_at`).
 
-Virtualne lokacije (npr. ugrađeno, proizvodnja, otpis) su običan red u `loc_locations` odgovarajućeg tipa; pomeranje = `TRANSFER` s količinom.
+Virtualne lokacije (npr. ugrađeno, proizvodnja, otpis) su običan red u `loc_locations` odgovarajućeg tipa; pomeranje = `TRANSFER` s količinom. Poslovna pravila za šifarnik su u migraciji `add_loc_location_hierarchy_rules.sql`: view `loc_location_hierarchy_issues` prijavljuje zatečene nelogičnosti, a trigger sprečava nove police bez hale ili hale ispod druge lokacije.
+
+Audit master definicija je u migraciji `add_loc_locations_audit.sql`: generički `audit_row_change()` se kači na `loc_locations`, a UI koristi `loc_locations_audit(p_limit)` da prikaže samo istoriju hala/polica korisnicima koji smeju da uređuju lokacije.
 
 **Redosled primene (tipično):**  
-`add_loc_module_step1_tables.sql` (ako treba) → `add_loc_module.sql` → `add_loc_step2_ci_unique.sql` → `add_loc_step3_cleanup.sql` → opciono `add_loc_step4_pgcron.sql`, `add_loc_step5_sync_rpcs.sql` → `add_loc_v2_quantity.sql` → `add_loc_v3_order_scope.sql` → `add_loc_v4_drawing_no.sql` → **`add_loc_menadzment_manage_locations.sql`**.
+`add_loc_module_step1_tables.sql` (ako treba) → `add_loc_module.sql` → `add_loc_step2_ci_unique.sql` → `add_loc_step3_cleanup.sql` → opciono `add_loc_step4_pgcron.sql`, `add_loc_step5_sync_rpcs.sql` → `add_loc_v2_quantity.sql` → `add_loc_v3_order_scope.sql` → `add_loc_v4_drawing_no.sql` → **`add_loc_menadzment_manage_locations.sql`** → `add_loc_locations_audit.sql` → `add_loc_location_hierarchy_rules.sql`.
 
 Jednokratni seed: `sql/seed/loc_seed_bigtehn_positions.sql`.
 
@@ -79,6 +82,7 @@ Jednokratni seed: `sql/seed/loc_seed_bigtehn_positions.sql`.
 
 ## Kod u repou
 
+`src/lib/lokacijeTypes.js` — zajedničko značenje HALA/POLICA tipova za desktop i mobilni UI  
 `src/ui/lokacije/` — `index.js`, `modals.js`, `scanModal.js`, `labelsPrint.js`, `lookupModals.js`  
 `src/services/lokacije.js` (servis za RPC `loc_report_parts_by_locations` i `fetchAll…`) · `src/state/lokacije.js` (tab `report`, filteri, sort, paginacija) · `src/lib/lokacijeFilters.js` · `src/lib/barcodeParse.js` (parser + encoderi `formatBigTehnRnzBarcode`/`formatBigTehnShortBarcode`)  
 Mobilno: `src/ui/mobile/mobileHome.js`, `mobileLookup.js`, `mobileHistory.js`, `mobileBatch.js`  

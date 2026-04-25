@@ -3,6 +3,14 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
+import {
+  HALL_TYPE_OPTIONS,
+  canBeShelfParent,
+  getLocationKindLabel,
+  getLocationTypeLabel,
+  isHallType,
+  isShelfType,
+} from '../../lib/lokacijeTypes.js';
 import { canEdit } from '../../state/auth.js';
 import {
   createLocation,
@@ -12,23 +20,6 @@ import {
   locCreateMovement,
   updateLocation,
 } from '../../services/lokacije.js';
-
-const LOC_TYPES = [
-  'WAREHOUSE',
-  'RACK',
-  'SHELF',
-  'BIN',
-  'PROJECT',
-  'PRODUCTION',
-  'ASSEMBLY',
-  'SERVICE',
-  'FIELD',
-  'TRANSIT',
-  'OFFICE',
-  'TEMP',
-  'SCRAPPED',
-  'OTHER',
-];
 
 /* TRANSFER je prvi jer je najčešći slučaj u svakodnevnom radu;
  * INITIAL_PLACEMENT je eksplicitno drugačiji tok (samo za nove stavke). */
@@ -164,9 +155,9 @@ function createModalShell({ id, title, subtitle = '' }) {
  * ostaju iste — samo je UI preveden.
  *
  * Mapiranje:
- *   - POLICA  = location_type SHELF (RACK/BIN može da se doda kasnije).
- *               Parent je obavezno neka HALA (ne može POLICA bez hale).
- *   - HALA    = location_type WAREHOUSE. Parent je null (root).
+ *   - POLICA  = location_type SHELF. Parent je obavezno neka HALA
+ *               (WAREHOUSE/PRODUCTION/ASSEMBLY/FIELD/TEMP).
+ *   - HALA    = jedan od HALA tipova. Parent je null (root).
  *
  * Za izmenu postojeće lokacije ne menjamo tip (SHELF ostaje SHELF, WAREHOUSE
  * ostaje WAREHOUSE) — to je retka operacija i može se uraditi direktno u bazi
@@ -187,7 +178,7 @@ export function openLocationModal({ existing = null, onSuccess } = {}) {
     title: isEdit ? 'Izmeni lokaciju' : 'Nova lokacija',
     subtitle: isEdit
       ? 'Menjaju se naziv i opis; šifra i tip ostaju isti.'
-      : 'Izaberi šta dodaješ — policu unutar hale, ili novu halu.',
+      : 'Izaberi šta dodaješ — policu unutar hale, ili novu halu / zonu.',
   });
 
   let unbindEsc = null;
@@ -274,11 +265,7 @@ function renderPickerStage({ overlay, body, locs, close, onSuccess }) {
  * postojećih. Ima i "Dodaj više odjednom" bulk generator sa slovo × raspon.
  */
 function renderShelfForm({ overlay, body, locs, close, onSuccess }) {
-  /* Samo WAREHOUSE kao parent za policu. PRODUCTION/ASSEMBLY/FIELD su root
-   * kategorije, ali UX ih tretira odvojeno (nisu "hala" u smislu magacina). */
-  const halls = locs.filter(
-    l => String(l.location_type || '').toUpperCase() === 'WAREHOUSE' && l.is_active !== false,
-  );
+  const halls = locs.filter(canBeShelfParent);
 
   if (!halls.length) {
     body.innerHTML = `
@@ -303,7 +290,7 @@ function renderShelfForm({ overlay, body, locs, close, onSuccess }) {
   const hallOpts = halls
     .map(
       h =>
-        `<option value="${escHtml(String(h.id))}" data-code="${escHtml(h.location_code || '')}">${escHtml(h.location_code || '')} — ${escHtml(h.name || '')}</option>`,
+        `<option value="${escHtml(String(h.id))}" data-code="${escHtml(h.location_code || '')}">${escHtml(h.location_code || '')} — ${escHtml(h.name || '')} (${escHtml(getLocationTypeLabel(h.location_type))})</option>`,
     )
     .join('');
 
@@ -528,10 +515,13 @@ function renderShelfForm({ overlay, body, locs, close, onSuccess }) {
 }
 
 /**
- * Forma za HALU — user unosi šifru (npr. "MAG", "H2") i naziv. Tip je
- * uvek WAREHOUSE, parent je null.
+ * Forma za HALU — user unosi šifru (npr. "MAG", "H2") i naziv, uz izbor
+ * konkretnog HALA tipa. Parent je null.
  */
 function renderHallForm({ overlay, body, close, onSuccess }) {
+  const typeOptions = HALL_TYPE_OPTIONS
+    .map(o => `<option value="${escHtml(o.value)}">${escHtml(o.label)} (${escHtml(o.value)})</option>`)
+    .join('');
   body.innerHTML = `
     <div class="loc-form-breadcrumb">
       <button type="button" class="loc-breadcrumb-back" data-act="back">←</button>
@@ -552,6 +542,11 @@ function renderHallForm({ overlay, body, close, onSuccess }) {
           <label for="locHallName">Naziv hale *</label>
           <input type="text" id="locHallName" required maxlength="200" placeholder="npr. Centralni magacin, Hala 2">
         </div>
+        <div class="emp-field col-full">
+          <label for="locHallType">Tip hale / zone *</label>
+          <select id="locHallType" required>${typeOptions}</select>
+          <div class="loc-muted" style="font-size:12px;margin-top:4px">Svi ovi tipovi se u prikazu vode kao HALA; police se definišu unutar njih.</div>
+        </div>
       </div>
       <div class="kadr-modal-actions">
         <button type="button" class="btn" data-act="cancel">Otkaži</button>
@@ -563,6 +558,7 @@ function renderHallForm({ overlay, body, close, onSuccess }) {
   const errEl = overlay.querySelector('#locModalNewLocErr');
   const codeInput = overlay.querySelector('#locHallCode');
   const nameInput = overlay.querySelector('#locHallName');
+  const typeSelect = overlay.querySelector('#locHallType');
   const submitBtn = overlay.querySelector('#locHallSubmit');
 
   overlay.querySelector('[data-act="cancel"]').addEventListener('click', close);
@@ -589,6 +585,7 @@ function renderHallForm({ overlay, body, close, onSuccess }) {
     errEl.textContent = '';
     const code = codeInput.value.trim().toUpperCase();
     const name = nameInput.value.trim();
+    const locationType = String(typeSelect.value || '').toUpperCase();
     if (!code) {
       errEl.textContent = 'Šifra hale je obavezna.';
       return;
@@ -597,11 +594,15 @@ function renderHallForm({ overlay, body, close, onSuccess }) {
       errEl.textContent = 'Naziv hale je obavezan.';
       return;
     }
+    if (!isHallType(locationType)) {
+      errEl.textContent = 'Izaberi validan tip hale.';
+      return;
+    }
     submitBtn.disabled = true;
     const row = await createLocation({
       location_code: code,
       name,
-      location_type: 'WAREHOUSE',
+      location_type: locationType,
       parent_id: null,
     }).catch(() => null);
     submitBtn.disabled = false;
@@ -621,12 +622,13 @@ function renderHallForm({ overlay, body, close, onSuccess }) {
  */
 function renderEditForm({ overlay, body, existing, close, onSuccess }) {
   const type = String(existing.location_type || '').toUpperCase();
-  const SHELF = new Set(['SHELF', 'RACK', 'BIN']);
-  const kindLabel = SHELF.has(type)
-    ? '📍 POLICA'
-    : ['WAREHOUSE', 'PRODUCTION', 'ASSEMBLY', 'FIELD', 'TEMP'].includes(type)
-      ? '🏭 HALA'
-      : `📦 ${type}`;
+  const kind = getLocationKindLabel(type);
+  const kindLabel = `${kind} · ${getLocationTypeLabel(type)} (${type || '—'})`;
+  const parentHint = isShelfType(type)
+    ? 'Polica je konkretno mesto unutar hale. Promena hale/tipa se radi kontrolisano kroz bazu zbog istorije i postojećih placement-a.'
+    : isHallType(type)
+      ? 'Hala je root lokacija; police se vezuju na nju kroz parent odnos.'
+      : 'Specijalna lokacija van osnovne podele HALA/POLICA.';
 
   const isActive = existing.is_active !== false;
   /* Dugme za deaktivaciju mora biti dovoljno uočljivo da admin primeti da je
@@ -649,8 +651,21 @@ function renderEditForm({ overlay, body, existing, close, onSuccess }) {
     <form id="locFormEditLoc">
       <div class="emp-form-grid">
         <div class="emp-field col-full">
+          <label>Poslovni tip</label>
+          <div class="loc-readonly-field">${escHtml(kindLabel)}</div>
+          <div class="loc-muted" style="font-size:12px;margin-top:4px">${escHtml(parentHint)}</div>
+        </div>
+        <div class="emp-field col-full">
           <label for="locEditName">Naziv / opis *</label>
           <input type="text" id="locEditName" required maxlength="200" value="${escHtml(existing.name || '')}">
+        </div>
+        <div class="emp-field">
+          <label for="locEditCapacity">Kapacitet / napomena kapaciteta</label>
+          <input type="text" id="locEditCapacity" maxlength="200" value="${escHtml(existing.capacity_note || '')}" placeholder="npr. max 20 kom, paletna pozicija">
+        </div>
+        <div class="emp-field">
+          <label for="locEditNotes">Interna napomena</label>
+          <input type="text" id="locEditNotes" maxlength="500" value="${escHtml(existing.notes || '')}" placeholder="npr. privremeno, samo inox, zona prijema">
         </div>
       </div>
       <div class="kadr-modal-actions">
@@ -670,6 +685,8 @@ function renderEditForm({ overlay, body, existing, close, onSuccess }) {
 
   const errEl = overlay.querySelector('#locModalNewLocErr');
   const nameInput = overlay.querySelector('#locEditName');
+  const capacityInput = overlay.querySelector('#locEditCapacity');
+  const notesInput = overlay.querySelector('#locEditNotes');
   const submitBtn = overlay.querySelector('#locEditSubmit');
   const toggleBtn = overlay.querySelector('#locEditToggle');
 
@@ -685,7 +702,11 @@ function renderEditForm({ overlay, body, existing, close, onSuccess }) {
       return;
     }
     submitBtn.disabled = true;
-    const row = await updateLocation(existing.id, { name });
+    const row = await updateLocation(existing.id, {
+      name,
+      capacity_note: capacityInput.value.trim() || null,
+      notes: notesInput.value.trim() || null,
+    });
     submitBtn.disabled = false;
     if (!row) {
       errEl.textContent = 'Izmena nije uspela (možda nemaš permisije).';

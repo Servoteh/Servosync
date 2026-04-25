@@ -2824,6 +2824,15 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 }
 .loc-breadcrumb-back:hover { background: var(--surface2); }
 .loc-path-muted { color: var(--text3); font-weight: 400; }
+.loc-readonly-field {
+  padding: 8px 10px;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
 
 /* Status badge u breadcrumb-u edit forme ? sitan chip "neaktivno" pored koda
  * da admin vidi stanje i pre klika na dugme. */
@@ -2990,6 +2999,41 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .loc-tree-inactive { opacity:0.55; font-style:italic; }
 .loc-inline-check { display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--text2); margin-left:auto; cursor:pointer; }
 .loc-inline-check input { margin:0; }
+.loc-inline-check select {
+  padding:4px 8px;
+  font-size:11px;
+  border:1px solid var(--border2);
+  border-radius:6px;
+  background:var(--surface);
+  color:var(--text);
+}
+.loc-master-heading {
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:220px;
+  max-width:360px;
+  padding:6px 10px;
+  border:1px solid var(--border2);
+  border-radius:8px;
+  background:var(--surface2);
+  font-size:12px;
+  color:var(--text2);
+}
+.loc-master-heading strong { color:var(--text); font-size:13px; }
+.loc-master-heading span { line-height:1.35; }
+.loc-kind-pill {
+  display:inline-flex;
+  align-items:center;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid var(--border2);
+  background:var(--surface2);
+  color:var(--text);
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:0.4px;
+}
 
 /* -- Pretraga / filter (browse + items) ----------------------------- */
 .loc-search { display:inline-flex; align-items:center; gap:8px; flex:1 1 220px; min-width:200px; }

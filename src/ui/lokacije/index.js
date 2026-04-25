@@ -5,6 +5,11 @@
 
 import { escHtml } from '../../lib/dom.js';
 import { toggleTheme } from '../../lib/theme.js';
+import {
+  getLocationKind,
+  getLocationKindLabel,
+  getLocationTypeLabel,
+} from '../../lib/lokacijeTypes.js';
 import { logout } from '../../services/auth.js';
 import { getAuth, canViewLokacijeSync, isAdmin, canEdit } from '../../state/auth.js';
 import {
@@ -13,6 +18,7 @@ import {
   setLokacijeActiveTab,
   getLokacijeUiState,
   setBrowseFilter,
+  setBrowseKindFilter,
   setItemsFilter,
   setItemsPage,
   setItemsPageSize,
@@ -39,6 +45,7 @@ import {
   fetchLocReportPartsByLocations,
   fetchAllLocReportPartsByLocations,
   fetchBridgeSyncStatus,
+  fetchLocationDefinitionsAudit,
 } from '../../services/lokacije.js';
 import { loadUsersFromDb } from '../../services/users.js';
 import { hasSupabaseConfig } from '../../services/supabase.js';
@@ -76,7 +83,8 @@ const TABS = [
   { id: 'items', label: 'Stavke' },
   { id: 'report', label: 'Pregled po lokacijama' },
   { id: 'labels', label: '🏷 Štampa nalepnica' },
-  { id: 'history', label: 'Istorija' },
+  { id: 'definitions', label: 'Istorija definicija', manageOnly: true },
+  { id: 'history', label: 'Istorija premeštanja' },
   { id: 'sync', label: 'Sync', adminOnly: true },
 ];
 
@@ -231,20 +239,22 @@ function attachBrowseActions(locs) {
  * @param {boolean} canEditLocs
  */
 function renderLocationsTableHtml(locs, canEditLocs) {
-  const colspan = canEditLocs ? 5 : 4;
+  const colspan = canEditLocs ? 6 : 5;
   const rows = Array.isArray(locs)
     ? locs
         .map(r => {
           const d = Math.max(0, Math.min(Number(r.depth) || 0, 12));
           const pad = 10 + d * 14;
           const inactiveCls = r.is_active ? '' : ' loc-row-inactive';
+          const businessType = getLocationKindLabel(r.location_type);
+          const techType = getLocationTypeLabel(r.location_type);
           const actions = canEditLocs
             ? `<td class="loc-actions-cell">
                 <button type="button" class="btn btn-xs" data-loc-edit="${escHtml(String(r.id))}">Izmeni</button>
                 <button type="button" class="btn btn-xs" data-loc-toggle="${escHtml(String(r.id))}">${r.is_active ? 'Deaktiviraj' : 'Aktiviraj'}</button>
               </td>`
             : '';
-          return `<tr class="${inactiveCls}"><td class="loc-code-cell" style="padding-left:${pad}px">${escHtml(r.location_code || '')}</td><td>${escHtml(r.name || '')}</td><td>${escHtml(r.location_type || '')}</td><td class="loc-path">${escHtml(r.path_cached || '')}</td>${actions}</tr>`;
+          return `<tr class="${inactiveCls}"><td class="loc-code-cell" style="padding-left:${pad}px">${escHtml(r.location_code || '')}</td><td>${escHtml(r.name || '')}</td><td><span class="loc-kind-pill">${escHtml(businessType)}</span></td><td>${escHtml(techType)} <span class="loc-muted">(${escHtml(r.location_type || '')})</span></td><td class="loc-path">${escHtml(r.path_cached || '')}</td>${actions}</tr>`;
         })
         .join('')
       : '';
@@ -252,7 +262,7 @@ function renderLocationsTableHtml(locs, canEditLocs) {
   return `
     <div class="loc-table-wrap">
       <table class="loc-table">
-        <thead><tr><th>Šifra</th><th>Naziv</th><th>Tip</th><th>Putanja</th>${headActions}</tr></thead>
+        <thead><tr><th>Šifra</th><th>Naziv</th><th>Poslovno</th><th>Tehnički tip</th><th>Putanja</th>${headActions}</tr></thead>
         <tbody>${rows || `<tr><td colspan="${colspan}" class="loc-muted">Nema lokacija. Unos master lokacija (admin/LeadPM/PM/menadžment) dolazi iz UI ili SQL.</td></tr>`}</tbody>
       </table>
     </div>`;
@@ -278,7 +288,8 @@ function renderLocationsTreeHtml(locs, canEditLocs) {
     const kids = childrenByParent.get(node.id) || [];
     const code = escHtml(node.location_code || '');
     const name = escHtml(node.name || '');
-    const type = escHtml(node.location_type || '');
+    const type = escHtml(getLocationKindLabel(node.location_type));
+    const techType = escHtml(node.location_type || '');
     const inactive = node.is_active ? '' : ' loc-tree-inactive';
     const actions = canEditLocs
       ? `<span class="loc-tree-actions">
@@ -288,7 +299,7 @@ function renderLocationsTreeHtml(locs, canEditLocs) {
       : '';
     const head = `<span class="loc-tree-code">${code}</span>
       <span class="loc-tree-name">${name}</span>
-      <span class="loc-tree-type">${type}</span>
+      <span class="loc-tree-type">${type} · ${techType}</span>
       ${actions}`;
 
     if (kids.length === 0) {
@@ -306,6 +317,22 @@ function renderLocationsTreeHtml(locs, canEditLocs) {
 
   const roots = childrenByParent.get('__root__') || [];
   return `<ul class="loc-tree loc-tree-root">${roots.map(renderNode).join('')}</ul>`;
+}
+
+function filterLocationsByKindHierarchical(locs, kind) {
+  if (!Array.isArray(locs)) return [];
+  if (!kind) return locs.slice();
+  const byId = new Map(locs.map(l => [l.id, l]));
+  const keep = new Set();
+  for (const loc of locs) {
+    if (getLocationKind(loc.location_type) !== kind) continue;
+    let cur = loc;
+    while (cur && !keep.has(cur.id)) {
+      keep.add(cur.id);
+      cur = cur.parent_id ? byId.get(cur.parent_id) : null;
+    }
+  }
+  return locs.filter(l => keep.has(l.id));
 }
 
 function attachBrowseViewSwitch() {
@@ -330,6 +357,11 @@ function attachBrowseSearch() {
   const host = locPanelHost;
   if (!host) return;
   const input = host.querySelector('#locBrowseSearch');
+  const kindSel = host.querySelector('#locBrowseKind');
+  kindSel?.addEventListener('change', () => {
+    setBrowseKindFilter(kindSel.value || '');
+    refreshLocPanel();
+  });
   if (!input) return;
   let t = null;
   input.addEventListener('input', () => {
@@ -812,6 +844,65 @@ function formatLocBrief(id, idx) {
   return l.name ? `${code} · ${escHtml(l.name)}` : code;
 }
 
+function fmtAuditWhen(iso) {
+  return (iso || '').replace('T', ' ').slice(0, 16);
+}
+
+function auditLocLabel(row, locIdx) {
+  const data = row?.new_data || row?.old_data || {};
+  const id = row?.record_id || data.id;
+  const loc = id ? locIdx.get(id) : null;
+  const code = loc?.location_code || data.location_code || String(id || '').slice(0, 8);
+  const name = loc?.name || data.name || '';
+  const kind = getLocationKindLabel(loc?.location_type || data.location_type || '');
+  return `${code}${name ? ' · ' + name : ''} (${kind})`;
+}
+
+function auditFieldValue(data, key) {
+  if (!data || !(key in data)) return '—';
+  const v = data[key];
+  if (v === null || v === undefined || v === '') return '—';
+  return String(v);
+}
+
+function auditDiffSummary(row) {
+  const action = row?.action || '';
+  if (action === 'INSERT') return 'Kreirano';
+  if (action === 'DELETE') return 'Obrisano';
+  const keys = Array.isArray(row?.diff_keys) ? row.diff_keys.filter(k => k !== 'updated_at') : [];
+  if (!keys.length) return 'Bez vidljivih promena';
+  return keys.map(k => {
+    const before = auditFieldValue(row.old_data, k);
+    const after = auditFieldValue(row.new_data, k);
+    return `${k}: ${before} -> ${after}`;
+  }).join('; ');
+}
+
+function definitionAuditRowsHtml(rows, locIdx) {
+  if (!Array.isArray(rows)) {
+    return '<tr><td colspan="6" class="loc-muted">Istorija definicija nije dostupna.</td></tr>';
+  }
+  if (!rows.length) {
+    return '<tr><td colspan="6" class="loc-muted">Još nema zabeleženih izmena definicija hala/polica.</td></tr>';
+  }
+  return rows.map(row => {
+    const who = row.actor_email || (row.actor_uid ? String(row.actor_uid).slice(0, 8) + '…' : '—');
+    const changed = Array.isArray(row.diff_keys) && row.diff_keys.length
+      ? row.diff_keys.filter(k => k !== 'updated_at').join(', ')
+      : row.action === 'INSERT'
+        ? 'sva polja'
+        : '—';
+    return `<tr>
+      <td class="loc-mov-when">${escHtml(fmtAuditWhen(row.changed_at))}</td>
+      <td>${escHtml(who)}</td>
+      <td><span class="loc-mov-type">${escHtml(row.action || '')}</span></td>
+      <td>${escHtml(auditLocLabel(row, locIdx))}</td>
+      <td class="loc-path">${escHtml(changed)}</td>
+      <td class="loc-path">${escHtml(auditDiffSummary(row).slice(0, 300))}</td>
+    </tr>`;
+  }).join('');
+}
+
 function headerHtml() {
   const auth = getAuth();
   return `
@@ -838,7 +929,11 @@ function headerHtml() {
 }
 
 function tabsHtml(activeId) {
-  const visible = TABS.filter(t => !t.adminOnly || canViewLokacijeSync());
+  const visible = TABS.filter(t => {
+    if (t.adminOnly && !canViewLokacijeSync()) return false;
+    if (t.manageOnly && !canEdit()) return false;
+    return true;
+  });
   return `
     <nav class="kadrovska-tabs loc-tabs" role="tablist" aria-label="Lokacije — sekcije">
       ${visible
@@ -943,17 +1038,34 @@ async function renderPanel(host, tabId) {
     const locs = await fetchLocations({ activeOnly: !showInactiveLocations });
     const canEditLocs = canEdit();
     const err = locs === null ? `<p class="loc-warn">Učitavanje neuspešno.</p>` : '';
-    const { browseFilter } = getLokacijeUiState();
-    const filtered = filterLocationsHierarchical(locs, browseFilter);
+    const { browseFilter, browseKindFilter } = getLokacijeUiState();
+    const textFiltered = filterLocationsHierarchical(locs, browseFilter);
+    const filtered = filterLocationsByKindHierarchical(textFiltered, browseKindFilter);
     const matchCount = browseFilter
       ? `<span class="loc-muted loc-filter-hint">Pogodaka: ${Array.isArray(locs) ? filtered.length : 0} / ${Array.isArray(locs) ? locs.length : 0}</span>`
       : '';
+    const kindOptions = [
+      ['', 'Sve lokacije'],
+      ['hall', 'Samo HALE'],
+      ['shelf', 'Samo POLICE'],
+      ['other', 'Ostalo'],
+    ]
+      .map(([v, label]) => `<option value="${escHtml(v)}"${browseKindFilter === v ? ' selected' : ''}>${escHtml(label)}</option>`)
+      .join('');
 
     const extraToolbar = `
+      <div class="loc-master-heading">
+        <strong>Šifarnik hala i polica</strong>
+        <span>HALA je veći prostor; POLICA je konkretno mesto unutar hale. Sve izmene se čuvaju kroz istoriju definicija.</span>
+      </div>
       <div class="loc-view-switch" role="group" aria-label="Prikaz">
         <button type="button" class="btn btn-xs${browseViewMode === 'table' ? ' is-active' : ''}" data-loc-view="table">Tabela</button>
         <button type="button" class="btn btn-xs${browseViewMode === 'tree' ? ' is-active' : ''}" data-loc-view="tree">Stablo</button>
       </div>
+      <label class="loc-inline-check">
+        <span>Tip:</span>
+        <select id="locBrowseKind">${kindOptions}</select>
+      </label>
       <label class="loc-inline-check">
         <input type="checkbox" id="locBrowseShowInactive" ${showInactiveLocations ? 'checked' : ''}>
         <span>Prikaži neaktivne</span>
@@ -1226,6 +1338,41 @@ async function renderPanel(host, tabId) {
       </div>`;
     attachLocToolbar();
     attachReportTabHandlers();
+    return;
+  }
+
+  if (tabId === 'definitions') {
+    const [auditRows, locs] = await Promise.all([
+      fetchLocationDefinitionsAudit({ limit: 150 }),
+      fetchLocations({ activeOnly: false }),
+    ]);
+    const locIdx = locationIndex(locs);
+    const err = auditRows === null
+      ? `<p class="loc-warn">Ne mogu da učitam istoriju definicija. Proveri da li je primenjena migracija za audit lokacija.</p>`
+      : '';
+    host.innerHTML = `
+      <div class="kadr-panel active loc-panel">
+        ${err}
+        ${locToolbarHtml()}
+        <div class="loc-master-heading">
+          <strong>Istorija definicija hala i polica</strong>
+          <span>Prikazuje ko je i kada dodao, promenio ili deaktivirao red u šifarniku <code>loc_locations</code>. Ovo nije istorija premeštanja stavki.</span>
+        </div>
+        <div class="loc-table-wrap">
+          <table class="loc-table loc-history-table">
+            <thead><tr>
+              <th>Vreme</th>
+              <th>Korisnik</th>
+              <th>Akcija</th>
+              <th>Lokacija</th>
+              <th>Promenjeno</th>
+              <th>Detalj</th>
+            </tr></thead>
+            <tbody>${definitionAuditRowsHtml(auditRows, locIdx)}</tbody>
+          </table>
+        </div>
+      </div>`;
+    attachLocToolbar();
     return;
   }
 

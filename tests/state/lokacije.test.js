@@ -33,6 +33,13 @@ describe('state/lokacije — normalizeTab', () => {
     expect(getLokacijeUiState().activeTab).toBe('report');
   });
 
+  it('prihvata tabove za nalepnice i istoriju definicija', () => {
+    setLokacijeActiveTab('labels');
+    expect(getLokacijeUiState().activeTab).toBe('labels');
+    setLokacijeActiveTab('definitions');
+    expect(getLokacijeUiState().activeTab).toBe('definitions');
+  });
+
   it('odbija nevalidan tab i fallback-uje na dashboard', () => {
     setLokacijeActiveTab('zlonamerno');
     expect(getLokacijeUiState().activeTab).toBe('dashboard');
