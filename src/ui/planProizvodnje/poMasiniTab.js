@@ -44,6 +44,7 @@ import {
   rokUrgencyClass,
   formatSecondsHm,
   plannedSeconds,
+  filterOperationsByRnOrDrawing,
 } from '../../services/planProizvodnje.js';
 import {
   sanitizeDrawingNo,
@@ -68,6 +69,7 @@ import {
 /* ── LocalStorage ključevi (UX) ── */
 const LS_LAST_MACHINE = 'plan-proizvodnje:last-machine';
 const LS_LAST_DEPT    = 'plan-proizvodnje:last-department';
+const LS_RN_FILTER    = 'plan-proizvodnje:filter-rn:po-masini';
 
 /* ── Local state (po instanci taba — postoji jedan u svakom trenutku) ── */
 const state = {
@@ -81,6 +83,8 @@ const state = {
   /* Podaci */
   allMachines: [],     /* [{rj_code, name, no_procedure, department_id}] iz loadMachines() */
   rows: [],            /* trenutne operacije (za izabranu mašinu ili dept) */
+  rnFilter: '',
+  rnFilterTimer: null,
 
   /* UI flags */
   loading: false,
@@ -101,6 +105,7 @@ export async function renderPoMasiniTab(host, { canEdit }) {
     state.selectedDeptSlug = localStorage.getItem(LS_LAST_DEPT) || 'sve';
     if (!getDepartment(state.selectedDeptSlug)) state.selectedDeptSlug = 'sve';
   }
+  state.rnFilter = localStorage.getItem(LS_RN_FILTER) || '';
 
   /* Skeleton: tabovi + toolbar + body. Mašine se učitavaju asinhrono. */
   host.innerHTML = `
@@ -130,6 +135,8 @@ export function teardownPoMasiniTab() {
   state.allMachines = [];
   state.rows = [];
   state.dragRowKey = null;
+  if (state.rnFilterTimer) clearTimeout(state.rnFilterTimer);
+  state.rnFilterTimer = null;
   state.error = null;
   /* Reset selectedDeptSlug / selectedMachineCode na null — sledeći render
      re-čita izbor iz `localStorage` (`LS_LAST_DEPT` / `LS_LAST_MACHINE`).
@@ -476,6 +483,7 @@ function renderToolbarSve() {
     <select class="pp-machine-select" id="ppMachineSelect" disabled>
       <option>Učitavanje…</option>
     </select>
+    ${renderRnFilterHtml()}
     <button class="pp-refresh-btn" id="ppRefreshBtn" disabled title="Osvezi listu operacija">
       <span aria-hidden="true">↻</span> Osveži
     </button>
@@ -484,6 +492,7 @@ function renderToolbarSve() {
     ${state.canEdit ? '' : '<span class="pp-readonly-badge">🔒 Read-only</span>'}
   `;
   wireSveToolbar();
+  wireRnFilter();
 }
 
 function wireSveToolbar() {
@@ -542,6 +551,7 @@ function renderToolbarDrillDown(dept) {
     <button class="pp-refresh-btn" id="ppRefreshBtn" title="Osvezi listu operacija">
       <span aria-hidden="true">↻</span> Osveži
     </button>
+    ${renderRnFilterHtml()}
     <div class="pp-toolbar-spacer"></div>
     <span class="pp-counter" id="ppCounter">— operacija</span>
     ${state.canEdit ? '' : '<span class="pp-readonly-badge">🔒 Read-only</span>'}
@@ -560,6 +570,7 @@ function renderToolbarDrillDown(dept) {
     if (state.loading) return;
     await refreshOperationsForMachine({ force: true });
   });
+  wireRnFilter();
 }
 
 function renderToolbarOperations(dept, opts = {}) {
@@ -571,6 +582,7 @@ function renderToolbarOperations(dept, opts = {}) {
     <button class="pp-refresh-btn" id="ppRefreshBtn" title="Osvezi listu operacija">
       <span aria-hidden="true">↻</span> Osveži
     </button>
+    ${renderRnFilterHtml()}
     <div class="pp-toolbar-spacer"></div>
     <span class="pp-counter" id="ppCounter">— operacija</span>
     ${state.canEdit ? '' : '<span class="pp-readonly-badge">🔒 Read-only</span>'}
@@ -579,6 +591,30 @@ function renderToolbarOperations(dept, opts = {}) {
   if (refresh) refresh.addEventListener('click', async () => {
     if (state.loading) return;
     await refreshOperationsForDept(dept, { force: true });
+  });
+  wireRnFilter();
+}
+
+function renderRnFilterHtml() {
+  return `
+    <label class="pp-rn-filter" title="Filtriraj po RN-u ili broju crteža">
+      <span>RN</span>
+      <input type="search" id="ppRnFilter" value="${escHtml(state.rnFilter)}"
+             placeholder="RN ili crtež…" autocomplete="off">
+    </label>
+  `;
+}
+
+function wireRnFilter() {
+  const input = state.host?.querySelector('#ppRnFilter');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    state.rnFilter = input.value || '';
+    localStorage.setItem(LS_RN_FILTER, state.rnFilter);
+    if (state.rnFilterTimer) clearTimeout(state.rnFilterTimer);
+    state.rnFilterTimer = setTimeout(() => {
+      renderTable({ allowDragDrop: canDragInCurrentView() });
+    }, 200);
   });
 }
 
@@ -607,7 +643,6 @@ async function refreshOperationsForMachine() {
     setRefreshSpinner(false);
   }
   renderTable({ allowDragDrop: true });
-  setCounter(state.rows.length);
 }
 
 async function refreshOperationsForDept(dept, opts = {}) {
@@ -646,7 +681,10 @@ async function refreshOperationsForDept(dept, opts = {}) {
   /* Drag-drop reorder NIJE dozvoljen u operacionim tabovima — sortiranje
      je per-mašina, mešanje raznih mašina nema smisla. */
   renderTable({ allowDragDrop: false });
-  setCounter(state.rows.length);
+}
+
+function canDragInCurrentView() {
+  return !!state.selectedMachineCode && !String(state.rnFilter || '').trim();
 }
 
 async function annotateRowsWithPdfAvailability(rows) {
@@ -705,9 +743,14 @@ function renderTable({ allowDragDrop }) {
     })();
   if (!wrap) return;
 
-  if (state.rows.length === 0) {
+  const filteredRows = filterOperationsByRnOrDrawing(state.rows, state.rnFilter);
+  const filterActive = !!String(state.rnFilter || '').trim();
+  setCounter(filteredRows.length, { total: state.rows.length });
+
+  if (filteredRows.length === 0) {
     const dept = getDepartment(state.selectedDeptSlug);
     let hint = 'Sve operacije su završene ili nisu još kreirane u BigTehn-u.';
+    let title = 'Nema operacija za prikaz';
     if (dept?.kind === 'machines' && state.selectedMachineCode) {
       hint = 'Sve operacije za ovu mašinu su završene ili nisu još kreirane u BigTehn-u.<br>'
         + 'Pokušaj <strong>Osveži</strong> ili izaberi drugu mašinu.';
@@ -716,10 +759,14 @@ function renderTable({ allowDragDrop }) {
     } else if (dept?.isFallback) {
       hint = 'Nema operacija koje ne pripadaju nekom drugom tabu — sve je kategorisano. 👍';
     }
+    if (filterActive && state.rows.length > 0) {
+      title = 'Nema rezultata za filter';
+      hint = `Nema operacija koje sadrže <strong>${escHtml(state.rnFilter.trim())}</strong> u RN-u ili broju crteža.`;
+    }
     wrap.innerHTML = `
       <div class="pp-state">
         <div class="pp-state-icon">🛠</div>
-        <div class="pp-state-title">Nema operacija za prikaz</div>
+        <div class="pp-state-title">${title}</div>
         <div class="pp-state-hint">${hint}</div>
       </div>
     `;
@@ -748,18 +795,19 @@ function renderTable({ allowDragDrop }) {
           <th class="pp-cell-num" title="Urađeno / Ukupno komada">Done / Plan</th>
           <th class="pp-cell-num" title="Tehnološko / Stvarno vreme">T / R</th>
           <th>Status</th>
-          <th style="min-width:200px">Šefova napomena</th>
           <th title="Skice / slike">📎</th>
           <th>Mašina</th>
+          <th class="pp-note-col">Napomena</th>
         </tr>
       </thead>
       <tbody>
-        ${state.rows.map((r, i) => rowHtml(r, { allowDragDrop, rowNo: i + 1 })).join('')}
+        ${filteredRows.map((r, i) => rowHtml(r, { allowDragDrop: allowDragDrop && !filterActive, rowNo: i + 1 })).join('')}
       </tbody>
+      ${renderPlanFooter(filteredRows)}
     </table>
   `;
 
-  wireRows(wrap, { allowDragDrop });
+  wireRows(wrap, { allowDragDrop: allowDragDrop && !filterActive });
 }
 
 function rowKey(r) {
@@ -874,16 +922,6 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
           ${statusLabel(status)}
         </button>
       </td>
-      <td>
-        <textarea
-          id="${noteId}"
-          class="pp-note-input"
-          rows="1"
-          placeholder="${state.canEdit ? 'Napomena…' : '—'}"
-          data-action="edit-note"
-          ${state.canEdit ? '' : 'disabled'}>${escHtml(noteVal)}</textarea>
-        <span class="pp-note-saved" data-saved-for="${noteId}">✓ sačuvano</span>
-      </td>
       <td class="pp-cell-center">
         <button type="button"
                 class="pp-drawings-btn ${(r.drawings_count || 0) > 0 ? 'has-files' : ''}"
@@ -913,7 +951,38 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
           </button>
         </div>
       </td>
+      <td class="pp-note-col">
+        <textarea
+          id="${noteId}"
+          class="pp-note-input"
+          rows="1"
+          placeholder="${state.canEdit ? 'Napomena…' : '—'}"
+          title="Napomena šefa smene"
+          data-action="edit-note"
+          ${state.canEdit ? '' : 'disabled'}>${escHtml(noteVal)}</textarea>
+        <span class="pp-note-saved" data-saved-for="${noteId}">✓ sačuvano</span>
+      </td>
     </tr>
+  `;
+}
+
+function renderPlanFooter(rows) {
+  const openStatuses = new Set(['waiting', 'in_progress', 'blocked']);
+  const plannedTotal = rows.reduce((sum, row) => {
+    const status = row.local_status || 'waiting';
+    return openStatuses.has(status) ? sum + plannedSeconds(row) : sum;
+  }, 0);
+  const label = formatSecondsHm(plannedTotal);
+  return `
+    <tfoot>
+      <tr class="pp-total-row">
+        <td colspan="13">
+          <strong>Σ planirano vreme:</strong>
+          <span class="pp-total-value">${escHtml(label)}</span>
+          <span class="pp-total-hint">za trenutno prikazane redove</span>
+        </td>
+      </tr>
+    </tfoot>
   `;
 }
 
@@ -1091,6 +1160,7 @@ async function onCycleStatus(btn) {
 
   row.local_status = next;
   btn.disabled = false;
+  renderTable({ allowDragDrop: canDragInCurrentView() });
 }
 
 /* ── Napomena ── */
@@ -1310,7 +1380,9 @@ function setCounter(n, opts = {}) {
   if (opts.unit === 'machines') {
     el.textContent = `${n} ${plural(n, 'mašina', 'mašine', 'mašina')}`;
   } else {
-    el.textContent = `${n} ${plural(n, 'operacija', 'operacije', 'operacija')}`;
+    const total = Number(opts.total);
+    const base = `${n} ${plural(n, 'operacija', 'operacije', 'operacija')}`;
+    el.textContent = Number.isFinite(total) && total !== n ? `${base} / ${total}` : base;
   }
 }
 

@@ -847,6 +847,30 @@ export function plannedSeconds(row) {
   return Math.round((tpz + tk * k) * 60);
 }
 
+/**
+ * Client-side filter za "RN ili crtež" u Planiranju proizvodnje.
+ * Pretražuje BigTehn ident RN-a i broj crteža, case-insensitive contains.
+ */
+export function operationMatchesRnOrDrawing(row, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [
+    row?.rn_ident_broj,
+    row?.ident_broj,
+    row?.broj_crteza,
+  ]
+    .filter(v => v != null && v !== '')
+    .map(v => String(v).toLowerCase());
+  return haystack.some(v => v.includes(q));
+}
+
+export function filterOperationsByRnOrDrawing(rows, query) {
+  if (!Array.isArray(rows)) return [];
+  const q = String(query || '').trim();
+  if (!q) return rows;
+  return rows.filter(row => operationMatchesRnOrDrawing(row, q));
+}
+
 /* ── Client-side agregacije (za "Zauzetost mašina" i "Pregled svih") ── */
 
 /**

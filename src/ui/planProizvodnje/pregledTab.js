@@ -23,6 +23,7 @@ import {
   loadAllOpenOperations,
   loadMachines,
   buildDeadlineMatrix,
+  filterOperationsByRnOrDrawing,
 } from '../../services/planProizvodnje.js';
 
 const state = {
@@ -33,10 +34,13 @@ const state = {
   loading: false,
   error: null,
   filter: 'all',
+  rnFilter: '',
+  rnFilterTimer: null,
   onJumpToPoMasini: null,
 };
 
 const STORAGE_KEY_FILTER = 'plan-proizvodnje:pregled:filter';
+const STORAGE_KEY_RN_FILTER = 'plan-proizvodnje:filter-rn:pregled';
 
 /* ── Public ── */
 
@@ -46,6 +50,7 @@ export async function renderPregledTab(host, { canEdit, onJumpToPoMasini } = {})
   void canEdit;
 
   state.filter = localStorage.getItem(STORAGE_KEY_FILTER) || 'all';
+  state.rnFilter = localStorage.getItem(STORAGE_KEY_RN_FILTER) || '';
 
   host.innerHTML = `
     <div class="pp-toolbar">
@@ -57,6 +62,11 @@ export async function renderPregledTab(host, { canEdit, onJumpToPoMasini } = {})
       <button class="pp-refresh-btn" id="pmRefreshBtn" title="Osveži podatke">
         <span aria-hidden="true">↻</span> Osveži
       </button>
+      <label class="pp-rn-filter" title="Filtriraj po RN-u ili broju crteža">
+        <span>RN</span>
+        <input type="search" id="pmRnFilter" value="${escHtml(state.rnFilter)}"
+               placeholder="RN ili crtež…" autocomplete="off">
+      </label>
       <div class="pp-toolbar-spacer"></div>
       <span class="pp-counter" id="pmCounter">— mašina · — dana</span>
     </div>
@@ -87,6 +97,12 @@ export async function renderPregledTab(host, { canEdit, onJumpToPoMasini } = {})
     if (state.loading) return;
     void reload();
   });
+  host.querySelector('#pmRnFilter')?.addEventListener('input', (e) => {
+    state.rnFilter = e.target.value || '';
+    localStorage.setItem(STORAGE_KEY_RN_FILTER, state.rnFilter);
+    if (state.rnFilterTimer) clearTimeout(state.rnFilterTimer);
+    state.rnFilterTimer = setTimeout(renderMatrix, 200);
+  });
 
   await reload();
 }
@@ -97,6 +113,8 @@ export function teardownPregledTab() {
   state.machinesMap = null;
   state.matrix = { days: [], machines: [] };
   state.error = null;
+  if (state.rnFilterTimer) clearTimeout(state.rnFilterTimer);
+  state.rnFilterTimer = null;
   state.onJumpToPoMasini = null;
 }
 
@@ -114,16 +132,6 @@ async function reload() {
     ]);
     state.machinesMap = new Map((machines || []).map(m => [m.rj_code, m]));
     state.rows = rows || [];
-    state.matrix = buildDeadlineMatrix(state.rows, 5);
-    /* Obogati machines metadatom */
-    state.matrix.machines = state.matrix.machines.map(m => {
-      const meta = state.machinesMap.get(m.machineCode);
-      return {
-        ...m,
-        machineName: meta?.name || '',
-        noProcedure: !!meta?.no_procedure,
-      };
-    });
     renderMatrix();
   } catch (e) {
     console.error('[pregled] reload failed', e);
@@ -153,8 +161,18 @@ function renderMatrix() {
     ? `<div class="pp-error">${escHtml(state.error)}</div>`
     : '';
 
-  const { days } = state.matrix;
-  let { machines } = state.matrix;
+  const filteredRows = filterOperationsByRnOrDrawing(state.rows, state.rnFilter);
+  const matrix = buildDeadlineMatrix(filteredRows, 5);
+  const { days } = matrix;
+  let { machines } = matrix;
+  machines = machines.map(m => {
+    const meta = state.machinesMap?.get(m.machineCode);
+    return {
+      ...m,
+      machineName: meta?.name || '',
+      noProcedure: !!meta?.no_procedure,
+    };
+  });
   if (state.filter === 'proc') {
     machines = machines.filter(m => m.noProcedure === false);
   }
@@ -167,10 +185,14 @@ function renderMatrix() {
   counter.textContent = `${machines.length} mašina · ${days.length} dana`;
 
   if (!machines.length) {
+    const filterActive = !!String(state.rnFilter || '').trim();
     wrap.innerHTML = `
       <div class="pp-state">
         <div class="pp-state-icon">📭</div>
-        <div class="pp-state-title">Nema otvorenih operacija</div>
+        <div class="pp-state-title">${filterActive ? 'Nema rezultata za filter' : 'Nema otvorenih operacija'}</div>
+        ${filterActive
+          ? `<div class="pp-state-desc">Nema operacija koje sadrže <strong>${escHtml(state.rnFilter.trim())}</strong> u RN-u ili broju crteža.</div>`
+          : ''}
       </div>
     `;
     return;

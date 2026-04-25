@@ -19,10 +19,12 @@ import {
   loadMachines,
   summarizeByMachine,
   formatSecondsHm,
+  filterOperationsByRnOrDrawing,
 } from '../../services/planProizvodnje.js';
 
 const STORAGE_KEY_SORT     = 'plan-proizvodnje:zauzetost:sort';
 const STORAGE_KEY_FILTER   = 'plan-proizvodnje:zauzetost:filter'; /* 'all' | 'proc' */
+const STORAGE_KEY_RN_FILTER = 'plan-proizvodnje:filter-rn:zauzetost';
 
 const state = {
   host: null,
@@ -34,6 +36,8 @@ const state = {
   sortKey: 'totalOps',
   sortDir: 'desc',
   filter: 'all',
+  rnFilter: '',
+  rnFilterTimer: null,
   onJumpToPoMasini: null,
 };
 
@@ -134,6 +138,7 @@ export async function renderZauzetostTab(host, { canEdit, onJumpToPoMasini } = {
     if (saved.dir) state.sortDir = saved.dir;
   } catch { /* ignore */ }
   state.filter = localStorage.getItem(STORAGE_KEY_FILTER) || 'all';
+  state.rnFilter = localStorage.getItem(STORAGE_KEY_RN_FILTER) || '';
 
   host.innerHTML = `
     <div class="pp-toolbar">
@@ -145,6 +150,11 @@ export async function renderZauzetostTab(host, { canEdit, onJumpToPoMasini } = {
       <button class="pp-refresh-btn" id="zmRefreshBtn" title="Osveži podatke">
         <span aria-hidden="true">↻</span> Osveži
       </button>
+      <label class="pp-rn-filter" title="Filtriraj po RN-u ili broju crteža">
+        <span>RN</span>
+        <input type="search" id="zmRnFilter" value="${escHtml(state.rnFilter)}"
+               placeholder="RN ili crtež…" autocomplete="off">
+      </label>
       <div class="pp-toolbar-spacer"></div>
       <span class="pp-counter" id="zmCounter">— mašina · — operacija</span>
     </div>
@@ -175,6 +185,12 @@ export async function renderZauzetostTab(host, { canEdit, onJumpToPoMasini } = {
     if (state.loading) return;
     void reload();
   });
+  host.querySelector('#zmRnFilter')?.addEventListener('input', (e) => {
+    state.rnFilter = e.target.value || '';
+    localStorage.setItem(STORAGE_KEY_RN_FILTER, state.rnFilter);
+    if (state.rnFilterTimer) clearTimeout(state.rnFilterTimer);
+    state.rnFilterTimer = setTimeout(renderTable, 200);
+  });
 
   await reload();
 }
@@ -185,6 +201,8 @@ export function teardownZauzetostTab() {
   state.summary = [];
   state.machinesMap = null;
   state.error = null;
+  if (state.rnFilterTimer) clearTimeout(state.rnFilterTimer);
+  state.rnFilterTimer = null;
   state.onJumpToPoMasini = null;
 }
 
@@ -207,14 +225,6 @@ async function reload() {
       (machines || []).map(m => [m.rj_code, m]),
     );
     state.rows = rows || [];
-    state.summary = summarizeByMachine(state.rows).map(s => {
-      const meta = state.machinesMap.get(s.machineCode);
-      return {
-        ...s,
-        machineName: meta?.name || '',
-        noProcedure: !!meta?.no_procedure,
-      };
-    });
     renderTable();
   } catch (e) {
     console.error('[zauzetost] reload failed', e);
@@ -245,7 +255,15 @@ function renderTable() {
     : '';
 
   /* Filter */
-  let data = state.summary;
+  const filteredRows = filterOperationsByRnOrDrawing(state.rows, state.rnFilter);
+  let data = summarizeByMachine(filteredRows).map(s => {
+    const meta = state.machinesMap?.get(s.machineCode);
+    return {
+      ...s,
+      machineName: meta?.name || '',
+      noProcedure: !!meta?.no_procedure,
+    };
+  });
   if (state.filter === 'proc') {
     data = data.filter(r => r.noProcedure === false);
   }
@@ -257,12 +275,14 @@ function renderTable() {
   counter.textContent = `${totalMach} mašina · ${totalOps} ops · ${formatSecondsHm(totalPlanned)} plan`;
 
   if (!data.length) {
+    const filterActive = !!String(state.rnFilter || '').trim();
     wrap.innerHTML = `
       <div class="pp-state">
         <div class="pp-state-icon">📭</div>
-        <div class="pp-state-title">Nema otvorenih operacija</div>
-        <div class="pp-state-desc">Sve mašine su trenutno bez aktivnih radnih naloga,
-          ili Bridge još nije popunio cache.</div>
+        <div class="pp-state-title">${filterActive ? 'Nema rezultata za filter' : 'Nema otvorenih operacija'}</div>
+        <div class="pp-state-desc">${filterActive
+          ? `Nema operacija koje sadrže <strong>${escHtml(state.rnFilter.trim())}</strong> u RN-u ili broju crteža.`
+          : 'Sve mašine su trenutno bez aktivnih radnih naloga, ili Bridge još nije popunio cache.'}</div>
       </div>
     `;
     return;
