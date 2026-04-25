@@ -75,14 +75,20 @@ export async function promovisiAkcionuTacku(akcioniPlanId, odeljenjeId, rnId) {
 }
 
 export async function canEditPracenje(projectId, rnId) {
-  if (!projectId && !rnId) return false;
+  if (!projectId && !rnId) {
+    console.warn('[pracenje] canEditPracenje skipped: missing both projectId and rnId');
+    return false;
+  }
   try {
-    return !!await rpc('can_edit_pracenje', {
+    const raw = await rpc('can_edit_pracenje', {
       p_project_id: projectId || null,
       p_rn_id: rnId || null,
     });
+    const result = !!raw;
+    console.info('[pracenje] canEditPracenje', { projectId, rnId, raw, result });
+    return result;
   } catch (e) {
-    console.warn('[pracenje] canEditPracenje failed', e);
+    console.warn('[pracenje] canEditPracenje failed', { projectId, rnId, error: e });
     return false;
   }
 }
