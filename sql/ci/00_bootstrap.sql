@@ -126,6 +126,8 @@ CREATE TABLE IF NOT EXISTS public.bigtehn_machines_cache (
 -- Grant-ovi očekivani u migracijama (PostgREST style).
 GRANT USAGE ON SCHEMA public TO authenticated, anon, service_role;
 GRANT USAGE ON SCHEMA auth TO authenticated, service_role;
+-- Tabela: RLS odlučuje redove; ipak treba tabelni GRANT (pgTAP kao authenticated).
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_roles TO authenticated;
 
 -- ── Dummy test korisnici ────────────────────────────────────────────────
 -- Neki pgTAP testovi referenciraju `auth.users(id)` preko FK (npr. moved_by

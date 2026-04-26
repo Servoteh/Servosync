@@ -211,3 +211,4 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.audit_log_cleanup(int) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.current_user_email() TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.audit_log TO authenticated;
