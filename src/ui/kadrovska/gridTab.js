@@ -902,7 +902,7 @@ async function _exportToXlsx() {
     XLSX = await loadXlsx();
   } catch (err) {
     console.error('[kadr-grid-xlsx]', err);
-    showToast('Neuspešno učitavanje biblioteke za Excel. Proveri mrežu ili osveži stranicu. Pokušaj ponovo „📊 Excel“.');
+    showToast('Neuspešno učitavanje modula za Excel. Osveži stranicu (Ctrl+F5) i pokušaj ponovo. Ako se ponovi, očisti keš PWA/Service Worker-a.');
     return;
   }
 
