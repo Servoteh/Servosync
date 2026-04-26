@@ -33,7 +33,7 @@ export function aktivniPredmetiListHtml(state) {
     return `
       <section class="form-card" style="margin-bottom:14px">
         <h2 class="form-section-title" style="margin:0 0 10px">Aktivni predmeti</h2>
-        <p class="form-hint">Nema aktivnih predmeta (MES lista bez item_id ili prazan cache).</p>
+        <p class="form-hint">Nema predmeta koji su u MES aktivnim RN-ovima i uključeni u Podešavanjima (Podeš. predmeta). Proveri aktivaciju predmeta i MES listu.</p>
       </section>
     `;
   }

@@ -27,6 +27,11 @@ import {
   wireMaintProfilesTab,
   refreshMaintProfiles,
 } from './maintProfilesTab.js';
+import {
+  refreshPredmetAktivacija,
+  renderPodesavanjePredmetaPanel,
+  wirePodesavanjePredmetaPanel,
+} from './podesavanjePredmeta/index.js';
 
 let _mountEl = null;
 let _onLogoutCb = null;
@@ -37,13 +42,15 @@ let _activeTab = 'users';
 const TABS = [
   { id: 'users', label: 'Korisnici' },
   { id: 'maint-profiles', label: 'Održ. profili' },
+  { id: 'predmet-aktivacija', label: 'Podeš. predmeta' },
   { id: 'masters', label: 'Matični podaci' },
   { id: 'system', label: 'Sistem' },
 ];
 
-/** Menadžment vidi samo „Održ. profili”; admin sve tabove. */
+/** Menadžment vidi „Održ. profili” + Podeš. predmeta; admin sve tabove. */
 function _visibleTabs() {
-  return canManageUsers() ? TABS : TABS.filter(t => t.id === 'maint-profiles');
+  if (canManageUsers()) return TABS;
+  return TABS.filter(t => t.id === 'maint-profiles' || t.id === 'predmet-aktivacija');
 }
 
 export async function renderPodesavanjaModule(mountEl, options = {}) {
@@ -63,6 +70,11 @@ export async function renderPodesavanjaModule(mountEl, options = {}) {
     refreshMaintProfiles()
       .then(() => _renderShell())
       .catch(e => console.warn('[podesavanja] maint profiles load failed', e));
+  }
+  if (_activeTab === 'predmet-aktivacija') {
+    refreshPredmetAktivacija()
+      .then(() => _renderShell())
+      .catch(e => console.warn('[podesavanja] predmet aktivacija load failed', e));
   }
 
   if (_authUnsubscribe) _authUnsubscribe();
@@ -136,6 +148,7 @@ function _headerHtml() {
 function _panelHtml(tab) {
   if (tab === 'users') return renderUsersTab({ onChange: () => _renderShell() });
   if (tab === 'maint-profiles') return renderMaintProfilesTab();
+  if (tab === 'predmet-aktivacija') return renderPodesavanjePredmetaPanel();
   if (tab === 'masters') return renderMastersTab();
   if (tab === 'system') return renderSystemTab();
   return '';
@@ -194,6 +207,11 @@ function _wireTabs() {
           .then(() => _renderShell())
           .catch(e => console.warn('[podesavanja] maint profiles refresh failed', e));
       }
+      if (t === 'predmet-aktivacija') {
+        refreshPredmetAktivacija()
+          .then(() => _renderShell())
+          .catch(e => console.warn('[podesavanja] predmet aktivacija refresh failed', e));
+      }
     });
   });
 }
@@ -204,5 +222,8 @@ function _wireTabBody() {
   }
   if (_activeTab === 'maint-profiles') {
     wireMaintProfilesTab(_mountEl, { onChange: () => _renderShell() });
+  }
+  if (_activeTab === 'predmet-aktivacija') {
+    wirePodesavanjePredmetaPanel(_mountEl);
   }
 }

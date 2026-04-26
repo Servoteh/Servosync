@@ -5,7 +5,7 @@
  * Prikazuje:
  *   - Header sa osnovnim podacima RN-a (broj, naziv dela, materijal,
  *     dimenzija, komada, rok, kupac, eventualnu napomenu, status)
- *   - Tabelu svih operacija RN-a (po Operacija ASC) iz v_production_operations
+ *   - Tabelu svih operacija RN-a (po Operacija ASC) iz v_production_operations_effective
  *     sa: br., opis, mašina, plan/real vreme, komada done/total, status, datum
  *     završetka.
  *   - (Opciono) podtabelu/expandable sa svim prijavama (bigtehn_tech_routing_cache).

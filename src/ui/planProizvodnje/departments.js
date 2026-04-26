@@ -222,7 +222,7 @@ export function machineFallsIntoOstalo(machine) {
 }
 
 /**
- * Operacija (red iz v_production_operations) ide u „Ostalo" ako njen
+ * Operacija (red iz v_production_operations_effective) ide u „Ostalo" ako njen
  * `effective_machine_code` ne pripada nijednom mašinskom tabu. Koristi se
  * u `renderOstaloView` za prikaz „operacija bez kategorije".
  */

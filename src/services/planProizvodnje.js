@@ -3,7 +3,7 @@
  *
  * Sve PostgREST queries za:
  *   - listu mašina (iz bigtehn_machines_cache)
- *   - listu otvorenih operacija po efektivnoj mašini (v_production_operations)
+ *   - listu otvorenih operacija po efektivnoj mašini (v_production_operations_effective)
  *   - upsert overlay-a (sort, status, napomena, REASSIGN)
  *   - bulk reorder (drag-drop)
  *
@@ -164,7 +164,7 @@ export async function loadOperationsForMachine(machineCode) {
      operacija; 2500 daje 2.5× headroom. Ako nekada bude veće, dodaj paging. */
   params.set('limit', '2500');
 
-  const data = await sbReq(`v_production_operations?${params.toString()}`);
+  const data = await sbReq(`v_production_operations_effective?${params.toString()}`);
   return sortProductionOperations(Array.isArray(data) ? data : []);
 }
 
@@ -222,7 +222,7 @@ export async function loadOperationsForDept(dept) {
     const p = baseParams();
     /* Ostalo NE filtrira na effective_machine_code IS NOT NULL — operacije
        bez mašine sigurno spadaju u „Ostalo". */
-    const data = await sbReq(`v_production_operations?${p.toString()}`);
+    const data = await sbReq(`v_production_operations_effective?${p.toString()}`);
     const all = Array.isArray(data) ? data : [];
     return sortProductionOperations(all.filter(op => operationFallsIntoOstalo(op)));
   }
@@ -282,7 +282,7 @@ export async function loadOperationsForDept(dept) {
   );
   finalParams.set('limit', '5000');
 
-  const data = await sbReq(`v_production_operations?${finalParams.toString()}`);
+  const data = await sbReq(`v_production_operations_effective?${finalParams.toString()}`);
   let rows = Array.isArray(data) ? data : [];
 
   /* Client-side strip-dijakritika provera za name patterns — pokriva slučaj
@@ -361,7 +361,7 @@ export async function loadAllOpenOperations() {
      ~3× headroom za naredne godine. */
   params.set('limit', '10000');
 
-  const data = await sbReq(`v_production_operations?${params.toString()}`);
+  const data = await sbReq(`v_production_operations_effective?${params.toString()}`);
   return sortProductionOperations(Array.isArray(data) ? data : []);
 }
 
@@ -381,7 +381,7 @@ export async function listForCooperation(searchText = '') {
   params.set('order', 'rok_izrade.asc.nullslast,rn_ident_broj.asc,operacija.asc');
   params.set('limit', '5000');
 
-  const data = await sbReq(`v_production_operations?${params.toString()}`);
+  const data = await sbReq(`v_production_operations_effective?${params.toString()}`);
   const rows = Array.isArray(data) ? data : [];
   return filterOperationsByRnOrDrawing(rows, searchText);
 }
@@ -399,7 +399,7 @@ export async function listAutoCooperationGroups() {
  *
  * Čita prvo iz `v_active_bigtehn_work_orders` (po `ident_broj`) — tu su
  * **broj crteža** i **ukupna količina**, i radi i za RN-ove koji nisu u
- * view-u otvorenih operacija (v_production_operations je filtriran na
+ * view-u otvorenih operacija (v_production_operations_effective je filtriran na
  * is_done_in_bigtehn=false i rn_zavrsen=false). Zatim, ako postoji
  * operacija (TP), pokušava da dohvati i `komada_done` iz
  * `bigtehn_tech_routing_cache` da predlog količine bude "preostalo".
@@ -1022,7 +1022,7 @@ export async function getBigtehnDrawingSignedUrl(brojCrteza, expiresIn = 300) {
  *
  * Koristi se u modal-u koji se otvara klikom na 📋 pored RN-a u "Po mašini".
  * Vraća:
- *   - operations: sve linije RN-a iz v_production_operations (sa svim
+ *   - operations: sve linije RN-a iz v_production_operations_effective (sa svim
  *     denormalizovanim podacima — mašina, planirano vreme, status, itd.)
  *   - logs: sve prijave iz bigtehn_tech_routing_cache za taj RN (po opcijama)
  * ──────────────────────────────────────────────────────────────────────── */
@@ -1045,7 +1045,7 @@ export async function loadFullTechProcedure(workOrderId) {
   opParams.set('work_order_id', `eq.${workOrderId}`);
   opParams.set('order', 'operacija.asc');
   opParams.set('limit', '500');
-  const operations = await sbReq(`v_production_operations?${opParams.toString()}`);
+  const operations = await sbReq(`v_production_operations_effective?${opParams.toString()}`);
 
   /* 2) Sve prijave iz tech_routing cache-a (svi radnici, sve operacije). */
   const logParams = new URLSearchParams();

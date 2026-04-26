@@ -54,9 +54,13 @@ Drag-drop (`shift_sort_order`) samo u single-machine kontekstu.
 
 ---
 
+## Filter aktivacije predmeta
+
+Operacije za plan se čitaju iz **`public.v_production_operations_effective`**: to je `v_production_operations` (otvoreni RN-ovi, BigTehn linije, overlay) **dodatno** filtrirano na predmete koji su u `production.predmet_aktivacija` sa `je_aktivan = true`. Upravljanje listom predmeta: **Podešavanja → Podeš. predmeta** (admin + menadžment). Time Plan i Praćenje dele isti politički „prekidač” vidljivosti predmeta.
+
 ## Servisni sloj (`planProizvodnje.js`)
 
-- **Čitanje:** `loadMachines()`, `loadOperationsForMachine`, `loadOperationsForDept`, `loadAllOpenOperations`, `listForCooperation`, `listAutoCooperationGroups` — iz `v_production_operations` (operativni planovi isključuju efektivnu kooperaciju).
+- **Čitanje:** `loadMachines()`, `loadOperationsForMachine`, `loadOperationsForDept`, `loadAllOpenOperations`, `listForCooperation`, `listAutoCooperationGroups` — iz `v_production_operations_effective` (operativni planovi isključuju efektivnu kooperaciju; vidi filter aktivacije iznad).
 - **Pisanje overlay-a:** `upsertOverlay()`, `reorderOverlays()`.
 - **G2:** `setUrgent()`, `clearUrgent()`, `pinToTop()`, `unpin()`, `sortProductionOperations()`.
 - **G3:** `setCamReady()` (i srodno u UI).

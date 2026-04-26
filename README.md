@@ -4,7 +4,7 @@ Modularna Vite + vanilla JS aplikacija za:
 
 - **Plan Montaže** — projekti → work packages → faze, Gantt, mobilne kartice, total Gantt, reminders, 3D model panel, eksport (JSON/XLSX/PDF).
 - **Kadrovska** — zaposleni, odsustva, mesečni grid (Excel-like), sati pojedinačno, ugovori, izveštaji (bolovanja).
-- **Podešavanja** — korisnici / uloge (admin only), placeholderi za matične podatke i sistem.
+- **Podešavanja** — korisnici / uloge (admin only), **Podeš. predmeta** (admin + menadžment: aktivacija predmeta za Plan + Praćenje), placeholderi za matične i sistem.
 
 Backend: Supabase (Auth + Postgres + RLS).
 

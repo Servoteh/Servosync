@@ -1,11 +1,19 @@
 -- ============================================================================
 -- Smoke test (nije seed podataka) — pokrenuti kao admin / service_role posle
--- migracije 20260426203000__pracenje_aktivni_predmeti_init.sql
+-- migracija 20260427160000__predmet_aktivacija_init (ili kompletan lanac Praćenja).
 -- Preduslov: bigtehn_rn_components_test.sql (Predmet A=810100, B=810101, C=810102)
+-- Napomena: get_aktivni_predmeti vraća predmete samo ako su u v_active_bigtehn + je_aktivan.
 -- ============================================================================
 
+-- 0) Aktiviraj A,B,C u predmet_aktivacija
+INSERT INTO production.predmet_aktivacija (predmet_item_id, je_aktivan, azurirano_at)
+VALUES (810100, true, now()), (810101, true, now()), (810102, true, now())
+ON CONFLICT (predmet_item_id) DO UPDATE SET
+  je_aktivan = true,
+  azurirano_at = now();
+
 -- 1) get_aktivni_predmeti
--- expected: jsonb niz sa 3 objekta (A,B,C ako su svi u v_active), polja:
+-- expected: jsonb niz sa 3 objekta (A,B,C), polja:
 --   item_id, broj_predmeta, naziv_predmeta, customer_name, sort_priority|null,
 --   broj_root_rn (A:1, B:1, C:1), redni_broj 1..3
 SELECT public.get_aktivni_predmeti() AS aktivni_predmeti;
