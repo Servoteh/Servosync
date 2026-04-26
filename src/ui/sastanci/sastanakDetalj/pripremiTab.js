@@ -6,13 +6,12 @@ import { escHtml, showToast } from '../../../lib/dom.js';
 import { formatDate } from '../../../lib/date.js';
 import { SAVE_DEBOUNCE_MS } from '../../../lib/constants.js';
 import { sbReq } from '../../../services/supabase.js';
-import { saveSastanak, saveUcesnici, loadUcesnici, SASTANAK_TIPOVI } from '../../../services/sastanci.js';
+import { saveSastanak, loadUcesnici, SASTANAK_TIPOVI } from '../../../services/sastanci.js';
 import {
   loadPmTemeForSastanak,
   addUcesnik, removeUcesnik,
   updateUcesnikPozvan, updateUcesnikPrisustvo,
   reorderPmTeme,
-  updateTemaAdminRang,
 } from '../../../services/sastanciDetalj.js';
 import { loadUsersFromDb } from '../../../services/users.js';
 import { isAdmin } from '../../../state/auth.js';
@@ -388,8 +387,6 @@ function wireTemeReorder(host, teme, admin) {
     arr.forEach(t => teme.push(t));
 
     dragState = null;
-    ul.innerHTML = renderTemeList(teme, true, false, admin).match(/<li[\s\S]*<\/ul>/)?.[0]?.replace(/<\/?ul[^>]*>/g, '') || '';
-    // re-render properly
     host.querySelector('#sdTemeList').innerHTML = renderTemeList(teme, true, false, admin);
     wireTemeReorder(host, teme, admin);
 

@@ -52,9 +52,10 @@ Faza 1 nije bila o globalnom skoku — zatvorena su 4 konkretna proboja koji su 
 **Ko ima `service_role` ključ (BYPASSRLS):**
 - `supabase/functions/maint-notify-dispatch` (cron)
 - `supabase/functions/hr-notify-dispatch` (cron)
+- `supabase/functions/sastanci-notify-dispatch` (cron — Faza C, vidi §10)
 - `workers/loc-sync-mssql` (Node worker za MSSQL → Supabase sync)
 
-**Posledica:** sve što ovi izvršavaju je nevidljivo za RLS. Audit log ih hvata kroz triger `audit_row_change()`, ali bez `actor_email` (jer service_role nema JWT).
+**Posledica:** sve što ovi izvršavaju je nevidljivo za RLS. Audit log ih hvata kroz triger `audit_row_change()`, ali bez `actor_email` (jer service_role nema JWT). Izuzetak: `sastanci-notify-dispatch` šalje `X-Audit-Actor` header na svaki RPC poziv (vidi §10).
 
 ---
 
@@ -293,6 +294,40 @@ CI radi `schema-baseline` job na svakom push/PR-u u `main`. Pad → blokira merg
 | Verzija | Datum | Šta je urađeno | Ko |
 |---|---|---|---|
 | 1.0 | 2026-04-23 | Faza 1 hardening: offline mode gate, anon REVOKE, schema.sql usklađivanje, CI baseline guard | Nenad + AI |
+| 1.1 | 2026-04-26 | Faza C — `sastanci-notify-dispatch` sa `X-Audit-Actor` atribucijom; SECURITY DEFINER triggeri za outbox; Storage bucket `'sastanci-arhiva'` sa RLS | Nenad + AI |
+
+---
+
+## 10. Faza C — sastanci-notify-dispatch atribucija (2026-04-26)
+
+### 10.1 Problem
+
+Prethodne Edge funkcije (`maint-notify-dispatch`, `hr-notify-dispatch`) koriste `service_role` koji bypassuje RLS. Svaki RPC poziv ostaje bez `actor_email` u audit log-u — nije jasno koja funkcija je napravila promenu.
+
+### 10.2 Rešenje u `sastanci-notify-dispatch`
+
+Svaki RPC poziv iz Edge funkcije nosi header:
+
+```
+X-Audit-Actor: sastanci-notify-dispatch@edge.servoteh
+```
+
+Header je definisan kao konstanta `AUDIT_ACTOR` u [index.ts](../supabase/functions/sastanci-notify-dispatch/index.ts) i prosleđuje se kroz `rpc()` helper na sve pozive:
+- `sastanci_dispatch_dequeue`
+- `sastanci_dispatch_mark_sent`
+- `sastanci_dispatch_mark_failed`
+
+**Napomena:** PostgreSQL `audit_row_change()` triger trenutno ne čita ovaj header automatski (čeka §6.1 implementaciju `SET LOCAL audit.actor_email`). Header je ipak prisutan u HTTP layer-u i vidljiv je u Supabase request log-ovima.
+
+### 10.3 SECURITY DEFINER triggeri
+
+Četiri trigger funkcije za outbox (`sast_trg_akcija_new`, `sast_trg_akcija_changed`, `sast_trg_meeting_locked`, `sast_trg_ucesnik_invite`) su sve `SECURITY DEFINER SET search_path = public, pg_temp`. Zaobilaze RLS INSERT na `sastanci_notification_log` jer triggeri rade pod `postgres` kontekstom — isti pattern kao `maint_enqueue_notification`.
+
+Enqueue helper `sastanci_enqueue_notification()` je dostupan samo `service_role`-u (REVOKE from authenticated) — browser klijenti ne mogu direktno zvati.
+
+### 10.4 WhatsApp (Faza C ograničenje)
+
+Redovi sa `channel='whatsapp'` se odmah markuju `failed` (bez retry-a, `next_attempt_at = now() + 1 year`). Nema slanja ka Meta API. Ovo je svesna odluka dok Meta Business nalog nije odobren.
 
 ---
 

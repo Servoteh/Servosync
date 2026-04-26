@@ -1,7 +1,7 @@
 # Sastanci modul — Faza B (analiza + plan)
 
-**Datum:** 2026-04-26  
-**Status:** ČEKA ODOBRENJE — ne implementirati pre OK
+**Datum plana:** 2026-04-26  
+**Status:** ✅ IMPLEMENTIRANO — commit `8135514`
 
 ---
 

@@ -476,6 +476,7 @@ function showModulePlaceholder(moduleId, options = {}) {
     try {
       renderSastanciModule(mountEl, {
         sastanakId: opts.sastanakId || null,
+        sastanciTab: opts.sastanciTab || null,
         onBackToHub: () => showHub(),
         onLogout: () => {
           resetKadrovskaState();
@@ -782,7 +783,11 @@ function applyRouteFromLocation() {
       showHub();
       return;
     }
-    showModulePlaceholder(route.moduleId, { skipUrlSync: true, sastanakId: route.sastanakId || null });
+    showModulePlaceholder(route.moduleId, {
+      skipUrlSync: true,
+      sastanakId: route.sastanakId || null,
+      sastanciTab: route.sastanciTab || null,
+    });
   }
 }
 

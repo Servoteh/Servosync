@@ -81,6 +81,9 @@ export function pathnameToRoute(pathname) {
   if (p === '/sastanci') {
     return { kind: 'module', moduleId: 'sastanci' };
   }
+  if (p === '/sastanci/podesavanja-notifikacija') {
+    return { kind: 'module', moduleId: 'sastanci', sastanciTab: 'podesavanja-notif' };
+  }
   const sd = /^\/sastanci\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(p);
   if (sd) {
     return { kind: 'module', moduleId: 'sastanci', sastanakId: sd[1] };

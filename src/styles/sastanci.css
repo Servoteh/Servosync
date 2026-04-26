@@ -1579,3 +1579,78 @@ body.dark .sast-projekat-item.is-active {
 .tema-hitna td:first-child { border-left: 3px solid var(--danger, #ef4444); }
 .tema-hitna .tema-naslov-line { color: var(--danger, #ef4444); }
 #module-sastanci { position: relative; }
+
+/* ══════════════════════════════════════════════════════════
+   FAZA C — Podešavanja notifikacija + Arhiva PDF
+   ══════════════════════════════════════════════════════════ */
+
+/* Prefs wrapper */
+.sast-prefs-wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+.sast-prefs-header { margin-bottom: 20px; }
+.sast-prefs-title { font-size: 20px; font-weight: 700; margin: 0 0 4px; color: var(--text1, #111); }
+
+/* Email info row */
+.sast-prefs-email-row {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface2, #f5f5f5); border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 24px; font-size: 13px;
+}
+.sast-prefs-email-label { color: var(--text2, #666); }
+
+/* Fieldset */
+.sast-prefs-fieldset {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px; padding: 16px; margin-bottom: 16px;
+}
+.sast-prefs-fieldset--disabled { opacity: 0.6; }
+.sast-prefs-legend {
+  font-size: 13px; font-weight: 700; color: var(--text2, #666);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 0 6px; display: flex; align-items: center; gap: 8px;
+}
+.sast-prefs-soon {
+  font-size: 10px; font-weight: 600;
+  background: #dbeafe; color: var(--primary, #2563eb);
+  border-radius: 10px; padding: 1px 7px; text-transform: none; letter-spacing: 0;
+}
+
+/* Toggle row */
+.sast-prefs-toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 10px 0;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.sast-prefs-toggle-row:last-child { border-bottom: none; padding-bottom: 0; }
+.sast-prefs-toggle-row--disabled { opacity: 0.55; cursor: not-allowed; }
+.sast-prefs-toggle-info { flex: 1; min-width: 0; }
+.sast-prefs-toggle-label { display: block; font-size: 14px; font-weight: 600; color: var(--text1, #111); }
+.sast-prefs-toggle-desc { display: block; font-size: 12px; color: var(--text2, #666); margin-top: 2px; }
+
+/* Toggle switch */
+.sast-toggle { position: relative; display: inline-flex; cursor: pointer; flex-shrink: 0; }
+.sast-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.sast-toggle-track {
+  width: 42px; height: 24px; border-radius: 12px;
+  background: var(--border, #d1d5db); transition: background 0.2s;
+  position: relative;
+}
+.sast-toggle-track::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: transform 0.2s;
+}
+.sast-toggle input:checked + .sast-toggle-track { background: var(--primary, #2563eb); }
+.sast-toggle input:checked + .sast-toggle-track::after { transform: translateX(18px); }
+.sast-toggle input:disabled + .sast-toggle-track { cursor: not-allowed; }
+
+/* Footer + feedback */
+.sast-prefs-footer { display: flex; align-items: center; gap: 16px; margin-top: 20px; }
+.sast-prefs-saved { font-size: 13px; color: #16a34a; font-weight: 600; }
+
+/* PDF banner u arhiva tabu */
+.sast-pdf-banner {
+  padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px;
+}
+.sast-pdf-banner--warn { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+.sast-arhiva-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }

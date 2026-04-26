@@ -60,6 +60,9 @@ function mapArhiva(d) {
     arhiviranEmail: d.arhivirao_email || '',
     arhiviranLabel: d.arhivirao_label || '',
     arhiviranoAt: d.arhivirano_at || null,
+    zapisnikStoragePath: d.zapisnik_storage_path || null,
+    zapisnikSizeBytes: d.zapisnik_size_bytes || null,
+    zapisnikGeneratedAt: d.zapisnik_generated_at || null,
   };
 }
 

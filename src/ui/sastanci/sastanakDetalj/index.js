@@ -24,6 +24,8 @@ import {
   zakljucajSaSapisanikom,
   otvojiPonovo,
 } from '../../../services/sastanciDetalj.js';
+import { generateSastanakPdf } from '../../../lib/sastanciPdf.js';
+import { uploadSastanakPdf } from '../../../services/sastanciArhiva.js';
 import { SASTANAK_TIPOVI, SASTANAK_STATUSI, SASTANAK_STATUS_BOJE } from '../../../services/sastanci.js';
 import { renderPripremiTab, teardownPripremiTab } from './pripremiTab.js';
 import { renderZapisnikTab, teardownZapisnikTab } from './zapisnikTab.js';
@@ -235,12 +237,32 @@ function wireActionButtons(host, sastanak, canWrite, admin, onReload) {
         else { showToast('⚠ Nije uspelo'); btn.disabled = false; }
 
       } else if (action === 'zakljucaj') {
-        if (!confirm('Zaključaj sastanak? Ovo kreira snapshot zapisnika.')) {
+        if (!confirm('Zaključaj sastanak? Sistem će kreirati snapshot i PDF zapisnik.')) {
           btn.disabled = false; return;
         }
-        const ok = await zakljucajSaSapisanikom(sastanak.id);
-        if (ok) { showToast('🔒 Sastanak zaključan'); onReload(); }
-        else { showToast('⚠ Nije uspelo'); btn.disabled = false; }
+        // 1) Zaključaj + snapshot
+        const zakljucan = await zakljucajSaSapisanikom(sastanak.id);
+        if (!zakljucan) { showToast('⚠ Zaključavanje nije uspelo'); btn.disabled = false; return; }
+
+        showToast('🔒 Zaključano. Generisujem PDF…');
+
+        // 2) Generiši PDF i uploaduj (greška ne blokira zaključavanje)
+        try {
+          const fullData = await getSastanakFull(sastanak.id);
+          if (fullData) {
+            const blob = await generateSastanakPdf(fullData);
+            await uploadSastanakPdf(sastanak.id, blob);
+          }
+        } catch (e) {
+          console.error('[zakljucaj] PDF generation failed', e);
+          // Prikaži banner u arhiva tabu — sastanak ostaje zaključan
+          showToast('🔒 Zaključano. ⚠ PDF nije kreiran — otvori Arhiva tab da pokušaš ponovo.');
+          onReload();
+          return;
+        }
+
+        showToast('🔒 Sastanak zaključan — PDF je spreman');
+        onReload();
 
       } else if (action === 'otvori') {
         if (!confirm('Otvoriti sastanak ponovo? Status se vraća na "U toku".')) {

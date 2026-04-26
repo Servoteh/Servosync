@@ -26,6 +26,7 @@ import { renderPregledPoProjektuTab, teardownPregledPoProjektuTab } from './preg
 import { renderAkcioniPlanTab, teardownAkcioniPlanTab } from './akcioniPlanTab.js';
 import { renderSastanciTab, teardownSastanciTab } from './sastanciTab.js';
 import { renderArhivaTab, teardownArhivaTab } from './arhivaTab.js';
+import { renderPodesavanjaNotifikacijaTab, teardownPodesavanjaNotifikacijaTab } from './podesavanjaNotifikacijaTab.js';
 import { mountSastanciFab, unmountSastanciFab } from './quickAddTemaButton.js';
 import { renderSastanakDetalj, teardownSastanakDetalj } from './sastanakDetalj/index.js';
 
@@ -36,6 +37,7 @@ const TABS = [
   { id: 'pregled-projekti',  label: 'Po projektu',       icon: '🎯', desc: 'Pregled tema po projektu sa master rangom (admin).' },
   { id: 'akcioni-plan',      label: 'Akcioni plan',      icon: '✅', desc: 'Otvorene akcije sa rokovima.' },
   { id: 'arhiva',            label: 'Arhiva',            icon: '🗃', desc: 'Zaključani sastanci i zapisnici.' },
+  { id: 'podesavanja-notif', label: 'Podešavanja',       icon: '⚙️',  desc: 'Podešavanja email notifikacija.' },
 ];
 
 /**
@@ -47,10 +49,15 @@ export function navigateToSastanakDetalj(sastanakId, tab) {
   navigateToAppPath(buildSastanakDetaljPath(sastanakId, tab || null));
 }
 
-export function renderSastanciModule(mountEl, { onBackToHub, onLogout, sastanakId = null } = {}) {
+export function renderSastanciModule(mountEl, { onBackToHub, onLogout, sastanakId = null, sastanciTab = null } = {}) {
   const auth = getAuth();
   const editor = canEdit();
   const state = getSastanciState();
+
+  // Deep link na specifičan tab (npr. /sastanci/podesavanja-notifikacija)
+  if (sastanciTab && TABS.some(t => t.id === sastanciTab)) {
+    setActiveTab(sastanciTab);
+  }
 
   /* Deep link na /sastanci/<uuid> — prikaži detalj, bez main tab strip-a */
   if (sastanakId) {
@@ -177,6 +184,10 @@ function renderTabBody(host, { canEdit }) {
     renderArhivaTab(host, { canEdit });
     return;
   }
+  if (state.activeTab === 'podesavanja-notif') {
+    renderPodesavanjaNotifikacijaTab(host);
+    return;
+  }
 }
 
 function teardownActiveTab() {
@@ -187,6 +198,7 @@ function teardownActiveTab() {
   if (state.activeTab === 'pregled-projekti') teardownPregledPoProjektuTab();
   if (state.activeTab === 'akcioni-plan') teardownAkcioniPlanTab();
   if (state.activeTab === 'arhiva') teardownArhivaTab();
+  if (state.activeTab === 'podesavanja-notif') teardownPodesavanjaNotifikacijaTab();
 }
 
 export function teardownSastanciModule() {
