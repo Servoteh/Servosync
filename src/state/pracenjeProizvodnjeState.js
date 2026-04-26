@@ -9,20 +9,23 @@ import {
   canEditPracenje,
   ensureRadniNalogFromBigtehn,
   fetchAktivniNaloziZaPracenje,
+  fetchAktivniPredmeti,
   fetchOperativneAktivnostiRaw,
   fetchOperativniPlan,
+  fetchPodsklopoviPredmeta,
   fetchPracenjeRn,
   listOdeljenja,
   listRadnici,
   promovisiAkcionuTacku,
   resolveRnId,
   setBlokirano,
+  shiftPredmetPrioritet,
   skiniBlokadu,
   subscribePracenjeRn,
   upsertOperativnaAktivnost,
   zatvoriAktivnost,
 } from '../services/pracenjeProizvodnje.js';
-import { canEdit as authCanEditApp } from '../state/auth.js';
+import { canEdit as authCanEditApp, getCurrentRole } from '../state/auth.js';
 import { showToast } from '../lib/dom.js';
 
 /** UI edit: RPC can_edit_pracenje + fallback na app ulogu (isti pattern kao Plan Montaže). */
@@ -69,6 +72,19 @@ export const pracenjeState = {
   aktivniNaloziLoading: false,
   aktivniNaloziError: null,
   aktivniNaloziLoaded: false,
+  /** Aktivni predmeti (ekran 1) + podsklopovi (ekran 2) */
+  aktivniPredmetiState: {
+    predmeti: [],
+    selectedItemId: null,
+    podsklopovi: [],
+    headerPredmet: null,
+    isAdmin: false,
+    loading: false,
+    error: null,
+    loaded: false,
+    podsklopoviLoading: false,
+    podsklopoviError: null,
+  },
 };
 
 const listeners = new Set();
@@ -83,6 +99,20 @@ export function subscribePracenje(callback) {
 
 export function getPracenjeSnapshot() {
   return snapshot();
+}
+
+/** Skida Inkrement 2 prikaz (nakon back sa ?rn=) bez resetovanja cele aplikacije. */
+export function clearRnInkrementView() {
+  if (!pracenjeState.rnId) return;
+  pracenjeState.rnId = null;
+  pracenjeState.header = null;
+  pracenjeState.tab1Data = null;
+  pracenjeState.tab2Data = { activities: [] };
+  pracenjeState.dashboard = null;
+  pracenjeState.loading = false;
+  pracenjeState.error = null;
+  pracenjeState.highlightedActivityId = null;
+  emit();
 }
 
 export function resetPracenjeState() {
@@ -101,6 +131,18 @@ export function resetPracenjeState() {
   pracenjeState.aktivniNaloziLoading = false;
   pracenjeState.aktivniNaloziError = null;
   pracenjeState.aktivniNaloziLoaded = false;
+  pracenjeState.aktivniPredmetiState = {
+    predmeti: [],
+    selectedItemId: null,
+    podsklopovi: [],
+    headerPredmet: null,
+    isAdmin: false,
+    loading: false,
+    error: null,
+    loaded: false,
+    podsklopoviLoading: false,
+    podsklopoviError: null,
+  };
   emit();
 }
 
@@ -146,6 +188,139 @@ export async function loadAktivniNaloziList() {
   }
 }
 
+function normalizePredmetiRpc(raw) {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      const p = JSON.parse(raw);
+      return Array.isArray(p) ? p : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function normalizePodsklopoviRpc(raw) {
+  return normalizePredmetiRpc(raw);
+}
+
+/** Učitava listu aktivnih predmeta (RPC get_aktivni_predmeti). */
+export async function loadAktivniPredmeti() {
+  const ap = pracenjeState.aktivniPredmetiState;
+  if (ap.loading) return;
+  ap.loading = true;
+  ap.error = null;
+  ap.isAdmin = getCurrentRole() === 'admin';
+  emit();
+  try {
+    const raw = await fetchAktivniPredmeti();
+    ap.predmeti = normalizePredmetiRpc(raw);
+    ap.error = null;
+    ap.loaded = true;
+  } catch (e) {
+    ap.predmeti = [];
+    ap.error = e?.message || String(e);
+    ap.loaded = true;
+  } finally {
+    ap.loading = false;
+    emit();
+  }
+}
+
+/** Otvara ekran 2: učitava podsklopove i ažurira URL ?predmet= */
+export async function selectPredmet(itemId) {
+  const id = Number(itemId);
+  if (!Number.isFinite(id) || id <= 0) return;
+  const ap = pracenjeState.aktivniPredmetiState;
+  ap.selectedItemId = id;
+  ap.podsklopoviError = null;
+  ap.podsklopoviLoading = true;
+  ap.headerPredmet = ap.predmeti.find(p => Number(p.item_id) === id) || {
+    item_id: id,
+    naziv_predmeta: '',
+    customer_name: '',
+    broj_predmeta: '',
+  };
+  syncPredmetUrl(id);
+  emit();
+  try {
+    const raw = await fetchPodsklopoviPredmeta(id);
+    ap.podsklopovi = normalizePodsklopoviRpc(raw);
+    ap.podsklopoviError = null;
+  } catch (e) {
+    ap.podsklopovi = [];
+    ap.podsklopoviError = e?.message || String(e);
+  } finally {
+    ap.podsklopoviLoading = false;
+    emit();
+  }
+}
+
+export function clearSelectedPredmet() {
+  const ap = pracenjeState.aktivniPredmetiState;
+  ap.selectedItemId = null;
+  ap.podsklopovi = [];
+  ap.headerPredmet = null;
+  ap.podsklopoviError = null;
+  clearPredmetFromUrl();
+  emit();
+}
+
+/**
+ * Admin: pomeraj prioritet (optimistički swap u listi, rollback preko reload-a).
+ * @param {'up'|'down'} direction
+ */
+export async function shiftPrioritet(itemId, direction) {
+  const ap = pracenjeState.aktivniPredmetiState;
+  const id = Number(itemId);
+  const dir = direction === 'up' ? 'up' : 'down';
+  const list = [...(ap.predmeti || [])];
+  const idx = list.findIndex(p => Number(p.item_id) === id);
+  if (idx < 0) return;
+  const neighborIdx = dir === 'up' ? idx - 1 : idx + 1;
+  if (neighborIdx < 0 || neighborIdx >= list.length) return;
+  const before = list.map(p => ({ ...p }));
+  const tmp = list[idx];
+  list[idx] = list[neighborIdx];
+  list[neighborIdx] = tmp;
+  list.forEach((p, i) => { p.redni_broj = i + 1; });
+  ap.predmeti = list;
+  emit();
+  try {
+    await shiftPredmetPrioritet(id, dir);
+    ap.error = null;
+    await loadAktivniPredmeti();
+  } catch (e) {
+    ap.predmeti = before;
+    ap.error = e?.message || String(e);
+    emit();
+    showToast(ap.error);
+  }
+}
+
+function syncPredmetUrl(itemId) {
+  if (typeof window === 'undefined') return;
+  const cur = new URLSearchParams(window.location.search).get('predmet');
+  if (cur === String(itemId)) return;
+  const params = new URLSearchParams(window.location.search);
+  params.delete('rn');
+  params.set('predmet', String(itemId));
+  const hash = window.location.hash || '';
+  history.pushState(null, '', `${window.location.pathname}?${params.toString()}${hash}`);
+}
+
+function clearPredmetFromUrl() {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('predmet')) return;
+  params.delete('predmet');
+  const qs = params.toString();
+  const hash = window.location.hash || '';
+  history.pushState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}${hash}`);
+}
+
 /**
  * @param {string} rnId - RN broj, UUID, ili privremeni query
  * @param {{ bigtehnWorkOrderId?: number }} [options] - ako je setovan, kreira RN u Fazi 2 iz BigTehn cache-a (MES)
@@ -158,6 +333,9 @@ export async function loadPracenje(rnId, options = {}) {
     emit();
     return false;
   }
+  pracenjeState.aktivniPredmetiState.selectedItemId = null;
+  pracenjeState.aktivniPredmetiState.podsklopovi = [];
+  pracenjeState.aktivniPredmetiState.headerPredmet = null;
   pracenjeState.rnId = rnQuery || `wo:${bigtehnWorkOrderId}`;
   hydrateFilters(pracenjeState.rnId);
   pracenjeState.loading = true;
@@ -544,6 +722,14 @@ function snapshot() {
     departments: [...pracenjeState.departments],
     radnici: [...pracenjeState.radnici],
     aktivniNalozi: [...(pracenjeState.aktivniNalozi || [])],
+    aktivniPredmetiState: {
+      ...pracenjeState.aktivniPredmetiState,
+      predmeti: [...(pracenjeState.aktivniPredmetiState?.predmeti || [])],
+      podsklopovi: [...(pracenjeState.aktivniPredmetiState?.podsklopovi || [])],
+      headerPredmet: pracenjeState.aktivniPredmetiState?.headerPredmet
+        ? { ...pracenjeState.aktivniPredmetiState.headerPredmet }
+        : null,
+    },
     tab2Data: {
       ...pracenjeState.tab2Data,
       activities: [...(pracenjeState.tab2Data?.activities || [])],

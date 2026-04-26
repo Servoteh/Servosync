@@ -1,8 +1,14 @@
 # Praćenje proizvodnje — frontend smoke test
 
-## Otvaranje modula
+## Otvaranje modula (Aktivni predmeti + Inkrement 2)
 
-Bez `?rn=` u URL-u modul prvo učitava **tabelu aktivnih MES radnih naloga** (isti izvor kao Lokacije/Plan: `v_active_bigtehn_work_orders` = ručna lista `production_active_work_orders` + `bigtehn_work_orders_cache`). Tabela: redni broj, **Broj predmeta** (iz `bigtehn_items_cache`), **Naziv** (`naziv_dela` sa RN), **Komitent**. Klik na red poziva učitavanje RN-a (mapiranje preko `production.radni_nalog.legacy_idrn` = BigTehn `id`, inače `ident_broj` kroz `resolveRnId`).
+Bez `?rn=` modul prvo učitava **listu aktivnih predmeta** (`public.get_aktivni_predmeti` → distinct `item_id` iz `v_active_bigtehn_work_orders`). Kolone: redni broj, naziv predmeta (ispod: broj predmeta), komitent, badge **broj root MES RN** (`broj_root_rn` iz `v_bigtehn_rn_root_count`). Klik na red ili badge otvara **ekran 2** (`?predmet=<item_id>`): stablo iz `get_podsklopovi_predmeta` (flat RPC, expand/collapse, `localStorage` po `item_id`). Klik na RN (`IdentBroj — NazivDela`) poziva `ensure_radni_nalog_iz_bigtehn` + `loadPracenje` i prebacuje na `?rn=<uuid>`.
+
+**URL:**
+
+- Lista: `/pracenje-proizvodnje` (ili bez query-ja koji nisu `rn`/`predmet`)
+- Stablo: `?predmet=810102` (nakon seed-a `bigtehn_rn_components_test.sql`)
+- Inkrement 2: `?rn=<uuid|broj>` (direktan ulaz, kao ranije)
 
 Ruta modula:
 
@@ -22,6 +28,14 @@ Tabovi su deep-linkable:
 #tab=po_pozicijama
 #tab=operativni_plan
 ```
+
+## Ručni smoke (Aktivni predmeti)
+
+1. Otvori modul bez `?rn=` — vidiš **listu predmeta** (broj redova = aktivni predmeti u MES-u).
+2. Ako postoji seed `bigtehn_rn_components_test.sql`: klik na **Predmet C** (`810102`) — stablo sa više nivoa; klik na podsklop koji ima RN — otvara se Inkrement 2.
+3. **Nazad** u stablu (`← Nazad na listu predmeta`) → lista; browser **Back** vraća kroz istoriju (`?predmet=` ↔ lista ↔ `?rn=`).
+4. **Admin:** u listi vidiš strelice ↑ ↓; klik ↓ na prvom redu → redosled se menja; refresh stranice → redosled ostaje (server `shift_predmet_prioritet`).
+5. **Non-admin:** nema strelica; `set_predmet_prioritet` / `shift` na backend-u vraćaju `forbidden` / RLS.
 
 ## Očekivano ponašanje
 
@@ -44,6 +58,7 @@ Tabovi su deep-linkable:
 
 ## Poznata ograničenja
 
+- Lista aktivnih predmeta (ekran 1) nema realtime osvežavanje — potreban ručni refresh ili ponovni ulazak u modul.
 - Pravi Supabase websocket realtime nije uveden jer projekat trenutno koristi custom REST `sbReq`, ne Supabase JS realtime client. Modul koristi polling fallback od 30s.
 - Export audit je best-effort upis u postojeći `audit_log`; ako RLS odbije direktan insert, export se ne prekida.
 - Deep-link na originalnu akcionu tačku vodi na `/sastanci?akcija=<id>`; modul Sastanci ne menja se u ovom inkrementu.

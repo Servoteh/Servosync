@@ -132,6 +132,34 @@ export async function ensureRadniNalogFromBigtehn(workOrderId) {
   return rpc('ensure_radni_nalog_iz_bigtehn', { p_work_order_id: id });
 }
 
+/** Aktivni predmeti (ekran 1) — jsonb niz iz production.get_aktivni_predmeti. */
+export async function fetchAktivniPredmeti() {
+  return rpc('get_aktivni_predmeti', {});
+}
+
+/** Flat hijerarhija RN-ova za predmet (ekran 2). */
+export async function fetchPodsklopoviPredmeta(itemId) {
+  const id = Number(itemId);
+  if (!Number.isFinite(id) || id <= 0) throw new Error('Neispravan ID predmeta.');
+  return rpc('get_podsklopovi_predmeta', { p_item_id: id });
+}
+
+export async function setPredmetPrioritet(itemId, sortPriority) {
+  const id = Number(itemId);
+  const sp = Number(sortPriority);
+  if (!Number.isFinite(id) || id <= 0) throw new Error('Neispravan ID predmeta.');
+  if (!Number.isFinite(sp) || sp < 0) throw new Error('Neispravan prioritet.');
+  return rpc('set_predmet_prioritet', { p_item_id: id, p_sort_priority: sp });
+}
+
+export async function shiftPredmetPrioritet(itemId, direction) {
+  const id = Number(itemId);
+  const dir = String(direction || '').trim().toLowerCase();
+  if (!Number.isFinite(id) || id <= 0) throw new Error('Neispravan ID predmeta.');
+  if (dir !== 'up' && dir !== 'down') throw new Error('Smer mora biti up ili down.');
+  return rpc('shift_predmet_prioritet', { p_item_id: id, p_direction: dir });
+}
+
 export async function fetchPracenjeRn(rnId) {
   if (!rnId) throw new Error('RN ID je obavezan');
   return rpc('get_pracenje_rn', { p_rn_id: rnId });

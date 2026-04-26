@@ -7,15 +7,21 @@ import { toggleTheme } from '../../lib/theme.js';
 import { logout } from '../../services/auth.js';
 import { getAuth } from '../../state/auth.js';
 import {
+  clearRnInkrementView,
+  clearSelectedPredmet,
   getPracenjeSnapshot,
-  loadAktivniNaloziList,
+  loadAktivniPredmeti,
   loadPracenje,
   resetPracenjeState,
+  selectPredmet,
   setActiveTab,
   startRealtime,
   stopRealtime,
   subscribePracenje,
 } from '../../state/pracenjeProizvodnjeState.js';
+import { aktivniPredmetiListHtml, wireAktivniPredmetiList } from './aktivniPredmetiList.js';
+import { podsklopoviTreeHtml, wirePodsklopoviTree } from './podsklopoviTree.js';
+import { getPracenjeUrlState } from './pracenjeRouter.js';
 import { pageHeaderHtml } from './pageHeader.js';
 import { tab1PozicijeHtml, wireTab1Pozicije } from './tab1Pozicije.js';
 import {
@@ -36,6 +42,7 @@ let _onBackToHub = null;
 let _onLogout = null;
 let _unsubscribe = null;
 let _hashHandler = null;
+let _popStateHandler = null;
 
 export function renderPracenjeProizvodnjeModule(mountEl, options = {}) {
   _mountEl = mountEl;
@@ -55,13 +62,40 @@ export function renderPracenjeProizvodnjeModule(mountEl, options = {}) {
   };
   window.addEventListener('hashchange', _hashHandler);
 
-  const rnId = new URLSearchParams(window.location.search).get('rn');
-  if (rnId && rnId !== getPracenjeSnapshot().rnId) {
-    void loadPracenje(rnId).then(ok => { if (ok) startRealtime(); });
-  } else {
+  if (_popStateHandler) window.removeEventListener('popstate', _popStateHandler);
+  _popStateHandler = () => {
+    const { rn, predmet } = getPracenjeUrlState();
+    if (rn) {
+      void loadPracenje(rn).then((ok) => {
+        if (ok) startRealtime();
+        renderShell();
+      });
+      return;
+    }
+    stopRealtime();
+    if (getPracenjeSnapshot().rnId) clearRnInkrementView();
+    if (predmet != null) {
+      void loadAktivniPredmeti().then(() => selectPredmet(predmet).then(() => renderShell()));
+    } else {
+      clearSelectedPredmet();
+      void loadAktivniPredmeti().then(() => renderShell());
+    }
+  };
+  window.addEventListener('popstate', _popStateHandler);
+
+  const { rn: rnParam, predmet: predmetParam } = getPracenjeUrlState();
+  if (rnParam && rnParam !== getPracenjeSnapshot().rnId) {
+    void loadPracenje(rnParam).then((ok) => {
+      if (ok) startRealtime();
+      renderShell();
+    });
+  } else if (rnParam) {
     renderShell();
-    if (rnId) startRealtime();
-    if (!rnId) void loadAktivniNaloziList();
+    startRealtime();
+  } else if (predmetParam != null) {
+    void loadAktivniPredmeti().then(() => selectPredmet(predmetParam).then(() => renderShell()));
+  } else {
+    void loadAktivniPredmeti();
   }
 }
 
@@ -69,6 +103,7 @@ export function teardownPracenjeProizvodnjeModule() {
   stopRealtime();
   if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
   if (_hashHandler) { window.removeEventListener('hashchange', _hashHandler); _hashHandler = null; }
+  if (_popStateHandler) { window.removeEventListener('popstate', _popStateHandler); _popStateHandler = null; }
   resetPracenjeState();
   _mountEl = null;
 }
@@ -107,7 +142,7 @@ function renderShell() {
       </div>
     </header>
     <main class="kadrovska-tabpanel" style="padding:24px;max-width:1680px;margin:0 auto">
-      ${aktivniNaloziTableHtml(state)}
+      ${predmetShellHtml(state)}
       ${rnLoaderHtml(state)}
       ${state.rnId ? pageHeaderHtml(state) : ''}
       ${state.rnId ? tabSwitcherHtml(state.activeTab) : ''}
@@ -119,65 +154,14 @@ function renderShell() {
   wireShell(container, state);
 }
 
-function aktivniNaloziTableHtml(state) {
+function predmetShellHtml(state) {
   if (state.rnId) return '';
-  if (state.aktivniNaloziLoading) {
-    return `
-      <section class="form-card" style="margin-bottom:14px" aria-busy="true">
-        <h2 class="form-section-title" style="margin:0 0 10px">Aktivni radni nalozi (MES)</h2>
-        <p class="form-hint">Učitavanje liste iz <code>v_active_bigtehn_work_orders</code>…</p>
-      </section>
-    `;
-  }
-  if (state.aktivniNaloziError) {
-    return `
-      <section class="form-card" style="margin-bottom:14px">
-        <h2 class="form-section-title" style="margin:0 0 10px">Aktivni radni nalozi (MES)</h2>
-        <p class="pp-error">Lista nije učitana: ${escHtml(state.aktivniNaloziError)}</p>
-      </section>
-    `;
-  }
-  const rows = state.aktivniNalozi || [];
-  if (!rows.length && state.aktivniNaloziLoaded) {
-    return `
-      <section class="form-card" style="margin-bottom:14px">
-        <h2 class="form-section-title" style="margin:0 0 10px">Aktivni radni nalozi (MES)</h2>
-        <p class="form-hint">Nema aktivnih RN-ova u MES listi. Proveri <code>production_active_work_orders</code> / seed.</p>
-      </section>
-    `;
-  }
-  if (!rows.length) return '';
-  return `
-    <section class="form-card" style="margin-bottom:14px">
-      <h2 class="form-section-title" style="margin:0 0 10px">Aktivni radni nalozi (MES)</h2>
-      <p class="form-hint" style="margin:0 0 12px">Klik na red učitava taj nalog. Lista = ručno održavani MES aktivni nalozi (iste kao u Lokacijama / planiranju).</p>
-      <div class="pp-table-wrap" style="max-height:min(60vh,520px);overflow:auto">
-        <table class="pp-table" id="ppAktivniNaloziTable">
-          <thead>
-            <tr>
-              <th class="pp-cell-num">Red</th>
-              <th>Broj predmeta</th>
-              <th>Naziv</th>
-              <th>Komitent</th>
-            </tr>
-          </thead>
-          <tbody id="ppAktivniTbody">
-            ${rows.map((r) => `
-              <tr class="pp-pickable-rn" data-pracenje-rn="${escHtml(r.loadQuery)}" data-bigtehn-ensure="${r.pracenjeRnId ? '' : escHtml(String(r.bigtehnId ?? ''))}" style="cursor:pointer" title="Učitaj u praćenje proizvodnje">
-                <td class="pp-cell-num">${r.redBr}</td>
-                <td>${escHtml(r.brojPredmeta)}</td>
-                <td>${escHtml(r.naziv)}</td>
-                <td>${escHtml(r.komitent)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  `;
+  if (state.aktivniPredmetiState?.selectedItemId) return podsklopoviTreeHtml(state);
+  return aktivniPredmetiListHtml(state);
 }
 
 function rnLoaderHtml(state) {
+  if (state.aktivniPredmetiState?.selectedItemId && !state.rnId) return '';
   return `
     <section class="form-card" style="margin-bottom:14px">
       <div class="pp-toolbar" style="margin:0">
@@ -196,12 +180,21 @@ function rnLoaderHtml(state) {
 }
 
 function bodyHtml(state) {
+  if (!state.rnId && state.aktivniPredmetiState?.selectedItemId) {
+    return `
+      <div class="pp-state">
+        <div class="pp-state-icon">…</div>
+        <div class="pp-state-title">Izaberi RN u stablu</div>
+        <div class="pp-state-desc">Klik na red u stablu iznad otvara praćenje (Inkrement 2). Ili unesi RN ispod / <code>?rn=</code>.</div>
+      </div>
+    `;
+  }
   if (!state.rnId) {
     return `
       <div class="pp-state">
         <div class="pp-state-icon">...</div>
         <div class="pp-state-title">Izaberi radni nalog</div>
-        <div class="pp-state-desc">Klik na red u tabeli iznad, unos u polju ispod, ili <code>?rn=&lt;uuid|broj&gt;</code> u URL-u.</div>
+        <div class="pp-state-desc">Klik na predmet u listi, unos RN u polju ispod, ili <code>?rn=&lt;uuid|broj&gt;</code> / <code>?predmet=&lt;id&gt;</code>.</div>
       </div>
     `;
   }
@@ -223,15 +216,6 @@ function wireShell(container, state) {
     const rnId = container.querySelector('#pracenjeRnInput')?.value?.trim();
     loadFromInput(rnId);
   });
-  container.querySelector('#ppAktivniTbody')?.addEventListener('click', (ev) => {
-    const tr = ev.target.closest('tr[data-pracenje-rn]');
-    if (!tr) return;
-    const q = tr.getAttribute('data-pracenje-rn');
-    if (!q) return;
-    const ens = tr.getAttribute('data-bigtehn-ensure');
-    const id = ens && /^\d+$/.test(ens) ? Number(ens) : null;
-    loadFromInput(q, id != null && Number.isFinite(id) ? { bigtehnWorkOrderId: id } : {});
-  });
   container.querySelector('#pracenjeRnInput')?.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') loadFromInput(ev.target.value?.trim());
   });
@@ -248,11 +232,17 @@ function wireShell(container, state) {
   container.querySelector('#pracenjeRetryBtn')?.addEventListener('click', () => {
     if (state.rnId) void loadPracenje(state.rnId);
   });
+  if (!state.rnId && state.aktivniPredmetiState?.selectedItemId) {
+    wirePodsklopoviTree(container, state, renderShell);
+  } else if (!state.rnId) {
+    wireAktivniPredmetiList(container, renderShell);
+  }
 }
 
 function loadFromInput(rnId, options = {}) {
   if (!rnId) return;
   const params = new URLSearchParams(window.location.search);
+  params.delete('predmet');
   params.set('rn', rnId);
   const hash = window.location.hash || '#tab=po_pozicijama';
   history.replaceState(null, '', `${window.location.pathname}?${params.toString()}${hash}`);
