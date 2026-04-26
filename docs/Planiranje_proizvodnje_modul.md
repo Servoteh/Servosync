@@ -56,7 +56,7 @@ Drag-drop (`shift_sort_order`) samo u single-machine kontekstu.
 
 ## Filter aktivacije predmeta
 
-Operacije za plan se čitaju iz **`public.v_production_operations_effective`**: to je `v_production_operations` (otvoreni RN-ovi, BigTehn linije, overlay) **dodatno** filtrirano na predmete koji su u `production.predmet_aktivacija` sa `je_aktivan = true`. Upravljanje listom predmeta: **Podešavanja → Podeš. predmeta** (admin + menadžment). Time Plan i Praćenje dele isti politički „prekidač” vidljivosti predmeta.
+Operacije za plan se čitaju iz **`public.v_production_operations_effective`**: to je `v_production_operations` (otvoreni RN-ovi, BigTehn linije, overlay) **dodatno** filtrirano na predmete koji su u `production.predmet_aktivacija` sa `je_aktivan = true` — isključeni predmeti **ne** ulaze u prikaz, čak i sa aktivnim RN-ovima. Upravljanje: **Podešavanja → Podeš. predmeta** (admin + menadžment). U **Praćenju** lista aktivnih predmeta (`get_aktivni_predmeti()`) koristi **isti** kriterijum: samo `je_aktivan` (nije presek sa MES listom).
 
 ## Servisni sloj (`planProizvodnje.js`)
 

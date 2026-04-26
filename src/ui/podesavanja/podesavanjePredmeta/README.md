@@ -10,8 +10,8 @@
 ## Ručni smoke
 
 1. Uloguj se kao **admin** ili **menadžment** — otvori **Podešavanja → Podeš. predmeta**, lista se učita (broj redova = broj predmeta u cache-u).
-2. Isključi jedan predmet (toggle) — u **Planu proizvodnje** operacije tog predmeta nestaju sa ekrana (view `v_production_operations_effective`).
-3. U **Praćenju** (bez `?rn=`) taj predmet nestaje sa liste aktivnih ako je bio u MES aktivnom skupu — `get_aktivni_predmeti()` poštuje `je_aktivan`.
+2. Isključi jedan predmet (toggle) — u **Planu proizvodnje** operacije tog predmeta nestaju sa ekrana (view `v_production_operations_effective`), čak i ako su RN-ovi u MES-u „aktivni”.
+3. U **Praćenju** (bez `?rn=`) taj predmet nestaje sa liste — `get_aktivni_predmeti()` vraća samo `je_aktivan = true` (predmet nije obrisan, samo uklonjen sa prikaza).
 4. (Opciono) uloguj se kao **PM** / **viewer** — tab se ne vidi; API `list_predmet_aktivacija_admin` vraća grešku pri pristupu.
 
 ## SQL smoke

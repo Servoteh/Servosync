@@ -2,8 +2,8 @@
 
 Jedinstven izvor istine za to **koji predmeti** (iz `bigtehn_items_cache`) ulaze u:
 
-- **Plan proizvodnje** — preko `public.v_production_operations_effective` (filtar `je_aktivan`);
-- **Praćenje proizvodnje** — `production.get_aktivni_predmeti()` vraća predmete koji su i u MES aktivnom skupu i **aktivirani** ovde.
+- **Plan proizvodnje** — preko `public.v_production_operations_effective` (filtar `je_aktivan` na operacijama: isključen predmet nema prikaz i ako postoje „aktivni” RN-ovi);
+- **Praćenje proizvodnje** — `production.get_aktivni_predmeti()` vraća **sve** predmete u `production.predmet_aktivacija` sa `je_aktivan = true` (nema preseka sa `v_active_bigtehn_work_orders`). Deaktivacija u Podešavanjima **ne briše** predmet — samo uklanja prikaz u Planu i u ovoj listi, bez obzira na MES.
 
 Upravljanje: **Podešavanja → Podeš. predmeta** (admin + globalna `menadžment` u `user_roles`).  
 `predmet_prioritet` i Faza 0/A RPC-ovi (`get_podsklopovi_predmeta`, itd.) ostaju nezavisni.

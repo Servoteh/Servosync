@@ -2,7 +2,7 @@
 -- Smoke test (nije seed podataka) — pokrenuti kao admin / service_role posle
 -- migracija 20260427160000__predmet_aktivacija_init (ili kompletan lanac Praćenja).
 -- Preduslov: bigtehn_rn_components_test.sql (Predmet A=810100, B=810101, C=810102)
--- Napomena: get_aktivni_predmeti vraća predmete samo ako su u v_active_bigtehn + je_aktivan.
+-- Napomena: get_aktivni_predmeti vraća predmete sa predmet_aktivacija.je_aktivan = true.
 -- ============================================================================
 
 -- 0) Aktiviraj A,B,C u predmet_aktivacija

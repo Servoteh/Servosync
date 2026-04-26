@@ -2,10 +2,7 @@
 
 ## Aktivacija predmeta
 
-Lista na prvom ekranu dolazi iz `public.get_aktivni_predmeti()` → predmet mora biti:
-
-1. u **MES aktivnom skupu** (`v_active_bigtehn_work_orders` po `item_id`), i  
-2. **aktiviran** u `production.predmet_aktivacija` (`je_aktivan`).
+Lista na prvom ekranu dolazi iz `public.get_aktivni_predmeti()` — predmeti sa **`production.predmet_aktivacija.je_aktivan = true`** (nema uslova na MES / `v_active_bigtehn_work_orders`).
 
 Uključivanje/isključivanje predmeta: **Podešavanja → Podeš. predmeta** (admin + menadžment). Vidi [docs/migration/07-predmet-aktivacija.md](../../../docs/migration/07-predmet-aktivacija.md).
 
@@ -40,7 +37,7 @@ Tabovi su deep-linkable:
 
 ## Ručni smoke (Aktivni predmeti)
 
-1. Otvori modul bez `?rn=` — vidiš listu predmeta koji su i MES-aktivni i uključeni u Podešavanjima.
+1. Otvori modul bez `?rn=` — vidiš listu predmeta uključenih u Podešavanjima (Podeš. predmeta, `je_aktivan = true`).
 2. Ako postoji seed `bigtehn_rn_components_test.sql`: klik na **Predmet C** (`810102`) — stablo sa više nivoa; klik na podsklop koji ima RN — otvara se Inkrement 2.
 3. **Nazad** u stablu (`← Nazad na listu predmeta`) → lista; browser **Back** vraća kroz istoriju (`?predmet=` ↔ lista ↔ `?rn=`).
 4. **Admin:** u listi vidiš strelice ↑ ↓; klik ↓ na prvom redu → redosled se menja; refresh stranice → redosled ostaje (server `shift_predmet_prioritet`).
@@ -48,4 +45,4 @@ Tabovi su deep-linkable:
 
 ## Očekivano ponašanje
 
-(Bez promene u odnosu na prethodnu verziju osim izvora liste — sada zavisi od Podeš. predmeta + MES.)
+(Prikaz u listi zavisi samo od Podeš. predmeta; u stablu / RN-ovima i dalje postoje MES indikatori gde su definisani u SQL-u.)

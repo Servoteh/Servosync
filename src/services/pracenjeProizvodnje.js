@@ -133,7 +133,7 @@ export async function ensureRadniNalogFromBigtehn(workOrderId) {
 }
 
 /**
- * Aktivni predmeti (ekran 1) — jsonb niz. Izvor: v_active + production.predmet_aktivacija
+ * Aktivni predmeti (ekran 1) — jsonb niz. Izvor: production.predmet_aktivacija (je_aktivan = true).
  * (je_aktivan). Upravljanje: Podešavanja → Podešavanje predmeta.
  */
 export async function fetchAktivniPredmeti() {
