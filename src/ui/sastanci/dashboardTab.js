@@ -81,24 +81,36 @@ export async function renderDashboardTab(host, { canEdit, onJumpToTab }) {
   const today = new Date().toISOString().slice(0, 10);
   const in14 = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
 
-  const [stats, nextSast, mojeAkc, mojeTemeRaw, upcoming, late, topics, cachedProj] = await Promise.all([
-    loadDashboardStats(),
-    loadNextPlaniranSastanak(),
-    email
-      ? loadAkcije({ odgovoranEmail: email, openOnly: true, limit: 20 })
-      : Promise.resolve([]),
-    email
-      ? loadPmTeme({
-        predlozioEmail: email,
-        excludeStatuses: ['zatvoreno', 'odbijeno'],
-        limit: 30,
-      })
-      : Promise.resolve([]),
-    loadSastanci({ status: 'planiran', fromDate: today, toDate: in14, limit: 10 }),
-    loadAkcije({ effectiveStatus: 'kasni', limit: 8 }),
-    loadPmTeme({ status: 'predlog', limit: 8 }),
-    loadProjektiLite(),
-  ]);
+  let stats, nextSast, mojeAkc, mojeTemeRaw, upcoming, late, topics, cachedProj;
+  try {
+    [stats, nextSast, mojeAkc, mojeTemeRaw, upcoming, late, topics, cachedProj] = await Promise.all([
+      loadDashboardStats(),
+      loadNextPlaniranSastanak(),
+      email
+        ? loadAkcije({ odgovoranEmail: email, openOnly: true, limit: 20 })
+        : Promise.resolve([]),
+      email
+        ? loadPmTeme({
+          predlozioEmail: email,
+          excludeStatuses: ['zatvoreno', 'odbijeno'],
+          limit: 30,
+        })
+        : Promise.resolve([]),
+      loadSastanci({ status: 'planiran', fromDate: today, toDate: in14, limit: 10 }),
+      loadAkcije({ effectiveStatus: 'kasni', limit: 8 }),
+      loadPmTeme({ status: 'predlog', limit: 8 }),
+      loadProjektiLite(),
+    ]);
+  } catch (e) {
+    console.error('[Dashboard] Greška pri učitavanju', e);
+    host.querySelector('#sastStats').innerHTML =
+      '<span class="sast-empty">⚠ Greška pri učitavanju. Osvežite stranicu.</span>';
+    ['#sastUpcoming', '#sastLate', '#sastTopics'].forEach(sel => {
+      const el = host.querySelector(sel);
+      if (el) el.innerHTML = '';
+    });
+    return;
+  }
 
   if (abortFlag) return;
 

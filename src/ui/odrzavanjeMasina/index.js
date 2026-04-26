@@ -47,6 +47,7 @@ import {
   openMaintMachineModal,
   openMaintMachinesImportDialog,
 } from './maintCatalogTab.js';
+import { renderMaintLocationsPanel } from './maintLocationsTab.js';
 import { renderMaintFilesTab } from './maintFilesTab.js';
 
 let mountRef = null;
@@ -280,6 +281,7 @@ function subnavHtml(section, machineCode, tab, onNavigateToPath) {
   const boardActive = section === 'board' ? ' mnt-subnav-active' : '';
   const notifActive = section === 'notifications' ? ' mnt-subnav-active' : '';
   const catActive = section === 'catalog' ? ' mnt-subnav-active' : '';
+  const locActive = section === 'locations' ? ' mnt-subnav-active' : '';
   const machActive = section === 'machine' ? ' mnt-subnav-active' : '';
   return `
     <nav class="mnt-subnav" aria-label="Održavanje navigacija">
@@ -287,6 +289,7 @@ function subnavHtml(section, machineCode, tab, onNavigateToPath) {
       <button type="button" class="mnt-subnav-btn${listActive}" data-mnt-nav="/maintenance/machines">Mašine</button>
       <button type="button" class="mnt-subnav-btn${boardActive}" data-mnt-nav="/maintenance/board">Rokovi</button>
       <button type="button" class="mnt-subnav-btn${notifActive}" data-mnt-nav="/maintenance/notifications">Obaveštenja</button>
+      <button type="button" class="mnt-subnav-btn${locActive}" data-mnt-nav="/maintenance/locations">Lokacije</button>
       <button type="button" class="mnt-subnav-btn${catActive}" data-mnt-nav="/maintenance/catalog">Katalog mašina</button>
       ${
         section === 'machine' && machineCode
@@ -986,6 +989,13 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
     return;
   }
 
+  if (section === 'locations') {
+    const prof = await fetchMaintUserProfile();
+    if (disposeRef.disposed || !host.isConnected) return;
+    await renderMaintLocationsPanel(host, { prof, onNavigateToPath });
+    return;
+  }
+
   if (section === 'board') {
     const [dues, prof, names, statuses] = await Promise.all([
       fetchMaintTaskDueDates(),
@@ -1673,7 +1683,7 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
 /**
  * @param {HTMLElement} root
  * @param {{
- *   section: 'dashboard' | 'machines' | 'machine' | 'board' | 'notifications',
+ *   section: 'dashboard' | 'machines' | 'machine' | 'board' | 'notifications' | 'catalog' | 'locations',
  *   machineCode?: string | null,
  *   tab?: string | null,
  *   onBackToHub: () => void,

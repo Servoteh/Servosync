@@ -90,8 +90,5 @@ CREATE POLICY "sast_tu_write" ON public.sastanci_template_ucesnici
   USING (public.has_edit_role())
   WITH CHECK (public.has_edit_role());
 
-GRANT SELECT ON public.sastanci_templates TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.sastanci_templates TO authenticated;
-
-GRANT SELECT ON public.sastanci_template_ucesnici TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.sastanci_template_ucesnici TO authenticated;

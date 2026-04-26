@@ -195,8 +195,13 @@ export async function deleteTemplate(id) {
  */
 export async function instantiateTemplate(tpl) {
   if (!getIsOnline() || !tpl?.id) return null;
-  const list = await listTemplates();
-  const full = list.find(x => x.id === tpl.id) || tpl;
+  const rows = await sbReq(
+    `sastanci_templates?id=eq.${encodeURIComponent(tpl.id)}&select=*,sastanci_template_ucesnici(email,label)&limit=1`,
+  );
+  const row = Array.isArray(rows) && rows[0];
+  const full = row
+    ? { ...mapRow(row), ucesnici: (row.sastanci_template_ucesnici || []).map(u => ({ email: String(u.email || '').toLowerCase().trim(), label: u.label || '' })) }
+    : tpl;
   const datum = nextOccurrence(full);
   const cu = getCurrentUser();
   const ucesEmails = new Map();

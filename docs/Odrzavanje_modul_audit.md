@@ -88,6 +88,7 @@ Izvor: `src/lib/appPaths.js` (`parsePath`), `src/ui/odrzavanjeMasina/index.js` (
 | `/maintenance/machines` | `machines` | isti | Operativna lista mašina, filteri (status, rok, incident, „moje”). |
 | `/maintenance/board` | `board` | isti (Rokovi) | Pregled rokova / „Rokovi” (koristi `v_maint_task_due_dates` i slično). |
 | `/maintenance/notifications` | `notifications` | `maintNotificationsTab.js` | Istorija / retry notifikacija. |
+| `/maintenance/locations` | `locations` | `maintLocationsTab.js` | Hijerarhija `maint_locations` (pregled + izmena za šef/admin). |
 | `/maintenance/catalog` | `catalog` | `maintCatalogTab.js` | Admin katalog, uvoz, hard delete, rename. |
 | `/maintenance/machines/:code` | `machine` + `machineCode` | `index.js` (detalj) | Tabovi: Pregled, Zadaci, Istorija, Napomene, Dokumenta, Šabloni; modali: incident, override, zadaci. |
 

@@ -130,6 +130,9 @@ Skripta u `scripts/backfill-production-cache.js` povlači kompletan set podataka
 - `dbo.tStavkeRN` → `public.bigtehn_work_order_lines_cache`
 - `dbo.tTehPostupak` → `public.bigtehn_tech_routing_cache`
 - `dbo.tTehPostupak` (`IDVrstaKvaliteta` 1/2) → `public.bigtehn_rework_scrap_cache`
+- `dbo.tRNKomponente` → `public.bigtehn_rn_components_cache` (hijerarhija RN–RN, Faza 0; uvek puna tabela, bez `StatusRN` filtera)
+
+Migracija: `supabase/migrations/20260426120000__bigtehn_rn_components_cache_init.sql` (mora biti u bazi pre backfill-a).
 
 Default režim je `--scope=open`: bez filtera “poslednjih 30 dana”, ali samo za RN-ove koji nisu završeni (`StatusRN` nije `true`). To je najbrži i najbezbedniji sync za ekran “Po mašini”. Ako treba cela istorija, koristi `--scope=all`.
 
@@ -164,4 +167,9 @@ node scripts/backfill-production-cache.js --tables=rework-scrap --scope=open
 
 # Test prvih 1000 redova po tabeli
 node scripts/backfill-production-cache.js --scope=open --limit=1000 --dry-run
+
+# Samo tRNKomponente (Faza 0 / struktura)
+node scripts/backfill-production-cache.js --tables=rn-components --scope=open
 ```
+
+Za **bigtehn_rn_components_cache**: nakon uspešnog backfill-a bez `--limit` skripta uklanja redove u Supabase čiji `id` više nije u MSSQL-u. Sa `--limit` ovo se preskače.

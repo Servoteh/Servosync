@@ -25,6 +25,12 @@ pnpm-debug.log*
 # Temp
 *.log
 *.tmp
+__pycache__/
+*.pyc
+
+# Root-level ad-hoc SQL / sync scratch (prefer sql/manual/ or migrations)
+/_tmp_*.sql
+/_emp_sync_*.sql
 
 # Lokalni screenshot-ovi (radni materijal, ne ide u repo)
 /screenshots/

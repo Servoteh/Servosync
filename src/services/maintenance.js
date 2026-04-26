@@ -1021,3 +1021,56 @@ export async function patchMaintMachineFile(id, patch) {
   const res = await sbReq(`maint_machine_files?${params.toString()}`, 'PATCH', body);
   return Array.isArray(res) ? (res[0] || null) : (res || null);
 }
+
+/* ── Hijerarhija lokacija (maint_locations) — add_maint_locations.sql ───── */
+
+const MAINT_LOCATION_COLS =
+  'location_id,parent_location_id,location_type,code,name,active,created_at,updated_at';
+
+/**
+ * @param {{ limit?: number }} [opts]
+ * @returns {Promise<Array<object>|null>}
+ */
+export async function fetchMaintLocations(opts = {}) {
+  const limit = opts.limit ?? 2000;
+  return await sbReq(
+    `maint_locations?select=${MAINT_LOCATION_COLS}&order=name.asc&limit=${limit}`,
+  );
+}
+
+/**
+ * @param {{ name: string, code?: string | null, location_type?: string, parent_location_id?: string | null, active?: boolean }} payload
+ * @returns {Promise<object|null>}
+ */
+export async function insertMaintLocation(payload) {
+  const name = String(payload.name || '').trim();
+  if (!name) return null;
+  const body = {
+    name,
+    code: payload.code != null && String(payload.code).trim() ? String(payload.code).trim() : null,
+    location_type: (payload.location_type && String(payload.location_type).trim()) || 'lokacija',
+    parent_location_id: payload.parent_location_id || null,
+    active: payload.active !== false,
+  };
+  const rows = await sbReq('maint_locations', 'POST', body, { upsert: false });
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
+/**
+ * @param {string} locationId UUID
+ * @param {Record<string, unknown>} patch
+ * @returns {Promise<boolean>}
+ */
+export async function patchMaintLocation(locationId, patch) {
+  if (!locationId) return false;
+  const body = { ...patch };
+  delete body.location_id;
+  delete body.created_at;
+  if (!Object.keys(body).length) return false;
+  const r = await sbReq(
+    `maint_locations?location_id=eq.${enc(locationId)}`,
+    'PATCH',
+    body,
+  );
+  return r !== null;
+}
