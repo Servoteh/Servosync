@@ -26,6 +26,14 @@ U tabeli **`public.employees`**, vrednost **`department = 'HAP Fluid'`** treba d
 
 Filtar „HAP” po radnom nalogu u cache-u nije ista stvar kao sektor u `employees`. Tehnički opis: `sql/migrations/add_production_active_work_orders.sql` (npr. predmet/tekst, RN ≥ 8000).
 
+## Kadrovska — „Firma: HAP Fluid” (mesečni pregled / grid)
+
+U UI-ju, filter **Firma** je jednak koloni **`employees.department`**, ne tabeli uplate ili nečem trećem (`src/ui/kadrovska/gridTab.js`).
+
+- **Janković Mihajlo** i **Radelić Uroš** su praktikanti i **ne treba** da budu u HAP listi: migracija
+  `supabase/migrations/20260429120000__employees_remove_praktikanti_hap_fluid_firma.sql` ih prebacuje sa `HAP Fluid` na `Servoteh` (dijakritike u `full_name` i opciono `work_type = praksa`).
+- Posle `supabase db push` (ili nalepljenja SQL u **Supabase → SQL**), u pregledu uradi **↻ Osveži** (ili ponovo učitaj stranicu).
+
 ## Sinhronizacija iz Excela (obračun)
 
 U **`scripts/payroll_name_aliases.json`** postoji mapiranje koje Excel „Ime Prezime” spaja na `full_name` u bazi. Posle ažuriranja liste, ponovo generisati SQL sync ako treba: `python scripts/payroll_employee_sync.py …`
