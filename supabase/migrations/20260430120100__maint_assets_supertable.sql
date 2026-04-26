@@ -1,5 +1,5 @@
 -- =============================================================================
--- Supabase: isti sadržaj kao `sql/migrations/add_maint_assets_supertable.sql` (izvor u repo-u).
+-- Supabase: isti sadrzaj kao sql/migrations/add_maint_assets_supertable.sql (izvor u repo-u).
 -- =============================================================================
 
 -- ============================================================================

@@ -15,6 +15,14 @@ sql/migrations/add_loc_step2_ci_unique.sql
 sql/migrations/add_loc_step3_cleanup.sql
 sql/migrations/add_loc_step5_sync_rpcs.sql
 
+# Faza 2 security / lokacije — potrebno za pgTAP (has_edit_role, RLS, audit, HALA↔POLICA pravila)
+sql/migrations/add_menadzment_full_edit_kadrovska.sql
+sql/migrations/enable_user_roles_rls_proper.sql
+sql/migrations/add_audit_log.sql
+sql/migrations/add_audit_actor_attribution.sql
+sql/migrations/add_loc_location_hierarchy_rules.sql
+sql/migrations/add_loc_locations_audit.sql
+
 # Održavanje (CMMS) — stek: modul, katalog mašina, odgovorni, lokacije, supertablica sredstava
 # (bootstrap u `00_bootstrap.sql` daje `project_id` + stub `bigtehn_machines_cache` za CI)
 sql/migrations/add_maintenance_module.sql

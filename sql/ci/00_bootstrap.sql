@@ -89,7 +89,7 @@ $fn$;
 -- ovde (ili uradi `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`) da CI prode.
 CREATE TABLE IF NOT EXISTS public.user_roles (
   email     TEXT PRIMARY KEY,
-  role      TEXT NOT NULL CHECK (role IN ('admin','leadpm','pm','user','viewer')),
+  role      TEXT NOT NULL CHECK (role IN ('admin','leadpm','pm','user','viewer','hr','menadzment')),
   is_active BOOLEAN NOT NULL DEFAULT true
 );
 
@@ -102,6 +102,16 @@ ALTER TABLE public.user_roles
 -- `add_maintenance_module.sql` / `maint_is_erp_admin()` i srodne upite.
 ALTER TABLE public.user_roles
   ADD COLUMN IF NOT EXISTS project_id UUID;
+
+-- Uskladi CHECK sa Faza 2 pgTAP (hr, menadzment) ako je tabela starija verzija.
+DO $$
+BEGIN
+  ALTER TABLE public.user_roles DROP CONSTRAINT IF EXISTS user_roles_role_check;
+  ALTER TABLE public.user_roles ADD CONSTRAINT user_roles_role_check
+    CHECK (role IN ('admin','leadpm','pm','user','viewer','hr','menadzment'));
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Stub BigTehn cache: `add_maintenance_module.sql` i `add_maint_machines_catalog.sql`
 -- referenciraju ovu tabelu (view + seed), ali kompletan shape dolazi u produkciji
