@@ -1,12 +1,16 @@
 # Planiranje proizvodnje — dokumentacija
 
-**Jedan aktuelni dokument za modul u repou.** Izvor u kodu: `src/ui/planProizvodnje/`, `src/services/planProizvodnje.js`, `src/state/auth.js`, stilovi `src/styles/planProizvodnje.css`. Baza: `sql/migrations/add_plan_proizvodnje.sql`, `add_v_production_operations.sql`, `add_plan_proizvodnje_menadzment_edit.sql`, bucket `production-drawings`.
+**Jedan aktuelni dokument za modul u repou.**  
+Izvor zahteva (korisnički predlog sprintova): **`PLAN_PROIZVODNJE_DORADE_v1.2.md`** (lokalni fajl van repoa; ovde je **stvarno stanje** nakon implementacije G1–G7).
+
+Izvor u kodu: `src/ui/planProizvodnje/`, `src/services/planProizvodnje.js`, `src/state/auth.js`, stilovi `src/styles/planProizvodnje.css`.  
+Baza: migracije u `sql/migrations/` (ispod je spisak). Bridge punjenje: repo **`servoteh-bridge`** i skripta `scripts/backfill-production-cache.js` (i paralelno `workers/loc-sync-mssql` u monorepu).
 
 ---
 
 ## Uloga modula
 
-**Operativni plan šinskog obrade:** prikaz otvorenih operacija iz BigTehn cache-a (radni nalozi, stavke, mašine), lokalno **raspoređivanje po mašini** (prioritet), **status** (waiting / in_progress / blocked; `completed` dolazi iz BigTehn sync-a), **šefova napomena**, **REASSIGN** operacije na drugu mašinu, **skice** (fajlovi u Storage). Podaci iz overlay tabela **ne idu nazad u BigTehn** — BigTehn ostaje izvor istine za RN/tehnologiju; ovde se vodi samo „šta šef trenutno planira na mašini”.
+**Operativni plan šinskog obrade:** prikaz otvorenih operacija iz BigTehn cache-a (radni nalozi, stavke, mašine), filtrirano na **aktivne RN-ove** (MES lista + pravila u Supabase), lokalno **raspoređivanje po mašini** (prioritet), **status** (waiting / in_progress / blocked; `completed` i završetak u BigTehn-u), kolona **„Napomena”** (u bazi i dalje `shift_note`), **REASSIGN**, **skice** (Storage), **kooperacija** (poseban tab + auto-grupe + ručni flag). Podaci iz overlay tabela **ne idu nazad u BigTehn** — BigTehn ostaje izvor istine za RN/tehnologiju; ovde se vodi operativni prikaz i lokalne odluke.
 
 ---
 
@@ -15,12 +19,12 @@
 | Funkcija | Pravilo |
 |----------|---------|
 | Ulaz u modul | `canAccessPlanProizvodnje()` — **admin, leadpm, pm, menadzment, hr, viewer** (svi ulogovani sa tim ulogama u `user_roles`) |
-| **Pun edit** (drag-drop, status, napomena, REASSIGN, crteži) | `canEditPlanProizvodnje()` — **admin, pm, menadzment** |
+| **Pun edit** (drag-drop, status, napomena, REASSIGN, crteži, HITNO, pin, kooperacija ručno, CAM, itd.) | `canEditPlanProizvodnje()` — **admin, pm, menadzment** |
 | Read-only u UI | **leadpm, hr, viewer** — badge „read-only”, servisi na write vraćaju `null` pre upita; RLS na serveru i dalje štiti |
 
-**Baza:** RLS na `production_overlays`, `production_drawings` i bucket `production-drawings` koristi **`public.can_edit_plan_proizvodnje()`** — mora uključivati iste uloge kao UI. Migracija: `add_plan_proizvodnje_menadzment_edit.sql` (dodaje `menadzment` ako starija baza ima samo `admin`/`pm`).
+**Baza:** RLS na `production_overlays`, `production_drawings` i bucket `production-drawings` koristi **`public.can_edit_plan_proizvodnje()`** — mora uključivati iste uloge kao UI. Migracija: `add_plan_proizvodnje_menadzment_edit.sql`.
 
-**Napomena:** U `user_roles`, efektivna rola mora ispravno da uključi `menadzment` (`effectiveRoleFromMatches` u `src/services/userRoles.js`) — inače korisnik može pasti na `viewer` iako u bazi ima menadžment red.
+**Napomena:** U `user_roles`, efektivna rola mora ispravno da uključi `menadzment` (`effectiveRoleFromMatches` u `src/services/userRoles.js`).
 
 ---
 
@@ -30,131 +34,141 @@ Modul: `sessionStorage` / hub modul **`plan-proizvodnje`**, `src/ui/planProizvod
 
 | Tab | Svrha | Glavni fajl |
 |-----|--------|-------------|
-| **Po mašini** | Tabovi po **odeljenju** → lista mašina (sortirano numerički po `rj_code`) ili lista operacija; drill-down na mašinu prikazuje tabelu operacija sa drag-drop, status pill, napomenom, REASSIGN, skicama i TP modalom | `poMasiniTab.js` |
-| **Zauzetost mašina** | Zbirno: otvorene operacije i planirano vreme po mašini; skok u „Po mašini” | `zauzetostTab.js` |
-| **Pregled svih** | Matrica mašina × narednih radnih dana; skok u „Po mašini” | `pregledTab.js` |
+| **Po mašini** | Tabovi po **odeljenju** → lista mašina ili lista operacija; tabela: drag-drop, status, napomena, RN filter, CAM, spremnost, HITNO, pin, bulk REASSIGN, kooperacija „→ Kooperacija”, Σ planirano vreme, DORADA/SKART badge + filter | `poMasiniTab.js` |
+| **Zauzetost mašina** | Zbirno po mašini; RN filter; agregati (uklj. G2/G3/G4 gde postoji) | `zauzetostTab.js` |
+| **Pregled svih** | Matrica mašina × dani; RN filter; badge-i | `pregledTab.js` |
+| **Kooperacija** | Operacije sa `is_cooperation_effective` (auto RJ grupe iz `production_auto_cooperation_groups` + ručni `cooperation_status`); pretraga RN/crtež; akcije po izvoru (auto vs manual) | `kooperacijaTab.js` |
 
-Pomoćni moduli: **`departments.js`** (single source of truth za tabove odeljenja u „Po mašini" — kod-based filter `rj_code` / `effective_machine_code` prefiks), **`drawingManager.js`** (upload/lista/signed URL za `production-drawings`), **`techProcedureModal.js`** (detalji operacije / BigTehn kontekst gde je predviđeno).
+Pomoćni moduli: **`departments.js`**, **`drawingManager.js`**, **`techProcedureModal.js`**.
 
 ### Tabovi „Po mašini" (v2)
 
-Tabovi su raspoređeni u **2 reda** (forsiran column-flex layout, ne `flex-wrap` koji bi se prelivao). Vidi `src/ui/planProizvodnje/departments.js` za autoritativan spisak:
+Tabovi su u **2 reda**. Detalj: `src/ui/planProizvodnje/departments.js`.
 
-**Red 1**: Sve · Glodanje · Struganje · Brušenje · Erodiranje · Ažistiranje
+**Red 1**: Sve · Glodanje · Struganje · Brušenje · Erodiranje · Ažistiranje  
 **Red 2**: Sečenje i savijanje · Bravarsko · Farbanje i površinska zaštita · CAM programiranje · Ostalo
 
-| # | Tab | Tip | Filter (autoritativ: `departments.js`) |
-|---|-----|-----|----------------------------------------|
-| 1 | Sve | dropdown | — (legacy: dropdown mašine + operacije) |
-| 2 | Glodanje | lista mašina → drill-down | `machinePrefixes:['3']` (uklj. borvere `3.21`/`3.22`, Štos `3.50`) |
-| 3 | Struganje | lista mašina → drill-down | `machinePrefixes:['2']`, `excludeMachineCodes:['21.1','21.2']` |
-| 4 | Brušenje | lista mašina → drill-down | `machinePrefixes:['6']`, `excludeMachineCodes:['6.8']` (Laser-Graviranje ide u Ostalo) |
-| 5 | Erodiranje | lista mašina → drill-down | `machineCodes:['10.1','10.2','10.3','10.4','10.5']` |
-| 6 | Ažistiranje | lista mašina → drill-down | `machineCodes:['8.2']` — SAMO „Ručni radovi-Ažistiranje" |
-| 7 | Sečenje i savijanje | lista mašina → drill-down | `machineCodes:['1.10','1.2','1.30','1.40','1.50','1.60','1.71','1.72']` (sečenje + Apkant Hammerle) |
-| 8 | Bravarsko | lista mašina → drill-down | `machineCodes:['4.1','4.11','4.12','4.2','4.3','4.4']` (savijanje + bušilice + zavarivanje MIG-MAG/REL/TIG) |
-| 9 | Farbanje i površinska zaštita | lista mašina → drill-down | `machineCodes:['5.1'…'5.8','5.11']` — NE 5.9 Graviranje |
-| 10 | CAM programiranje | lista mašina → drill-down | `machineCodes:['17.0','17.1']` |
-| 11 | Ostalo | mašine bez kategorije + operacije bez kategorije | safety bucket (Termička 7.x, 3D 21.x, Kooperacija 9.x, Opšti 0.0, Graviranje 5.9/6.8, Montaža/Kontrola 8.1/8.3/8.4, Ispravljanje 7.5) |
+(Grupisanje mašina po `rj_code` / eksplicitne liste u `departments.js` — vidi fajl za produženu tabelu.)
 
-**Promena 22.04.2026**: svih 5 grupa koje su bile `kind:'operations'` (Ažistiranje, Sečenje+savijanje, Bravarsko, Farbanje, CAM) su pretvorene u `kind:'machines'` po eksplicitnom zahtevu — korisnik želi za svaku grupu prvo listu mašina, pa drill-down na operacije te mašine (kao za Brušenje). Stara `operationPrefixes` / `operationNamePatterns` polja su zamenjena `machineCodes` (eksplicitna lista `rj_code`-ova).
-
-Drag-drop reorder (`shift_sort_order`) dostupan je SAMO u single-machine kontekstu (Sve dropdown + drill-down u machines tabu).
+Drag-drop (`shift_sort_order`) samo u single-machine kontekstu.
 
 ---
 
 ## Servisni sloj (`planProizvodnje.js`)
 
-- **Čitanje:** `loadMachines()`, `loadOperationsForMachine(machineCode)`, `loadOperationsForDept(dept)` (v2 — operacije po odeljenju za operacione tabove i „Ostalo"), `loadAllOpenOperations()` — iz `bigtehn_*_cache` i view-a **`v_production_operations`**.
-- **Pisanje overlay-a:** `upsertOverlay()`, `reorderOverlays()` — `production_overlays` (PostgREST UPSERT po `(work_order_id, line_id)`).
-- **G2 prioritet:** `setUrgent()`, `clearUrgent()`, `pinToTop()`, `unpin()` i `sortProductionOperations()` — lokalni HITNO po RN-u, spremnost operacije i dvonivoski sort.
-- **G5 REASSIGN:** `reassignLine()` i `bulkReassignLines()` pozivaju RPC-eve `reassign_production_line` / `bulk_reassign_production_lines`; direktan upis `assigned_machine_code` iz UI-a se ne koristi za REASSIGN.
-- **G4/G6 automatika:** Bridge/backfill puni skart/dorada cache i posle `tech` sync-a poziva `mark_in_progress_from_tech_routing()` za automatski prelazak u `in_progress`.
-- **Crteži:** upload preko Storage API + metapodaci u `production_drawings`; signed URL za prikaz (bucket nije javan).
-- **Pomoćno:** `fetchBigtehnOpSnapshotByRnAndTp`, `fetchBigtehnWorkOrdersByIds` — za nalepnice / Lokacije integraciju; `rokUrgencyClass`, `plannedSeconds`, itd.
+- **Čitanje:** `loadMachines()`, `loadOperationsForMachine`, `loadOperationsForDept`, `loadAllOpenOperations`, `listForCooperation`, `listAutoCooperationGroups` — iz `v_production_operations` (operativni planovi isključuju efektivnu kooperaciju).
+- **Pisanje overlay-a:** `upsertOverlay()`, `reorderOverlays()`.
+- **G2:** `setUrgent()`, `clearUrgent()`, `pinToTop()`, `unpin()`, `sortProductionOperations()`.
+- **G3:** `setCamReady()` (i srodno u UI).
+- **G5:** `reassignLine()`, `bulkReassignLines()` → RPC `reassign_production_line` / `bulk_reassign_production_lines` (nema direktnog client UPSERT-a za dodelu mašine).
+- **G7:** `setCooperationManual()`, `clearCooperationManual()`, itd.
+- **G4/G6 (podaci):** nisu „servis pozivi” sami po sebi — zavise od cache-a i backfill/bridge; vidi ispod.
+- **Crteži:** Storage + `production_drawings`.
 
-Lokalni statusi u UI konstantama: `LOCAL_STATUSES`, ciklus `STATUS_CYCLE_NEXT` (`waiting` → `in_progress` → `blocked` → …).
+Lokalni statusi: `LOCAL_STATUSES`, `STATUS_CYCLE_NEXT`.
 
 ---
 
-## Baza podataka
+## Sprint G1–G7 — šta je urađeno (realno stanje u repou)
 
-### Tabele (Sprint F.1)
+Spec v1.2 deli zahteve u **G1–G7**; **G8** (HITNO u QBigTehn) je **otkazan** — hitnost je samo lokalno (G2).
 
-- **`production_overlays`** — po jedan red po paru `(work_order_id, line_id)`: `shift_sort_order`, `local_status`, `shift_note`, `assigned_machine_code` (REASSIGN), `archived_at` / razlog arhive kada RN završi.
-- **`production_urgency_overrides`** — lokalni MES HITNO status po RN-u (`work_order_id`), nezavisan od BigTehn statusa.
-- **`production_reassign_audit`** — audit force REASSIGN izuzetaka kada `admin` ili `menadzment` prebace operaciju na drugu vrstu mašine uz obavezan razlog.
-- **`bigtehn_rework_scrap_cache`** — G4 pouzdan signal za `DORADA` / `SKART` iz `tTehPostupak.IDVrstaKvaliteta` (1/2), bez heuristike po opisu rada.
-- **`production_drawings`** — metapodaci fajlova vezana za operaciju.
+| Sprint | Obuhvat u v1.2 | Urađeno u repou | Napomene / odstupanja |
+|--------|----------------|-----------------|------------------------|
+| **G1** | „Napomena” (ne „šefova”), RN/crtež filter, Σ planirano vreme | **Da** | Filter klijentski, `localStorage` po tabu. Footer ne uključuje redove gde je operacija završena u BigTehn-u (logika kao u helperu). |
+| **G2** | Spremnost, lokalno HITNO, dvonivoski sort (pin bije auto), Pin/Otpinuj | **Da** | Tabela `production_urgency_overrides`; view `v_production_operations` sa `is_ready_for_processing`, `previous_operation_status`, `is_urgent`, `auto_sort_bucket`. Spremnost: agregat `komada_done` iz tech routinga vs plan RN (prethodne operacije po `prioritet`). |
+| **G3** | CAM kockica | **Da** | Kolone `cam_ready*` u `production_overlays` + view. |
+| **G4** | Faza A analiza, faza B badge/filter | **Da** | Faza A: `docs/migration/g4-skart-analiza.md`. Faza B: **nije** heuristika po `opis_rada` — uvedena **`bigtehn_rework_scrap_cache`** (redovi iz `tTehPostupak` gde je `IDVrstaKvaliteta` 1/2), view proširen (`is_rework`, `is_scrap`, količine). Zahtev u v1.2 koji pominje `ftDodatiPostupke...` rešen je pouzdanim kvalitet signalom, ne TVF pozivom u app-u. |
+| **G5** | Bulk REASSIGN, ista grupa, admin force + audit | **Da** | RPC + `production_reassign_audit`. **Force:** u dogovoru sa korisnikom dozvoljeni **`admin` i `menadzment`** (u nekim nacrtima tekstualno samo admin — u kodu je `can_force_plan_reassign()`). |
+| **G6** | Auto `in_progress` kad operater prijavi komade | **Da**, drugačiji detalj od G6 bloka u v1.2 | U spec-u je ponekad nacrtan RPC nad **`part_movements`**. U implementaciji: **`mark_in_progress_from_tech_routing()`** koristi **`bigtehn_tech_routing_cache`** (prijava `komada > 0`, spoj na plan linije po `(work_order_id, operacija)`), jer je to isti signal prijave operatera u praksi. Poziva se iz **backfill** posle `tech` sync-a (`servoteh-bridge` / `workers/loc-sync-mssql` skripta). Nije korišćen trigger na cache tabelama. `blocked` se ne menja. |
+| **G7** | Kooperacija: auto-grupe + manual + tab, izuzimanje iz operativnog plana | **Da** (faza A+B) | `production_auto_cooperation_groups` (seed + admin RLS), proširenje `production_overlays` (`cooperation_*`), view polja `is_cooperation_effective` itd. **Podešavanja → UI sekcija** za održavanje auto-grupa iz v1.2 **nije** obavezno urađena — grupe se mogu održavati kroz **Supabase Table Editor** / SQL dok se ne doda ekran. |
+
+---
+
+## Baza podataka (ključni objekti)
+
+### Tabele (izbor; pun spisak u migracijama)
+
+- **`production_active_work_orders`**, view **`v_active_bigtehn_work_orders`** — koji RN su „aktivni” za MES/Plan; `v_production_operations` gleda samo te RN-ove.
+- **`production_overlays`** — `shift_sort_order`, `local_status`, `shift_note`, `assigned_machine_code`, `cam_ready*`, `cooperation_*`, arhiva kada RN završi.
+- **`production_urgency_overrides`** — G2 HITNO po RN-u.
+- **`production_reassign_audit`** — G5 force razlozi.
+- **`production_auto_cooperation_groups`** — G7 auto RJ grupe.
+- **`bigtehn_rework_scrap_cache`** — G4 signali DORADA/SKART (ne direktan deo v1.2 minimalnog opisa, ali potrebno da badge bude pouzdan).
+- **`production_drawings`** — skice.
 
 ### View
 
-- **`v_production_operations`** — denormalizovan spoj linija RN-a, RN headera, kupca, mašine, overlay-a, tech routing agregata, broja crteža; kolona **`effective_machine_code`** = `COALESCE(assigned_machine_code, original_machine_code)`. G2 dodaje `is_ready_for_processing`, podatke o prethodnoj operaciji, `is_urgent`, `urgency_reason` i `auto_sort_bucket`.
+- **`v_production_operations`** — višestruki rewrite kroz migracije; uključuje aktivne RN, tech routing agregate, G2, G3, G4, G7; wrapper **`v_production_operations_pre_g4`** ostaje ispod ako je G4 view sloj ugradio dodatne kolone — proveri trenutnu definiciju u poslednjoj `add_production_g4_rework_scrap_cache` migraciji. Koristiti **`security_invoker = true`** gde je traženo (security advisor).
 
-### G5 REASSIGN pravila
+### Funkcije (izbor)
 
-- Standardni REASSIGN dozvoljava prebacivanje samo unutar iste vrste mašine, mapirane istim pravilima kao `departments.js` (`production_machine_group_slug`).
-- `admin` i `menadzment` mogu uključiti force za drugu vrstu mašine, ali moraju uneti razlog; `pm` nema force opciju.
-- Single i bulk REASSIGN idu kroz RPC, tako da server validacija ne zavisi od UI-a.
+- `can_edit_plan_proizvodnje()`, `reassign_production_line`, `bulk_reassign_production_lines`, `production_machine_group_slug`, `can_force_plan_reassign`
+- `mark_in_progress_from_tech_routing` (G6) — `GRANT` tipično **service_role**; poziv iz bridge backfill klijenta.
 
-### G6 auto `in_progress`
-
-- RPC `mark_in_progress_from_tech_routing()` koristi `bigtehn_tech_routing_cache` prijave (`komada > 0`) spojene sa planiranom linijom po `(work_order_id, operacija)`.
-- Menja samo overlay-e koji su `waiting` ili ne postoje; `blocked` i `completed` ostaju netaknuti.
-- Poziva se iz `workers/loc-sync-mssql/scripts/backfill-production-cache.js` posle `tech` / `rework-scrap` sync-a, service-role klijentom.
-
-### G4 skart/dorada
-
-- `v_production_operations` vraća `is_rework`, `is_scrap`, `rework_pieces`, `scrap_pieces` i `rework_scrap_count`.
-- `Po mašini` prikazuje badge `DORADA` / `SKART` i filter `Dorada/skart`.
-- Signal dolazi isključivo iz `bigtehn_rework_scrap_cache`, ne iz tekstualnog opisa operacije.
-
-Redosled migracija (tipično):
+### Redosled tipičnih migracija (informativno; tačan zavisi od grane)
 
 ```text
-add_plan_proizvodnje.sql              # tabele + RLS + can_edit_plan_proizvodnje + bucket
-add_v_production_operations.sql       # view (zavisi od cache tabela + overlays + drawings)
-add_plan_proizvodnje_menadzment_edit.sql   # proširenje can_edit_plan_proizvodnje za menadzment
+add_plan_proizvodnje.sql
+add_v_production_operations.sql
+add_plan_proizvodnje_menadzment_edit.sql
+add_production_active_work_orders.sql + update_v_production_operations_active_work_orders.sql
+add_production_overlays_cam_ready.sql
+add_production_g2_readiness_urgency.sql
+add_production_cooperation_g7.sql
+add_production_g5_reassign_rpc.sql
+add_production_g4_rework_scrap_cache.sql   # uključuje proširenje v_production_operations za G4
+add_production_g6_auto_in_progress.sql
+fix_supabase_security_advisor_findings.sql   # ako je primenjena — views/functions hardening
 ```
-
-BigTehn cache i bridge sync nisu u ovom fajlu — zavise od ostalih migracija/workera (`bigtehn_work_orders_cache`, `bigtehn_work_order_lines_cache`, …).
 
 ---
 
 ## Stilovi i putanje
 
-- **`src/styles/planProizvodnje.css`** — uvezen u `main.js`.
-- Deep link: **`/plan-proizvodnje`** → `appPaths.js` mapira na modul `plan-proizvodnje`.
+- **`src/styles/planProizvodnje.css`**
+- Deep link: **`/plan-proizvodnje`** → `appPaths.js`
 
 ---
 
 ## Lokalni storage (UX)
 
-- Poslednja izabrana mašina: `plan-proizvodnje:last-machine` (`localStorage`).
-- Poslednje izabrano odeljenje (tab) u „Po mašini": `plan-proizvodnje:last-department` (v2). Skok iz „Zauzetosti" / „Pregleda svih" automatski upisuje slug taba kome mašina pripada (`findDeptForMachineCode`), pa „Po mašini" otvara odgovarajući tab + drill-down.
-- Tabovi „Zauzetost” / „Pregled”: filter/sort ključevi u `zauzetostTab.js` / `pregledTab.js` (prefiks `plan-proizvodnje:`).
+- `plan-proizvodnje:last-machine`, `plan-proizvodnje:last-department`
+- RN filter: `plan-proizvodnje:filter-rn:po-masini` (i slični za druge tabove)
+- G2 filter dorade/skart: `plan-proizvodnje:filter-rework:po-masini` (kada je uključeno u UI)
+
+---
+
+## Bridge i ručni backfill
+
+- Stalan sync: repozitorijum **`servoteh-bridge`** (Node scheduler, production svakih 15 min, itd.).
+- Puno punjenje / nadoknada cache-a: `scripts/backfill-production-cache.js` — tabele uključuju **`rework-scrap`** (G4) i nakon **`tech`** poziv **`mark_in_progress_from_tech_routing`** (G6). Na VM-u bez git-a: kopirati ažuriran `backfill-production-cache.js` i pokretati `node scripts/...` (vidi `servoteh-bridge` README).
 
 ---
 
 ## Hub
 
-`moduleHub.js` — kartica „Planiranje proizvodnje”; CTA tekst zavisi od `canEditPlanProizvodnje()` (Otvori vs Pregled read-only).
+`moduleHub.js` — kartica „Planiranje proizvodnje”.
 
 ---
 
 ## Konvencije
 
-- Sve upise u overlay proveravaju **`canEditPlanProizvodnje()`** pre mrežnog poziva.
-- Uloge iz **`user_roles`**, ne iz JWT `app_metadata`.
+- Upisi u overlay i G2/G7 proveravaju **`canEditPlanProizvodnje()`** gde je primenjivo; REASSIGN i force idu kroz **RPC** na serveru.
+- Uloge iz **`user_roles`**, ne iz JWT `app_metadata` za autorizaciju pisanja.
 
 ---
 
-## Istorija razvoja (kratko, iz komentara u kodu)
+## Istorija razvoja (F.x + G sprintovi)
 
-- **F.1** — šema, overlay, Storage bucket, osnovni servis.
-- **F.2** — tab „Po mašini”: tabela, drag-drop, status, napomena, REASSIGN, refresh.
-- **F.3** — „Zauzetost mašina” i „Pregled svih” (agregacije na klijentu iz `loadAllOpenOperations()` širokog fetch-a).
-- **F.4** — skice (`production_drawings` + `drawingManager`), signed URL.
-- **F.5** — refactor „Po mašini" u tab-po-odeljenju sa drill-down listom mašina (kod-based filter `rj_code` / `effective_machine_code` prefiks); operacioni tabovi (Ažistiranje, Sečenje+savijanje, Bravarsko, Farbanje+PZ, CAM); name-match samo za Bravarsko; `Ostalo` safety bucket.
+- **F.1–F.5** — osnovna šema, tabovi, skice, refactor odeljenja (vidi starije commit poruke i `index.js` ako postoji zastareo checklist).
+- **G1** — UX: Napomena, filter RN, footer suma.
+- **G2** — spremnost, lokalno HITNO, sort + pin.
+- **G3** — CAM.
+- **G4** — analiza + cache `bigtehn_rework_scrap_cache` + view + badge/filter.
+- **G5** — bulk + guarded REASSIGN + force + audit.
+- **G6** — auto in_progress preko tech routing + backfill/bridge.
+- **G7** — kooperacija (lookup + overlay + tab).
+- **G8** — nije implementiran (otkazano u v1.2).
 
-Detaljni sprint checklist u zaglavlju `index.js` može biti zastareo u odnosu na stvarno stanje — ova sekcija služi kao orijentacija, ne kao PM artefakt.
+**Napomena o zastarelom tekstu:** zaglavlje ili komentar u `index.js` može pominjati stari checklist — **ovaj fajl** je mera trenutnog obima modula.
