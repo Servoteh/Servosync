@@ -6,6 +6,8 @@ Izvor zahteva (korisnički predlog sprintova): **`PLAN_PROIZVODNJE_DORADE_v1.2.m
 Izvor u kodu: `src/ui/planProizvodnje/`, `src/services/planProizvodnje.js`, `src/state/auth.js`, stilovi `src/styles/planProizvodnje.css`.  
 Baza: migracije u `sql/migrations/` (ispod je spisak). Bridge punjenje: repo **`servoteh-bridge`** i skripta `scripts/backfill-production-cache.js` (i paralelno `workers/loc-sync-mssql` u monorepu).
 
+**Povezano (ljudi / sektor, ne modul):** ko u Kadrovskoj/obračunu spada u **HAP Fluid** — vidi `docs/reports/hap_fluid_sektor_referenca.md`. (U planu, „HAP” radni nalozi i dalje prate `add_production_active_work_orders.sql`, nezavisno od te liste.)
+
 ---
 
 ## Uloga modula
