@@ -24,6 +24,7 @@ import {
 import { loadSastanci } from '../../services/sastanci.js';
 import { loadProjektiLite } from '../../services/projekti.js';
 import { getCurrentUser, canPrioritizeTeme, isTemaOwner } from '../../state/auth.js';
+import { SESSION_KEYS } from '../../lib/constants.js';
 
 let abortFlag = false;
 let cachedTeme = [];
@@ -39,6 +40,10 @@ const SUB_TABS = [
 
 export async function renderPmTemeTab(host, { canEdit }) {
   abortFlag = false;
+  if (sessionStorage.getItem(SESSION_KEYS.SAST_INTENT_PM_MOJE) === '1') {
+    sessionStorage.removeItem(SESSION_KEYS.SAST_INTENT_PM_MOJE);
+    filters.subTab = 'moje';
+  }
   const isAdmin = canPrioritizeTeme();
   host.innerHTML = `
     <div class="sast-section">

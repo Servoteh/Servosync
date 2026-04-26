@@ -24,6 +24,7 @@ import { renderPregledPoProjektuTab, teardownPregledPoProjektuTab } from './preg
 import { renderAkcioniPlanTab, teardownAkcioniPlanTab } from './akcioniPlanTab.js';
 import { renderSastanciTab, teardownSastanciTab } from './sastanciTab.js';
 import { renderArhivaTab, teardownArhivaTab } from './arhivaTab.js';
+import { mountSastanciFab, unmountSastanciFab } from './quickAddTemaButton.js';
 
 const TABS = [
   { id: 'dashboard',         label: 'Pregled',           icon: '📊', desc: 'Statistike i nadolazeći sastanci.' },
@@ -86,6 +87,11 @@ export function renderSastanciModule(mountEl, { onBackToHub, onLogout }) {
   `;
 
   mountEl.appendChild(container);
+
+  mountSastanciFab(container, {
+    getActiveTab: () => getSastanciState().activeTab,
+    canEdit: editor,
+  });
 
   /* Wire događaji */
   container.querySelector('#sastBackBtn').addEventListener('click', () => onBackToHub?.());
@@ -153,5 +159,6 @@ function teardownActiveTab() {
 }
 
 export function teardownSastanciModule() {
+  unmountSastanciFab();
   teardownActiveTab();
 }

@@ -49,6 +49,12 @@ export const SESSION_KEYS = Object.freeze({
   SETTINGS_TAB: 'plan_montaze_v51_settings_tab',
   /** Posle login-a: pun path + query (npr. /maintenance/machines/8.3?tab=checks) */
   POST_LOGIN_REDIRECT: 'plan_montaze_v51_post_login_redirect_v1',
+  /** Sastanci: lista / kalendar u tabu Sastanci */
+  SAST_SASTANCI_VIEW: 'sastanci:sastanci_view',
+  /** Jednokratni otvor Akcioni plan sa "moje" filterom (string '1' pa briši) */
+  SAST_INTENT_AKCIJONI_MOJE: 'sastanci:intent_akcioni_moje',
+  /** Jednokratni fokus PM teme sub-tab = moje (string '1' pa briši) */
+  SAST_INTENT_PM_MOJE: 'sastanci:intent_pm_moje',
 });
 
 /* ── Role hijerarhija (priority: admin > leadpm > pm > menadzment > hr > viewer) ── */

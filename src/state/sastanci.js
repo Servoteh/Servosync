@@ -5,6 +5,8 @@
  * resetSastanciState() koji router zove pri logout-u.
  */
 
+import { SESSION_KEYS } from '../lib/constants.js';
+
 const state = {
   /* Cache projekata (lite verzija {id, label}) — koristi ga PM Teme select. */
   projektiCache: null,
@@ -43,6 +45,15 @@ export function setActiveTab(tab) {
 
 export function setOpenSastanak(id) {
   state.openSastanakId = id;
+}
+
+/** Lista / kalendar u tabu Sastanci (sessionStorage). */
+export function getSastSastanView() {
+  try {
+    return sessionStorage.getItem(SESSION_KEYS.SAST_SASTANCI_VIEW) || 'lista';
+  } catch {
+    return 'lista';
+  }
 }
 
 export function resetSastanciState() {

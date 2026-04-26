@@ -112,6 +112,10 @@ export async function loadPmTeme(filters = {}) {
   ];
 
   if (filters.status) params.push(`status=eq.${encodeURIComponent(filters.status)}`);
+  if (filters.excludeStatuses?.length) {
+    const esc = filters.excludeStatuses.map(s => encodeURIComponent(s)).join(',');
+    params.push(`status=not.in.(${esc})`);
+  }
   if (filters.sastanakId) params.push(`sastanak_id=eq.${encodeURIComponent(filters.sastanakId)}`);
   if (filters.projekatId) params.push(`projekat_id=eq.${encodeURIComponent(filters.projekatId)}`);
   if (filters.predlozioEmail) {
@@ -147,6 +151,9 @@ function buildTemaPayload(t) {
     sastanak_id: t.sastanakId || null,
     updated_at: new Date().toISOString(),
   };
+  if (t.zaRazmatranje === true) {
+    payload.za_razmatranje = true;
+  }
   if (t.id) {
     payload.id = t.id;
   } else {

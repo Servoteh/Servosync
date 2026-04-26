@@ -16,14 +16,20 @@ import {
   AKCIJA_STATUSI, AKCIJA_STATUS_BOJE,
 } from '../../services/akcioniPlan.js';
 import { loadProjektiLite } from '../../services/projekti.js';
+import { getCurrentUser } from '../../state/auth.js';
+import { SESSION_KEYS } from '../../lib/constants.js';
 
 let abortFlag = false;
 let cachedRows = [];
 let cachedProjekti = [];
-let filters = { status: '', projekatId: '', openOnly: true };
+let filters = { status: '', projekatId: '', openOnly: true, mineOnly: false };
 
 export async function renderAkcioniPlanTab(host, { canEdit }) {
   abortFlag = false;
+  if (sessionStorage.getItem(SESSION_KEYS.SAST_INTENT_AKCIJONI_MOJE) === '1') {
+    sessionStorage.removeItem(SESSION_KEYS.SAST_INTENT_AKCIJONI_MOJE);
+    filters.mineOnly = true;
+  }
   cachedProjekti = await loadProjektiLite();
 
   host.innerHTML = `
@@ -41,6 +47,10 @@ export async function renderAkcioniPlanTab(host, { canEdit }) {
           <label class="sast-checkbox">
             <input type="checkbox" id="apFiltOpenOnly" ${filters.openOnly ? 'checked' : ''}>
             <span>Samo otvorene</span>
+          </label>
+          <label class="sast-checkbox">
+            <input type="checkbox" id="apFiltMine" ${filters.mineOnly ? 'checked' : ''}>
+            <span>Samo moje (odgovorni = ja)</span>
           </label>
         </div>
         <div class="sast-toolbar-actions">
@@ -68,6 +78,9 @@ export async function renderAkcioniPlanTab(host, { canEdit }) {
   host.querySelector('#apFiltOpenOnly').addEventListener('change', (e) => {
     filters.openOnly = e.target.checked; renderAkcije(host, { canEdit });
   });
+  host.querySelector('#apFiltMine').addEventListener('change', (e) => {
+    filters.mineOnly = e.target.checked; renderAkcije(host, { canEdit });
+  });
 
   await renderAkcije(host, { canEdit });
 }
@@ -80,12 +93,19 @@ async function renderAkcije(host, { canEdit }) {
   const body = host.querySelector('#apBody');
   body.innerHTML = '<div class="sast-loading">Učitavam akcije…</div>';
 
-  cachedRows = await loadAkcije({
+  const cu = getCurrentUser();
+  const loadOpts = {
     effectiveStatus: filters.status || null,
     projekatId: filters.projekatId || null,
-    openOnly: filters.openOnly && !filters.status ? true : false,
     limit: 1000,
-  });
+  };
+  if (filters.mineOnly && cu?.email) {
+    loadOpts.odgovoranEmail = cu.email;
+    loadOpts.openOnly = true;
+  } else {
+    loadOpts.openOnly = filters.openOnly && !filters.status ? true : false;
+  }
+  cachedRows = await loadAkcije(loadOpts);
 
   if (abortFlag) return;
 

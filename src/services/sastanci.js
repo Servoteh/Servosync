@@ -92,7 +92,10 @@ export function mapDbUcesnik(d) {
  */
 export async function loadSastanci(filters = {}) {
   if (!getIsOnline()) return [];
-  const params = ['select=*', 'order=datum.desc,vreme.desc.nullslast'];
+  const orderParam = filters.orderDatum === 'asc'
+    ? 'order=datum.asc,vreme.asc.nullsfirst'
+    : 'order=datum.desc,vreme.desc.nullslast';
+  const params = ['select=*', orderParam];
 
   if (filters.tip) params.push(`tip=eq.${encodeURIComponent(filters.tip)}`);
   if (filters.status) params.push(`status=eq.${encodeURIComponent(filters.status)}`);
@@ -103,6 +106,22 @@ export async function loadSastanci(filters = {}) {
 
   const data = await sbReq(`sastanci?${params.join('&')}`);
   return Array.isArray(data) ? data.map(mapDbSastanak) : [];
+}
+
+/**
+ * Prvi naredni sastanak (planiran) na ili posle danaasnjeg dana, sort po datumu.
+ */
+export async function loadNextPlaniranSastanak() {
+  if (!getIsOnline()) return null;
+  const t = new Date();
+  const todayStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  const list = await loadSastanci({
+    status: 'planiran',
+    fromDate: todayStr,
+    orderDatum: 'asc',
+    limit: 1,
+  });
+  return list.length ? list[0] : null;
 }
 
 export async function loadSastanak(id) {
@@ -117,6 +136,23 @@ export async function loadUcesnici(sastanakId) {
     `sastanak_ucesnici?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=*&order=label.asc`,
   );
   return Array.isArray(data) ? data.map(mapDbUcesnik) : [];
+}
+
+/** sastanakId -> niz učesnika (batch) */
+export async function loadUcesniciForMany(sastanakIds) {
+  if (!sastanakIds?.length || !getIsOnline()) return new Map();
+  const ids = [...new Set(sastanakIds)].filter(Boolean);
+  if (!ids.length) return new Map();
+  const data = await sbReq(
+    `sastanak_ucesnici?sastanak_id=in.(${ids.join(',')})&select=*`,
+  );
+  const map = new Map();
+  (Array.isArray(data) ? data : []).forEach(d => {
+    const id = d.sastanak_id;
+    if (!map.has(id)) map.set(id, []);
+    map.get(id).push(mapDbUcesnik(d));
+  });
+  return map;
 }
 
 /* ── Savers ── */
