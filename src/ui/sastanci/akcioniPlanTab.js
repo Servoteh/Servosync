@@ -18,6 +18,8 @@ import {
 import { loadProjektiLite } from '../../services/projekti.js';
 import { getCurrentUser } from '../../state/auth.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
+import { getSastAkcioniView, setSastAkcioniView } from '../../state/sastanci.js';
+import { renderAkcioniKanban } from './akcioniPlanKanban.js';
 
 let abortFlag = false;
 let cachedRows = [];
@@ -32,8 +34,19 @@ export async function renderAkcioniPlanTab(host, { canEdit }) {
   }
   cachedProjekti = await loadProjektiLite();
 
+  const view = getSastAkcioniView();
+
   host.innerHTML = `
     <div class="sast-section">
+      <div class="sst-view-bar">
+        <div class="sst-toggle" role="group" aria-label="Prikaz akcija">
+          <button type="button" class="sst-tgl-btn${view === 'lista' ? ' is-on' : ''}" data-ap-view="lista">☰ Lista</button>
+          <button type="button" class="sst-tgl-btn${view === 'kanban' ? ' is-on' : ''}" data-ap-view="kanban">⬛ Kanban</button>
+        </div>
+        <div class="sast-toolbar-actions">
+          ${canEdit ? '<button class="btn btn-primary" id="newAkcijaBtn">+ Nova akcija</button>' : ''}
+        </div>
+      </div>
       <div class="sast-toolbar">
         <div class="sast-filters">
           <select id="apFiltStatus" class="sast-input">
@@ -50,11 +63,8 @@ export async function renderAkcioniPlanTab(host, { canEdit }) {
           </label>
           <label class="sast-checkbox">
             <input type="checkbox" id="apFiltMine" ${filters.mineOnly ? 'checked' : ''}>
-            <span>Samo moje (odgovorni = ja)</span>
+            <span>Samo moje</span>
           </label>
-        </div>
-        <div class="sast-toolbar-actions">
-          ${canEdit ? '<button class="btn btn-primary" id="newAkcijaBtn">+ Nova akcija</button>' : ''}
         </div>
       </div>
       <div id="apBody" class="sast-table-wrap"></div>
@@ -66,6 +76,14 @@ export async function renderAkcioniPlanTab(host, { canEdit }) {
       openAkcijaModal(host, { canEdit, mode: 'create' });
     });
   }
+
+  host.querySelectorAll('[data-ap-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setSastAkcioniView(btn.dataset.apView);
+      host.querySelectorAll('[data-ap-view]').forEach(b => b.classList.toggle('is-on', b === btn));
+      void renderAkcije(host, { canEdit });
+    });
+  });
 
   host.querySelector('#apFiltStatus').value = filters.status;
   host.querySelector('#apFiltProjekat').value = filters.projekatId;
@@ -111,6 +129,16 @@ async function renderAkcije(host, { canEdit }) {
 
   if (!cachedRows.length) {
     body.innerHTML = '<div class="sast-empty">Nema akcija sa zadatim filterima.</div>';
+    return;
+  }
+
+  if (getSastAkcioniView() === 'kanban') {
+    renderAkcioniKanban(body, cachedRows, {
+      canEdit,
+      cachedProjekti,
+      onRefresh: () => renderAkcije(host, { canEdit }),
+      onEdit: (akc) => openAkcijaModal(host, { canEdit, mode: 'edit', akcija: akc }),
+    });
     return;
   }
 

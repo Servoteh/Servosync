@@ -15,7 +15,7 @@ import { getCurrentUser } from '../../state/auth.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
 import { openCreateSastanakModal } from './createSastanakModal.js';
 import { openQuickAddTemaModal } from './quickAddTemaButton.js';
-import { openFazaBPlaceholderModal } from './fazaBPlaceholder.js';
+import { navigateToSastanakDetalj } from './index.js';
 
 let abortFlag = false;
 
@@ -200,7 +200,7 @@ function renderWidgetNext(host, s, canEdit, { onJumpToTab, cachedProj = [] }) {
       </div>
     `;
     host.querySelector('[data-a=pripremi]')?.addEventListener('click', () => {
-      openFazaBPlaceholderModal('Pripremi sastanak');
+      navigateToSastanakDetalj(s.id, 'pripremi');
     });
     host.querySelector('[data-a=sast]')?.addEventListener('click', () => onJumpToTab?.('sastanci'));
   });

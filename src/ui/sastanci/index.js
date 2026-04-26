@@ -15,8 +15,10 @@
 import { escHtml } from '../../lib/dom.js';
 import { toggleTheme } from '../../lib/theme.js';
 import { logout } from '../../services/auth.js';
-import { getAuth, canEdit } from '../../state/auth.js';
+import { getAuth, canEdit, canEditSastanci } from '../../state/auth.js';
 import { getSastanciState, setActiveTab } from '../../state/sastanci.js';
+import { navigateToAppPath } from '../router.js';
+import { buildSastanakDetaljPath } from '../../lib/appPaths.js';
 
 import { renderDashboardTab, teardownDashboardTab } from './dashboardTab.js';
 import { renderPmTemeTab, teardownPmTemeTab } from './pmTemeTab.js';
@@ -25,6 +27,7 @@ import { renderAkcioniPlanTab, teardownAkcioniPlanTab } from './akcioniPlanTab.j
 import { renderSastanciTab, teardownSastanciTab } from './sastanciTab.js';
 import { renderArhivaTab, teardownArhivaTab } from './arhivaTab.js';
 import { mountSastanciFab, unmountSastanciFab } from './quickAddTemaButton.js';
+import { renderSastanakDetalj, teardownSastanakDetalj } from './sastanakDetalj/index.js';
 
 const TABS = [
   { id: 'dashboard',         label: 'Pregled',           icon: '📊', desc: 'Statistike i nadolazeći sastanci.' },
@@ -35,10 +38,38 @@ const TABS = [
   { id: 'arhiva',            label: 'Arhiva',            icon: '🗃', desc: 'Zaključani sastanci i zapisnici.' },
 ];
 
-export function renderSastanciModule(mountEl, { onBackToHub, onLogout }) {
+/**
+ * Navigacija na detalj stranicu sastanka (menja URL i renderuje detalj).
+ * @param {string} sastanakId UUID
+ * @param {string} [tab] 'pripremi'|'zapisnik'|'akcije'|'arhiva'
+ */
+export function navigateToSastanakDetalj(sastanakId, tab) {
+  navigateToAppPath(buildSastanakDetaljPath(sastanakId, tab || null));
+}
+
+export function renderSastanciModule(mountEl, { onBackToHub, onLogout, sastanakId = null } = {}) {
   const auth = getAuth();
   const editor = canEdit();
   const state = getSastanciState();
+
+  /* Deep link na /sastanci/<uuid> — prikaži detalj, bez main tab strip-a */
+  if (sastanakId) {
+    mountEl.innerHTML = '';
+    const container = document.createElement('div');
+    container.className = 'kadrovska-section';
+    container.id = 'module-sastanci';
+    container.style.display = 'block';
+    mountEl.appendChild(container);
+    document.body.classList.add('kadrovska-active', 'module-sastanci');
+    renderSastanakDetalj(container, {
+      sastanakId,
+      onBack: () => {
+        history.back();
+      },
+      onNavigate: (path) => navigateToAppPath(path),
+    });
+    return;
+  }
 
   mountEl.innerHTML = '';
 
@@ -159,6 +190,7 @@ function teardownActiveTab() {
 }
 
 export function teardownSastanciModule() {
+  teardownSastanakDetalj();
   unmountSastanciFab();
   teardownActiveTab();
 }

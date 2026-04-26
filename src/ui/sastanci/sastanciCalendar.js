@@ -4,7 +4,6 @@
 
 import { escHtml } from '../../lib/dom.js';
 import { SASTANAK_TIPOVI, SASTANAK_STATUSI } from '../../services/sastanci.js';
-import { openFazaBPlaceholderModal } from './fazaBPlaceholder.js';
 
 const MES = ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Jun', 'Jul', 'Avgust', 'Septembar', 'Oktobar', 'Novembar', 'Decembar'];
 const DOWH = ['Pon', 'Uto', 'Sre', 'Čet', 'Pet', 'Sub', 'Ned'];
@@ -149,16 +148,16 @@ function openDayDrawer(ymd, list, { onRowAction, canEdit }) {
     if (!host) return;
     const st = s.status || 'planiran';
     if (st === 'planiran') {
-      addBtn(host, 'Pripremi', () => openFazaBPlaceholderModal('Pripremi sastanak'));
+      addBtn(host, 'Pripremi', () => { close(); onRowAction?.(s, 'pripremi'); });
       addBtn(host, 'Uredi', () => { close(); onRowAction?.(s, 'open'); });
       if (canEdit) addBtn(host, 'Otkaži', () => { close(); onRowAction?.(s, 'delete'); });
     } else if (st === 'u_toku') {
-      addBtn(host, 'Zapisnik', () => openFazaBPlaceholderModal('Zapisnik'));
+      addBtn(host, 'Zapisnik', () => { close(); onRowAction?.(s, 'zap'); });
     } else if (st === 'zavrsen') {
       addBtn(host, 'Otvori', () => { close(); onRowAction?.(s, 'open'); });
     } else if (st === 'zakljucan') {
       addBtn(host, 'Otvori', () => { close(); onRowAction?.(s, 'open'); });
-      addBtn(host, 'Arhiva', () => openFazaBPlaceholderModal('Arhiviraj sastanak'));
+      addBtn(host, 'Arhiva', () => { close(); onRowAction?.(s, 'arh'); });
     } else {
       addBtn(host, 'Otvori', () => { close(); onRowAction?.(s, 'open'); });
     }

@@ -9,10 +9,9 @@ import {
   SASTANAK_TIPOVI, SASTANAK_STATUSI,
 } from '../../services/sastanci.js';
 import { loadProjektiLite } from '../../services/projekti.js';
-import { openSastanakModal } from './sastanakModal.js';
 import { openCreateSastanakModal } from './createSastanakModal.js';
-import { openFazaBPlaceholderModal } from './fazaBPlaceholder.js';
 import { openTemplatesModal } from './templatesModal.js';
+import { navigateToSastanakDetalj } from './index.js';
 import { renderSastanciCalendarView, groupSastanciByYmd } from './sastanciCalendar.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
 import { getSastSastanView } from '../../state/sastanci.js';
@@ -221,11 +220,7 @@ async function renderRowsTable(host, canEdit) {
   body.querySelectorAll('tr[data-id]').forEach(tr => {
     tr.addEventListener('click', (e) => {
       if (e.target.closest('[data-action]')) return;
-      openSastanakModal({
-        sastanakId: tr.dataset.id,
-        canEdit,
-        onClose: () => renderAll(host, canEdit),
-      });
+      navigateToSastanakDetalj(tr.dataset.id);
     });
   });
 
@@ -237,7 +232,7 @@ async function renderRowsTable(host, canEdit) {
       if (!sast) return;
       const act = btn.dataset.action;
       if (act === 'open') {
-        openSastanakModal({ sastanakId: id, canEdit, onClose: () => renderAll(host, canEdit) });
+        navigateToSastanakDetalj(id);
         return;
       }
       if (act === 'delete') {
@@ -246,22 +241,30 @@ async function renderRowsTable(host, canEdit) {
         deleteSastanak(id).then(ok => { if (ok) { showToast('Obrisano'); renderAll(host, canEdit); } });
         return;
       }
-      if (act === 'pripremi' || act === 'zap' || act === 'arh') {
-        openFazaBPlaceholderModal();
+      if (act === 'pripremi') {
+        navigateToSastanakDetalj(id, 'pripremi');
+        return;
+      }
+      if (act === 'zap') {
+        navigateToSastanakDetalj(id, 'zapisnik');
+        return;
+      }
+      if (act === 'arh') {
+        navigateToSastanakDetalj(id, 'arhiva');
       }
     });
   });
 }
 
 function handleRowAction(s, act, host, canEdit) {
-  if (act === 'open') {
-    openSastanakModal({ sastanakId: s.id, canEdit, onClose: () => { void renderAll(host, canEdit); } });
-    return;
-  }
+  if (act === 'open') { navigateToSastanakDetalj(s.id); return; }
+  if (act === 'pripremi') { navigateToSastanakDetalj(s.id, 'pripremi'); return; }
+  if (act === 'zap') { navigateToSastanakDetalj(s.id, 'zapisnik'); return; }
+  if (act === 'arh') { navigateToSastanakDetalj(s.id, 'arhiva'); return; }
   if (act === 'delete') {
-    if (s.status === 'zakljucan') { showToast('🔒 Zabranjeno'); return; }
-    if (!confirm('Obrisati?')) return;
-    deleteSastanak(s.id).then(ok => { if (ok) { showToast('Obrisano'); void renderAll(host, canEdit); } });
+    if (s.status === 'zakljucan') { showToast('🔒 Zaključan se ne može obrisati'); return; }
+    if (!confirm(`Obriši sastanak "${s.naslov}"?`)) return;
+    deleteSastanak(s.id).then(ok => { if (ok) { showToast('Obrisano'); renderAll(host, canEdit); } });
   }
 }
 

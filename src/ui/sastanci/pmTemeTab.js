@@ -135,6 +135,14 @@ async function renderTeme(host, { canEdit, isAdmin }) {
   if (filters.oblast) rows = rows.filter(t => t.oblast === filters.oblast);
   if (filters.vrsta) rows = rows.filter(t => t.vrsta === filters.vrsta);
 
+  /* Sort: adminRang ASC NULLS LAST, then prioritet ASC (1=visok prvi) */
+  rows = [...rows].sort((a, b) => {
+    const ar = a.adminRang ?? 9999;
+    const br = b.adminRang ?? 9999;
+    if (ar !== br) return ar - br;
+    return (a.prioritet || 2) - (b.prioritet || 2);
+  });
+
   if (!rows.length) {
     body.innerHTML = `<div class="sast-empty">${escHtml(emptyMsg(filters.subTab))}</div>`;
     return;
@@ -202,7 +210,7 @@ function renderTemaRow(t, { canEdit, isAdmin }) {
   const owner = isTemaOwner(t.predlozioEmail);
   const canEditThis = canEdit && (owner || isAdmin);
   const rowCls = [
-    t.hitno ? 'is-hitno' : '',
+    t.hitno ? 'is-hitno tema-hitna' : '',
     t.zaRazmatranje ? 'is-razmatra' : '',
     owner ? 'is-mine' : '',
   ].filter(Boolean).join(' ');
@@ -226,7 +234,7 @@ function renderTemaRow(t, { canEdit, isAdmin }) {
     actions.push(`<button class="btn-icon btn-danger" data-action="reject" data-id="${t.id}" title="Odbij">✕</button>`);
   }
   if (isAdmin && t.status === 'usvojeno' && !t.sastanakId) {
-    actions.push(`<button class="btn-icon btn-primary" data-action="assign" data-id="${t.id}" title="Dodeli sastanku">📅</button>`);
+    actions.push(`<button class="btn btn-sm btn-primary" data-action="assign" data-id="${t.id}" title="Stavi na dnevni red sastanka">📅 Stavi na sastanak</button>`);
   }
   if (canEditThis) {
     actions.push(`<button class="btn-icon" data-action="edit" data-id="${t.id}" title="Izmeni">✎</button>`);

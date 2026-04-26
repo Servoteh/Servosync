@@ -23,6 +23,16 @@ export function getSupabaseAnonKey() {
   return SUPABASE_CONFIG.anonKey;
 }
 
+/** Auth headers za direktne fetch pozive (Storage API itd.). */
+export function getSupabaseHeaders() {
+  const user = getCurrentUser();
+  const token = user?._token || SUPABASE_CONFIG.anonKey;
+  return {
+    'apikey': SUPABASE_CONFIG.anonKey,
+    'Authorization': 'Bearer ' + token,
+  };
+}
+
 /**
  * @param {string} path     PostgREST putanja BEZ vodećeg slash-a, npr. 'employees?select=*'
  *                          ili 'rpc/get_my_user_roles' za RPC.
