@@ -295,7 +295,7 @@ export function refreshEmployeesTab() {
       <td class=”col-hide-sm”>${medBadge}</td>
       <td><span class=”emp-status-badge ${statusCls}”>${statusTxt}</span></td>
       <td class=”col-actions”>
-        <button class=”btn-row-act” data-action=”edit” data-id=”${rowId}” ${edit ? '' : 'disabled'} title=”${edit ? 'Izmeni' : 'Samo pregled'}”>Izmeni</button>
+        <button class=”btn-row-act” data-action=”edit” data-id=”${rowId}” ${edit ? '' : 'disabled'} onclick=”console.error('ONCLICK-DIREKTNO',this.dataset.id,this.disabled)” title=”${edit ? 'Izmeni' : 'Samo pregled'}”>Izmeni</button>
         <button class=”btn-row-act danger” data-action=”delete” data-id=”${rowId}” ${edit ? '' : 'disabled'} title=”${edit ? 'Obriši' : 'Samo pregled'}”>Obriši</button>
       </td>
     </tr>`;
