@@ -6,7 +6,7 @@
  * obrazovanje, lekarski pregled, deca) živi u detaljnom modalu sa sekcijama.
  *
  * Osetljiva polja (JMBG, adresa, banka, privatni telefon, kontakt osoba, deca)
- * vide i menjaju samo admin. Za ostale korisnike modal prikazuje „•••“ u tim
+ * vide i menjaju samo admin. Za ostale korisnike modal prikazuje „•••" u tim
  * sekcijama i disable-uje ih.
  *
  * Public API:
@@ -148,10 +148,8 @@ export async function wireEmployeesTab(panelEl, { onChange } = {}) {
 
   panelEl.addEventListener('click', e => {
     const btn = e.target.closest('.btn-emp-edit, .btn-emp-delete');
-    console.error('[D1]', e.target.tagName, e.target.className, '→ btn:', !!btn);
     if (!btn || btn.disabled) return;
     const empId = btn.getAttribute('data-id');
-    console.error('[D2] empId:', empId, 'edit:', btn.classList.contains('btn-emp-edit'));
     if (!empId) return;
     if (btn.classList.contains('btn-emp-edit'))   openEmployeeModal(empId);
     if (btn.classList.contains('btn-emp-delete')) confirmDeleteEmployee(empId);
@@ -282,31 +280,31 @@ export function refreshEmployeesTab() {
     const statusTxt = e.isActive ? 'Aktivan' : 'Neaktivan';
     const rowId = escHtml(e.id || '');
 
-    /* Medical badge — „Ističe za X d” ili „Istekao” */
+    /* Medical badge — „Ističe za X d" ili „Istekao" */
     let medBadge = '—';
     if (e.medicalExamExpires) {
       const d1 = new Date(e.medicalExamExpires);
       const diff = Math.ceil((d1 - today) / (24 * 3600 * 1000));
-      if (diff < 0) medBadge = `<span class=”kadr-type-badge t-bolovanje”>Istekao</span>`;
-      else if (diff <= 30) medBadge = `<span class=”kadr-type-badge t-placeno”>za ${diff}d</span>`;
-      else medBadge = `<span class=”emp-sub”>${formatDate(e.medicalExamExpires)}</span>`;
+      if (diff < 0) medBadge = `<span class="kadr-type-badge t-bolovanje">Istekao</span>`;
+      else if (diff <= 30) medBadge = `<span class="kadr-type-badge t-placeno">za ${diff}d</span>`;
+      else medBadge = `<span class="emp-sub">${formatDate(e.medicalExamExpires)}</span>`;
     }
 
-    return `<tr data-id=”${rowId}”>
+    return `<tr data-id="${rowId}">
       <td>
-        <div class=”emp-name”>${escHtml(employeeDisplayName(e) || '—')}</div>
-        ${sub ? `<div class=”emp-sub col-hide-sm”>${escHtml(sub)}</div>` : ''}
+        <div class="emp-name">${escHtml(employeeDisplayName(e) || '—')}</div>
+        ${sub ? `<div class="emp-sub col-hide-sm">${escHtml(sub)}</div>` : ''}
       </td>
       <td>${escHtml(posDisplay)}</td>
-      <td class=”col-hide-sm”>${escHtml(deptDisplay)}</td>
-      <td class=”col-hide-sm”>${escHtml(subDeptDisplay)}</td>
-      <td class=”col-hide-sm”>${escHtml(e.phoneWork || e.phone || '—')}</td>
-      <td class=”col-hide-sm”>${escHtml(e.email || '—')}</td>
-      <td class=”col-hide-sm”>${medBadge}</td>
-      <td><span class=”emp-status-badge ${statusCls}”>${statusTxt}</span></td>
-      <td class=”col-actions”>
-        <button class=”btn-row-act btn-emp-edit” data-id=”${rowId}” ${edit ? '' : 'disabled'} title=”${edit ? 'Izmeni' : 'Samo pregled'}”>Izmeni</button>
-        <button class=”btn-row-act danger btn-emp-delete” data-id=”${rowId}” ${edit ? '' : 'disabled'} title=”${edit ? 'Obriši' : 'Samo pregled'}”>Obriši</button>
+      <td class="col-hide-sm">${escHtml(deptDisplay)}</td>
+      <td class="col-hide-sm">${escHtml(subDeptDisplay)}</td>
+      <td class="col-hide-sm">${escHtml(e.phoneWork || e.phone || '—')}</td>
+      <td class="col-hide-sm">${escHtml(e.email || '—')}</td>
+      <td class="col-hide-sm">${medBadge}</td>
+      <td><span class="emp-status-badge ${statusCls}">${statusTxt}</span></td>
+      <td class="col-actions">
+        <button class="btn-row-act btn-emp-edit" data-id="${rowId}" ${edit ? '' : 'disabled'} title="${edit ? 'Izmeni' : 'Samo pregled'}">Izmeni</button>
+        <button class="btn-row-act danger btn-emp-delete" data-id="${rowId}" ${edit ? '' : 'disabled'} title="${edit ? 'Obriši' : 'Samo pregled'}">Obriši</button>
       </td>
     </tr>`;
   }).join('');
