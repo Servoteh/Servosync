@@ -568,6 +568,7 @@ function closeEmployeeModal() {
 }
 
 async function openEmployeeModal(id) {
+  console.log('[MODAL] id=', id, 'canEdit=', canEditKadrovska());
   if (!canEditKadrovska()) {
     showToast('⚠ Nemate prava za izmenu');
     return;
@@ -577,6 +578,7 @@ async function openEmployeeModal(id) {
   let emp = null;
   if (id) {
     emp = kadrovskaState.employees.find(x => x.id === id);
+    console.log('[MODAL] emp=', emp ? 'found' : 'NOT FOUND, total=' + kadrovskaState.employees.length);
     if (!emp) {
       showToast('⚠ Zaposleni nije pronađen');
       return;
