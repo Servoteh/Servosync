@@ -84,8 +84,50 @@ export async function renderMaintWorkOrdersPanel(host, opts) {
     return;
   }
 
+  const canEdit = canEditWorkOrder(prof);
+  const myUid = getCurrentUser()?.id || null;
+  const sp = new URLSearchParams(window.location.search);
+  const state = {
+    status: sp.get('status') || 'all',
+    priority: sp.get('priority') || 'all',
+    mine: sp.get('mine') === '1',
+    openOnly: sp.get('open') !== '0',
+    search: sp.get('q') || '',
+  };
+
+  function syncUrl() {
+    const q = new URLSearchParams();
+    if (state.status !== 'all') q.set('status', state.status);
+    if (state.priority !== 'all') q.set('priority', state.priority);
+    if (state.mine) q.set('mine', '1');
+    if (!state.openOnly) q.set('open', '0');
+    if (state.search.trim()) q.set('q', state.search.trim());
+    const next = `/maintenance/work-orders${q.toString() ? '?' + q.toString() : ''}`;
+    window.history.replaceState(null, '', next);
+  }
+
+  function filterRows() {
+    const q = state.search.trim().toLowerCase();
+    return raw.filter(w => {
+      if (state.status !== 'all' && String(w.status || '') !== state.status) return false;
+      if (state.priority !== 'all' && String(w.priority || '') !== state.priority) return false;
+      if (state.mine && (!myUid || String(w.assigned_to || '') !== String(myUid))) return false;
+      if (state.openOnly && ['zavrsen', 'otkazan'].includes(String(w.status || ''))) return false;
+      if (q) {
+        const asset = w.maint_assets || {};
+        const hay = [
+          w.wo_number, w.title, w.description, w.status, w.priority,
+          asset.asset_code, asset.name, asset.asset_type,
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  const rows = filterRows();
   const byCol = new Map(WO_STATUS_GROUPS.map(g => [g.id, []]));
-  for (const w of raw) {
+  for (const w of rows) {
     const st = String(w.status || '');
     const g = WO_STATUS_GROUPS.find(x => x.statuses.includes(st));
     if (g) {
@@ -101,8 +143,16 @@ export async function renderMaintWorkOrdersPanel(host, opts) {
     const ac = asset?.asset_code || '—';
     const an = asset?.name || '';
     const pri = priorityBadgeClass(w);
+    const done = ['zavrsen', 'otkazan'].includes(String(w.status || ''));
+    const actions = canEdit && !done
+      ? `<div class="mnt-wo-card-actions">
+          ${w.status !== 'u_radu' ? `<button type="button" class="mnt-wo-mini" data-mnt-wo-status="u_radu">Započni</button>` : ''}
+          <button type="button" class="mnt-wo-mini" data-mnt-wo-status="ceka_deo">Čeka deo</button>
+          <button type="button" class="mnt-wo-mini mnt-wo-mini--ok" data-mnt-wo-status="zavrsen">Završi</button>
+        </div>`
+      : '';
     return `
-      <div class="mnt-wo-card" data-mnt-wo-id="${escHtml(String(w.wo_id))}" role="button" tabindex="0">
+      <div class="mnt-wo-card" data-mnt-wo-id="${escHtml(String(w.wo_id))}" role="button" tabindex="0" draggable="${canEdit ? 'true' : 'false'}">
         <div class="mnt-wo-card-top">
           <code class="mnt-wo-num">${escHtml(w.wo_number || w.wo_id?.slice(0, 8) || '')}</code>
           <span class="${pri}">${escHtml(woPriorityLabel(String(w.priority || '')))}</span>
@@ -110,19 +160,21 @@ export async function renderMaintWorkOrdersPanel(host, opts) {
         <div class="mnt-wo-card-title">${escHtml(w.title || '')}</div>
         <div class="mnt-wo-card-meta mnt-muted">${escHtml(ac)}${an ? ' · ' + escHtml(an) : ''}</div>
         <div class="mnt-wo-card-st">${escHtml(woStatusLabelSr(String(w.status || '')))}</div>
+        ${actions}
       </div>`;
   }
 
   const colHtml = WO_STATUS_GROUPS.map(g => {
     const items = byCol.get(g.id) || [];
     return `
-      <div class="mnt-wo-col" data-mnt-wo-group="${g.id}">
+      <div class="mnt-wo-col" data-mnt-wo-group="${g.id}" data-mnt-drop-status="${escHtml(g.statuses[0])}">
         <h3 class="mnt-wo-col-h">${escHtml(g.label)} <span class="mnt-muted">(${items.length})</span></h3>
         <div class="mnt-wo-col-body">${items.length ? items.map(cardHtml).join('') : '<p class="mnt-muted mnt-wo-empty">Nema stavki.</p>'}</div>
       </div>`;
   }).join('');
 
   const listRows = raw
+    .filter(w => rows.includes(w))
     .slice()
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
     .map(w => {
@@ -139,7 +191,21 @@ export async function renderMaintWorkOrdersPanel(host, opts) {
     .join('');
 
   host.innerHTML = `
-    <p class="mnt-muted" style="margin:0 0 12px">Radni nalozi povezani s mašinama (assets). Klik na karticu ili red za detalj i promenu statusa (ovlašćenja: tehničar/šef/admin).</p>
+    <p class="mnt-muted" style="margin:0 0 12px">Radni nalozi povezani s mašinama (assets). Kanban je operativni prikaz; tabela ispod koristi iste filtere.</p>
+    <div class="mnt-wo-toolbar">
+      <input type="search" class="form-input" id="mntWoSearch" placeholder="Pretraga (broj, naslov, sredstvo)…" value="${escHtml(state.search)}">
+      <select class="form-input" id="mntWoStatus">
+        <option value="all"${state.status === 'all' ? ' selected' : ''}>Svi statusi</option>
+        ${ALL_WO_STATUSES.map(s => `<option value="${escHtml(s)}"${state.status === s ? ' selected' : ''}>${escHtml(woStatusLabelSr(s))}</option>`).join('')}
+      </select>
+      <select class="form-input" id="mntWoPriority">
+        <option value="all"${state.priority === 'all' ? ' selected' : ''}>Svi prioriteti</option>
+        ${['p1_zastoj', 'p2_smetnja', 'p3_manje', 'p4_planirano'].map(p => `<option value="${escHtml(p)}"${state.priority === p ? ' selected' : ''}>${escHtml(woPriorityLabel(p))}</option>`).join('')}
+      </select>
+      <label class="mnt-wo-check"><input type="checkbox" id="mntWoOpen"${state.openOnly ? ' checked' : ''}> Samo otvoreni</label>
+      <label class="mnt-wo-check"><input type="checkbox" id="mntWoMine"${state.mine ? ' checked' : ''}> Samo moji</label>
+      <span class="mnt-muted mnt-wo-count">${rows.length} od ${raw.length}</span>
+    </div>
     <div class="mnt-wo-board" role="region" aria-label="Kanban po statusu">
       ${colHtml}
     </div>
@@ -169,6 +235,74 @@ export async function renderMaintWorkOrdersPanel(host, opts) {
     el.addEventListener('click', () => {
       const id = el.getAttribute('data-mnt-wo-id');
       openDet(id);
+    });
+  });
+
+  const rerender = () => {
+    syncUrl();
+    void renderMaintWorkOrdersPanel(host, opts);
+  };
+  host.querySelector('#mntWoSearch')?.addEventListener('input', e => {
+    state.search = e.target.value || '';
+    rerender();
+  });
+  host.querySelector('#mntWoStatus')?.addEventListener('change', e => {
+    state.status = e.target.value || 'all';
+    rerender();
+  });
+  host.querySelector('#mntWoPriority')?.addEventListener('change', e => {
+    state.priority = e.target.value || 'all';
+    rerender();
+  });
+  host.querySelector('#mntWoOpen')?.addEventListener('change', e => {
+    state.openOnly = !!e.target.checked;
+    rerender();
+  });
+  host.querySelector('#mntWoMine')?.addEventListener('change', e => {
+    state.mine = !!e.target.checked;
+    rerender();
+  });
+
+  async function quickStatus(woId, status) {
+    if (!woId || !status) return;
+    const patch = { status };
+    if (status === 'u_radu') patch.started_at = new Date().toISOString();
+    if (status === 'zavrsen') patch.completed_at = new Date().toISOString();
+    const ok = await patchMaintWorkOrder(woId, patch);
+    if (!ok) {
+      showToast('⚠ Promena statusa nije uspela');
+      return;
+    }
+    showToast('✅ Status promenjen');
+    onRefresh?.();
+  }
+
+  host.querySelectorAll('[data-mnt-wo-status]').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const card = btn.closest('[data-mnt-wo-id]');
+      void quickStatus(card?.getAttribute('data-mnt-wo-id'), btn.getAttribute('data-mnt-wo-status'));
+    });
+  });
+
+  host.querySelectorAll('.mnt-wo-card[draggable="true"]').forEach(card => {
+    card.addEventListener('dragstart', ev => {
+      ev.dataTransfer?.setData('text/plain', card.getAttribute('data-mnt-wo-id') || '');
+    });
+  });
+  host.querySelectorAll('[data-mnt-drop-status]').forEach(col => {
+    col.addEventListener('dragover', ev => {
+      if (!canEdit) return;
+      ev.preventDefault();
+      col.classList.add('mnt-wo-col--drop');
+    });
+    col.addEventListener('dragleave', () => col.classList.remove('mnt-wo-col--drop'));
+    col.addEventListener('drop', ev => {
+      ev.preventDefault();
+      col.classList.remove('mnt-wo-col--drop');
+      const woId = ev.dataTransfer?.getData('text/plain');
+      const status = col.getAttribute('data-mnt-drop-status');
+      void quickStatus(woId, status);
     });
   });
 }

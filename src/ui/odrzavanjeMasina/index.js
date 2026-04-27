@@ -278,26 +278,32 @@ function headerHtml() {
  */
 function subnavHtml(section, machineCode, tab, onNavigateToPath) {
   const dashActive = section === 'dashboard' ? ' mnt-subnav-active' : '';
-  const listActive = section === 'machines' ? ' mnt-subnav-active' : '';
-  const boardActive = section === 'board' ? ' mnt-subnav-active' : '';
+  const assetsActive = ['assets', 'assetsMachines', 'assetsVehicles', 'assetsIt', 'assetsFacilities', 'machines', 'catalog', 'locations'].includes(section) ? ' mnt-subnav-active' : '';
+  const preventiveActive = ['preventive', 'board'].includes(section) ? ' mnt-subnav-active' : '';
+  const calendarActive = section === 'calendar' ? ' mnt-subnav-active' : '';
+  const inventoryActive = section === 'inventory' ? ' mnt-subnav-active' : '';
+  const docsActive = section === 'documents' ? ' mnt-subnav-active' : '';
+  const reportsActive = section === 'reports' ? ' mnt-subnav-active' : '';
+  const settingsActive = section === 'settings' ? ' mnt-subnav-active' : '';
   const notifActive = section === 'notifications' ? ' mnt-subnav-active' : '';
-  const catActive = section === 'catalog' ? ' mnt-subnav-active' : '';
-  const locActive = section === 'locations' ? ' mnt-subnav-active' : '';
   const woActive = section === 'workorders' ? ' mnt-subnav-active' : '';
   const machActive = section === 'machine' ? ' mnt-subnav-active' : '';
   return `
     <nav class="mnt-subnav" aria-label="Održavanje navigacija">
       <button type="button" class="mnt-subnav-btn${dashActive}" data-mnt-nav="/maintenance">Pregled</button>
-      <button type="button" class="mnt-subnav-btn${listActive}" data-mnt-nav="/maintenance/machines">Mašine</button>
-      <button type="button" class="mnt-subnav-btn${boardActive}" data-mnt-nav="/maintenance/board">Rokovi</button>
       <button type="button" class="mnt-subnav-btn${woActive}" data-mnt-nav="/maintenance/work-orders">Radni nalozi</button>
-      <button type="button" class="mnt-subnav-btn${notifActive}" data-mnt-nav="/maintenance/notifications">Obaveštenja</button>
-      <button type="button" class="mnt-subnav-btn${locActive}" data-mnt-nav="/maintenance/locations">Lokacije</button>
-      <button type="button" class="mnt-subnav-btn${catActive}" data-mnt-nav="/maintenance/catalog">Katalog mašina</button>
+      <button type="button" class="mnt-subnav-btn${assetsActive}" data-mnt-nav="/maintenance/assets">Sredstva</button>
+      <button type="button" class="mnt-subnav-btn${preventiveActive}" data-mnt-nav="/maintenance/preventive">Preventiva</button>
+      <button type="button" class="mnt-subnav-btn${calendarActive}" data-mnt-nav="/maintenance/calendar">Kalendar</button>
+      <button type="button" class="mnt-subnav-btn${inventoryActive}" data-mnt-nav="/maintenance/inventory">Zalihe i dobavljači</button>
+      <button type="button" class="mnt-subnav-btn${docsActive}" data-mnt-nav="/maintenance/documents">Dokumenta</button>
+      <button type="button" class="mnt-subnav-btn${reportsActive}" data-mnt-nav="/maintenance/reports">Izveštaji</button>
+      <button type="button" class="mnt-subnav-btn${settingsActive}" data-mnt-nav="/maintenance/settings">Podešavanja</button>
+      <button type="button" class="mnt-subnav-btn${notifActive}" data-mnt-nav="/maintenance/notifications" title="Istorija obaveštenja">🔔</button>
       ${
         section === 'machine' && machineCode
           ? `<button type="button" class="mnt-subnav-btn${machActive}" data-mnt-nav="${buildMaintenanceMachinePath(machineCode, normalizeTab(tab || 'pregled'))}">Ova mašina</button>
-             <button type="button" class="mnt-subnav-btn" data-mnt-nav="/maintenance/machines">← Lista mašina</button>`
+             <button type="button" class="mnt-subnav-btn" data-mnt-nav="/maintenance/assets/machines">← Lista mašina</button>`
           : ''
       }
     </nav>`;
@@ -368,6 +374,18 @@ function maintCanAddNote(prof) {
   const erp = isAdminOrMenadzment();
   const r = prof?.role;
   return erp || ['operator', 'technician', 'chief', 'admin'].includes(r);
+}
+
+function maintenancePlaceholderHtml(title, items = []) {
+  const list = items.length
+    ? `<ul class="mnt-list">${items.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul>`
+    : '';
+  return `
+    <div class="mnt-panel">
+      <h3 style="font-size:16px;margin:0 0 8px">${escHtml(title)}</h3>
+      <p class="mnt-muted">U izradi — deo CMMS roadmap-a. Postojeći podaci nisu uklonjeni.</p>
+      ${list}
+    </div>`;
 }
 
 function sortAttention(rows) {
@@ -811,6 +829,8 @@ async function renderOperationalMachinesList(host, opts) {
     if (op === 'report') {
       openReportIncidentModal({
         machineCode: code,
+        maintProf: myProf,
+        onNavigateToPath,
         onSaved: () => onRefreshPanel?.(),
       });
       return;
@@ -881,6 +901,8 @@ async function renderOperationalMachinesList(host, opts) {
       if (!code) return;
       openReportIncidentModal({
         machineCode: code,
+        maintProf: myProf,
+        onNavigateToPath,
         onSaved: () => onRefreshPanel?.(),
       });
     });
@@ -996,6 +1018,86 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
     const prof = await fetchMaintUserProfile();
     if (disposeRef.disposed || !host.isConnected) return;
     await renderMaintLocationsPanel(host, { prof, onNavigateToPath });
+    return;
+  }
+
+  if (section === 'assets') {
+    host.innerHTML = `
+      <div class="mnt-panel">
+        <h3 style="font-size:16px;margin:0 0 8px">Sredstva</h3>
+        <p class="mnt-muted">Sva sredstva se vode kroz asset model. Mašine su implementirane; ostali tipovi su pripremljeni kao placeholder-i za naredne sprintove.</p>
+        <p style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn" data-mnt-nav="/maintenance/assets/machines">Mašine →</button>
+          <button type="button" class="btn" data-mnt-nav="/maintenance/assets/vehicles" style="background:var(--surface3)">Vozila</button>
+          <button type="button" class="btn" data-mnt-nav="/maintenance/assets/it" style="background:var(--surface3)">IT oprema</button>
+          <button type="button" class="btn" data-mnt-nav="/maintenance/assets/facilities" style="background:var(--surface3)">Objekti</button>
+        </p>
+      </div>`;
+    host.querySelectorAll('[data-mnt-nav]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const p = btn.getAttribute('data-mnt-nav');
+        if (p) onNavigateToPath?.(p);
+      });
+    });
+    return;
+  }
+
+  if (section === 'assetsMachines') {
+    const prof = await fetchMaintUserProfile();
+    if (disposeRef.disposed || !host.isConnected) return;
+    if (canManageMaintCatalog(prof)) {
+      await renderMaintCatalogPanel(host, { prof, onNavigateToPath });
+    } else {
+      await renderOperationalMachinesList(host, { onNavigateToPath, onRefreshPanel });
+    }
+    return;
+  }
+
+  if (section === 'assetsVehicles') {
+    host.innerHTML = maintenancePlaceholderHtml('Vozila', [
+      'Sprint 3: registracija, osiguranje, gume, kilometraža i servisni WO template-i.',
+      'Model je spreman kroz maint_assets(asset_type=vehicle), ali extension tabela još nije uvedena.',
+    ]);
+    return;
+  }
+
+  if (section === 'assetsIt') {
+    host.innerHTML = maintenancePlaceholderHtml('IT oprema', [
+      'Sprint 4: helpdesk tiketi kroz WO, licence, garancije, IP/MAC/hostname.',
+      'Puni license key se ne sme čuvati u plain tekstu.',
+    ]);
+    return;
+  }
+
+  if (section === 'assetsFacilities') {
+    host.innerHTML = maintenancePlaceholderHtml('Objekti', [
+      'Sprint 5: objekti, prostorije, instalacije, PP/HVAC/elektro inspekcije.',
+      'Hijerarhija lokacija već postoji kroz maint_locations.',
+    ]);
+    return;
+  }
+
+  if (section === 'preventive') {
+    /* Backward-compatible: postojeći Rokovi prikaz sada je UI naziv "Preventiva". */
+    section = 'board';
+  }
+
+  if (['calendar', 'inventory', 'documents', 'reports', 'settings'].includes(section)) {
+    const titleMap = {
+      calendar: 'Kalendar',
+      inventory: 'Zalihe i dobavljači',
+      documents: 'Dokumenta',
+      reports: 'Izveštaji',
+      settings: 'Podešavanja održavanja',
+    };
+    const hintMap = {
+      calendar: ['Sprint 5: preventivne kontrole, rokovi WO, registracije, licence i inspekcije u jednom kalendaru.'],
+      inventory: ['Sprint 5+: potrošni delovi, dobavljači, cene i veza sa maint_wo_parts.'],
+      documents: ['Sprint 2: polimorfni maint_documents za assete, WO, incidente i preventivu.'],
+      reports: ['Sprint 5: troškovi, najčešći kvarovi, vreme rešavanja, rad po tehničaru i CSV export.'],
+      settings: ['Kasnije: šabloni statusa, notifikacije, default uloge i CMMS podešavanja.'],
+    };
+    host.innerHTML = maintenancePlaceholderHtml(titleMap[section], hintMap[section] || []);
     return;
   }
 
@@ -1545,6 +1647,8 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
   host.querySelector('#mntBtnIncident')?.addEventListener('click', () => {
     openReportIncidentModal({
       machineCode,
+      maintProf: prof,
+      onNavigateToPath,
       onSaved: () => {
         onRefreshPanel?.();
       },
@@ -1715,7 +1819,7 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
 /**
  * @param {HTMLElement} root
  * @param {{
- *   section: 'dashboard' | 'machines' | 'machine' | 'board' | 'notifications' | 'catalog' | 'locations' | 'workorders',
+ *   section: 'dashboard' | 'machines' | 'machine' | 'board' | 'notifications' | 'catalog' | 'locations' | 'workorders' | 'assets' | 'assetsMachines' | 'assetsVehicles' | 'assetsIt' | 'assetsFacilities' | 'preventive' | 'calendar' | 'inventory' | 'documents' | 'reports' | 'settings',
  *   machineCode?: string | null,
  *   tab?: string | null,
  *   onBackToHub: () => void,

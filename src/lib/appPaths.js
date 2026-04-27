@@ -23,7 +23,8 @@ function normalizePathname(pathname) {
  *   | 'reset-password'
  *   | 'unknown',
  *   moduleId?: string,
- *   section?: 'dashboard' | 'machines' | 'machine' | 'board' | 'notifications' | 'catalog' | 'locations' | 'workorders',
+ *   section?: 'dashboard' | 'machines' | 'machine' | 'board' | 'notifications' | 'catalog' | 'locations' | 'workorders' | 'assets' | 'assetsMachines' | 'assetsVehicles' | 'assetsIt' | 'assetsFacilities' | 'preventive' | 'calendar' | 'inventory' | 'documents' | 'reports' | 'settings',
+ *   redirectTo?: string,
  *   machineCode?: string,
  *   mobileScreen?: 'home' | 'scan' | 'manual' | 'history' | 'batch' | 'lookup'
  * }}
@@ -94,6 +95,12 @@ export function pathnameToRoute(pathname) {
   if (p === '/maintenance') {
     return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'dashboard' };
   }
+  if (p === '/maintenance/rokovi') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'preventive', redirectTo: '/maintenance/preventive' };
+  }
+  if (p === '/maintenance/katalog') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'assetsMachines', redirectTo: '/maintenance/assets/machines?view=admin' };
+  }
   if (p === '/maintenance/machines') {
     return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'machines' };
   }
@@ -111,6 +118,39 @@ export function pathnameToRoute(pathname) {
   }
   if (p === '/maintenance/work-orders') {
     return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'workorders' };
+  }
+  if (p === '/maintenance/assets') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'assets' };
+  }
+  if (p === '/maintenance/assets/machines') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'assetsMachines' };
+  }
+  if (p === '/maintenance/assets/vehicles') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'assetsVehicles' };
+  }
+  if (p === '/maintenance/assets/it') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'assetsIt' };
+  }
+  if (p === '/maintenance/assets/facilities') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'assetsFacilities' };
+  }
+  if (p === '/maintenance/preventive') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'preventive' };
+  }
+  if (p === '/maintenance/calendar') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'calendar' };
+  }
+  if (p === '/maintenance/inventory') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'inventory' };
+  }
+  if (p === '/maintenance/documents') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'documents' };
+  }
+  if (p === '/maintenance/reports') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'reports' };
+  }
+  if (p === '/maintenance/settings') {
+    return { kind: 'maintenance', moduleId: 'odrzavanje-masina', section: 'settings' };
   }
   const mm = /^\/maintenance\/machines\/([^/]+)$/.exec(p);
   if (mm) {

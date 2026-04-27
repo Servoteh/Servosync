@@ -670,7 +670,7 @@ function assertModuleAllowed(moduleId) {
 
 /**
  * Podruta održavanja (deep link), npr. /maintenance/machines/8.3?tab=checks
- * @param {{ kind: 'maintenance', moduleId: string, section: string, machineCode?: string }} route
+ * @param {{ kind: 'maintenance', moduleId: string, section: string, machineCode?: string, redirectTo?: string }} route
  * @param {{ tab: string | null }} searchParsed
  * @param {{ skipUrlSync?: boolean }} [opts]
  */
@@ -678,6 +678,9 @@ function showMaintenanceFromRoute(route, searchParsed, opts = {}) {
   const leaving = currentScreen;
   currentScreen = 'odrzavanje-masina';
   clearMount(leaving);
+  if (route.redirectTo) {
+    history.replaceState(null, '', route.redirectTo);
+  }
   if (!opts.skipUrlSync) {
     let wantPath = '/maintenance';
     if (route.section === 'machines') wantPath = '/maintenance/machines';
@@ -686,6 +689,17 @@ function showMaintenanceFromRoute(route, searchParsed, opts = {}) {
     else if (route.section === 'catalog') wantPath = '/maintenance/catalog';
     else if (route.section === 'locations') wantPath = '/maintenance/locations';
     else if (route.section === 'workorders') wantPath = '/maintenance/work-orders';
+    else if (route.section === 'assets') wantPath = '/maintenance/assets';
+    else if (route.section === 'assetsMachines') wantPath = '/maintenance/assets/machines';
+    else if (route.section === 'assetsVehicles') wantPath = '/maintenance/assets/vehicles';
+    else if (route.section === 'assetsIt') wantPath = '/maintenance/assets/it';
+    else if (route.section === 'assetsFacilities') wantPath = '/maintenance/assets/facilities';
+    else if (route.section === 'preventive') wantPath = '/maintenance/preventive';
+    else if (route.section === 'calendar') wantPath = '/maintenance/calendar';
+    else if (route.section === 'inventory') wantPath = '/maintenance/inventory';
+    else if (route.section === 'documents') wantPath = '/maintenance/documents';
+    else if (route.section === 'reports') wantPath = '/maintenance/reports';
+    else if (route.section === 'settings') wantPath = '/maintenance/settings';
     else if (route.section === 'machine' && route.machineCode) {
       wantPath = buildMaintenanceMachinePath(route.machineCode, searchParsed.tab);
     }
@@ -708,6 +722,28 @@ function showMaintenanceFromRoute(route, searchParsed, opts = {}) {
                 ? 'locations'
                 : route.section === 'workorders'
                   ? 'workorders'
+                  : route.section === 'assets'
+                    ? 'assets'
+                    : route.section === 'assetsMachines'
+                      ? 'assetsMachines'
+                      : route.section === 'assetsVehicles'
+                        ? 'assetsVehicles'
+                        : route.section === 'assetsIt'
+                          ? 'assetsIt'
+                          : route.section === 'assetsFacilities'
+                            ? 'assetsFacilities'
+                            : route.section === 'preventive'
+                              ? 'preventive'
+                              : route.section === 'calendar'
+                                ? 'calendar'
+                                : route.section === 'inventory'
+                                  ? 'inventory'
+                                  : route.section === 'documents'
+                                    ? 'documents'
+                                    : route.section === 'reports'
+                                      ? 'reports'
+                                      : route.section === 'settings'
+                                        ? 'settings'
                   : 'dashboard';
   renderMaintenanceShell(mountEl, {
     section,

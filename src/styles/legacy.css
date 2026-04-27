@@ -4026,12 +4026,35 @@ body.pdf-export .tg-wp-filter { display: none !important; }
   gap: 12px;
   align-items: start;
 }
+.mnt-wo-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 170px 170px auto auto auto;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 12px;
+}
+.mnt-wo-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text2);
+  white-space: nowrap;
+}
+.mnt-wo-count {
+  font-size: 12px;
+  justify-self: end;
+}
 .mnt-wo-col {
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px 10px;
   min-height: 80px;
+}
+.mnt-wo-col--drop {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
 }
 .mnt-wo-col-h {
   font-size: 14px;
@@ -4100,6 +4123,27 @@ body.pdf-export .tg-wp-filter { display: none !important; }
   font-size: 11px;
   color: var(--text2);
 }
+.mnt-wo-card-actions {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.mnt-wo-mini {
+  border: 1px solid var(--border2);
+  background: var(--surface3);
+  color: var(--text2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.mnt-wo-mini:hover {
+  border-color: var(--accent);
+}
+.mnt-wo-mini--ok {
+  background: rgba(80, 180, 110, 0.18);
+}
 .mnt-wo-empty {
   font-size: 12px;
   margin: 0;
@@ -4116,5 +4160,13 @@ body.pdf-export .tg-wp-filter { display: none !important; }
 }
 .mnt-wo-table-details summary {
   user-select: none;
+}
+@media (max-width: 760px) {
+  .mnt-wo-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .mnt-wo-count {
+    justify-self: start;
+  }
 }
 

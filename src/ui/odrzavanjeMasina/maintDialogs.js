@@ -6,9 +6,11 @@ import { escHtml, showToast } from '../../lib/dom.js';
 import {
   insertMaintCheck,
   insertMaintIncident,
+  fetchMaintWorkOrderByIncidentId,
   patchMaintIncident,
   uploadMaintMachineFile,
 } from '../../services/maintenance.js';
+import { openMaintWorkOrderDetailModal } from './maintWorkOrdersPanel.js';
 
 function removeIfExists(id) {
   document.getElementById(id)?.remove();
@@ -93,10 +95,10 @@ export function openConfirmCheckModal(opts) {
 }
 
 /**
- * @param {{ machineCode: string, onSaved?: () => void }} opts
+ * @param {{ machineCode: string, onSaved?: () => void, maintProf?: object|null, onNavigateToPath?: (p:string)=>void }} opts
  */
 export function openReportIncidentModal(opts) {
-  const { machineCode, onSaved } = opts;
+  const { machineCode, onSaved, maintProf = null, onNavigateToPath = null } = opts;
   removeIfExists('mntDlgInc');
 
   const wrap = document.createElement('div');
@@ -259,6 +261,17 @@ export function openReportIncidentModal(opts) {
     showToast(paths.length ? `✅ Kvar prijavljen (${paths.length} foto)` : '✅ Kvar prijavljen');
     close();
     onSaved?.();
+    const wo = await fetchMaintWorkOrderByIncidentId(inc.id);
+    if (wo?.wo_id) {
+      await openMaintWorkOrderDetailModal({
+        woId: String(wo.wo_id),
+        maintProf,
+        onNavigateToPath,
+        onSaved,
+      });
+    } else if (severity === 'minor') {
+      showToast('ℹ Za manje kvarove radni nalog se ne kreira automatski.');
+    }
   });
 
   setTimeout(() => wrap.querySelector('#mntDlgIncTitle')?.focus(), 50);

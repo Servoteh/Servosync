@@ -1062,6 +1062,18 @@ export async function fetchMaintWorkOrderById(woId) {
 }
 
 /**
+ * @param {string} incidentId uuid
+ * @returns {Promise<object|null>}
+ */
+export async function fetchMaintWorkOrderByIncidentId(incidentId) {
+  if (!incidentId) return null;
+  const rows = await sbReq(
+    `maint_work_orders?select=${MAINT_WO_LIST_COLS},maint_assets(asset_code,name,asset_type)&source_incident_id=eq.${encodeURIComponent(incidentId)}&order=created_at.desc&limit=1`,
+  ).catch(() => null);
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
+/**
  * @param {string} woId
  * @param {Record<string, unknown>} fields npr. status, assigned_to, started_at, completed_at, closure_comment
  * @returns {Promise<boolean>}
