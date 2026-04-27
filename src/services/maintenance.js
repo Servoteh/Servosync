@@ -594,6 +594,56 @@ export async function upsertMaintVehicleDetails(assetId, fields) {
   return Array.isArray(rows) && rows[0] ? rows[0] : (rows || null);
 }
 
+/* ── Specijalizovani detalji za IT opremu ────────────────────────────────── */
+
+const MAINT_IT_ASSET_DETAIL_COLS = [
+  'asset_id', 'device_type', 'hostname', 'ip_address', 'mac_address',
+  'operating_system', 'assigned_to', 'license_key', 'license_expires_at',
+  'warranty_expires_at', 'backup_required', 'last_backup_at', 'notes',
+  'created_at', 'updated_at', 'updated_by',
+].join(',');
+
+/**
+ * @param {string[]} assetIds
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchMaintItAssetDetails(assetIds = []) {
+  const ids = [...new Set(assetIds.filter(Boolean).map(String))];
+  if (!ids.length) return [];
+  const inList = ids.map(id => encodeURIComponent(id)).join(',');
+  const rows = await sbReq(
+    `maint_it_asset_details?select=${MAINT_IT_ASSET_DETAIL_COLS}&asset_id=in.(${inList})`,
+  ).catch(() => null);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * @param {string} assetId
+ * @param {Record<string, unknown>} fields
+ * @returns {Promise<object|null>}
+ */
+export async function upsertMaintItAssetDetails(assetId, fields) {
+  if (!assetId) return null;
+  const body = {
+    asset_id: assetId,
+    device_type: fields.device_type || null,
+    hostname: fields.hostname || null,
+    ip_address: fields.ip_address || null,
+    mac_address: fields.mac_address || null,
+    operating_system: fields.operating_system || null,
+    assigned_to: fields.assigned_to || null,
+    license_key: fields.license_key || null,
+    license_expires_at: fields.license_expires_at || null,
+    warranty_expires_at: fields.warranty_expires_at || null,
+    backup_required: Boolean(fields.backup_required),
+    last_backup_at: fields.last_backup_at || null,
+    notes: fields.notes || null,
+    updated_by: getCurrentUser()?.id || null,
+  };
+  const rows = await sbReq('maint_it_asset_details', 'POST', body).catch(() => null);
+  return Array.isArray(rows) && rows[0] ? rows[0] : (rows || null);
+}
+
 /* ── Katalog mašina (maint_machines) ─────────────────────────────────────── */
 
 /* `responsible_user_id` NIJE u ovoj listi namerno — dodat je u posebnoj

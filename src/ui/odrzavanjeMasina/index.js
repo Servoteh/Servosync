@@ -53,6 +53,7 @@ import { renderMaintFilesTab } from './maintFilesTab.js';
 import { renderMaintWorkOrdersPanel } from './maintWorkOrdersPanel.js';
 import { renderMaintAssetsPanel } from './maintAssetsPanel.js';
 import { renderMaintVehiclesPanel } from './maintVehiclesPanel.js';
+import { renderMaintItAssetsPanel } from './maintItAssetsPanel.js';
 import { renderMaintDocumentsPanel } from './maintDocumentsPanel.js';
 import { renderMaintPreventivePanel, renderMaintCalendarPanel } from './maintPreventivePanel.js';
 import { renderMaintReportsPanel } from './maintReportsPanel.js';
@@ -1056,7 +1057,7 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
   if (section === 'assetsIt') {
     const prof = await fetchMaintUserProfile();
     if (disposeRef.disposed || !host.isConnected) return;
-    await renderMaintAssetsPanel(host, { prof, onNavigateToPath, forcedType: 'it' });
+    await renderMaintItAssetsPanel(host, { prof });
     return;
   }
 

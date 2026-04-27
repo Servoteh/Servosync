@@ -1,10 +1,10 @@
 # Supabase: šema baze (public)
 
-Generisano: 2026-04-27. **Ažuriranje:** CMMS objekti (`maint_locations`, `maint_assets`, radni nalozi, `work_order_id`/`asset_id` na incidentima, `maint_documents`, `maint_parts`, `maint_suppliers`, `maint_part_stock_movements`, `maint_vehicle_details`) usklađeni su sa migracijama u `sql/migrations/` (`add_maint_locations.sql`, `add_maint_assets_supertable.sql`, `add_maint_work_orders.sql`, `link_maint_incidents_to_wo.sql`, `extend_maint_incidents_assets.sql`, `add_maint_documents.sql`, `add_maint_inventory.sql`, `add_maint_vehicle_details.sql`). Originalni snimak žive baze: 2026-04-22.
+Generisano: 2026-04-27. **Ažuriranje:** CMMS objekti (`maint_locations`, `maint_assets`, radni nalozi, `work_order_id`/`asset_id` na incidentima, `maint_documents`, `maint_parts`, `maint_suppliers`, `maint_part_stock_movements`, `maint_vehicle_details`, `maint_it_asset_details`) usklađeni su sa migracijama u `sql/migrations/` (`add_maint_locations.sql`, `add_maint_assets_supertable.sql`, `add_maint_work_orders.sql`, `link_maint_incidents_to_wo.sql`, `extend_maint_incidents_assets.sql`, `add_maint_documents.sql`, `add_maint_inventory.sql`, `add_maint_vehicle_details.sql`, `add_maint_it_asset_details.sql`). Originalni snimak žive baze: 2026-04-22.
 
 ## Šta ovaj dokument pokriva
 
-- **Baze tabele (BASE TABLE)**: 70 tabela, kolone u jednoj flat tabeli (pogodno za pretragu).
+- **Baze tabele (BASE TABLE)**: 71 tabela, kolone u jednoj flat tabeli (pogodno za pretragu).
 - **Pregledi (views)**: 12 objekata u `public` (definicija SQL-a je u migracijama; ovde su samo imena).
 - **Enum vrednosti**: svi korisnički enum tipovi u `public` sa labelama.
 - **Strani ključevi (FOREIGN KEY)**: ograničenja koja referenciraju druge tabele (unutar `public`).
@@ -240,6 +240,7 @@ Ispod: **Pregledi**, **Enumi**, **Foreign keys**, zatim **flat tabela svih kolon
 | maint_incident_events | incident_id | maint_incidents |
 | maint_incidents | asset_id | maint_assets |
 | maint_incidents | work_order_id | maint_work_orders |
+| maint_it_asset_details | asset_id | maint_assets |
 | maint_locations | parent_location_id | maint_locations |
 | maint_machines | asset_id | maint_assets |
 | maint_part_stock_movements | part_id | maint_parts |
@@ -844,6 +845,22 @@ Ispod: **Pregledi**, **Enumi**, **Foreign keys**, zatim **flat tabela svih kolon
 | maint_user_profiles | created_at | timestamp with time zone(6) | NO |
 | maint_user_profiles | updated_at | timestamp with time zone(6) | NO |
 | maint_user_profiles | phone | text | YES |
+| maint_it_asset_details | asset_id | uuid | NO |
+| maint_it_asset_details | device_type | text | YES |
+| maint_it_asset_details | hostname | text | YES |
+| maint_it_asset_details | ip_address | inet | YES |
+| maint_it_asset_details | mac_address | text | YES |
+| maint_it_asset_details | operating_system | text | YES |
+| maint_it_asset_details | assigned_to | text | YES |
+| maint_it_asset_details | license_key | text | YES |
+| maint_it_asset_details | license_expires_at | date(0) | YES |
+| maint_it_asset_details | warranty_expires_at | date(0) | YES |
+| maint_it_asset_details | backup_required | boolean | NO |
+| maint_it_asset_details | last_backup_at | timestamp with time zone(6) | YES |
+| maint_it_asset_details | notes | text | YES |
+| maint_it_asset_details | created_at | timestamp with time zone(6) | NO |
+| maint_it_asset_details | updated_at | timestamp with time zone(6) | NO |
+| maint_it_asset_details | updated_by | uuid | YES |
 | maint_vehicle_details | asset_id | uuid | NO |
 | maint_vehicle_details | registration_plate | text | YES |
 | maint_vehicle_details | vin | text | YES |
