@@ -110,6 +110,40 @@ export async function fetchMaintUserProfile() {
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
 
+const MAINT_SETTINGS_COLS = [
+  'id', 'auto_create_wo_major', 'auto_create_wo_critical',
+  'safety_marker_requires_wo', 'default_wo_priority',
+  'major_wo_due_hours', 'critical_wo_due_hours',
+  'preventive_due_warning_days', 'notification_enabled',
+  'notify_on_major_incident', 'notify_on_critical_incident',
+  'notify_on_overdue_preventive', 'notification_channels',
+  'status_labels', 'wo_status_labels', 'notes',
+  'created_at', 'updated_at', 'updated_by',
+].join(',');
+
+/**
+ * Centralna CMMS podešavanja (singleton `id = 1`).
+ * @returns {Promise<object|null>}
+ */
+export async function fetchMaintSettings() {
+  const rows = await sbReq(`maint_settings?select=${MAINT_SETTINGS_COLS}&id=eq.1&limit=1`);
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
+/**
+ * @param {Record<string, unknown>} fields
+ * @returns {Promise<object|null>}
+ */
+export async function patchMaintSettings(fields) {
+  const body = { ...fields };
+  delete body.id;
+  delete body.created_at;
+  delete body.updated_at;
+  body.updated_by = getCurrentUser()?.id || null;
+  const rows = await sbReq('maint_settings?id=eq.1', 'PATCH', body);
+  return Array.isArray(rows) && rows[0] ? rows[0] : (rows || null);
+}
+
 /**
  * @param {string} machineCode
  * @returns {Promise<Array<object>|null>}

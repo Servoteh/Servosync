@@ -59,6 +59,7 @@ import { renderMaintDocumentsPanel } from './maintDocumentsPanel.js';
 import { renderMaintPreventivePanel, renderMaintCalendarPanel } from './maintPreventivePanel.js';
 import { renderMaintReportsPanel } from './maintReportsPanel.js';
 import { renderMaintInventoryPanel } from './maintInventoryPanel.js';
+import { renderMaintSettingsPanel } from './maintSettingsPanel.js';
 
 let mountRef = null;
 let disposeRef = { disposed: false };
@@ -1098,14 +1099,10 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
     return;
   }
 
-  if (['settings'].includes(section)) {
-    const titleMap = {
-      settings: 'Podešavanja održavanja',
-    };
-    const hintMap = {
-      settings: ['Kasnije: šabloni statusa, notifikacije, default uloge i CMMS podešavanja.'],
-    };
-    host.innerHTML = maintenancePlaceholderHtml(titleMap[section], hintMap[section] || []);
+  if (section === 'settings') {
+    const prof = await fetchMaintUserProfile();
+    if (disposeRef.disposed || !host.isConnected) return;
+    await renderMaintSettingsPanel(host, { prof });
     return;
   }
 
