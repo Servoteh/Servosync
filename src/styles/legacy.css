@@ -4182,12 +4182,77 @@ body.pdf-export .tg-wp-filter { display: none !important; }
 .mnt-wo-table-details summary {
   user-select: none;
 }
+.mnt-wo-drawer {
+  max-width: min(920px, calc(100vw - 28px));
+}
+.mnt-wo-drawer-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 14px;
+  align-items: start;
+}
+.mnt-wo-drawer .mnt-wo-mini {
+  cursor: default;
+  padding: 8px 10px;
+  line-height: 1.55;
+}
+.mnt-wo-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 14px 0 12px;
+  border-bottom: 1px solid var(--border2);
+}
+.mnt-wo-tab {
+  border: 1px solid transparent;
+  border-bottom: 0;
+  background: transparent;
+  color: var(--text2);
+  padding: 7px 10px;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.mnt-wo-tab:hover,
+.mnt-wo-tab.is-active {
+  color: var(--text);
+  background: var(--surface2);
+  border-color: var(--border2);
+}
+.mnt-wo-tab-panel {
+  display: none;
+}
+.mnt-wo-tab-panel.is-active {
+  display: block;
+}
+.mnt-wo-activity-item {
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 9px 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.mnt-wo-inline-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 110px 110px minmax(130px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
 @media (max-width: 760px) {
   .mnt-wo-toolbar {
     grid-template-columns: 1fr;
   }
   .mnt-wo-count {
     justify-self: start;
+  }
+  .mnt-wo-drawer-head {
+    grid-template-columns: 1fr;
+  }
+  .mnt-wo-inline-form {
+    grid-template-columns: 1fr;
   }
 }
 

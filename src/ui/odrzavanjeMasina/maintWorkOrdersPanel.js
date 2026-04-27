@@ -8,8 +8,14 @@ import { getCurrentUser, isAdminOrMenadzment } from '../../state/auth.js';
 import {
   fetchMaintWorkOrders,
   fetchMaintWorkOrderById,
+  fetchMaintWorkOrderEvents,
+  fetchMaintWorkOrderParts,
+  fetchMaintWorkOrderLabor,
+  insertMaintWorkOrderPart,
+  insertMaintWorkOrderLabor,
   fetchMachineCodeByAssetId,
   patchMaintWorkOrder,
+  insertMaintWorkOrderEvent,
   fetchAssignableMaintUsers,
 } from '../../services/maintenance.js';
 import { buildMaintenanceMachinePath } from '../../lib/appPaths.js';
@@ -57,6 +63,16 @@ function woPriorityLabel(p) {
     p4_planirano: 'P4 planirano',
   };
   return m[p] || p;
+}
+
+function eventTypeLabel(t) {
+  const m = {
+    status_change: 'Promena statusa',
+    assigned_change: 'Promena dodele',
+    priority_change: 'Promena prioriteta',
+    user_note: 'Napomena',
+  };
+  return m[t] || t;
 }
 
 /**
@@ -336,23 +352,83 @@ export async function openMaintWorkOrderDetailModal(opts) {
       `<option value="${escHtml(s)}"${String(wo.status) === s ? ' selected' : ''}>${escHtml(woStatusLabelSr(s))}</option>`,
   ).join('');
 
+  const [events, parts, labor] = await Promise.all([
+    fetchMaintWorkOrderEvents(wo.wo_id),
+    fetchMaintWorkOrderParts(wo.wo_id),
+    fetchMaintWorkOrderLabor(wo.wo_id),
+  ]);
+  const eventsHtml = events.length
+    ? events
+        .map(
+          ev => `<div class="mnt-wo-activity-item">
+            <div><strong>${escHtml(eventTypeLabel(String(ev.event_type || '')))}</strong>
+              <span class="mnt-muted">${escHtml((ev.at || '').replace('T', ' ').slice(0, 16))}</span></div>
+            ${
+              ev.from_value || ev.to_value
+                ? `<div class="mnt-muted">${escHtml(ev.from_value || '—')} → ${escHtml(ev.to_value || '—')}</div>`
+                : ''
+            }
+            ${ev.comment ? `<div style="white-space:pre-wrap">${escHtml(ev.comment)}</div>` : ''}
+          </div>`,
+        )
+        .join('')
+    : '<p class="mnt-muted">Još nema aktivnosti.</p>';
+  const partsHtml = parts.length
+    ? parts
+        .map(
+          p => `<tr>
+            <td>${escHtml(p.part_name || '')}</td>
+            <td>${escHtml(p.quantity ?? '—')}</td>
+            <td>${escHtml(p.unit || '—')}</td>
+            <td>${escHtml(p.supplier || '—')}</td>
+          </tr>`,
+        )
+        .join('')
+    : '<tr><td colspan="4" class="mnt-muted">Nema evidentiranih delova.</td></tr>';
+  const laborHtml = labor.length
+    ? labor
+        .map(
+          l => `<tr>
+            <td>${escHtml(l.minutes ?? '—')}</td>
+            <td>${escHtml((l.started_at || '').replace('T', ' ').slice(0, 16) || '—')}</td>
+            <td>${escHtml((l.ended_at || '').replace('T', ' ').slice(0, 16) || '—')}</td>
+            <td>${escHtml(l.notes || '—')}</td>
+          </tr>`,
+        )
+        .join('')
+    : '<tr><td colspan="4" class="mnt-muted">Nema evidentiranih sati.</td></tr>';
+
   const wrap = document.createElement('div');
   wrap.id = 'mntWoDlg';
   wrap.className = 'kadr-modal-overlay';
   wrap.innerHTML = `
-    <div class="kadr-modal" style="max-width:540px">
+    <div class="kadr-modal mnt-wo-drawer">
       <div class="kadr-modal-title">Radni nalog</div>
       <div class="kadr-modal-subtitle">
         <code>${escHtml(wo.wo_number || wo.wo_id)}</code>
         ${machineCode ? ` · <a href="#" id="mntWoDlgMach" style="color:var(--accent)">Otvori mašinu</a>` : ''}
         ${wo.source_incident_id ? ` · <a href="#" id="mntWoDlgInc" style="color:var(--accent)">Otvori incident</a>` : ''}
       </div>
-      <p><strong>${escHtml(wo.title || '')}</strong></p>
-      <p class="mnt-muted" style="font-size:14px;white-space:pre-wrap">${escHtml(wo.description || '—')}</p>
-      <p>Prioritet: <span class="${priorityBadgeClass(wo)}">${escHtml(woPriorityLabel(String(wo.priority || '')))}</span>
-        · Tip: <span class="mnt-muted">${escHtml(String(wo.type || ''))}</span></p>
-      <p class="mnt-muted" style="font-size:12px">Sredstvo: ${escHtml(wo.maint_assets?.asset_code || '—')}
-        — ${escHtml(wo.maint_assets?.name || '—')}</p>
+      <div class="mnt-wo-drawer-head">
+        <div>
+          <p><strong>${escHtml(wo.title || '')}</strong></p>
+          <p class="mnt-muted" style="font-size:14px;white-space:pre-wrap">${escHtml(wo.description || '—')}</p>
+        </div>
+        <div class="mnt-wo-mini">
+          <div>Status: <strong>${escHtml(woStatusLabelSr(String(wo.status || '')))}</strong></div>
+          <div>Prioritet: <span class="${priorityBadgeClass(wo)}">${escHtml(woPriorityLabel(String(wo.priority || '')))}</span></div>
+          <div>Tip: <span class="mnt-muted">${escHtml(String(wo.type || ''))}</span></div>
+          <div>Sredstvo: <span class="mnt-muted">${escHtml(wo.maint_assets?.asset_code || '—')} — ${escHtml(wo.maint_assets?.name || '—')}</span></div>
+        </div>
+      </div>
+      <div class="mnt-wo-tabs" role="tablist" aria-label="Radni nalog detalji">
+        <button type="button" class="mnt-wo-tab is-active" data-mnt-wo-tab="overview">Pregled</button>
+        <button type="button" class="mnt-wo-tab" data-mnt-wo-tab="activity">Aktivnost</button>
+        <button type="button" class="mnt-wo-tab" data-mnt-wo-tab="parts">Delovi</button>
+        <button type="button" class="mnt-wo-tab" data-mnt-wo-tab="labor">Sati</button>
+        <button type="button" class="mnt-wo-tab" data-mnt-wo-tab="docs">Dokumenta</button>
+      </div>
+      <section class="mnt-wo-tab-panel is-active" data-mnt-wo-panel="overview">
       ${
         canEdit
           ? `<form id="mntWoForm">
@@ -360,6 +436,8 @@ export async function openMaintWorkOrderDetailModal(opts) {
         <select class="form-input" name="status" id="mntWoSt">${stOpts}</select>
         <label class="form-label">Dodeljeno</label>
         <select class="form-input" name="assigned_to" id="mntWoAs">${assignOpts}</select>
+        <label class="form-label">Komentar promene</label>
+        <textarea class="form-input" id="mntWoComment" rows="3" placeholder="Šta je urađeno / razlog promene statusa ili dodele"></textarea>
         <div class="kadr-modal-actions" style="margin-top:16px">
           <button type="button" class="btn" id="mntWoCancel" style="background:var(--surface3)">Zatvori</button>
           <button type="submit" class="btn" id="mntWoSave">Sačuvaj</button>
@@ -369,14 +447,59 @@ export async function openMaintWorkOrderDetailModal(opts) {
          <p class="mnt-muted">Menjanje statusa: tehničar, šef ili admin održavanja.</p>
          <div class="kadr-modal-actions"><button type="button" class="btn" id="mntWoCancel">Zatvori</button></div>`
       }
+      </section>
+      <section class="mnt-wo-tab-panel" data-mnt-wo-panel="activity">${eventsHtml}</section>
+      <section class="mnt-wo-tab-panel" data-mnt-wo-panel="parts">
+        <div class="mnt-table-wrap"><table class="mnt-table"><thead><tr><th>Deo</th><th>Količina</th><th>Jedinica</th><th>Dobavljač</th></tr></thead><tbody>${partsHtml}</tbody></table></div>
+        ${
+          canEdit
+            ? `<form id="mntWoPartForm" class="mnt-wo-inline-form">
+          <input class="form-input" name="part_name" placeholder="Naziv dela" required>
+          <input class="form-input" name="quantity" type="number" min="0" step="0.0001" placeholder="Količina">
+          <input class="form-input" name="unit" placeholder="Jedinica">
+          <input class="form-input" name="supplier" placeholder="Dobavljač">
+          <button type="submit" class="btn btn-xs">Dodaj deo</button>
+        </form>`
+            : ''
+        }
+      </section>
+      <section class="mnt-wo-tab-panel" data-mnt-wo-panel="labor">
+        <div class="mnt-table-wrap"><table class="mnt-table"><thead><tr><th>Minuta</th><th>Početak</th><th>Kraj</th><th>Napomena</th></tr></thead><tbody>${laborHtml}</tbody></table></div>
+        ${
+          canEdit
+            ? `<form id="mntWoLaborForm" class="mnt-wo-inline-form">
+          <input class="form-input" name="minutes" type="number" min="1" step="1" placeholder="Minuta" required>
+          <input class="form-input" name="notes" placeholder="Napomena">
+          <button type="submit" class="btn btn-xs">Dodaj sate</button>
+        </form>`
+            : ''
+        }
+      </section>
+      <section class="mnt-wo-tab-panel" data-mnt-wo-panel="docs">
+        <p class="mnt-muted">Dokumenta će se povezati kada dodamo storage/povezanu tabelu za priloge radnog naloga.</p>
+      </section>
     </div>`;
   document.body.appendChild(wrap);
 
   const close = () => wrap.remove();
+  const reloadDrawer = () => {
+    close();
+    onSaved?.();
+    void openMaintWorkOrderDetailModal(opts);
+  };
   wrap.addEventListener('click', e => {
     if (e.target === wrap) close();
   });
   wrap.querySelector('#mntWoCancel')?.addEventListener('click', close);
+  wrap.querySelectorAll('[data-mnt-wo-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.getAttribute('data-mnt-wo-tab');
+      wrap.querySelectorAll('[data-mnt-wo-tab]').forEach(b => b.classList.toggle('is-active', b === btn));
+      wrap
+        .querySelectorAll('[data-mnt-wo-panel]')
+        .forEach(p => p.classList.toggle('is-active', p.getAttribute('data-mnt-wo-panel') === tab));
+    });
+  });
   wrap.querySelector('#mntWoDlgMach')?.addEventListener('click', e => {
     e.preventDefault();
     if (machineCode) {
@@ -398,12 +521,63 @@ export async function openMaintWorkOrderDetailModal(opts) {
     close();
   });
 
+  wrap.querySelector('#mntWoPartForm')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(/** @type {HTMLFormElement} */ (e.currentTarget));
+    const partName = String(fd.get('part_name') || '').trim();
+    const quantityRaw = String(fd.get('quantity') || '').trim();
+    const unit = String(fd.get('unit') || '').trim();
+    const supplier = String(fd.get('supplier') || '').trim();
+    const row = await insertMaintWorkOrderPart({
+      wo_id: wo.wo_id,
+      part_name: partName,
+      quantity: quantityRaw ? Number(quantityRaw) : null,
+      unit: unit || null,
+      supplier: supplier || null,
+    });
+    if (!row) {
+      showToast('⚠ Deo nije dodat');
+      return;
+    }
+    await insertMaintWorkOrderEvent({
+      wo_id: wo.wo_id,
+      event_type: 'user_note',
+      comment: `Dodat deo: ${partName}`,
+    });
+    showToast('✅ Deo dodat');
+    reloadDrawer();
+  });
+
+  wrap.querySelector('#mntWoLaborForm')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(/** @type {HTMLFormElement} */ (e.currentTarget));
+    const minutes = Number(String(fd.get('minutes') || '').trim());
+    const notes = String(fd.get('notes') || '').trim();
+    const row = await insertMaintWorkOrderLabor({
+      wo_id: wo.wo_id,
+      minutes,
+      notes: notes || null,
+    });
+    if (!row) {
+      showToast('⚠ Sati nisu dodati');
+      return;
+    }
+    await insertMaintWorkOrderEvent({
+      wo_id: wo.wo_id,
+      event_type: 'user_note',
+      comment: `Dodato vreme rada: ${Math.round(minutes)} min${notes ? ` — ${notes}` : ''}`,
+    });
+    showToast('✅ Sati dodati');
+    reloadDrawer();
+  });
+
   wrap.querySelector('#mntWoForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const uid = getCurrentUser()?.id;
     if (!uid) return;
     const st = /** @type {HTMLSelectElement} */ (wrap.querySelector('#mntWoSt'))?.value;
     const asRaw = /** @type {HTMLSelectElement} */ (wrap.querySelector('#mntWoAs'))?.value;
+    const comment = /** @type {HTMLTextAreaElement} */ (wrap.querySelector('#mntWoComment'))?.value?.trim();
     const assigned_to = asRaw && asRaw.length > 10 ? asRaw : null;
     const patch = {
       status: st,
@@ -420,6 +594,13 @@ export async function openMaintWorkOrderDetailModal(opts) {
     if (!ok) {
       showToast('⚠ Snimanje nije uspelo (RLS)');
       return;
+    }
+    if (comment) {
+      await insertMaintWorkOrderEvent({
+        wo_id: wo.wo_id,
+        event_type: 'user_note',
+        comment,
+      });
     }
     showToast('✅ Sačuvano');
     close();

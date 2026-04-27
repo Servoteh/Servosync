@@ -1088,6 +1088,92 @@ export async function patchMaintWorkOrder(woId, fields) {
 }
 
 /**
+ * @param {string} woId uuid
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchMaintWorkOrderEvents(woId) {
+  if (!woId) return [];
+  const rows = await sbReq(
+    `maint_wo_events?select=*&wo_id=eq.${encodeURIComponent(woId)}&order=at.desc&limit=200`,
+  ).catch(() => null);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * @param {string} woId uuid
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchMaintWorkOrderParts(woId) {
+  if (!woId) return [];
+  const rows = await sbReq(
+    `maint_wo_parts?select=*&wo_id=eq.${encodeURIComponent(woId)}&order=created_at.desc&limit=200`,
+  ).catch(() => null);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * @param {string} woId uuid
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchMaintWorkOrderLabor(woId) {
+  if (!woId) return [];
+  const rows = await sbReq(
+    `maint_wo_labor?select=*&wo_id=eq.${encodeURIComponent(woId)}&order=created_at.desc&limit=200`,
+  ).catch(() => null);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * @param {{ wo_id: string, part_name: string, quantity?: number|null, unit?: string|null, unit_cost?: number|null, supplier?: string|null }} payload
+ * @returns {Promise<object|null>}
+ */
+export async function insertMaintWorkOrderPart(payload) {
+  const partName = String(payload.part_name || '').trim();
+  if (!payload.wo_id || !partName) return null;
+  const rows = await sbReq('maint_wo_parts', 'POST', {
+    wo_id: payload.wo_id,
+    part_name: partName,
+    quantity: payload.quantity ?? null,
+    unit: payload.unit || null,
+    unit_cost: payload.unit_cost ?? null,
+    supplier: payload.supplier || null,
+  }).catch(() => null);
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
+/**
+ * @param {{ wo_id: string, minutes: number, notes?: string|null }} payload
+ * @returns {Promise<object|null>}
+ */
+export async function insertMaintWorkOrderLabor(payload) {
+  const minutes = Number(payload.minutes || 0);
+  if (!payload.wo_id || !Number.isFinite(minutes) || minutes <= 0) return null;
+  const rows = await sbReq('maint_wo_labor', 'POST', {
+    wo_id: payload.wo_id,
+    technician_id: getCurrentUser()?.id || null,
+    minutes: Math.round(minutes),
+    notes: payload.notes || null,
+  }).catch(() => null);
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
+/**
+ * @param {{ wo_id: string, event_type: string, comment?: string|null, from_value?: string|null, to_value?: string|null }} payload
+ * @returns {Promise<object|null>}
+ */
+export async function insertMaintWorkOrderEvent(payload) {
+  const rows = await sbReq('maint_wo_events', 'POST', {
+    wo_id: payload.wo_id,
+    actor: getCurrentUser()?.id || null,
+    event_type: payload.event_type,
+    from_value: payload.from_value ?? null,
+    to_value: payload.to_value ?? null,
+    comment: payload.comment || null,
+  }).catch(() => null);
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
+/**
  * `maint_machines.machine_code` po `asset_id` (katalog ↔ CMMS sredstvo).
  * @param {string} assetId uuid
  * @returns {Promise<string|null>}
