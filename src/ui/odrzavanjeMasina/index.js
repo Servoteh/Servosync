@@ -53,6 +53,7 @@ import { renderMaintFilesTab } from './maintFilesTab.js';
 import { renderMaintWorkOrdersPanel } from './maintWorkOrdersPanel.js';
 import { renderMaintAssetsPanel } from './maintAssetsPanel.js';
 import { renderMaintDocumentsPanel } from './maintDocumentsPanel.js';
+import { renderMaintPreventivePanel, renderMaintCalendarPanel } from './maintPreventivePanel.js';
 
 let mountRef = null;
 let disposeRef = { disposed: false };
@@ -1063,11 +1064,6 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
     return;
   }
 
-  if (section === 'preventive') {
-    /* Backward-compatible: postojeći Rokovi prikaz sada je UI naziv "Preventiva". */
-    section = 'board';
-  }
-
   if (section === 'documents') {
     const prof = await fetchMaintUserProfile();
     if (disposeRef.disposed || !host.isConnected) return;
@@ -1075,15 +1071,23 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
     return;
   }
 
-  if (['calendar', 'inventory', 'reports', 'settings'].includes(section)) {
+  if (section === 'preventive') {
+    await renderMaintPreventivePanel(host, { onNavigateToPath });
+    return;
+  }
+
+  if (section === 'calendar') {
+    await renderMaintCalendarPanel(host, { onNavigateToPath });
+    return;
+  }
+
+  if (['inventory', 'reports', 'settings'].includes(section)) {
     const titleMap = {
-      calendar: 'Kalendar',
       inventory: 'Zalihe i dobavljači',
       reports: 'Izveštaji',
       settings: 'Podešavanja održavanja',
     };
     const hintMap = {
-      calendar: ['Sprint 5: preventivne kontrole, rokovi WO, registracije, licence i inspekcije u jednom kalendaru.'],
       inventory: ['Sprint 5+: potrošni delovi, dobavljači, cene i veza sa maint_wo_parts.'],
       reports: ['Sprint 5: troškovi, najčešći kvarovi, vreme rešavanja, rad po tehničaru i CSV export.'],
       settings: ['Kasnije: šabloni statusa, notifikacije, default uloge i CMMS podešavanja.'],

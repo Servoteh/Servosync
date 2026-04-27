@@ -359,7 +359,7 @@ export async function fetchAssignableMaintUsers() {
 export async function fetchMaintTaskDueDates(opts = {}) {
   const lim = opts.limit ?? 2000;
   return await sbReq(
-    `v_maint_task_due_dates?select=task_id,machine_code,title,severity,interval_value,interval_unit,next_due_at,last_performed_at&order=next_due_at.asc&limit=${lim}`,
+    `v_maint_task_due_dates?select=task_id,machine_code,title,severity,interval_value,interval_unit,grace_period_days,next_due_at,last_performed_at&order=next_due_at.asc&limit=${lim}`,
   );
 }
 
