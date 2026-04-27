@@ -18,6 +18,10 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { daysInclusive } from '../../lib/date.js';
+import {
+  compareEmployeesByLastFirst,
+  employeeDisplayName,
+} from '../../lib/employeeNames.js';
 import { canViewEmployeePii } from '../../state/auth.js';
 import { KADR_EDU_LEVEL_LABELS } from '../../lib/constants.js';
 import {
@@ -252,9 +256,9 @@ function _populateFilters() {
   if (sel) {
     const prev = sel.value;
     const sortedEmp = kadrovskaState.employees.slice()
-      .sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || ''), 'sr'));
+      .sort(compareEmployeesByLastFirst);
     sel.innerHTML = '<option value="">Svi zaposleni</option>'
-      + sortedEmp.map(e => `<option value="${escHtml(e.id)}">${escHtml(e.fullName || '—')}${e.isActive ? '' : ' (neaktivan)'}</option>`).join('');
+      + sortedEmp.map(e => `<option value="${escHtml(e.id)}">${escHtml(employeeDisplayName(e) || '—')}${e.isActive ? '' : ' (neaktivan)'}</option>`).join('');
     if (prev && Array.from(sel.options).some(o => o.value === prev)) sel.value = prev;
   }
   const dsel = panelRoot?.querySelector('#repSickDeptFilter');
@@ -296,7 +300,7 @@ function _aggregate() {
       perEmp.set(a.employeeId, {
         emp: emp || null,
         id: a.employeeId,
-        name: emp?.fullName || '(obrisan)',
+        name: emp ? employeeDisplayName(emp) : '(obrisan)',
         dept: emp?.department || '',
         count: 0,
         totalDays: 0,
@@ -604,10 +608,10 @@ function _renderVacReport() {
   }
   if (empty) empty.style.display = 'none';
 
-  tbody.innerHTML = rows.sort((a, b) => String(a.emp.fullName || '').localeCompare(String(b.emp.fullName || ''), 'sr')).map(r => {
+  tbody.innerHTML = rows.sort((a, b) => compareEmployeesByLastFirst(a.emp, b.emp)).map(r => {
     const remCls = r.remaining < 0 ? 'warn' : (r.remaining < 3 ? 'accent' : 'ok');
     return `<tr>
-      <td><strong>${escHtml(r.emp.fullName || '—')}</strong></td>
+      <td><strong>${escHtml(employeeDisplayName(r.emp) || '—')}</strong></td>
       <td class="col-hide-sm">${escHtml(r.emp.department || '—')}</td>
       <td>${r.daysTotal}</td>
       <td>${r.daysCarried}</td>
@@ -636,7 +640,7 @@ async function _exportVacXlsx() {
       const dt = ent?.daysTotal ?? 20;
       const dc = ent?.daysCarriedOver ?? 0;
       const du = bal?.daysUsed ?? 0;
-      aoa.push([emp.fullName || '', emp.department || '', dt, dc, du, dt + dc - du]);
+      aoa.push([employeeDisplayName(emp) || '', emp.department || '', dt, dc, du, dt + dc - du]);
     });
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 12 }];
@@ -702,12 +706,12 @@ async function _renderChildrenReport() {
   }
   if (empty) empty.style.display = 'none';
 
-  rows.sort((a, b) => String(a.emp.fullName || '').localeCompare(String(b.emp.fullName || ''), 'sr')
+  rows.sort((a, b) => compareEmployeesByLastFirst(a.emp, b.emp)
     || String(a.c.birthDate || '').localeCompare(String(b.c.birthDate || '')));
   tbody.innerHTML = rows.map(({ emp, c }) => {
     const age = _ageYears(c.birthDate);
     return `<tr>
-      <td><strong>${escHtml(emp.fullName || '—')}</strong></td>
+      <td><strong>${escHtml(employeeDisplayName(emp) || '—')}</strong></td>
       <td>${escHtml(c.firstName || '—')}</td>
       <td>${c.birthDate ? _fmtSrDate(c.birthDate) : '—'}</td>
       <td>${age ?? '—'}</td>
@@ -722,9 +726,9 @@ async function _exportChildrenXlsx() {
   if (!rows.length) { showToast('Nema podataka za izvoz'); return; }
   const aoa = [['Zaposleni', 'Odeljenje', 'Ime deteta', 'Datum rođenja', 'Starost']];
   rows
-    .sort((a, b) => String(a.emp.fullName || '').localeCompare(String(b.emp.fullName || ''), 'sr'))
+    .sort((a, b) => compareEmployeesByLastFirst(a.emp, b.emp))
     .forEach(({ emp, c }) => {
-      aoa.push([emp.fullName || '', emp.department || '', c.firstName || '', c.birthDate || '', _ageYears(c.birthDate) ?? '']);
+      aoa.push([employeeDisplayName(emp) || '', emp.department || '', c.firstName || '', c.birthDate || '', _ageYears(c.birthDate) ?? '']);
     });
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 20 }, { wch: 14 }, { wch: 10 }];
@@ -761,7 +765,7 @@ async function _exportToXlsx() {
     if (deptFilter && (!emp || emp.department !== deptFilter)) return;
     const days = _intersectingDays(a.dateFrom, a.dateTo, pFrom, pTo);
     if (days <= 0) return;
-    const name = emp?.fullName || '(obrisan)';
+    const name = emp ? employeeDisplayName(emp) : '(obrisan)';
     const dept = emp?.department || '';
     detail.push([
       name, dept, a.dateFrom || '', a.dateTo || '',
@@ -789,7 +793,7 @@ async function _exportToXlsx() {
   const summaryAoa = [];
   summaryAoa.push(['IZVEŠTAJ O BOLOVANJIMA']);
   summaryAoa.push(['Period', _periodLabel(pFrom, pTo)]);
-  summaryAoa.push(['Filter — zaposleni', empFilter ? (empById.get(empFilter)?.fullName || empFilter) : 'Svi']);
+  summaryAoa.push(['Filter — zaposleni', empFilter ? (employeeDisplayName(empById.get(empFilter)) || empFilter) : 'Svi']);
   summaryAoa.push(['Filter — odeljenje', deptFilter || 'Sva']);
   summaryAoa.push([]);
   summaryAoa.push(['Zaposleni', 'Odeljenje', 'Broj evid.', 'Σ dana (u periodu)', 'Prosek (d) po evid.', 'Poslednje bolovanje', 'Trenutno?']);

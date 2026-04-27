@@ -17,6 +17,10 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { formatDate } from '../../lib/date.js';
+import {
+  compareEmployeesByLastFirst,
+  employeeDisplayName,
+} from '../../lib/employeeNames.js';
 import { canEditKadrovska, canViewEmployeePii, getIsOnline } from '../../state/auth.js';
 import {
   hasSupabaseConfig,
@@ -153,7 +157,7 @@ function applyFilters(list) {
     if (status === 'active' && !e.isActive) return false;
     if (status === 'inactive' && e.isActive) return false;
     if (q) {
-      const hay = [e.fullName, e.firstName, e.lastName, e.position, e.department, e.team, e.email, e.phoneWork, e.note].join(' ').toLowerCase();
+      const hay = [employeeDisplayName(e), e.firstName, e.lastName, e.position, e.department, e.team, e.email, e.phoneWork, e.note].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -265,7 +269,7 @@ export function refreshEmployeesTab() {
 
     return `<tr data-id="${rowId}">
       <td>
-        <div class="emp-name">${escHtml(e.fullName || [e.firstName, e.lastName].filter(Boolean).join(' ') || '—')}</div>
+        <div class="emp-name">${escHtml(employeeDisplayName(e) || '—')}</div>
         ${sub ? `<div class="emp-sub col-hide-sm">${escHtml(sub)}</div>` : ''}
       </td>
       <td>${escHtml(e.position || '—')}</td>
@@ -659,7 +663,7 @@ async function submitEmployeeForm() {
     id,
     firstName,
     lastName,
-    fullName: `${firstName} ${lastName}`.trim(),
+    fullName: employeeDisplayName({ firstName, lastName }),
     position: document.getElementById('empPosition').value.trim(),
     department: document.getElementById('empDepartment').value.trim(),
     team: document.getElementById('empTeam').value.trim() || null,
@@ -702,7 +706,7 @@ async function submitEmployeeForm() {
   if (basePayload.email) {
     const dup = kadrovskaState.employees.find(e => e.id !== id && e.email && e.email.toLowerCase() === basePayload.email);
     if (dup) {
-      errEl.textContent = 'Email već koristi zaposleni: ' + (dup.fullName || dup.email);
+      errEl.textContent = 'Email već koristi zaposleni: ' + (employeeDisplayName(dup) || dup.email);
       errEl.classList.add('visible');
       return;
     }
@@ -736,7 +740,7 @@ async function submitEmployeeForm() {
     const idx = kadrovskaState.employees.findIndex(e => e.id === saved.id);
     if (idx >= 0) kadrovskaState.employees[idx] = saved;
     else kadrovskaState.employees.push(saved);
-    kadrovskaState.employees.sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || ''), 'sr'));
+    kadrovskaState.employees.sort(compareEmployeesByLastFirst);
     saveEmployeesCache(kadrovskaState.employees);
     closeEmployeeModal();
     refreshEmployeesTab();
@@ -758,7 +762,7 @@ async function confirmDeleteEmployee(id) {
   }
   const emp = kadrovskaState.employees.find(e => e.id === id);
   if (!emp) return;
-  if (!confirm(`Obrisati zaposlenog "${emp.fullName}"?\nOva akcija je trajna.`)) return;
+  if (!confirm(`Obrisati zaposlenog "${employeeDisplayName(emp)}"?\nOva akcija je trajna.`)) return;
   try {
     if (getIsOnline() && hasSupabaseConfig() && !String(id).startsWith('local_')) {
       const ok = await deleteEmployeeFromDb(id);

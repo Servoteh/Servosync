@@ -19,6 +19,10 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { formatDate } from '../../lib/date.js';
+import {
+  compareEmployeesByLastFirst,
+  employeeDisplayName,
+} from '../../lib/employeeNames.js';
 import { canEditKadrovska, canViewEmployeePii } from '../../state/auth.js';
 import {
   kadrovskaState,
@@ -122,13 +126,13 @@ function computeRows() {
   const emps = kadrovskaState.employees.filter(e => {
     if (statusF === 'active' && !e.isActive) return false;
     if (q) {
-      const hay = [e.fullName, e.firstName, e.lastName, e.department, e.team].join(' ').toLowerCase();
+      const hay = [employeeDisplayName(e), e.firstName, e.lastName, e.department, e.team].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
   });
 
-  return emps.map(emp => {
+  return emps.sort(compareEmployeesByLastFirst).map(emp => {
     const ent = entByEmp.get(emp.id);
     const bal = balByEmp.get(emp.id);
     const daysTotal = ent ? ent.daysTotal : 20;
@@ -198,7 +202,7 @@ function renderRows() {
     const remCls = r.daysRemaining < 0 ? 'warn' : (r.daysRemaining < 3 ? 'accent' : 'ok');
     const entId = r.ent?.id || '';
     return `<tr data-emp-id="${escHtml(r.emp.id)}" data-ent-id="${escHtml(entId)}">
-      <td><div class="emp-name">${escHtml(r.emp.fullName || '—')}</div></td>
+      <td><div class="emp-name">${escHtml(employeeDisplayName(r.emp) || '—')}</div></td>
       <td class="col-hide-sm">${escHtml(r.emp.department || '—')}</td>
       <td>
         <input type="number" class="vac-inp vac-total" min="0" max="365" step="1" value="${r.daysTotal}" ${edit ? '' : 'disabled'}>
@@ -286,7 +290,7 @@ function openResenjePrint(employeeId) {
   let days = abs?.daysCount || 0;
 
   if (!abs) {
-    const inFrom = prompt(`Unesi datum početka GO (YYYY-MM-DD) za ${emp.fullName}:`, '');
+    const inFrom = prompt(`Unesi datum početka GO (YYYY-MM-DD) za ${employeeDisplayName(emp)}:`, '');
     if (!inFrom) return;
     const inTo = prompt('Unesi datum kraja GO (YYYY-MM-DD):', '');
     if (!inTo) return;
@@ -304,7 +308,7 @@ function openResenjePrint(employeeId) {
 <html lang="sr">
 <head>
 <meta charset="utf-8">
-<title>Rešenje o godišnjem odmoru — ${escHtml(emp.fullName || '')}</title>
+<title>Rešenje o godišnjem odmoru — ${escHtml(employeeDisplayName(emp) || '')}</title>
 <style>
   @page { size: A4; margin: 2.2cm 2cm; }
   body { font-family: 'Times New Roman', Georgia, serif; color:#111; font-size: 12pt; line-height: 1.55; }
@@ -340,7 +344,7 @@ function openResenjePrint(employeeId) {
   <h2>o korišćenju godišnjeg odmora za ${escHtml(String(year))}. godinu</h2>
 
   <div class="meta">
-    <div class="meta-row"><span>Zaposleni:</span><strong>${escHtml(emp.fullName || '')}</strong></div>
+    <div class="meta-row"><span>Zaposleni:</span><strong>${escHtml(employeeDisplayName(emp) || '')}</strong></div>
     ${emp.position ? `<div class="meta-row"><span>Radno mesto:</span><span>${escHtml(emp.position)}</span></div>` : ''}
     ${emp.department ? `<div class="meta-row"><span>Odeljenje:</span><span>${escHtml(emp.department)}</span></div>` : ''}
     ${emp.personalId && canViewEmployeePii() ? `<div class="meta-row"><span>JMBG:</span><span>${escHtml(emp.personalId)}</span></div>` : ''}
@@ -374,7 +378,7 @@ function openResenjePrint(employeeId) {
   <div class="signs">
     <div class="sign-box">
       <div class="sign-line">Zaposleni</div>
-      <div>${escHtml(emp.fullName || '')}</div>
+      <div>${escHtml(employeeDisplayName(emp) || '')}</div>
     </div>
     <div class="sign-box">
       <div class="sign-line">Direktor / ovlašćeno lice</div>
@@ -401,7 +405,7 @@ async function exportToExcel() {
   const data = [
     ['Zaposleni', 'Odeljenje', 'Dana pravo', 'Preneto', 'Iskorišćeno', 'Preostalo'],
     ...rows.map(r => [
-      r.emp.fullName || '',
+      employeeDisplayName(r.emp) || '',
       r.emp.department || '',
       r.daysTotal,
       r.daysCarried,

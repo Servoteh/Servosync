@@ -18,18 +18,22 @@
 
 import { sbReq } from './supabase.js';
 import { canEditKadrovska, getIsOnline } from '../state/auth.js';
+import { employeeDisplayName } from '../lib/employeeNames.js';
 
 /** Maskirati JMBG/bank/address za ne-HR user-e (ovde radimo samo defensive passthrough). */
 export function mapDbEmployee(d) {
-  const fullName =
-    d.full_name ||
-    [d.first_name, d.last_name].filter(Boolean).join(' ').trim() ||
-    '';
+  const firstName = d.first_name || '';
+  const lastName = d.last_name || '';
+  const fullName = employeeDisplayName({
+    fullName: d.full_name,
+    firstName,
+    lastName,
+  });
   return {
     id: d.id,
     fullName,
-    firstName: d.first_name || '',
-    lastName: d.last_name || '',
+    firstName,
+    lastName,
     position: d.position || '',
     department: d.department || '',
     team: d.team || '',
@@ -67,7 +71,7 @@ export function buildEmployeePayload(emp) {
   const first = (emp.firstName || '').trim();
   const last  = (emp.lastName || '').trim();
   const fullName = (first || last)
-    ? [first, last].filter(Boolean).join(' ')
+    ? [last, first].filter(Boolean).join(' ')
     : (emp.fullName || '').trim();
 
   const p = {

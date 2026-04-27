@@ -34,6 +34,10 @@ import {
 import { getIsOnline, canViewEmployeePii, isAdmin } from '../state/auth.js';
 import { hasSupabaseConfig } from '../lib/constants.js';
 import {
+  compareEmployeesByLastFirst,
+  employeeDisplayName,
+} from '../lib/employeeNames.js';
+import {
   kadrovskaState,
   kadrAbsencesState,
   kadrWorkHoursState,
@@ -51,6 +55,12 @@ import {
   saveContractsCache,
 } from '../state/kadrovska.js';
 
+function normalizeEmployees(list) {
+  return (list || [])
+    .map(e => ({ ...e, fullName: employeeDisplayName(e) || e.fullName || '' }))
+    .sort(compareEmployeesByLastFirst);
+}
+
 export async function ensureEmployeesLoaded(force = false) {
   if (kadrovskaState.loaded && !force) return;
   /* Force: ne puni in-memory stari mesečni keš (department bi ostao netačan). */
@@ -58,19 +68,19 @@ export async function ensureEmployeesLoaded(force = false) {
     kadrovskaState.employees = [];
   } else {
     /* Cache prvi — UI brzo prikazuje; mreža ga prepisuje kad stigne. */
-    kadrovskaState.employees = loadEmployeesCache();
+    kadrovskaState.employees = normalizeEmployees(loadEmployeesCache());
   }
   kadrovskaState.loaded = true;
   if (getIsOnline() && hasSupabaseConfig()) {
     const fresh = await loadEmployeesFromDb();
     if (fresh) {
-      kadrovskaState.employees = fresh;
-      saveEmployeesCache(fresh);
+      kadrovskaState.employees = normalizeEmployees(fresh);
+      saveEmployeesCache(kadrovskaState.employees);
       kadrovskaState._schemaSupported = true;
     } else {
       if (force) {
         /* Posle slobodnog fetch-a, fallback na LS samo da UI nije prazan. */
-        kadrovskaState.employees = loadEmployeesCache();
+        kadrovskaState.employees = normalizeEmployees(loadEmployeesCache());
       }
       kadrovskaState._schemaSupported = false;
     }
@@ -208,7 +218,7 @@ export async function ensureAllKadrovskaLoaded(force = false) {
 /** Helper: pronađi ime zaposlenog po ID-u (fallback '—'). */
 export function employeeNameById(id) {
   const e = kadrovskaState.employees.find(x => x.id === id);
-  return e ? (e.fullName || '—') : '—';
+  return e ? (employeeDisplayName(e) || '—') : '—';
 }
 
 /** Helper: lista odeljenja iz trenutnih zaposlenih, sortirana sr-locale. */

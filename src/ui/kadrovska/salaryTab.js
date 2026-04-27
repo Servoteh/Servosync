@@ -10,6 +10,10 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { formatDate } from '../../lib/date.js';
+import {
+  compareEmployeesByLastFirst,
+  employeeDisplayName,
+} from '../../lib/employeeNames.js';
 import { canAccessSalary, getIsOnline } from '../../state/auth.js';
 import { hasSupabaseConfig } from '../../lib/constants.js';
 import {
@@ -199,7 +203,7 @@ function refreshTerms() {
   const emps = kadrovskaState.employees.filter(e => {
     if (statF === 'active' && !e.isActive) return false;
     if (q) {
-      const hay = [e.fullName, e.firstName, e.lastName, e.position, e.department].join(' ').toLowerCase();
+      const hay = [employeeDisplayName(e), e.firstName, e.lastName, e.position, e.department].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     if (typeF) {
@@ -229,7 +233,7 @@ function refreshTerms() {
   }
   if (empty) empty.style.display = 'none';
 
-  emps.sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || ''), 'sr'));
+  emps.sort(compareEmployeesByLastFirst);
 
   tbody.innerHTML = emps.map(e => {
     const s = byEmp.get(e.id);
@@ -245,7 +249,7 @@ function refreshTerms() {
     const perDiemEur = s?.perDiemEur ? `${escHtml(String(s.perDiemEur))} EUR` : '<em class="emp-sub">0</em>';
     const fromTxt = s?.effectiveFrom ? formatDate(s.effectiveFrom) : '—';
     return `<tr data-emp-id="${escHtml(e.id)}" data-term-id="${escHtml(s?.salaryTermId || '')}">
-      <td><div class="emp-name">${escHtml(e.fullName || '—')}</div></td>
+      <td><div class="emp-name">${escHtml(employeeDisplayName(e) || '—')}</div></td>
       <td class="col-hide-sm">${escHtml(posDept || '—')}</td>
       <td>${typeBadge}</td>
       <td>${amountTxt}</td>
@@ -274,8 +278,8 @@ function buildTermModalHtml(term, empId) {
   const isEdit = !!term;
   const empOpts = kadrovskaState.employees
     .slice()
-    .sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || ''), 'sr'))
-    .map(e => `<option value="${escHtml(e.id)}"${(empId === e.id || term?.employeeId === e.id) ? ' selected' : ''}>${escHtml(e.fullName || '—')}</option>`)
+    .sort(compareEmployeesByLastFirst)
+    .map(e => `<option value="${escHtml(e.id)}"${(empId === e.id || term?.employeeId === e.id) ? ' selected' : ''}>${escHtml(employeeDisplayName(e) || '—')}</option>`)
     .join('');
 
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -509,7 +513,7 @@ async function openHistoryModal(empId) {
   wrap.innerHTML = `
     <div class="emp-modal-overlay" id="salModal" role="dialog">
       <div class="emp-modal emp-modal-wide">
-        <div class="emp-modal-title">📜 Istorija zarada — ${escHtml(emp?.fullName || '—')}</div>
+        <div class="emp-modal-title">📜 Istorija zarada — ${escHtml(employeeDisplayName(emp) || '—')}</div>
         <div class="emp-modal-subtitle">Poslednji aktivan red je trenutno važeći. Svaki „novi unos“ zatvara prethodni aktivan.</div>
         ${rowsHtml}
         <div class="emp-modal-actions">
@@ -560,12 +564,12 @@ async function exportTermsXlsx() {
   ]];
   kadrovskaState.employees
     .slice()
-    .sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || ''), 'sr'))
+    .sort(compareEmployeesByLastFirst)
     .forEach(e => {
       const s = curMap.get(e.id);
       if (!s) return;
       aoa.push([
-        e.fullName || '', e.position || '', e.department || '',
+        employeeDisplayName(e) || '', e.position || '', e.department || '',
         salaryTypeLabel(s.salaryType),
         s.amount, s.currency, s.amountType,
         s.transportAllowanceRsd || 0, s.perDiemRsd || 0, s.perDiemEur || 0,

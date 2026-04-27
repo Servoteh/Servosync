@@ -12,6 +12,10 @@
 import { escHtml } from '../../lib/dom.js';
 import { getAuth, canEdit, canAccessSalary } from '../../state/auth.js';
 import { kadrovskaState } from '../../state/kadrovska.js';
+import {
+  compareEmployeesByLastFirst,
+  employeeDisplayName,
+} from '../../lib/employeeNames.js';
 
 /** Stranica jedne kartice u summary strip-u. */
 export function summaryChipHtml(label, value, tone) {
@@ -59,7 +63,7 @@ export function kadrovskaHeaderHtml() {
 }
 
 /**
- * HTML <option> liste svih zaposlenih (sortirano po imenu, sr-locale).
+ * HTML <option> liste svih zaposlenih (sortirano po prezimenu, sr-locale).
  *  - includeBlank: doda prazan top option ('Svi zaposleni' / '— izaberi —').
  *  - blankLabel: tekst praznog opciona.
  *  - selectedId: prefilled value.
@@ -73,14 +77,14 @@ export function employeeOptionsHtml({
 } = {}) {
   let list = kadrovskaState.employees.slice();
   if (activeOnly) list = list.filter(e => e.isActive);
-  list.sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || ''), 'sr'));
+  list.sort(compareEmployeesByLastFirst);
   const opts = [];
   if (includeBlank) {
     opts.push(`<option value="">${escHtml(blankLabel)}</option>`);
   }
   for (const e of list) {
     const sel = String(e.id) === String(selectedId) ? ' selected' : '';
-    opts.push(`<option value="${escHtml(e.id)}"${sel}>${escHtml(e.fullName || '—')}</option>`);
+    opts.push(`<option value="${escHtml(e.id)}"${sel}>${escHtml(employeeDisplayName(e) || '—')}</option>`);
   }
   return opts.join('');
 }

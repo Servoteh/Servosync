@@ -20,6 +20,10 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
+import {
+  compareEmployeesByLastFirst,
+  employeeDisplayName,
+} from '../../lib/employeeNames.js';
 import { canEditKadrovskaGrid, getIsOnline } from '../../state/auth.js';
 import { hasSupabaseConfig } from '../../services/supabase.js';
 import { kadrovskaState } from '../../state/kadrovska.js';
@@ -248,21 +252,9 @@ function _gridUpdateDirtyBadge() {
   }
 }
 
-/** Prezime za sort: `lastName`, inače poslednja reč u `fullName`. */
-function _gridSurnameKey(emp) {
-  const ln = String(emp.lastName || '').trim();
-  if (ln) return ln;
-  const parts = String(emp.fullName || '').trim().split(/\s+/).filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : '';
-}
-
 /** Rastuće po prezimenu A–Z (sr), zatim po punom imenu za stabilan redosled. */
 function _gridCompareBySurnameAsc(a, b) {
-  const sa = _gridSurnameKey(a);
-  const sb = _gridSurnameKey(b);
-  const c = sa.localeCompare(sb, 'sr', { sensitivity: 'base' });
-  if (c !== 0) return c;
-  return String(a.fullName || '').localeCompare(String(b.fullName || ''), 'sr', { sensitivity: 'base' });
+  return compareEmployeesByLastFirst(a, b);
 }
 
 /** Aktivni + firma (filter) + sort; bez pretrage — za čip, badge, XLSX. */
@@ -286,7 +278,7 @@ function _gridFilteredEmployees() {
   const q = _gridCurrentSearchQuery().toLowerCase();
   if (!q) return base;
   return base.filter(e => {
-    const name = String(e.fullName || '').toLowerCase();
+    const name = employeeDisplayName(e).toLowerCase();
     return name.includes(q);
   });
 }
@@ -538,7 +530,7 @@ function _renderGridBody() {
       const deptLine = emp.department
         ? `<span class="grid-emp-dept">${escHtml(emp.department)}</span>`
         : `<span class="grid-emp-dept">${escHtml('—')}</span>`;
-      const nameCell = `<span class="grid-emp-name">${escHtml(emp.fullName || '—')}</span>${deptLine}`;
+      const nameCell = `<span class="grid-emp-name">${escHtml(employeeDisplayName(emp) || '—')}</span>${deptLine}`;
       html += `<tr class="row-emp-1"><td class="col-num" rowspan="4">${serialNo}.</td><td class="col-name" rowspan="4">${nameCell}</td><td class="col-kind">Redovni</td>${cellsReg.join('')}<td class="col-sum">${_gridFormatSum(sReg)}</td></tr>`;
       html += `<tr class="row-emp-2"><td class="col-kind">Prekov.</td>${cellsOt.join('')}<td class="col-sum">${_gridFormatSum(sOt)}</td></tr>`;
       html += `<tr class="row-emp-3"><td class="col-kind" title="Teren — domaći (D) / inostrani (I)">Teren</td>${cellsField.join('')}<td class="col-sum" title="Domaći ${_gridFormatSum(sFdom)}h / Inostrani ${_gridFormatSum(sFfor)}h">${_gridFormatSum(sField)}</td></tr>`;
@@ -927,7 +919,7 @@ async function _exportToXlsx() {
         serialNo++;
         let sR = 0, sO = 0, sF = 0, sFd = 0, sFf = 0, sTm = 0;
         const dept = emp.department || '';
-        const rowR = [serialNo + '.', emp.fullName || '—', dept, 'Redovni'];
+        const rowR = [serialNo + '.', employeeDisplayName(emp) || '—', dept, 'Redovni'];
         const rowO = ['', '', '', 'Prekov.'];
         const rowF = ['', '', '', 'Teren'];
         const rowTm = ['', '', '', '2 maš.'];

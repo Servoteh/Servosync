@@ -20,6 +20,10 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
+import {
+  compareEmployeesByLastFirst,
+  employeeDisplayName,
+} from '../../lib/employeeNames.js';
 import { canAccessSalary, getIsOnline } from '../../state/auth.js';
 import { hasSupabaseConfig } from '../../lib/constants.js';
 import { kadrPayrollState, kadrovskaState } from '../../state/kadrovska.js';
@@ -40,6 +44,21 @@ const MONTH_NAMES = [
 ];
 
 let rootEl = null;
+
+function payrollEmployee(row) {
+  return kadrovskaState.employees.find(e => e.id === row.employeeId) || null;
+}
+
+function payrollEmployeeName(row) {
+  return employeeDisplayName(payrollEmployee(row)) || row.employeeName || '';
+}
+
+function comparePayrollRows(a, b) {
+  const ea = payrollEmployee(a);
+  const eb = payrollEmployee(b);
+  if (ea && eb) return compareEmployeesByLastFirst(ea, eb);
+  return payrollEmployeeName(a).localeCompare(payrollEmployeeName(b), 'sr', { sensitivity: 'base' });
+}
 
 /* ── Public API ─────────────────────────────────────────────── */
 
@@ -197,10 +216,11 @@ function refreshRows() {
 
   const filtered = q
     ? rows.filter(r => {
-        const hay = [r.employeeName, r.employeePosition, r.employeeDepartment].join(' ').toLowerCase();
+        const hay = [payrollEmployeeName(r), r.employeeName, r.employeePosition, r.employeeDepartment].join(' ').toLowerCase();
         return hay.includes(q);
       })
     : rows;
+  const sorted = filtered.slice().sort(comparePayrollRows);
 
   const sumRsd = rows.reduce((a, r) => a + (r.totalRsd || 0), 0);
   const sumEur = rows.reduce((a, r) => a + (r.totalEur || 0), 0);
@@ -221,13 +241,13 @@ function refreshRows() {
 
   const tbody = rootEl.querySelector('#payrTbody');
   const empty = rootEl.querySelector('#payrEmpty');
-  if (!filtered.length) {
+  if (!sorted.length) {
     tbody.innerHTML = '';
     empty.style.display = 'block';
     return;
   }
   empty.style.display = 'none';
-  tbody.innerHTML = filtered.map(rowHtml).join('');
+  tbody.innerHTML = sorted.map(rowHtml).join('');
   wireRowEvents(tbody);
 }
 
@@ -249,7 +269,7 @@ function rowHtml(r) {
   return `
     <tr data-id="${escHtml(r.id)}" data-emp="${escHtml(r.employeeId)}" class="payr-row s-${escHtml(r.status)}">
       <td class="sticky-col">
-        <div class="emp-name">${escHtml(r.employeeName || '—')}</div>
+        <div class="emp-name">${escHtml(payrollEmployeeName(r) || '—')}</div>
         <small class="emp-sub">${escHtml([r.employeePosition, r.employeeDepartment].filter(Boolean).join(' / ') || '')}</small>
       </td>
       <td>${typeBadge}</td>
@@ -435,8 +455,8 @@ async function exportXlsx() {
     'Ukupno RSD', 'Ukupno EUR', 'II deo (RSD)',
     'II deo datum', 'Status', 'Napomena',
   ]];
-  rows.forEach(r => aoa.push([
-    r.employeeName, r.employeePosition, r.employeeDepartment, r.salaryType,
+  rows.slice().sort(comparePayrollRows).forEach(r => aoa.push([
+    payrollEmployeeName(r), r.employeePosition, r.employeeDepartment, r.salaryType,
     r.advanceAmount, r.advancePaidOn || '',
     r.hoursWorked, r.hourlyRate, r.fixedSalary,
     r.transportRsd, r.domesticDays, r.perDiemRsd,
