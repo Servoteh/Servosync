@@ -3,7 +3,13 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { fetchMaintSettings, patchMaintSettings } from '../../services/maintenance.js';
+import {
+  fetchMaintNotificationRules,
+  fetchMaintSettings,
+  insertMaintNotificationRule,
+  patchMaintNotificationRule,
+  patchMaintSettings,
+} from '../../services/maintenance.js';
 import { canManageMaintCatalog } from './maintCatalogTab.js';
 
 const PRIORITIES = [
@@ -18,6 +24,30 @@ const CHANNELS = [
   ['email', 'Email'],
   ['telegram', 'Telegram'],
   ['whatsapp', 'WhatsApp'],
+];
+
+const ROLES = [
+  ['', '—'],
+  ['operator', 'Operator'],
+  ['technician', 'Tehničar'],
+  ['chief', 'Šef'],
+  ['management', 'Menadžment'],
+  ['admin', 'Admin'],
+];
+
+const SEVERITIES = [
+  ['', 'Sve'],
+  ['minor', 'Minor'],
+  ['major', 'Major'],
+  ['critical', 'Critical'],
+];
+
+const ASSET_TYPES = [
+  ['', 'Sva sredstva'],
+  ['machine', 'Mašina'],
+  ['vehicle', 'Vozilo'],
+  ['it', 'IT'],
+  ['facility', 'Objekat'],
 ];
 
 function bool(v) {
@@ -61,6 +91,22 @@ function channelChecks(values, disabled) {
     </label>`).join('');
 }
 
+function selectOptions(list, selected) {
+  return list.map(([v, l]) => `<option value="${escHtml(v)}"${String(selected || '') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('');
+}
+
+function ruleRows(rules, canEdit) {
+  return (rules || []).map(r => `<tr data-mnt-rule-id="${escHtml(r.rule_id)}">
+    <td>${escHtml(r.event_type || '')}<div class="mnt-muted">${escHtml(r.enabled ? 'aktivno' : 'isključeno')}</div></td>
+    <td>${escHtml(r.severity || 'sve')}<div class="mnt-muted">${escHtml(r.asset_type || 'sva sredstva')}</div></td>
+    <td>${escHtml(r.target_role || '—')}</td>
+    <td>${escHtml(r.channel || '')}</td>
+    <td>${escHtml(String(r.delay_minutes ?? 0))} min<div class="mnt-muted">L${escHtml(String(r.escalation_level ?? 0))}</div></td>
+    <td>${escHtml(r.notes || '')}</td>
+    <td>${canEdit ? `<button type="button" class="btn btn-xs" data-mnt-rule-toggle>${r.enabled ? 'Isključi' : 'Uključi'}</button>` : ''}</td>
+  </tr>`).join('');
+}
+
 /**
  * @param {HTMLElement} host
  * @param {{ prof: object|null }} opts
@@ -68,7 +114,10 @@ function channelChecks(values, disabled) {
 export async function renderMaintSettingsPanel(host, opts) {
   const canEdit = canManageMaintCatalog(opts.prof);
   host.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Učitavam podešavanja…</p></div>`;
-  const settings = await fetchMaintSettings();
+  const [settings, rules] = await Promise.all([
+    fetchMaintSettings(),
+    fetchMaintNotificationRules(),
+  ]);
   if (!settings) {
     host.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Podešavanja nisu dostupna. Proveri migraciju ili RLS.</p></div>`;
     return;
@@ -127,6 +176,27 @@ export async function renderMaintSettingsPanel(host, opts) {
       </section>
 
       <section class="mnt-panel" style="margin-top:12px">
+        <div class="mnt-att-head">
+          <h3 style="font-size:15px;margin:0">Pravila eskalacije</h3>
+          <span class="mnt-muted">${rules.length} pravila</span>
+        </div>
+        <div class="mnt-table-wrap" style="margin-top:10px">
+          <table class="mnt-table">
+            <thead><tr><th>Događaj</th><th>Filter</th><th>Uloga</th><th>Kanal</th><th>Kašnjenje</th><th>Napomena</th><th></th></tr></thead>
+            <tbody>${ruleRows(rules, canEdit) || '<tr><td colspan="7" class="mnt-muted">Nema pravila.</td></tr>'}</tbody>
+          </table>
+        </div>
+        ${canEdit ? `<div class="mnt-settings-rule-form">
+          <select class="form-input" name="rule_severity">${selectOptions(SEVERITIES, 'major')}</select>
+          <select class="form-input" name="rule_asset_type">${selectOptions(ASSET_TYPES, '')}</select>
+          <select class="form-input" name="rule_target_role">${selectOptions(ROLES, 'chief')}</select>
+          <select class="form-input" name="rule_channel">${selectOptions(CHANNELS, 'in_app')}</select>
+          <input class="form-input" name="rule_delay_minutes" type="number" min="0" step="1" value="0" placeholder="min">
+          <button type="button" class="btn btn-xs" id="mntRuleAdd">Dodaj pravilo</button>
+        </div>` : ''}
+      </section>
+
+      <section class="mnt-panel" style="margin-top:12px">
         <label class="form-label">Napomena za pravila održavanja
           <textarea class="form-input" name="notes" rows="3" ${disabled}>${escHtml(settings.notes || '')}</textarea>
         </label>
@@ -140,6 +210,36 @@ export async function renderMaintSettingsPanel(host, opts) {
     </form>`;
 
   if (!canEdit) return;
+  host.querySelectorAll('[data-mnt-rule-toggle]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.closest('[data-mnt-rule-id]')?.getAttribute('data-mnt-rule-id');
+      const rule = rules.find(r => String(r.rule_id) === String(id));
+      if (!id || !rule) return;
+      btn.disabled = true;
+      const ok = await patchMaintNotificationRule(id, { enabled: !rule.enabled });
+      if (!ok) showToast('Snimanje pravila nije uspelo');
+      await renderMaintSettingsPanel(host, opts);
+    });
+  });
+  host.querySelector('#mntRuleAdd')?.addEventListener('click', async () => {
+    const payload = {
+      event_type: 'incident_created',
+      severity: host.querySelector('[name="rule_severity"]')?.value || null,
+      asset_type: host.querySelector('[name="rule_asset_type"]')?.value || null,
+      target_role: host.querySelector('[name="rule_target_role"]')?.value || null,
+      channel: host.querySelector('[name="rule_channel"]')?.value || 'in_app',
+      delay_minutes: intOrDefault(host.querySelector('[name="rule_delay_minutes"]')?.value, 0),
+      escalation_level: 0,
+      enabled: true,
+    };
+    const row = await insertMaintNotificationRule(payload);
+    if (!row) {
+      showToast('Dodavanje pravila nije uspelo');
+      return;
+    }
+    showToast('Pravilo dodato');
+    await renderMaintSettingsPanel(host, opts);
+  });
   host.querySelector('#mntSettingsForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const err = host.querySelector('#mntSettingsErr');

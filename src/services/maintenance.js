@@ -144,6 +144,62 @@ export async function patchMaintSettings(fields) {
   return Array.isArray(rows) && rows[0] ? rows[0] : (rows || null);
 }
 
+const MAINT_NOTIFICATION_RULE_COLS = [
+  'rule_id', 'event_type', 'severity', 'asset_type', 'target_role', 'channel',
+  'delay_minutes', 'escalation_level', 'enabled', 'notes',
+  'created_at', 'updated_at', 'updated_by',
+].join(',');
+
+/**
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchMaintNotificationRules() {
+  const rows = await sbReq(
+    `maint_notification_rules?select=${MAINT_NOTIFICATION_RULE_COLS}&order=event_type.asc,escalation_level.asc,delay_minutes.asc`,
+  ).catch(() => null);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * @param {Record<string, unknown>} payload
+ * @returns {Promise<object|null>}
+ */
+export async function insertMaintNotificationRule(payload) {
+  const body = {
+    event_type: payload.event_type || 'incident_created',
+    severity: payload.severity || null,
+    asset_type: payload.asset_type || null,
+    target_role: payload.target_role || null,
+    channel: payload.channel || 'in_app',
+    delay_minutes: payload.delay_minutes ?? 0,
+    escalation_level: payload.escalation_level ?? 0,
+    enabled: payload.enabled ?? true,
+    notes: payload.notes || null,
+    updated_by: getCurrentUser()?.id || null,
+  };
+  const rows = await sbReq('maint_notification_rules', 'POST', body, { upsert: false }).catch(() => null);
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
+/**
+ * @param {string} ruleId
+ * @param {Record<string, unknown>} fields
+ * @returns {Promise<boolean>}
+ */
+export async function patchMaintNotificationRule(ruleId, fields) {
+  if (!ruleId) return false;
+  const body = { ...fields, updated_by: getCurrentUser()?.id || null };
+  delete body.rule_id;
+  delete body.created_at;
+  delete body.updated_at;
+  const rows = await sbReq(
+    `maint_notification_rules?rule_id=eq.${encodeURIComponent(ruleId)}`,
+    'PATCH',
+    body,
+  ).catch(() => null);
+  return rows !== null;
+}
+
 /**
  * @param {string} machineCode
  * @returns {Promise<Array<object>|null>}
@@ -407,6 +463,19 @@ export async function fetchMaintTaskDueDates(opts = {}) {
   return await sbReq(
     `v_maint_task_due_dates?select=task_id,machine_code,title,severity,interval_value,interval_unit,grace_period_days,next_due_at,last_performed_at&order=next_due_at.asc&limit=${lim}`,
   );
+}
+
+/**
+ * Kreira ili vraća postojeći radni nalog za preventivni šablon.
+ * @param {string} taskId
+ * @returns {Promise<string|null>}
+ */
+export async function createMaintPreventiveWorkOrder(taskId) {
+  if (!taskId) return null;
+  const res = await sbReq('rpc/maint_create_preventive_work_order', 'POST', { p_task_id: taskId }).catch(() => null);
+  if (typeof res === 'string') return res;
+  if (Array.isArray(res) && typeof res[0] === 'string') return res[0];
+  return null;
 }
 
 /**
@@ -1693,6 +1762,30 @@ export async function fetchMaintWorkOrderLabor(woId) {
   if (!woId) return [];
   const rows = await sbReq(
     `maint_wo_labor?select=*&wo_id=eq.${encodeURIComponent(woId)}&order=created_at.desc&limit=200`,
+  ).catch(() => null);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * @param {{ limit?: number }} [opts]
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchMaintWorkOrderPartsAll(opts = {}) {
+  const limit = Math.min(opts.limit ?? 5000, 10000);
+  const rows = await sbReq(
+    `maint_wo_parts?select=*,maint_work_orders(wo_id,wo_number,title,asset_id,asset_type,status,created_at),maint_parts(part_code,name,unit,unit_cost)&order=created_at.desc&limit=${limit}`,
+  ).catch(() => null);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * @param {{ limit?: number }} [opts]
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchMaintWorkOrderLaborAll(opts = {}) {
+  const limit = Math.min(opts.limit ?? 5000, 10000);
+  const rows = await sbReq(
+    `maint_wo_labor?select=*,maint_work_orders(wo_id,wo_number,title,asset_id,asset_type,status,created_at)&order=created_at.desc&limit=${limit}`,
   ).catch(() => null);
   return Array.isArray(rows) ? rows : [];
 }

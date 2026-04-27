@@ -1,10 +1,10 @@
 # Supabase: šema baze (public)
 
-Generisano: 2026-04-27. **Ažuriranje:** CMMS objekti (`maint_locations`, `maint_assets`, radni nalozi, `work_order_id`/`asset_id` na incidentima, `maint_documents`, `maint_parts`, `maint_suppliers`, `maint_part_stock_movements`, `maint_vehicle_details`, `maint_it_asset_details`, `maint_facility_details`, `maint_settings`) usklađeni su sa migracijama u `sql/migrations/` (`add_maint_locations.sql`, `add_maint_assets_supertable.sql`, `add_maint_work_orders.sql`, `link_maint_incidents_to_wo.sql`, `extend_maint_incidents_assets.sql`, `add_maint_documents.sql`, `add_maint_inventory.sql`, `add_maint_vehicle_details.sql`, `add_maint_it_asset_details.sql`, `add_maint_facility_details.sql`, `add_maint_settings.sql`). Originalni snimak žive baze: 2026-04-22.
+Generisano: 2026-04-27. **Ažuriranje:** CMMS objekti (`maint_locations`, `maint_assets`, radni nalozi, `work_order_id`/`asset_id` na incidentima, `maint_documents`, `maint_parts`, `maint_suppliers`, `maint_part_stock_movements`, `maint_vehicle_details`, `maint_it_asset_details`, `maint_facility_details`, `maint_settings`, `maint_notification_rules`, preventive auto-WO RPC) usklađeni su sa migracijama u `sql/migrations/` (`add_maint_locations.sql`, `add_maint_assets_supertable.sql`, `add_maint_work_orders.sql`, `link_maint_incidents_to_wo.sql`, `extend_maint_incidents_assets.sql`, `add_maint_documents.sql`, `add_maint_inventory.sql`, `add_maint_vehicle_details.sql`, `add_maint_it_asset_details.sql`, `add_maint_facility_details.sql`, `add_maint_settings.sql`, `integrate_maint_settings_behavior.sql`, `add_maint_preventive_auto_wo.sql`). Originalni snimak žive baze: 2026-04-22.
 
 ## Šta ovaj dokument pokriva
 
-- **Baze tabele (BASE TABLE)**: 73 tabela, kolone u jednoj flat tabeli (pogodno za pretragu).
+- **Baze tabele (BASE TABLE)**: 74 tabela, kolone u jednoj flat tabeli (pogodno za pretragu).
 - **Pregledi (views)**: 12 objekata u `public` (definicija SQL-a je u migracijama; ovde su samo imena).
 - **Enum vrednosti**: svi korisnički enum tipovi u `public` sa labelama.
 - **Strani ključevi (FOREIGN KEY)**: ograničenja koja referenciraju druge tabele (unutar `public`).
@@ -244,10 +244,12 @@ Ispod: **Pregledi**, **Enumi**, **Foreign keys**, zatim **flat tabela svih kolon
 | maint_it_asset_details | asset_id | maint_assets |
 | maint_locations | parent_location_id | maint_locations |
 | maint_machines | asset_id | maint_assets |
+| maint_notification_rules | updated_by | auth.users |
 | maint_part_stock_movements | part_id | maint_parts |
 | maint_part_stock_movements | wo_id | maint_work_orders |
 | maint_parts | supplier_id | maint_suppliers |
 | maint_settings | updated_by | auth.users |
+| maint_tasks | asset_id | maint_assets |
 | maint_vehicle_details | asset_id | maint_assets |
 | maint_work_orders | asset_id | maint_assets |
 | maint_work_orders | source_incident_id | maint_incidents |
@@ -789,6 +791,19 @@ Ispod: **Pregledi**, **Enumi**, **Foreign keys**, zatim **flat tabela svih kolon
 | maint_notification_log | last_attempt_at | timestamp with time zone(6) | YES |
 | maint_notification_log | attempts | integer(32,0) | NO |
 | maint_notification_log | payload | jsonb | YES |
+| maint_notification_rules | rule_id | uuid | NO |
+| maint_notification_rules | event_type | text | NO |
+| maint_notification_rules | severity | text | YES |
+| maint_notification_rules | asset_type | maint_asset_type | YES |
+| maint_notification_rules | target_role | maint_maint_role | YES |
+| maint_notification_rules | channel | maint_notification_channel | NO |
+| maint_notification_rules | delay_minutes | integer(32,0) | NO |
+| maint_notification_rules | escalation_level | integer(32,0) | NO |
+| maint_notification_rules | enabled | boolean | NO |
+| maint_notification_rules | notes | text | YES |
+| maint_notification_rules | created_at | timestamp with time zone(6) | NO |
+| maint_notification_rules | updated_at | timestamp with time zone(6) | NO |
+| maint_notification_rules | updated_by | uuid | YES |
 | maint_part_stock_movements | movement_id | uuid | NO |
 | maint_part_stock_movements | part_id | uuid | NO |
 | maint_part_stock_movements | wo_id | uuid | YES |
@@ -857,6 +872,8 @@ Ispod: **Pregledi**, **Enumi**, **Foreign keys**, zatim **flat tabela svih kolon
 | maint_tasks | created_by | uuid | YES |
 | maint_tasks | updated_at | timestamp with time zone(6) | NO |
 | maint_tasks | updated_by | uuid | YES |
+| maint_tasks | checklist_template | jsonb | NO |
+| maint_tasks | asset_id | uuid | YES |
 | maint_user_profiles | user_id | uuid | NO |
 | maint_user_profiles | full_name | text | NO |
 | maint_user_profiles | role | maint_maint_role | NO |

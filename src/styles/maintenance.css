@@ -785,6 +785,14 @@ button.mnt-kpi:active {
   margin-bottom: 4px;
 }
 
+.mnt-settings-rule-form {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
 @media (max-width: 719px) {
   .mnt-dash-grid {
     grid-template-columns: 1fr;
@@ -811,7 +819,8 @@ button.mnt-kpi:active {
   .mnt-facility-form-grid,
   .mnt-settings-grid,
   .mnt-settings-two,
-  .mnt-settings-statuses {
+  .mnt-settings-statuses,
+  .mnt-settings-rule-form {
     grid-template-columns: 1fr;
   }
   .mnt-cal-weekdays {

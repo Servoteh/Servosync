@@ -2,8 +2,9 @@
  * CMMS Preventiva i kalendar rokova.
  */
 
-import { escHtml } from '../../lib/dom.js';
+import { escHtml, showToast } from '../../lib/dom.js';
 import {
+  createMaintPreventiveWorkOrder,
   fetchMaintMachines,
   fetchMaintMachineStatuses,
   fetchMaintTaskDueDates,
@@ -135,7 +136,12 @@ function applyFilters(rows, state) {
   });
 }
 
-function rowHtml(r) {
+function canCreateWo(prof) {
+  const role = prof?.role;
+  return role === 'technician' || role === 'chief' || role === 'admin';
+}
+
+function rowHtml(r, canWo) {
   const paused = !!r.override_reason;
   const pauseBadge = paused
     ? `<span class="${statusBadgeClass(r.machine_status)}" title="${escHtml(r.override_reason || '')}">PAUZA · ${escHtml(statusLabel(r.machine_status))}</span>`
@@ -153,6 +159,7 @@ function rowHtml(r) {
     <td>${escHtml(fmtDateTime(r.next_due_at))}<div class="mnt-muted">${escHtml(relDate(r.next_due_at))}</div></td>
     <td>${escHtml(fmtDateTime(r.last_performed_at))}</td>
     <td>${pauseBadge || `<span class="${statusBadgeClass(r.machine_status)}">${escHtml(statusLabel(r.machine_status))}</span>`}</td>
+    <td>${canWo ? `<button type="button" class="btn btn-xs" data-mnt-preventive-wo="${escHtml(r.task_id)}">Kreiraj WO</button>` : ''}</td>
   </tr>`;
 }
 
@@ -182,6 +189,7 @@ export async function renderMaintPreventivePanel(host, opts = {}) {
   }
   const rows = normalizeDueRows(dues, machines, statuses);
   const state = { q: '', severity: 'all', bucket: 'all' };
+  const canWo = canCreateWo(prof);
 
   const render = () => {
     const buckets = bucketDueDates(rows);
@@ -215,8 +223,8 @@ export async function renderMaintPreventivePanel(host, opts = {}) {
       </div>
       <div class="mnt-table-wrap">
         <table class="mnt-table">
-          <thead><tr><th>Mašina</th><th>Kontrola</th><th>Ozbiljnost</th><th>Rok</th><th>Poslednje</th><th>Status</th></tr></thead>
-          <tbody>${filtered.length ? filtered.map(rowHtml).join('') : '<tr><td colspan="6" class="mnt-muted">Nema stavki za izabrane filtere.</td></tr>'}</tbody>
+          <thead><tr><th>Mašina</th><th>Kontrola</th><th>Ozbiljnost</th><th>Rok</th><th>Poslednje</th><th>Status</th><th></th></tr></thead>
+          <tbody>${filtered.length ? filtered.map(r => rowHtml(r, canWo)).join('') : '<tr><td colspan="7" class="mnt-muted">Nema stavki za izabrane filtere.</td></tr>'}</tbody>
         </table>
       </div>`;
     host.querySelector('#mntPreventiveSearch')?.addEventListener('input', e => {
@@ -241,6 +249,20 @@ export async function renderMaintPreventivePanel(host, opts = {}) {
       btn.addEventListener('click', () => {
         const path = btn.getAttribute('data-mnt-nav');
         if (path) opts.onNavigateToPath?.(path);
+      });
+    });
+    host.querySelectorAll('[data-mnt-preventive-wo]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const taskId = btn.getAttribute('data-mnt-preventive-wo');
+        btn.disabled = true;
+        const woId = await createMaintPreventiveWorkOrder(taskId);
+        if (!woId) {
+          showToast('Kreiranje WO nije uspelo');
+          btn.disabled = false;
+          return;
+        }
+        showToast('Radni nalog je kreiran');
+        opts.onNavigateToPath?.('/maintenance/work-orders');
       });
     });
   };

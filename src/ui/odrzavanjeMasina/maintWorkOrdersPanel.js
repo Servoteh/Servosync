@@ -14,7 +14,10 @@ import {
   insertMaintWorkOrderPart,
   insertMaintWorkOrderLabor,
   fetchMaintParts,
+  fetchMaintDocuments,
+  getMaintDocumentSignedUrl,
   insertMaintPartStockMovement,
+  uploadMaintDocument,
   fetchMachineCodeByAssetId,
   patchMaintWorkOrder,
   insertMaintWorkOrderEvent,
@@ -354,11 +357,12 @@ export async function openMaintWorkOrderDetailModal(opts) {
       `<option value="${escHtml(s)}"${String(wo.status) === s ? ' selected' : ''}>${escHtml(woStatusLabelSr(s))}</option>`,
   ).join('');
 
-  const [events, parts, labor, partCatalog] = await Promise.all([
+  const [events, parts, labor, partCatalog, docs] = await Promise.all([
     fetchMaintWorkOrderEvents(wo.wo_id),
     fetchMaintWorkOrderParts(wo.wo_id),
     fetchMaintWorkOrderLabor(wo.wo_id),
     fetchMaintParts({ limit: 1000 }).catch(() => []),
+    fetchMaintDocuments({ entityType: 'work_order', woId: wo.wo_id }).catch(() => []),
   ]);
   const partOptions = Array.isArray(partCatalog)
     ? partCatalog.map(p => `<option value="${escHtml(`${p.part_code || ''} — ${p.name || ''}`)}"></option>`).join('')
@@ -403,6 +407,14 @@ export async function openMaintWorkOrderDetailModal(opts) {
         )
         .join('')
     : '<tr><td colspan="4" class="mnt-muted">Nema evidentiranih sati.</td></tr>';
+  const docsHtml = docs.length
+    ? docs.map(d => `<tr data-mnt-doc-path="${escHtml(d.storage_path || '')}">
+        <td><strong>${escHtml(d.file_name || '')}</strong><div class="mnt-muted">${escHtml(d.category || '')}</div></td>
+        <td>${escHtml(d.description || '—')}</td>
+        <td>${escHtml((d.uploaded_at || '').replace('T', ' ').slice(0, 16))}</td>
+        <td><button type="button" class="btn btn-xs" data-mnt-doc-open>Otvori</button></td>
+      </tr>`).join('')
+    : '<tr><td colspan="4" class="mnt-muted">Nema dokumenata za ovaj radni nalog.</td></tr>';
 
   const wrap = document.createElement('div');
   wrap.id = 'mntWoDlg';
@@ -483,7 +495,17 @@ export async function openMaintWorkOrderDetailModal(opts) {
         }
       </section>
       <section class="mnt-wo-tab-panel" data-mnt-wo-panel="docs">
-        <p class="mnt-muted">Dokumenta će se povezati kada dodamo storage/povezanu tabelu za priloge radnog naloga.</p>
+        <div class="mnt-table-wrap"><table class="mnt-table"><thead><tr><th>Dokument</th><th>Opis</th><th>Upload</th><th></th></tr></thead><tbody>${docsHtml}</tbody></table></div>
+        ${
+          canEdit
+            ? `<form id="mntWoDocForm" class="mnt-wo-inline-form" enctype="multipart/form-data">
+          <input class="form-input" name="file" type="file" required>
+          <input class="form-input" name="category" placeholder="Kategorija">
+          <input class="form-input" name="description" placeholder="Opis">
+          <button type="submit" class="btn btn-xs">Dodaj dokument</button>
+        </form>`
+            : ''
+        }
       </section>
     </div>`;
   document.body.appendChild(wrap);
@@ -526,6 +548,39 @@ export async function openMaintWorkOrderDetailModal(opts) {
       });
     }
     close();
+  });
+  wrap.querySelectorAll('[data-mnt-doc-open]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const path = btn.closest('[data-mnt-doc-path]')?.getAttribute('data-mnt-doc-path');
+      const url = path ? await getMaintDocumentSignedUrl(path) : null;
+      if (!url) {
+        showToast('Dokument nije dostupan');
+        return;
+      }
+      window.open(url, '_blank', 'noopener');
+    });
+  });
+  wrap.querySelector('#mntWoDocForm')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const file = form.elements.file?.files?.[0];
+    if (!file) return;
+    const btn = form.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+    const res = await uploadMaintDocument({
+      entityType: 'work_order',
+      entityId: wo.wo_id,
+      file,
+      category: form.elements.category?.value || null,
+      description: form.elements.description?.value || null,
+    });
+    if (!res.ok) {
+      showToast(res.error || 'Upload nije uspeo');
+      if (btn) btn.disabled = false;
+      return;
+    }
+    showToast('Dokument dodat');
+    reloadDrawer();
   });
 
   wrap.querySelector('#mntWoPartForm')?.addEventListener('submit', async e => {

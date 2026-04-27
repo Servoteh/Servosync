@@ -9,6 +9,8 @@ import {
   fetchMaintMachineStatuses,
   fetchMaintMachines,
   fetchMaintTaskDueDates,
+  fetchMaintWorkOrderLaborAll,
+  fetchMaintWorkOrderPartsAll,
   fetchMaintWorkOrders,
 } from '../../services/maintenance.js';
 
@@ -33,6 +35,10 @@ function inPeriod(row, field, period) {
 
 function fmtNum(v) {
   return new Intl.NumberFormat('sr-Latn-RS').format(Number(v) || 0);
+}
+
+function fmtMoney(v) {
+  return new Intl.NumberFormat('sr-Latn-RS', { style: 'currency', currency: 'RSD' }).format(Number(v) || 0);
 }
 
 function severityLabel(v) {
@@ -154,6 +160,10 @@ export async function renderMaintReportsPanel(host, opts = {}) {
     fetchMaintMachineStatuses({ limit: 1000 }),
     fetchMaintMachines({ limit: 3000 }),
   ]);
+  const [woParts, woLabor] = await Promise.all([
+    fetchMaintWorkOrderPartsAll({ limit: 5000 }),
+    fetchMaintWorkOrderLaborAll({ limit: 5000 }),
+  ]);
   if (!host.isConnected) return;
   if (!Array.isArray(incidents) || !Array.isArray(workOrders) || !Array.isArray(dues)) {
     host.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Ne mogu da učitam izveštaje. Proveri RLS ili migracije.</p></div>`;
@@ -179,6 +189,14 @@ export async function renderMaintReportsPanel(host, opts = {}) {
     const bySeverity = countBy(inc, i => i.severity);
     const woByStatus = countBy(wo, w => w.status);
     const woByPriority = countBy(wo, w => w.priority);
+    const woIds = new Set(wo.map(w => String(w.wo_id)));
+    const partsInPeriod = woParts.filter(p => woIds.has(String(p.wo_id)));
+    const laborInPeriod = woLabor.filter(l => woIds.has(String(l.wo_id)));
+    const partCost = p => (Number(p.quantity) || 0) * (Number(p.unit_cost ?? p.maint_parts?.unit_cost) || 0);
+    const partsCost = partsInPeriod.reduce((sum, p) => sum + partCost(p), 0);
+    const laborMinutes = laborInPeriod.reduce((sum, l) => sum + (Number(l.minutes) || 0), 0);
+    const costByAsset = sumBy(partsInPeriod, p => p.maint_work_orders?.asset_id || '—', partCost).slice(0, 10);
+    const costByType = sumBy(partsInPeriod, p => p.maint_work_orders?.asset_type || '—', partCost);
     const periodOpts = PERIODS.map(p => `<option value="${escHtml(p.id)}"${state.period === p.id ? ' selected' : ''}>${escHtml(p.label)}</option>`).join('');
 
     host.innerHTML = `
@@ -190,6 +208,7 @@ export async function renderMaintReportsPanel(host, opts = {}) {
         <div class="mnt-report-actions">
           <select class="form-input" id="mntReportPeriod">${periodOpts}</select>
           <button type="button" class="btn btn-xs" id="mntReportCsv">Export CSV</button>
+          <button type="button" class="btn btn-xs" id="mntReportCostCsv">Troškovi CSV</button>
         </div>
       </div>
       <div class="mnt-kpi-row">
@@ -198,6 +217,8 @@ export async function renderMaintReportsPanel(host, opts = {}) {
         ${kpi('Aktivni WO', activeWo.length, `${wo.length} ukupno`, 'mnt-kpi--maintenance')}
         ${kpi('Kasni preventive', overdueDue.length, 'trenutni rokovi', 'mnt-kpi--late')}
         ${kpi('Mašine u zastoju', downMachines, `${degradedMachines} smetnje`, 'mnt-kpi--down')}
+        ${kpi('Trošak delova', Math.round(partsCost), fmtMoney(partsCost), 'mnt-kpi--maintenance')}
+        ${kpi('Radni sati', Math.round(laborMinutes / 60), `${fmtNum(laborMinutes)} min`, 'mnt-kpi--maintenance')}
       </div>
       <div class="mnt-report-grid">
         <section class="mnt-dash-card">
@@ -217,6 +238,14 @@ export async function renderMaintReportsPanel(host, opts = {}) {
           <ul class="mnt-report-bar-list">${barRows(woByStatus, wo.length, { labelFn: statusLabel })}</ul>
           <hr class="mnt-report-sep">
           <ul class="mnt-report-bar-list">${barRows(woByPriority, wo.length)}</ul>
+        </section>
+        <section class="mnt-dash-card">
+          <div class="mnt-att-head"><h3>Trošak po sredstvu</h3><span class="mnt-muted">${fmtMoney(partsCost)}</span></div>
+          <ul class="mnt-report-bar-list">${barRows(costByAsset, partsCost, { labelFn: x => x })}</ul>
+        </section>
+        <section class="mnt-dash-card">
+          <div class="mnt-att-head"><h3>Trošak po tipu sredstva</h3></div>
+          <ul class="mnt-report-bar-list">${barRows(costByType, partsCost, { labelFn: x => x })}</ul>
         </section>
       </div>
       <section class="mnt-dash-card" style="margin-top:16px">
@@ -247,6 +276,21 @@ export async function renderMaintReportsPanel(host, opts = {}) {
       ]);
       downloadCsv(CSV_BOM + rowsToCsv(headers, rows), `odrzavanje_izvestaj_${period.id}_${new Date().toISOString().slice(0, 10)}.csv`);
       showToast('✅ CSV izvezen');
+    });
+    host.querySelector('#mntReportCostCsv')?.addEventListener('click', () => {
+      const headers = ['wo_number', 'title', 'asset_id', 'asset_type', 'part_name', 'quantity', 'unit_cost', 'cost'];
+      const rows = partsInPeriod.map(p => [
+        p.maint_work_orders?.wo_number || '',
+        p.maint_work_orders?.title || '',
+        p.maint_work_orders?.asset_id || '',
+        p.maint_work_orders?.asset_type || '',
+        p.part_name || '',
+        p.quantity || '',
+        p.unit_cost ?? p.maint_parts?.unit_cost ?? '',
+        (Number(p.quantity) || 0) * (Number(p.unit_cost ?? p.maint_parts?.unit_cost) || 0),
+      ]);
+      downloadCsv(CSV_BOM + rowsToCsv(headers, rows), `odrzavanje_troskovi_${period.id}_${new Date().toISOString().slice(0, 10)}.csv`);
+      showToast('✅ CSV troškova izvezen');
     });
     host.querySelectorAll('[data-mnt-nav]').forEach(btn => {
       btn.addEventListener('click', () => {

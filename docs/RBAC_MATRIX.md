@@ -6,9 +6,9 @@
 
 ## 1. Sažetak
 
-- **Tabela sa RLS politikama:** 40
-- **Ukupno efektivnih politika:** 119
-- **SECURITY DEFINER funkcija:** 73
+- **Tabela sa RLS politikama:** 43
+- **Ukupno efektivnih politika:** 125
+- **SECURITY DEFINER funkcija:** 81
 - **Objekata sa anon grant-om:** 2
 
 ## 2. Anon (javni) pristup
@@ -59,20 +59,27 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `loc_mark_sync_synced` | `sql/migrations/add_loc_step5_sync_rpcs.sql` |
 | `loc_purge_synced_events` | `sql/migrations/add_loc_step3_cleanup.sql` |
 | `loc_touch_updated_at` | `sql/migrations/add_loc_module.sql` |
+| `maint_apply_part_stock_movement` | `sql/migrations/add_maint_inventory.sql` |
 | `maint_asset_visible` | `sql/migrations/add_maint_assets_supertable.sql` |
 | `maint_assignable_users` | `sql/migrations/add_maint_assignable_users_rpc.sql` |
 | `maint_assigned_machine_codes` | `sql/migrations/add_maintenance_module.sql` |
-| `maint_can_close_incident` | `sql/migrations/add_maint_rls_menadzment_paritet.sql` |
+| `maint_can_close_incident` | `sql/migrations/extend_maint_incidents_assets.sql` |
+| `maint_create_preventive_work_order` | `sql/migrations/add_maint_preventive_auto_wo.sql` |
 | `maint_dispatch_dequeue` | `sql/migrations/add_maint_notify_dispatch_rpc.sql` |
 | `maint_dispatch_fanout` | `sql/migrations/add_maint_notify_dispatch_rpc.sql` |
 | `maint_dispatch_mark_failed` | `sql/migrations/add_maint_notify_dispatch_rpc.sql` |
 | `maint_dispatch_mark_sent` | `sql/migrations/add_maint_notify_dispatch_rpc.sql` |
+| `maint_document_visible` | `sql/migrations/add_maint_documents.sql` |
 | `maint_enqueue_notification` | `sql/migrations/add_maint_notification_outbox.sql` |
+| `maint_facility_details_guard` | `sql/migrations/add_maint_facility_details.sql` |
 | `maint_has_floor_read_access` | `sql/migrations/add_maintenance_module.sql` |
+| `maint_incident_row_visible` | `sql/migrations/extend_maint_incidents_assets.sql` |
 | `maint_incidents_autocreate_work_order` | `sql/migrations/link_maint_incidents_to_wo.sql` |
-| `maint_incidents_enqueue_notify` | `sql/migrations/add_maint_notification_outbox.sql` |
+| `maint_incidents_enqueue_notify` | `sql/migrations/integrate_maint_settings_behavior.sql` |
+| `maint_incidents_set_asset_fields` | `sql/migrations/extend_maint_incidents_assets.sql` |
 | `maint_is_erp_admin` | `sql/migrations/add_maintenance_module.sql` |
 | `maint_is_erp_admin_or_management` | `sql/migrations/add_maint_work_orders.sql` |
+| `maint_it_asset_details_guard` | `sql/migrations/add_maint_it_asset_details.sql` |
 | `maint_machine_delete_hard` | `sql/migrations/add_maint_machine_hard_delete.sql` |
 | `maint_machine_rename` | `sql/migrations/add_maint_rls_menadzment_paritet.sql` |
 | `maint_machine_visible` | `sql/migrations/add_maintenance_module.sql` |
@@ -80,6 +87,7 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `maint_machines_import_from_cache` | `sql/migrations/add_maint_rls_menadzment_paritet.sql` |
 | `maint_notification_retry` | `sql/migrations/add_maint_rls_menadzment_paritet.sql` |
 | `maint_profile_role` | `sql/migrations/add_maintenance_module.sql` |
+| `maint_vehicle_details_guard` | `sql/migrations/add_maint_vehicle_details.sql` |
 | `maint_wo_log_field_changes` | `sql/migrations/add_maint_work_orders.sql` |
 | `maint_wo_row_visible` | `sql/migrations/add_maint_work_orders.sql` |
 | `maint_work_orders_assign_wo_number` | `sql/migrations/add_maint_work_orders.sql` |
@@ -149,6 +157,13 @@ Legenda flag-ova:
 | `contracts_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadrovska_phase1.sql` |
 | `contracts_update` | UPDATE | `authenticated` | `has_edit_role()` | `has_edit_role()` | ✅ | `sql/migrations/add_kadrovska_phase1.sql` |
 
+### `departments`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `departments_manage` | ALL | `authenticated` | `public.current_user_is_admin()` | `public.current_user_is_admin()` | ✅ | `sql/migrations/add_kadr_org_structure.sql` |
+| `departments_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadr_org_structure.sql` |
+
 ### `employee_children`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
@@ -166,6 +181,13 @@ Legenda flag-ova:
 | `employees_insert` | INSERT | `authenticated` | `` | `has_edit_role()` | ✅ | `sql/migrations/add_kadrovska_module.sql` |
 | `employees_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadrovska_module.sql` |
 | `employees_update` | UPDATE | `authenticated` | `has_edit_role()` | `has_edit_role()` | ✅ | `sql/migrations/add_kadrovska_module.sql` |
+
+### `job_positions`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `job_positions_manage` | ALL | `authenticated` | `public.current_user_is_admin()` | `public.current_user_is_admin()` | ✅ | `sql/migrations/add_kadr_org_structure.sql` |
+| `job_positions_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadr_org_structure.sql` |
 
 ### `kadr_holidays`
 
@@ -393,6 +415,13 @@ Legenda flag-ova:
 | `sast_tpl_write` | ALL | `authenticated` | `public.has_edit_role()` | `public.has_edit_role()` | ✅ | `sql/migrations/add_sastanci_templates.sql` |
 | `sast_tpl_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_sastanci_templates.sql` |
 
+### `sub_departments`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `sub_departments_manage` | ALL | `authenticated` | `public.current_user_is_admin()` | `public.current_user_is_admin()` | ✅ | `sql/migrations/add_kadr_org_structure.sql` |
+| `sub_departments_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadr_org_structure.sql` |
+
 ### `user_roles`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
@@ -430,7 +459,7 @@ Legenda flag-ova:
 
 ## 5. Statistika rizika
 
-- Politike sa `USING(true)` (osim INSERT): **22**
+- Politike sa `USING(true)` (osim INSERT): **25**
 - Politike sa `TO anon`: **0**
 - Anon objekt grant-ovi (sa SELECT/INSERT/UPDATE/DELETE): **2**
 
