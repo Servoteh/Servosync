@@ -54,6 +54,7 @@ import { renderMaintWorkOrdersPanel } from './maintWorkOrdersPanel.js';
 import { renderMaintAssetsPanel } from './maintAssetsPanel.js';
 import { renderMaintDocumentsPanel } from './maintDocumentsPanel.js';
 import { renderMaintPreventivePanel, renderMaintCalendarPanel } from './maintPreventivePanel.js';
+import { renderMaintReportsPanel } from './maintReportsPanel.js';
 
 let mountRef = null;
 let disposeRef = { disposed: false };
@@ -1081,15 +1082,18 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
     return;
   }
 
-  if (['inventory', 'reports', 'settings'].includes(section)) {
+  if (section === 'reports') {
+    await renderMaintReportsPanel(host, { onNavigateToPath });
+    return;
+  }
+
+  if (['inventory', 'settings'].includes(section)) {
     const titleMap = {
       inventory: 'Zalihe i dobavljači',
-      reports: 'Izveštaji',
       settings: 'Podešavanja održavanja',
     };
     const hintMap = {
       inventory: ['Sprint 5+: potrošni delovi, dobavljači, cene i veza sa maint_wo_parts.'],
-      reports: ['Sprint 5: troškovi, najčešći kvarovi, vreme rešavanja, rad po tehničaru i CSV export.'],
       settings: ['Kasnije: šabloni statusa, notifikacije, default uloge i CMMS podešavanja.'],
     };
     host.innerHTML = maintenancePlaceholderHtml(titleMap[section], hintMap[section] || []);

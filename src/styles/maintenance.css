@@ -648,6 +648,70 @@ button.mnt-kpi:active {
   background: var(--orange-bg);
 }
 
+.mnt-report-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mnt-report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.mnt-report-bar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.mnt-report-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mnt-report-bar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.mnt-report-bar-head strong {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mnt-report-bar {
+  height: 7px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.mnt-report-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+
+.mnt-report-sep {
+  border: 0;
+  border-top: 1px solid var(--border2);
+  margin: 12px 0;
+}
+
 @media (max-width: 719px) {
   .mnt-dash-grid {
     grid-template-columns: 1fr;
@@ -666,7 +730,8 @@ button.mnt-kpi:active {
   .mnt-doc-layout,
   .mnt-doc-upload-grid,
   .mnt-preventive-toolbar,
-  .mnt-cal-layout {
+  .mnt-cal-layout,
+  .mnt-report-grid {
     grid-template-columns: 1fr;
   }
   .mnt-cal-weekdays {
