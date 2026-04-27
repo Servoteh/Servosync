@@ -3,7 +3,8 @@
  *
  * Funkcionalnost (paritetno sa legacy/index.html renderGrid):
  *   - Mesečni grid: 1 kolona po danu, 4 reda po radniku (Redovni / Prekov. /
- *     Teren / 2 maš.) + 4 footer reda (UKUPNO).
+ *     Teren / 2 maš.) + 4 footer reda (UKUPNO). Jedna lista radnika — opadajuće
+ *     po prezimenu; ispod imena prikaz odeljenja (bez grupisanja po odeljenju).
  *   - Vikend i današnji dan vizuelno markirani; ćelije sa neisaved izmenama
  *     dobijaju "cell-dirty" klasu.
  *   - Svi unosi prihvataju brojeve 0..24 (sa zarezom ili tačkom). Reg ćelija
@@ -247,13 +248,30 @@ function _gridUpdateDirtyBadge() {
   }
 }
 
+/** Prezime za sort: `lastName`, inače poslednja reč u `fullName`. */
+function _gridSurnameKey(emp) {
+  const ln = String(emp.lastName || '').trim();
+  if (ln) return ln;
+  const parts = String(emp.fullName || '').trim().split(/\s+/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : '';
+}
+
+/** Opadajuće po prezimenu (sr), zatim po punom imenu za stabilan redosled. */
+function _gridCompareBySurnameDesc(a, b) {
+  const sa = _gridSurnameKey(a);
+  const sb = _gridSurnameKey(b);
+  const c = sb.localeCompare(sa, 'sr', { sensitivity: 'base' });
+  if (c !== 0) return c;
+  return String(b.fullName || '').localeCompare(String(a.fullName || ''), 'sr', { sensitivity: 'base' });
+}
+
 /** Aktivni + firma (filter) + sort; bez pretrage — za čip, badge, XLSX. */
 function _gridEmployeesCompanyOnly() {
   const company = _gridQ('#gridCompanyFilter')?.value || '';
   return kadrovskaState.employees
     .filter(e => e.isActive)
     .filter(e => !company || e.department === company)
-    .sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || ''), 'sr'));
+    .sort(_gridCompareBySurnameDesc);
 }
 
 function _gridCurrentSearchQuery() {
@@ -289,26 +307,6 @@ function _syncGridSearchMeta(companyCount, visibleCount) {
   }
   el.style.display = 'inline';
   el.textContent = `Prikazano ${visibleCount} od ${companyCount}`;
-}
-
-function _gridGroupedByDepartment(emps) {
-  const order = ['Servoteh', 'HAP Fluid'];
-  const groups = new Map();
-  emps.forEach(e => {
-    const dep = e.department || '(Ostalo)';
-    if (!groups.has(dep)) groups.set(dep, []);
-    groups.get(dep).push(e);
-  });
-  return Array.from(groups.entries()).sort((a, b) => {
-    const ai = order.indexOf(a[0]);
-    const bi = order.indexOf(b[0]);
-    if (ai !== -1 || bi !== -1) {
-      if (ai === -1) return 1;
-      if (bi === -1) return -1;
-      return ai - bi;
-    }
-    return a[0].localeCompare(b[0], 'sr');
-  });
 }
 
 /* ─── COMPANY FILTER OPTIONS (samo aktivni → unique department) ──────── */
@@ -439,9 +437,8 @@ function _renderGridBody() {
     empty.textContent = 'Nema aktivnih radnika za izbrane filtere.';
   }
 
-  const groups = _gridGroupedByDepartment(emps);
+  const sortedEmps = [...emps].sort(_gridCompareBySurnameDesc);
   const today = _gridIsoToday();
-  const totalCols = 4 + days.length + 1;
   const editable = canEditKadrovskaGrid();
 
   let html = '<table class="grid-table"><thead>';
@@ -468,9 +465,7 @@ function _renderGridBody() {
   const colTotals = days.map(() => ({ reg: 0, ot: 0, field: 0, fdom: 0, ffor: 0, tm: 0 }));
   const grandTot = { reg: 0, ot: 0, field: 0, fdom: 0, ffor: 0, fdomDays: 0, fforDays: 0, tm: 0, tmDays: 0 };
 
-  groups.forEach(([dep, list]) => {
-    html += `<tr class="row-section"><td colspan="${totalCols}">${escHtml(dep)} (${list.length})</td></tr>`;
-    list.forEach(emp => {
+  sortedEmps.forEach(emp => {
       serialNo++;
       const empId = escHtml(emp.id || '');
       let sReg = 0, sOt = 0, sField = 0, sFdom = 0, sFfor = 0, sTm = 0;
@@ -540,11 +535,14 @@ function _renderGridBody() {
       grandTot.reg += sReg; grandTot.ot += sOt; grandTot.field += sField;
       grandTot.fdom += sFdom; grandTot.ffor += sFfor; grandTot.tm += sTm;
 
-      html += `<tr class="row-emp-1"><td class="col-num" rowspan="4">${serialNo}.</td><td class="col-name" rowspan="4">${escHtml(emp.fullName || '—')}</td><td class="col-kind">Redovni</td>${cellsReg.join('')}<td class="col-sum">${_gridFormatSum(sReg)}</td></tr>`;
+      const deptLine = emp.department
+        ? `<span class="grid-emp-dept">${escHtml(emp.department)}</span>`
+        : `<span class="grid-emp-dept">${escHtml('—')}</span>`;
+      const nameCell = `<span class="grid-emp-name">${escHtml(emp.fullName || '—')}</span>${deptLine}`;
+      html += `<tr class="row-emp-1"><td class="col-num" rowspan="4">${serialNo}.</td><td class="col-name" rowspan="4">${nameCell}</td><td class="col-kind">Redovni</td>${cellsReg.join('')}<td class="col-sum">${_gridFormatSum(sReg)}</td></tr>`;
       html += `<tr class="row-emp-2"><td class="col-kind">Prekov.</td>${cellsOt.join('')}<td class="col-sum">${_gridFormatSum(sOt)}</td></tr>`;
       html += `<tr class="row-emp-3"><td class="col-kind" title="Teren — domaći (D) / inostrani (I)">Teren</td>${cellsField.join('')}<td class="col-sum" title="Domaći ${_gridFormatSum(sFdom)}h / Inostrani ${_gridFormatSum(sFfor)}h">${_gridFormatSum(sField)}</td></tr>`;
       html += `<tr class="row-emp-4"><td class="col-kind" title="Rad na dve mašine — dodatno se plaća">2 maš.</td>${cellsTm.join('')}<td class="col-sum">${_gridFormatSum(sTm)}</td></tr>`;
-    });
   });
 
   /* Footer totals */
@@ -908,7 +906,7 @@ async function _exportToXlsx() {
 
   try {
     const days = _gridDaysInMonth(yyyymm);
-    const groups = _gridGroupedByDepartment(emps);
+    const sortedEmps = [...emps].sort(_gridCompareBySurnameDesc);
     const monthLabel = (() => {
       const [y, m] = yyyymm.split('-');
       const names = ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Jun', 'Jul', 'Avgust', 'Septembar', 'Oktobar', 'Novembar', 'Decembar'];
@@ -916,24 +914,23 @@ async function _exportToXlsx() {
     })();
 
     const aoa = [];
-    aoa.push([monthLabel].concat(new Array(days.length + 3).fill('')));
+    aoa.push([monthLabel].concat(new Array(days.length + 4).fill('')));
     aoa.push([]);
-    aoa.push(['#', 'Ime i prezime', 'Tip'].concat(days.map(d => d.day)).concat(['Σ']));
-    aoa.push(['', '', ''].concat(days.map(d => d.letter)).concat(['']));
+    aoa.push(['#', 'Ime i prezime', 'Odeljenje', 'Tip'].concat(days.map(d => d.day)).concat(['Σ']));
+    aoa.push(['', '', '', ''].concat(days.map(d => d.letter)).concat(['']));
 
     let serialNo = 0;
     const grand = { reg: 0, ot: 0, field: 0, fdom: 0, ffor: 0, fdomDays: 0, fforDays: 0, tm: 0, tmDays: 0 };
     const colTotals = days.map(() => ({ reg: 0, ot: 0, field: 0, tm: 0 }));
 
-    groups.forEach(([dep, list]) => {
-      aoa.push([`${dep} (${list.length})`].concat(new Array(days.length + 3).fill('')));
-      list.forEach(emp => {
+    sortedEmps.forEach(emp => {
         serialNo++;
         let sR = 0, sO = 0, sF = 0, sFd = 0, sFf = 0, sTm = 0;
-        const rowR = [serialNo + '.', emp.fullName || '—', 'Redovni'];
-        const rowO = ['', '', 'Prekov.'];
-        const rowF = ['', '', 'Teren'];
-        const rowTm = ['', '', '2 maš.'];
+        const dept = emp.department || '';
+        const rowR = [serialNo + '.', emp.fullName || '—', dept, 'Redovni'];
+        const rowO = ['', '', '', 'Prekov.'];
+        const rowF = ['', '', '', 'Teren'];
+        const rowTm = ['', '', '', '2 maš.'];
         days.forEach((d, i) => {
           const eff = _gridEffective(emp.id, d.ymd);
           const fH = Number(eff.field_hours || 0);
@@ -969,21 +966,20 @@ async function _exportToXlsx() {
         grand.fdom += sFd; grand.ffor += sFf; grand.tm += sTm;
         rowR.push(sR || 0); rowO.push(sO || 0); rowF.push(sF || 0); rowTm.push(sTm || 0);
         aoa.push(rowR); aoa.push(rowO); aoa.push(rowF); aoa.push(rowTm);
-      });
     });
     aoa.push([]);
-    aoa.push(['', 'UKUPNO', 'Redovni'].concat(colTotals.map(c => c.reg || 0)).concat([grand.reg || 0]));
-    aoa.push(['', '', 'Prekov.'].concat(colTotals.map(c => c.ot || 0)).concat([grand.ot || 0]));
-    aoa.push(['', '', 'Teren'].concat(colTotals.map(c => c.field || 0)).concat([grand.field || 0]));
-    aoa.push(['', '', '2 maš.'].concat(colTotals.map(c => c.tm || 0)).concat([grand.tm || 0]));
+    aoa.push(['', 'UKUPNO', '', 'Redovni'].concat(colTotals.map(c => c.reg || 0)).concat([grand.reg || 0]));
+    aoa.push(['', '', '', 'Prekov.'].concat(colTotals.map(c => c.ot || 0)).concat([grand.ot || 0]));
+    aoa.push(['', '', '', 'Teren'].concat(colTotals.map(c => c.field || 0)).concat([grand.field || 0]));
+    aoa.push(['', '', '', '2 maš.'].concat(colTotals.map(c => c.tm || 0)).concat([grand.tm || 0]));
     aoa.push([]);
     aoa.push(['', 'TEREN BREAKDOWN', 'Domaći (h)', grand.fdom || 0, '', '', 'Domaći (dani)', grand.fdomDays || 0]);
     aoa.push(['', '', 'Inostrani (h)', grand.ffor || 0, '', '', 'Inostrani (dani)', grand.fforDays || 0]);
     aoa.push(['', 'RAD NA 2 MAŠINE', 'Sati', grand.tm || 0, '', '', 'Dani', grand.tmDays || 0]);
 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 5 }, { wch: 26 }, { wch: 9 }].concat(days.map(() => ({ wch: 4 }))).concat([{ wch: 7 }]);
-    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: days.length + 3 } }];
+    ws['!cols'] = [{ wch: 5 }, { wch: 26 }, { wch: 18 }, { wch: 9 }].concat(days.map(() => ({ wch: 4 }))).concat([{ wch: 7 }]);
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: days.length + 4 } }];
 
     const wb = XLSX.utils.book_new();
     const sheetName = monthLabel.length > 31 ? monthLabel.slice(0, 31) : monthLabel;

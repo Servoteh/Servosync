@@ -1962,6 +1962,27 @@ body.module-kadrovska > #module-settings { display:none !important; }
   color:var(--text);
   overflow:hidden; text-overflow:ellipsis;
 }
+.grid-table td.col-name {
+  white-space:normal;
+  overflow:visible;
+  text-overflow:unset;
+  vertical-align:middle;
+  line-height:1.25;
+  padding-top:8px;
+  padding-bottom:8px;
+}
+.grid-table td.col-name .grid-emp-name {
+  display:block;
+  font-weight:600;
+}
+.grid-table td.col-name .grid-emp-dept {
+  display:block;
+  font-size:10px;
+  font-weight:500;
+  color:var(--text3);
+  font-family:var(--font);
+  margin-top:3px;
+}
 .grid-table th.col-kind, .grid-table td.col-kind {
   width:90px; min-width:90px;
   padding:0 8px;
