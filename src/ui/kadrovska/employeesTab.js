@@ -148,8 +148,10 @@ export async function wireEmployeesTab(panelEl, { onChange } = {}) {
 
   panelEl.addEventListener('click', e => {
     const btn = e.target.closest('.btn-emp-edit, .btn-emp-delete');
+    console.error('[D1]', e.target.tagName, e.target.className, '→ btn:', !!btn);
     if (!btn || btn.disabled) return;
     const empId = btn.getAttribute('data-id');
+    console.error('[D2] empId:', empId, 'edit:', btn.classList.contains('btn-emp-edit'));
     if (!empId) return;
     if (btn.classList.contains('btn-emp-edit'))   openEmployeeModal(empId);
     if (btn.classList.contains('btn-emp-delete')) confirmDeleteEmployee(empId);
@@ -568,6 +570,7 @@ function closeEmployeeModal() {
 }
 
 async function openEmployeeModal(id) {
+  console.error('[D3] openEmployeeModal id:', id, 'canEdit:', canEditKadrovska(), 'total:', kadrovskaState.employees.length);
   if (!canEditKadrovska()) {
     showToast('⚠ Nemate prava za izmenu');
     return;
