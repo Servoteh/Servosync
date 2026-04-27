@@ -302,7 +302,7 @@ export function refreshEmployeesTab() {
   }).join('');
 
   tbody.querySelectorAll('button[data-action="edit"]').forEach(btn => {
-    btn.addEventListener('click', () => openEmployeeModal(btn.dataset.id));
+    btn.addEventListener('click', () => { console.log('[btn-click] edit id=', btn.dataset.id); openEmployeeModal(btn.dataset.id); });
   });
   tbody.querySelectorAll('button[data-action="delete"]').forEach(btn => {
     btn.addEventListener('click', () => confirmDeleteEmployee(btn.dataset.id));
@@ -566,6 +566,7 @@ function closeEmployeeModal() {
 }
 
 async function openEmployeeModal(id) {
+  console.log('[openEmployeeModal] id=', id, 'edit=', canEditKadrovska());
   if (!canEditKadrovska()) {
     showToast('⚠ Nemate prava za izmenu');
     return;
