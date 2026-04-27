@@ -6,14 +6,26 @@ import { escHtml, showToast } from '../../lib/dom.js';
 import {
   insertMaintCheck,
   insertMaintIncident,
+  fetchMaintAssetsForPicker,
   fetchMaintWorkOrderByIncidentId,
   patchMaintIncident,
+  upsertMaintMachineOverride,
   uploadMaintMachineFile,
 } from '../../services/maintenance.js';
 import { openMaintWorkOrderDetailModal } from './maintWorkOrdersPanel.js';
 
 function removeIfExists(id) {
   document.getElementById(id)?.remove();
+}
+
+function assetTypeLabel(t) {
+  const m = {
+    machine: 'Mašina',
+    vehicle: 'Vozilo',
+    it: 'IT',
+    facility: 'Objekat',
+  };
+  return m[t] || t || 'Sredstvo';
 }
 
 /**
@@ -109,9 +121,13 @@ export function openReportIncidentModal(opts) {
   wrap.innerHTML = `
     <div class="kadr-modal" style="max-width:480px">
       <div class="kadr-modal-title">Prijavi kvar</div>
-      <div class="kadr-modal-subtitle">Mašina <code>${escHtml(machineCode)}</code></div>
+      <div class="kadr-modal-subtitle">Sredstvo <code>${escHtml(machineCode)}</code></div>
       <div class="kadr-modal-err" id="mntDlgIncErr"></div>
       <form id="mntDlgIncForm">
+        <label class="form-label">Sredstvo *</label>
+        <input type="text" class="form-input" id="mntDlgIncAsset" list="mntDlgIncAssetList" required placeholder="Pretraga šifre ili naziva sredstva">
+        <datalist id="mntDlgIncAssetList"></datalist>
+        <div class="mnt-muted" id="mntDlgIncAssetHint" style="font-size:12px;margin-top:4px">Učitavam sredstva…</div>
         <label class="form-label">Naslov *</label>
         <input type="text" class="form-input" id="mntDlgIncTitle" required maxlength="200" placeholder="Kratak opis kvara">
         <label class="form-label">Ozbiljnost</label>
@@ -122,6 +138,13 @@ export function openReportIncidentModal(opts) {
         </select>
         <label class="form-label">Opis</label>
         <textarea class="form-input" id="mntDlgIncDesc" rows="4" placeholder="Detalji, šta se dešava…"></textarea>
+        <label class="mnt-wo-check" style="margin-top:10px">
+          <input type="checkbox" id="mntDlgIncSafety"> Bezbednosni rizik / safety marker
+        </label>
+        <label class="mnt-wo-check" style="margin-top:6px">
+          <input type="checkbox" id="mntDlgIncDown"> Sredstvo je u zastoju (postavi status down)
+        </label>
+        <div class="mnt-muted" id="mntDlgIncDownHint" style="font-size:12px;margin-top:4px"></div>
 
         <label class="form-label" style="margin-top:10px">Fotografije (opciono)</label>
         <div class="mnt-inc-photo-wrap">
@@ -146,6 +169,57 @@ export function openReportIncidentModal(opts) {
     if (e.target === wrap) close();
   });
   wrap.querySelector('#mntDlgIncCancel')?.addEventListener('click', close);
+
+  /** @type {Array<object>} */
+  let assetRows = [];
+  const assetInput = /** @type {HTMLInputElement} */ (wrap.querySelector('#mntDlgIncAsset'));
+  const assetList = /** @type {HTMLDataListElement} */ (wrap.querySelector('#mntDlgIncAssetList'));
+  const assetHint = wrap.querySelector('#mntDlgIncAssetHint');
+  const downCheck = /** @type {HTMLInputElement} */ (wrap.querySelector('#mntDlgIncDown'));
+  const downHint = wrap.querySelector('#mntDlgIncDownHint');
+
+  const assetDisplay = a => `${a.asset_code || ''} — ${a.name || ''} (${assetTypeLabel(a.asset_type)})`;
+  const selectedAsset = () => {
+    const raw = String(assetInput?.value || '').trim();
+    return assetRows.find(a => assetDisplay(a) === raw || String(a.asset_code || '').toLowerCase() === raw.toLowerCase()) || null;
+  };
+  function renderAssets() {
+    if (assetList) {
+      assetList.innerHTML = assetRows.map(a => `<option value="${escHtml(assetDisplay(a))}"></option>`).join('');
+    }
+    const sel = selectedAsset();
+    if (assetHint) {
+      assetHint.textContent = sel
+        ? `${assetTypeLabel(sel.asset_type)} · ${sel.asset_code || '—'} · ${sel.name || '—'}`
+        : 'Izaberi sredstvo iz predloga.';
+    }
+    if (downCheck) {
+      downCheck.disabled = !!sel && sel.asset_type !== 'machine';
+      if (downCheck.disabled) downCheck.checked = false;
+    }
+    if (downHint) {
+      downHint.textContent = sel?.asset_type === 'machine'
+        ? 'Ako označiš zastoj, mašina dobija manuelni status down.'
+        : 'Zastoj trenutno automatski menjamo samo za mašine.';
+    }
+  }
+  async function loadAssets(q = '') {
+    assetRows = await fetchMaintAssetsForPicker({ q, limit: 300 });
+    const initial = assetRows.find(a => String(a.asset_code || '').toLowerCase() === String(machineCode || '').toLowerCase());
+    if (initial && assetInput && !assetInput.value) {
+      assetInput.value = assetDisplay(initial);
+    }
+    renderAssets();
+  }
+  let assetTimer = 0;
+  assetInput?.addEventListener('input', () => {
+    renderAssets();
+    window.clearTimeout(assetTimer);
+    assetTimer = window.setTimeout(() => {
+      void loadAssets(assetInput.value);
+    }, 250);
+  });
+  void loadAssets(machineCode);
 
   /* ── Upravljanje odabranim fotografijama (preview + ukloni) ─────────── */
   /** @type {File[]} */
@@ -213,16 +287,40 @@ export function openReportIncidentModal(opts) {
       if (errEl) errEl.textContent = 'Naslov je obavezan.';
       return;
     }
+    const asset = selectedAsset();
+    if (!asset?.asset_id) {
+      if (errEl) errEl.textContent = 'Izaberi sredstvo iz liste.';
+      return;
+    }
     const severity = wrap.querySelector('#mntDlgIncSev')?.value || 'minor';
     const description = wrap.querySelector('#mntDlgIncDesc')?.value?.trim() || null;
+    const safetyMarker = !!wrap.querySelector('#mntDlgIncSafety')?.checked;
+    const markDown = !!downCheck?.checked && asset.asset_type === 'machine';
     const btn = wrap.querySelector('#mntDlgIncSave');
     if (btn) { btn.disabled = true; btn.textContent = selected.length ? 'Prijavljujem…' : 'Prijavi'; }
-    const inc = await insertMaintIncident({ machine_code: machineCode, title, description, severity });
+    const inc = await insertMaintIncident({
+      machine_code: asset.asset_code || machineCode,
+      asset_id: asset.asset_id,
+      asset_type: asset.asset_type,
+      title,
+      description,
+      severity,
+      safety_marker: safetyMarker,
+    });
     if (!inc?.id) {
       if (btn) { btn.disabled = false; btn.textContent = 'Prijavi'; }
       if (errEl) errEl.textContent = 'Prijava nije uspela (RLS ili mreža).';
       showToast('⚠ Kvar nije prijavljen');
       return;
+    }
+    if (markDown) {
+      const okDown = await upsertMaintMachineOverride({
+        machine_code: asset.asset_code || machineCode,
+        status: 'down',
+        reason: `Kvar: ${title}`.slice(0, 200),
+        valid_until: null,
+      });
+      if (!okDown) showToast('⚠ Kvar je prijavljen, ali status down nije postavljen (ovlašćenje/RLS).');
     }
 
     /* Foto upload je best-effort: ako neka slika padne, incident ipak ostaje.
@@ -234,7 +332,7 @@ export function openReportIncidentModal(opts) {
       let done = 0;
       for (const f of selected) {
         const res = await uploadMaintMachineFile({
-          machineCode,
+          machineCode: asset.asset_code || machineCode,
           file: f,
           category: 'incident-foto',
           description: `Kvar: ${title}`.slice(0, 200),

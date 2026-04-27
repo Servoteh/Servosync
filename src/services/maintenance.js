@@ -280,10 +280,13 @@ export async function insertMaintIncident(payload) {
   if (!uid) return null;
   const body = {
     machine_code: payload.machine_code,
+    asset_id: payload.asset_id || null,
+    asset_type: payload.asset_type || null,
     reported_by: uid,
     title: payload.title,
     description: payload.description || null,
     severity: payload.severity,
+    safety_marker: !!payload.safety_marker,
     status: 'open',
     attachment_urls: [],
   };
@@ -442,6 +445,29 @@ export async function deleteMaintMachineOverride(machineCode) {
     'DELETE',
   );
   return r !== null;
+}
+
+/**
+ * Vidljiva CMMS sredstva za izbor u incidentu / WO.
+ * @param {{ q?: string, limit?: number }} [opts]
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchMaintAssetsForPicker(opts = {}) {
+  const limit = Math.min(opts.limit ?? 300, 1000);
+  const q = String(opts.q || '').trim();
+  const parts = [
+    'select=asset_id,asset_code,asset_type,name,status,active,archived_at',
+    'active=eq.true',
+    'archived_at=is.null',
+    'order=asset_code.asc',
+    `limit=${limit}`,
+  ];
+  if (q) {
+    const like = enc(`*${q.replace(/[,*]/g, ' ')}*`);
+    parts.push(`or=(asset_code.ilike.${like},name.ilike.${like})`);
+  }
+  const rows = await sbReq(`maint_assets?${parts.join('&')}`).catch(() => null);
+  return Array.isArray(rows) ? rows : [];
 }
 
 /* ── Katalog mašina (maint_machines) ─────────────────────────────────────── */

@@ -1,6 +1,6 @@
 # Supabase: šema baze (public)
 
-Generisano: 2026-04-27. **Ažuriranje:** CMMS objekti (`maint_locations`, `maint_assets`, radni nalozi, `work_order_id` na incidentima) usklađeni su sa migracijama u `sql/migrations/` (`add_maint_locations.sql`, `add_maint_assets_supertable.sql`, `add_maint_work_orders.sql`, `link_maint_incidents_to_wo.sql`). Originalni snimak žive baze: 2026-04-22.
+Generisano: 2026-04-27. **Ažuriranje:** CMMS objekti (`maint_locations`, `maint_assets`, radni nalozi, `work_order_id`/`asset_id` na incidentima) usklađeni su sa migracijama u `sql/migrations/` (`add_maint_locations.sql`, `add_maint_assets_supertable.sql`, `add_maint_work_orders.sql`, `link_maint_incidents_to_wo.sql`, `extend_maint_incidents_assets.sql`). Originalni snimak žive baze: 2026-04-22.
 
 ## Šta ovaj dokument pokriva
 
@@ -218,6 +218,7 @@ Ispod: **Pregledi**, **Enumi**, **Foreign keys**, zatim **flat tabela svih kolon
 | maint_assets | location_id | maint_locations |
 | maint_checks | task_id | maint_tasks |
 | maint_incident_events | incident_id | maint_incidents |
+| maint_incidents | asset_id | maint_assets |
 | maint_incidents | work_order_id | maint_work_orders |
 | maint_locations | parent_location_id | maint_locations |
 | maint_machines | asset_id | maint_assets |
@@ -643,6 +644,8 @@ Ispod: **Pregledi**, **Enumi**, **Foreign keys**, zatim **flat tabela svih kolon
 | maint_incident_events | comment | text | YES |
 | maint_incidents | id | uuid | NO |
 | maint_incidents | machine_code | text | NO |
+| maint_incidents | asset_id | uuid | YES |
+| maint_incidents | asset_type | maint_asset_type | YES |
 | maint_incidents | work_order_id | uuid | YES |
 | maint_incidents | reported_by | uuid | NO |
 | maint_incidents | reported_at | timestamp with time zone(6) | NO |
@@ -656,6 +659,7 @@ Ispod: **Pregledi**, **Enumi**, **Foreign keys**, zatim **flat tabela svih kolon
 | maint_incidents | resolution_notes | text | YES |
 | maint_incidents | downtime_minutes | integer(32,0) | YES |
 | maint_incidents | attachment_urls | text[] | NO |
+| maint_incidents | safety_marker | boolean | NO |
 | maint_incidents | created_at | timestamp with time zone(6) | NO |
 | maint_incidents | updated_at | timestamp with time zone(6) | NO |
 | maint_incidents | updated_by | uuid | YES |
