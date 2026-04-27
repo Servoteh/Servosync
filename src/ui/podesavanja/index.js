@@ -28,6 +28,11 @@ import {
   refreshMaintProfiles,
 } from './maintProfilesTab.js';
 import {
+  renderOrgStructureTab,
+  wireOrgStructureTab,
+  refreshOrgStructure,
+} from './orgStructureTab.js';
+import {
   refreshPredmetAktivacija,
   renderPodesavanjePredmetaPanel,
   wirePodesavanjePredmetaPanel,
@@ -41,6 +46,7 @@ let _activeTab = 'users';
 
 const TABS = [
   { id: 'users', label: 'Korisnici' },
+  { id: 'organizacija', label: 'Organizacija' },
   { id: 'maint-profiles', label: 'Održ. profili' },
   { id: 'predmet-aktivacija', label: 'Podeš. predmeta' },
   { id: 'masters', label: 'Matični podaci' },
@@ -75,6 +81,11 @@ export async function renderPodesavanjaModule(mountEl, options = {}) {
     refreshPredmetAktivacija()
       .then(() => _renderShell())
       .catch(e => console.warn('[podesavanja] predmet aktivacija load failed', e));
+  }
+  if (_activeTab === 'organizacija') {
+    refreshOrgStructure()
+      .then(() => _renderShell())
+      .catch(e => console.warn('[podesavanja] org structure load failed', e));
   }
 
   if (_authUnsubscribe) _authUnsubscribe();
@@ -147,6 +158,7 @@ function _headerHtml() {
 
 function _panelHtml(tab) {
   if (tab === 'users') return renderUsersTab({ onChange: () => _renderShell() });
+  if (tab === 'organizacija') return renderOrgStructureTab();
   if (tab === 'maint-profiles') return renderMaintProfilesTab();
   if (tab === 'predmet-aktivacija') return renderPodesavanjePredmetaPanel();
   if (tab === 'masters') return renderMastersTab();
@@ -212,6 +224,11 @@ function _wireTabs() {
           .then(() => _renderShell())
           .catch(e => console.warn('[podesavanja] predmet aktivacija refresh failed', e));
       }
+      if (t === 'organizacija') {
+        refreshOrgStructure()
+          .then(() => _renderShell())
+          .catch(e => console.warn('[podesavanja] org structure refresh failed', e));
+      }
     });
   });
 }
@@ -225,5 +242,8 @@ function _wireTabBody() {
   }
   if (_activeTab === 'predmet-aktivacija') {
     wirePodesavanjePredmetaPanel(_mountEl);
+  }
+  if (_activeTab === 'organizacija') {
+    wireOrgStructureTab(_mountEl);
   }
 }

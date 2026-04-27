@@ -26,8 +26,8 @@ import {
 } from '../../lib/employeeNames.js';
 import { canEditKadrovskaGrid, getIsOnline } from '../../state/auth.js';
 import { hasSupabaseConfig } from '../../services/supabase.js';
-import { kadrovskaState } from '../../state/kadrovska.js';
-import { ensureEmployeesLoaded } from '../../services/kadrovska.js';
+import { kadrovskaState, orgStructureState } from '../../state/kadrovska.js';
+import { ensureEmployeesLoaded, ensureOrgStructureLoaded } from '../../services/kadrovska.js';
 import { loadGridMonth, batchUpsertGrid } from '../../services/grid.js';
 import { renderSummaryChips } from './shared.js';
 import { loadXlsx } from '../../lib/xlsx.js';
@@ -262,7 +262,14 @@ function _gridEmployeesCompanyOnly() {
   const company = _gridQ('#gridCompanyFilter')?.value || '';
   return kadrovskaState.employees
     .filter(e => e.isActive)
-    .filter(e => !company || e.department === company)
+    .filter(e => {
+      if (!company) return true;
+      const deptId = parseInt(company, 10);
+      if (orgStructureState.departments.length && !isNaN(deptId)) {
+        return e.departmentId === deptId;
+      }
+      return e.department === company;
+    })
     .sort(_gridCompareBySurnameAsc);
 }
 
@@ -301,18 +308,27 @@ function _syncGridSearchMeta(companyCount, visibleCount) {
   el.textContent = `Prikazano ${visibleCount} od ${companyCount}`;
 }
 
-/* ─── COMPANY FILTER OPTIONS (samo aktivni → unique department) ──────── */
+/* ─── COMPANY FILTER OPTIONS (referentne tabele; fallback na tekst) ─── */
 
 function _gridCompanyOptions(selected) {
-  const set = new Set();
-  kadrovskaState.employees.forEach(e => {
-    if (e.isActive && e.department) set.add(e.department);
-  });
-  const list = Array.from(set).sort((a, b) => a.localeCompare(b, 'sr'));
   let html = `<option value=""${!selected ? ' selected' : ''}>Sva odeljenja</option>`;
-  for (const d of list) {
-    const sel = d === selected ? ' selected' : '';
-    html += `<option value="${escHtml(d)}"${sel}>${escHtml(d)}</option>`;
+  if (orgStructureState.departments.length) {
+    const list = [...orgStructureState.departments].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'sr'));
+    for (const d of list) {
+      const val = String(d.id);
+      const sel = val === selected ? ' selected' : '';
+      html += `<option value="${val}"${sel}>${escHtml(d.name)}</option>`;
+    }
+  } else {
+    const set = new Set();
+    kadrovskaState.employees.forEach(e => {
+      if (e.isActive && e.department) set.add(e.department);
+    });
+    const list = Array.from(set).sort((a, b) => a.localeCompare(b, 'sr'));
+    for (const d of list) {
+      const sel = d === selected ? ' selected' : '';
+      html += `<option value="${escHtml(d)}"${sel}>${escHtml(d)}</option>`;
+    }
   }
   return html;
 }
@@ -1053,9 +1069,12 @@ export async function wireGridTab(panel, toolbarHost = null) {
   });
 
   try {
-    await ensureEmployeesLoaded(true);
+    await Promise.all([
+      ensureEmployeesLoaded(true),
+      ensureOrgStructureLoaded(),
+    ]);
   } catch (err) {
-    console.warn('[grid] employees load failed', err);
+    console.warn('[grid] load failed', err);
   }
 
   const compSel = _gridQ('#gridCompanyFilter');

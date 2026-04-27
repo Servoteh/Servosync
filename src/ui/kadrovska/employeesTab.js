@@ -21,7 +21,7 @@ import {
   compareEmployeesByLastFirst,
   employeeDisplayName,
 } from '../../lib/employeeNames.js';
-import { canEditKadrovska, canViewEmployeePii, getIsOnline } from '../../state/auth.js';
+import { canEditKadrovska, canViewEmployeePii, getIsOnline, isAdmin } from '../../state/auth.js';
 import {
   hasSupabaseConfig,
   KADR_EDU_LEVEL_LABELS,
@@ -46,8 +46,10 @@ import {
 import {
   ensureEmployeesLoaded,
   ensureChildrenLoaded,
+  ensureOrgStructureLoaded,
   uniqueDepartments,
 } from '../../services/kadrovska.js';
+import { orgStructureState } from '../../state/kadrovska.js';
 import { renderSummaryChips } from './shared.js';
 import { openEmployeesBulkModal } from './employeesBulkModal.js';
 
@@ -105,7 +107,8 @@ export function renderEmployeesTab() {
           <tr>
             <th>Ime i prezime</th>
             <th>Pozicija</th>
-            <th class="col-hide-sm">Odeljenje / tim</th>
+            <th class="col-hide-sm">Odeljenje</th>
+            <th class="col-hide-sm">Pododeljenje</th>
             <th class="col-hide-sm">Telefon</th>
             <th class="col-hide-sm">Email</th>
             <th class="col-hide-sm">Lekarski ističe</th>
@@ -143,21 +146,31 @@ export async function wireEmployeesTab(panelEl, { onChange } = {}) {
     });
   });
 
-  await ensureEmployeesLoaded(true);
+  await Promise.all([
+    ensureEmployeesLoaded(true),
+    ensureOrgStructureLoaded(),
+  ]);
   refreshEmployeesTab();
 }
 
 function applyFilters(list) {
   if (!panelRef) return list;
   const q = (panelRef.querySelector('#kadrovskaSearch')?.value || '').trim().toLowerCase();
-  const dept = panelRef.querySelector('#kadrovskaDeptFilter')?.value || '';
+  const deptVal = panelRef.querySelector('#kadrovskaDeptFilter')?.value || '';
   const status = panelRef.querySelector('#kadrovskaStatusFilter')?.value || '';
   return list.filter(e => {
-    if (dept && e.department !== dept) return false;
+    if (deptVal) {
+      const deptId = parseInt(deptVal, 10);
+      if (orgStructureState.departments.length && !isNaN(deptId)) {
+        if (e.departmentId !== deptId) return false;
+      } else {
+        if (e.department !== deptVal) return false;
+      }
+    }
     if (status === 'active' && !e.isActive) return false;
     if (status === 'inactive' && e.isActive) return false;
     if (q) {
-      const hay = [employeeDisplayName(e), e.firstName, e.lastName, e.position, e.department, e.team, e.email, e.phoneWork, e.note].join(' ').toLowerCase();
+      const hay = [employeeDisplayName(e), e.firstName, e.lastName, e.positionName || e.position, e.departmentName || e.department, e.subDepartmentName, e.team, e.email, e.phoneWork, e.note].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -190,8 +203,9 @@ export function refreshEmployeesTab() {
   const deptSel = panelRef.querySelector('#kadrovskaDeptFilter');
   if (deptSel) {
     const curr = deptSel.value;
+    const depts = uniqueDepartments();
     const opts = ['<option value="">Sva odeljenja</option>']
-      .concat(uniqueDepartments().map(d => `<option value="${escHtml(d)}">${escHtml(d)}</option>`));
+      .concat(depts.map(d => `<option value="${escHtml(String(d.id ?? d.name))}">${escHtml(d.name)}</option>`));
     deptSel.innerHTML = opts.join('');
     if (curr && Array.from(deptSel.options).some(o => o.value === curr)) deptSel.value = curr;
   }
@@ -252,35 +266,38 @@ export function refreshEmployeesTab() {
   const edit = canEditKadrovska();
   tbody.innerHTML = filtered.map(e => {
     const sub = [e.email, e.phoneWork || e.phone].filter(x => x).join(' · ');
-    const deptTeam = [e.department, e.team].filter(Boolean).join(' / ');
+    const deptDisplay = e.departmentName || e.department || '—';
+    const subDeptDisplay = e.subDepartmentName || '—';
+    const posDisplay = e.positionName || e.position || '—';
     const statusCls = e.isActive ? 'active' : 'inactive';
     const statusTxt = e.isActive ? 'Aktivan' : 'Neaktivan';
     const rowId = escHtml(e.id || '');
 
-    /* Medical badge — „Ističe za X d“ ili „Istekao“ */
+    /* Medical badge — „Ističe za X d” ili „Istekao” */
     let medBadge = '—';
     if (e.medicalExamExpires) {
       const d1 = new Date(e.medicalExamExpires);
       const diff = Math.ceil((d1 - today) / (24 * 3600 * 1000));
-      if (diff < 0) medBadge = `<span class="kadr-type-badge t-bolovanje">Istekao</span>`;
-      else if (diff <= 30) medBadge = `<span class="kadr-type-badge t-placeno">za ${diff}d</span>`;
-      else medBadge = `<span class="emp-sub">${formatDate(e.medicalExamExpires)}</span>`;
+      if (diff < 0) medBadge = `<span class=”kadr-type-badge t-bolovanje”>Istekao</span>`;
+      else if (diff <= 30) medBadge = `<span class=”kadr-type-badge t-placeno”>za ${diff}d</span>`;
+      else medBadge = `<span class=”emp-sub”>${formatDate(e.medicalExamExpires)}</span>`;
     }
 
-    return `<tr data-id="${rowId}">
+    return `<tr data-id=”${rowId}”>
       <td>
-        <div class="emp-name">${escHtml(employeeDisplayName(e) || '—')}</div>
-        ${sub ? `<div class="emp-sub col-hide-sm">${escHtml(sub)}</div>` : ''}
+        <div class=”emp-name”>${escHtml(employeeDisplayName(e) || '—')}</div>
+        ${sub ? `<div class=”emp-sub col-hide-sm”>${escHtml(sub)}</div>` : ''}
       </td>
-      <td>${escHtml(e.position || '—')}</td>
-      <td class="col-hide-sm">${escHtml(deptTeam || '—')}</td>
-      <td class="col-hide-sm">${escHtml(e.phoneWork || e.phone || '—')}</td>
-      <td class="col-hide-sm">${escHtml(e.email || '—')}</td>
-      <td class="col-hide-sm">${medBadge}</td>
-      <td><span class="emp-status-badge ${statusCls}">${statusTxt}</span></td>
-      <td class="col-actions">
-        <button class="btn-row-act" data-action="edit" data-id="${rowId}" ${edit ? '' : 'disabled'} title="${edit ? 'Izmeni' : 'Samo pregled'}">Izmeni</button>
-        <button class="btn-row-act danger" data-action="delete" data-id="${rowId}" ${edit ? '' : 'disabled'} title="${edit ? 'Obriši' : 'Samo pregled'}">Obriši</button>
+      <td>${escHtml(posDisplay)}</td>
+      <td class=”col-hide-sm”>${escHtml(deptDisplay)}</td>
+      <td class=”col-hide-sm”>${escHtml(subDeptDisplay)}</td>
+      <td class=”col-hide-sm”>${escHtml(e.phoneWork || e.phone || '—')}</td>
+      <td class=”col-hide-sm”>${escHtml(e.email || '—')}</td>
+      <td class=”col-hide-sm”>${medBadge}</td>
+      <td><span class=”emp-status-badge ${statusCls}”>${statusTxt}</span></td>
+      <td class=”col-actions”>
+        <button class=”btn-row-act” data-action=”edit” data-id=”${rowId}” ${edit ? '' : 'disabled'} title=”${edit ? 'Izmeni' : 'Samo pregled'}”>Izmeni</button>
+        <button class=”btn-row-act danger” data-action=”delete” data-id=”${rowId}” ${edit ? '' : 'disabled'} title=”${edit ? 'Obriši' : 'Samo pregled'}”>Obriši</button>
       </td>
     </tr>`;
   }).join('');
@@ -293,6 +310,38 @@ export function refreshEmployeesTab() {
   });
 
   onChangeCb?.();
+}
+
+/* ─── KASKADNI SELECT HELPERI ─────────────────────────────────────── */
+
+function _deptOptions(selectedId) {
+  const opts = ['<option value="">— izaberi odeljenje —</option>'];
+  for (const d of orgStructureState.departments) {
+    const sel = d.id === selectedId ? ' selected' : '';
+    opts.push(`<option value="${d.id}"${sel}>${escHtml(d.name)}</option>`);
+  }
+  return opts.join('');
+}
+
+function _subDeptOptions(deptId, selectedId) {
+  const list = orgStructureState.subDepartments.filter(s => s.department_id === deptId);
+  const opts = ['<option value="">— izaberi pododeljenje —</option>'];
+  for (const s of list) {
+    const sel = s.id === selectedId ? ' selected' : '';
+    opts.push(`<option value="${s.id}"${sel}>${escHtml(s.name)}</option>`);
+  }
+  return opts.join('');
+}
+
+function _positionOptions(deptId, subDeptId, selectedId) {
+  let list = orgStructureState.jobPositions.filter(p => p.department_id === deptId);
+  if (subDeptId) list = list.filter(p => p.sub_department_id === subDeptId);
+  const opts = ['<option value="">— izaberi poziciju —</option>'];
+  for (const p of list) {
+    const sel = p.id === selectedId ? ' selected' : '';
+    opts.push(`<option value="${p.id}"${sel}>${escHtml(p.name)}</option>`);
+  }
+  return opts.join('');
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -343,28 +392,22 @@ function buildEmployeeModalHtml(emp) {
               <input type="text" id="empLastName" required maxlength="60" value="${escHtml(emp?.lastName || '')}">
             </div>
             <div class="emp-field">
-              <label for="empPosition">Radno mesto (pozicija)</label>
-              <input type="text" id="empPosition" list="empPositionList" maxlength="80" value="${escHtml(emp?.position || '')}">
-              <datalist id="empPositionList">
-                <option value="Odg. inženjer"></option>
-                <option value="Vođa montaže"></option>
-                <option value="Inženjer"></option>
-                <option value="Montažer"></option>
-                <option value="Zavarivač"></option>
-                <option value="Električar"></option>
-                <option value="Admin"></option>
-              </datalist>
+              <label for="empDepartment">Odeljenje ${isAdmin() ? '' : '<span class="kadr-section-lock" title="Samo admin može da menja">🔒</span>'}</label>
+              <select id="empDepartment" ${isAdmin() ? '' : 'disabled'}>
+                ${_deptOptions(emp?.departmentId || null)}
+              </select>
             </div>
             <div class="emp-field">
-              <label for="empDepartment">Odeljenje</label>
-              <input type="text" id="empDepartment" list="empDepartmentList" maxlength="80" value="${escHtml(emp?.department || '')}">
-              <datalist id="empDepartmentList">
-                <option value="Montaža"></option>
-                <option value="Elektro"></option>
-                <option value="Proizvodnja"></option>
-                <option value="Projektovanje"></option>
-                <option value="Administracija"></option>
-              </datalist>
+              <label for="empSubDepartment">Pododeljenje ${isAdmin() ? '' : '<span class="kadr-section-lock" title="Samo admin može da menja">🔒</span>'}</label>
+              <select id="empSubDepartment" ${isAdmin() ? '' : 'disabled'}>
+                ${_subDeptOptions(emp?.departmentId || null, emp?.subDepartmentId || null)}
+              </select>
+            </div>
+            <div class="emp-field">
+              <label for="empPosition">Radno mesto (pozicija)</label>
+              <select id="empPosition">
+                ${_positionOptions(emp?.departmentId || null, emp?.subDepartmentId || null, emp?.positionId || null)}
+              </select>
             </div>
             <div class="emp-field">
               <label for="empTeam">Tim</label>
@@ -557,6 +600,22 @@ async function openEmployeeModal(id) {
     if (ev.target === modal) closeEmployeeModal();
   });
 
+  /* Kaskadni selekti: Odeljenje → Pododeljenje → Pozicija */
+  const deptSel    = modal.querySelector('#empDepartment');
+  const subDeptSel = modal.querySelector('#empSubDepartment');
+  const posSel     = modal.querySelector('#empPosition');
+
+  deptSel?.addEventListener('change', () => {
+    const dId = parseInt(deptSel.value, 10) || null;
+    subDeptSel.innerHTML = _subDeptOptions(dId, null);
+    posSel.innerHTML     = _positionOptions(dId, null, null);
+  });
+  subDeptSel?.addEventListener('change', () => {
+    const dId  = parseInt(deptSel.value, 10) || null;
+    const sdId = parseInt(subDeptSel.value, 10) || null;
+    posSel.innerHTML = _positionOptions(dId, sdId, null);
+  });
+
   /* JMBG → auto-fill datum rođenja i pol */
   const jmbgEl = modal.querySelector('#empPersonalId');
   jmbgEl?.addEventListener('input', () => {
@@ -659,13 +718,25 @@ async function submitEmployeeForm() {
     ? slavaRaw.replace('-', '')
     : null;
 
+  const departmentId    = parseInt(document.getElementById('empDepartment')?.value, 10) || null;
+  const subDepartmentId = parseInt(document.getElementById('empSubDepartment')?.value, 10) || null;
+  const positionId      = parseInt(document.getElementById('empPosition')?.value, 10) || null;
+
+  const deptObj    = orgStructureState.departments.find(d => d.id === departmentId);
+  const subDeptObj = orgStructureState.subDepartments.find(s => s.id === subDepartmentId);
+  const posObj     = orgStructureState.jobPositions.find(p => p.id === positionId);
+
   const basePayload = {
     id,
     firstName,
     lastName,
     fullName: employeeDisplayName({ firstName, lastName }),
-    position: document.getElementById('empPosition').value.trim(),
-    department: document.getElementById('empDepartment').value.trim(),
+    departmentId,
+    departmentName: deptObj?.name || '',
+    subDepartmentId,
+    subDepartmentName: subDeptObj?.name || '',
+    positionId,
+    positionName: posObj?.name || '',
     team: document.getElementById('empTeam').value.trim() || null,
     phoneWork: document.getElementById('empPhoneWork').value.trim(),
     email: document.getElementById('empEmail').value.trim().toLowerCase(),

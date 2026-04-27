@@ -59,6 +59,14 @@ export const kadrChildrenState = {
   byEmp: new Map(),
 };
 
+/* Org struktura — odeljenja / pododeljenja / radna mesta */
+export const orgStructureState = {
+  departments:    [],  /* { id, name, sort_order } */
+  subDepartments: [],  /* { id, department_id, name, sort_order } */
+  jobPositions:   [],  /* { id, department_id, sub_department_id, name, sort_order } */
+  loaded: false,
+};
+
 /* Faza K3 — zarade (samo admin vidi) */
 export const kadrSalaryState = {
   /** Aktuelne zarade (iz v_employee_current_salary) po employeeId */

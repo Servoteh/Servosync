@@ -29,11 +29,13 @@ import {
   kadrAbsencesState,
   kadrVacationState,
   kadrChildrenState,
+  orgStructureState,
 } from '../../state/kadrovska.js';
 import {
   ensureEmployeesLoaded,
   ensureAbsencesLoaded,
   ensureVacationLoaded,
+  ensureOrgStructureLoaded,
 } from '../../services/kadrovska.js';
 import { loadChildrenForEmployee } from '../../services/employeeChildren.js';
 import { renderSummaryChips } from './shared.js';
@@ -264,13 +266,19 @@ function _populateFilters() {
   const dsel = panelRoot?.querySelector('#repSickDeptFilter');
   if (dsel) {
     const prev = dsel.value;
-    const set = new Set();
-    kadrovskaState.employees.forEach(e => {
-      if (e.department) set.add(String(e.department).trim());
-    });
-    const opts = Array.from(set).sort((a, b) => a.localeCompare(b, 'sr'));
-    dsel.innerHTML = '<option value="">Sva odeljenja / firme</option>'
-      + opts.map(d => `<option value="${escHtml(d)}">${escHtml(d)}</option>`).join('');
+    let deptOpts = '';
+    if (orgStructureState.departments.length) {
+      const list = [...orgStructureState.departments].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'sr'));
+      deptOpts = list.map(d => `<option value="${d.id}">${escHtml(d.name)}</option>`).join('');
+    } else {
+      const set = new Set();
+      kadrovskaState.employees.forEach(e => {
+        if (e.department) set.add(String(e.department).trim());
+      });
+      deptOpts = Array.from(set).sort((a, b) => a.localeCompare(b, 'sr'))
+        .map(d => `<option value="${escHtml(d)}">${escHtml(d)}</option>`).join('');
+    }
+    dsel.innerHTML = '<option value="">Sva odeljenja / firme</option>' + deptOpts;
     if (prev && Array.from(dsel.options).some(o => o.value === prev)) dsel.value = prev;
   }
 }
@@ -292,7 +300,15 @@ function _aggregate() {
     if (!a.employeeId) return;
     if (empFilter && a.employeeId !== empFilter) return;
     const emp = empById.get(a.employeeId);
-    if (deptFilter && (!emp || emp.department !== deptFilter)) return;
+    if (deptFilter) {
+      if (!emp) return;
+      const deptId = parseInt(deptFilter, 10);
+      if (orgStructureState.departments.length && !isNaN(deptId)) {
+        if (emp.departmentId !== deptId) return;
+      } else {
+        if (emp.department !== deptFilter) return;
+      }
+    }
     const days = _intersectingDays(a.dateFrom, a.dateTo, pFrom, pTo);
     if (days <= 0) return;
     kept++;
@@ -301,7 +317,7 @@ function _aggregate() {
         emp: emp || null,
         id: a.employeeId,
         name: emp ? employeeDisplayName(emp) : '(obrisan)',
-        dept: emp?.department || '',
+        dept: emp?.departmentName || emp?.department || '',
         count: 0,
         totalDays: 0,
         lastTo: '',
@@ -921,6 +937,7 @@ export async function wireReportsTab(panel) {
     await Promise.all([
       ensureEmployeesLoaded(),
       ensureAbsencesLoaded(),
+      ensureOrgStructureLoaded(),
     ]);
   } catch (err) {
     console.warn('[reports] data load failed', err);

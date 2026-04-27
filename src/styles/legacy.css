@@ -4256,3 +4256,79 @@ body.pdf-export .tg-wp-filter { display: none !important; }
   }
 }
 
+
+/* ─── ORG STRUCTURE TAB (Podešavanja / Organizacija) ───────────────── */
+.org-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.org-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.org-empty {
+  color: var(--text3);
+  font-size: 13px;
+}
+.org-dept {
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.org-dept-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface2);
+  flex-wrap: wrap;
+}
+.org-dept-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text1);
+}
+.org-subdepts {
+  padding: 8px 14px 10px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.org-item {
+  border: 1px solid var(--border3);
+  border-radius: 6px;
+  background: var(--surface1);
+}
+.org-item-header,
+.org-item.org-pos {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  flex-wrap: wrap;
+}
+.org-item-name {
+  font-size: 13px;
+  color: var(--text2);
+}
+.org-item-direct {
+  color: var(--text3);
+  font-style: italic;
+}
+.org-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.org-positions {
+  padding: 4px 10px 8px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

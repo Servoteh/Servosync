@@ -16,6 +16,11 @@
 import {
   loadEmployeesFromDb,
 } from './employees.js';
+import {
+  loadDepartments,
+  loadSubDepartments,
+  loadJobPositions,
+} from './orgStructure.js';
 import { loadAbsencesFromDb } from './absences.js';
 import { loadWorkHoursFromDb } from './workHours.js';
 import { loadContractsFromDb } from './contracts.js';
@@ -45,6 +50,7 @@ import {
   kadrVacationState,
   kadrChildrenState,
   kadrSalaryState,
+  orgStructureState,
   loadEmployeesCache,
   saveEmployeesCache,
   loadAbsencesCache,
@@ -221,13 +227,34 @@ export function employeeNameById(id) {
   return e ? (employeeDisplayName(e) || '—') : '—';
 }
 
-/** Helper: lista odeljenja iz trenutnih zaposlenih, sortirana sr-locale. */
+/**
+ * Lista odeljenja kao { id, name } objekti, sortirani po sort_order.
+ * Koristi referentne tabele kada su učitane; fallback na tekst iz zaposlenih.
+ */
 export function uniqueDepartments() {
+  if (orgStructureState.departments.length) {
+    return [...orgStructureState.departments].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'sr'));
+  }
   const set = new Set();
   for (const e of kadrovskaState.employees) {
-    if (e.department && String(e.department).trim()) {
-      set.add(String(e.department).trim());
-    }
+    if (e.department && String(e.department).trim()) set.add(String(e.department).trim());
   }
-  return Array.from(set).sort((a, b) => a.localeCompare(b, 'sr'));
+  return Array.from(set)
+    .sort((a, b) => a.localeCompare(b, 'sr'))
+    .map(name => ({ id: null, name }));
+}
+
+/** Učitaj i kešuj org strukturu (odeljenja / pododeljenja / radna mesta). */
+export async function ensureOrgStructureLoaded(force = false) {
+  if (orgStructureState.loaded && !force) return;
+  if (!getIsOnline() || !hasSupabaseConfig()) { orgStructureState.loaded = true; return; }
+  const [depts, subDepts, positions] = await Promise.all([
+    loadDepartments(),
+    loadSubDepartments(),
+    loadJobPositions(),
+  ]);
+  orgStructureState.departments    = depts     || [];
+  orgStructureState.subDepartments = subDepts  || [];
+  orgStructureState.jobPositions   = positions || [];
+  orgStructureState.loaded = true;
 }
