@@ -269,7 +269,7 @@ BEGIN
   SELECT id INTO sd_id FROM public.sub_departments WHERE department_id = 6 AND name = 'PM tim';
   INSERT INTO public.job_positions (department_id, sub_department_id, name, sort_order)
   VALUES
-    (6, sd_id, 'Viši projekt menadžer (Lead PM)', 10),
+    (6, sd_id, 'LEAD PM', 10),
     (6, sd_id, 'Projekt menadžer',                20),
     (6, sd_id, 'Tehnički lider projekta',          30)
   ON CONFLICT DO NOTHING;

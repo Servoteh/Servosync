@@ -2757,7 +2757,7 @@ SET
   first_name = 'Milan',
   last_name = 'Stojadinovic',
   department = 'Projektant',
-  position = 'Glavni Projekt Menadzer',
+  position = 'LEAD PM',
   phone = NULL,
   email = NULL,
   hire_date = NULL,

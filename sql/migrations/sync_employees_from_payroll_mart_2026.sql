@@ -108,7 +108,7 @@ INSERT INTO employees (full_name, department, position, is_active) VALUES ('Sama
 INSERT INTO employees (full_name, department, position, is_active) VALUES ('Manojlović Marijana', 'Logistika', '', true); -- excel: Marijana Manojlović
 INSERT INTO employees (full_name, department, position, is_active) VALUES ('Stojanović Marko', 'Projektant', 'Projektant', true); -- excel: Marko Stojanović
 INSERT INTO employees (full_name, department, position, is_active) VALUES ('Milovanovic Milan', 'Projektant', 'Projektant', true); -- excel: Milan Milovanovic
-INSERT INTO employees (full_name, department, position, is_active) VALUES ('Stojadinovic Milan', 'Projektant', 'Glavni Projekt Menadzer', true); -- excel: Milan Stojadinovic
+INSERT INTO employees (full_name, department, position, is_active) VALUES ('Stojadinovic Milan', 'Projektant', 'LEAD PM', true); -- excel: Milan Stojadinovic
 INSERT INTO employees (full_name, department, position, is_active) VALUES ('Jerotic Milorad', 'Projektant', 'Vodeci projektant', true); -- excel: Milorad Jerotic
 INSERT INTO employees (full_name, department, position, is_active) VALUES ('Nikolic Nenad', 'Menadžment', 'CTO', true); -- excel: Nenad Nikolic
 INSERT INTO employees (full_name, department, position, is_active) VALUES ('Aksentijević Nikola', 'Servoteh', '', true); -- excel: Nikola Aksentijević
