@@ -15,7 +15,11 @@ SELECT
   COALESCE(g4.rework_pieces, 0::numeric) AS rework_pieces,
   COALESCE(g4.scrap_pieces, 0::numeric) AS scrap_pieces,
   COALESCE(g4.rework_scrap_count, 0::bigint) AS rework_scrap_count,
-  COALESCE(fc.plan_rn_final_control_done, false) AS plan_rn_final_control_done
+  (
+    s_inner.komada_total IS NOT NULL
+    AND s_inner.komada_total > 0
+    AND COALESCE(fc.final_control_done_qty, 0::numeric) >= s_inner.komada_total::numeric
+  ) AS plan_rn_final_control_done
 FROM (
   SELECT v.*, wo.item_id::integer AS item_id
   FROM public.v_production_operations_pre_g4 v
@@ -32,32 +36,31 @@ LEFT JOIN LATERAL (
   WHERE c.work_order_id = s_inner.work_order_id AND c.operacija = s_inner.operacija
 ) g4 ON true
 LEFT JOIN LATERAL (
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.bigtehn_work_order_lines_cache fl
-    LEFT JOIN public.bigtehn_machines_cache m_fc ON m_fc.rj_code = fl.machine_code
-    WHERE fl.work_order_id = s_inner.work_order_id
+  /* Ista ideja kao final_qty_bt u get_predmet_pracenje_izvestaj: suma komada sa
+     završne kontrole samo od is_completed prijava; RN iz plana tek kad pokrije ceo lot. */
+  SELECT COALESCE((
+    SELECT sum(t.komada)::numeric
+    FROM public.bigtehn_work_order_lines_cache l
+    INNER JOIN public.bigtehn_machines_cache m ON m.rj_code = l.machine_code
+    INNER JOIN public.bigtehn_tech_routing_cache t
+      ON t.work_order_id = l.work_order_id
+     AND t.operacija = l.operacija
+     AND t.machine_code IS NOT DISTINCT FROM l.machine_code
+     AND t.is_completed IS TRUE
+    WHERE l.work_order_id = s_inner.work_order_id
       AND production._pracenje_line_is_final_control(
-        fl.machine_code,
-        m_fc.name,
-        COALESCE(m_fc.no_procedure, false)
+        l.machine_code,
+        m.name,
+        COALESCE(m.no_procedure, false)
       )
-      AND EXISTS (
-        SELECT 1
-        FROM public.bigtehn_tech_routing_cache t
-        WHERE t.work_order_id = fl.work_order_id
-          AND t.operacija = fl.operacija
-          AND t.machine_code IS NOT DISTINCT FROM fl.machine_code
-          AND t.is_completed IS TRUE
-      )
-  ) AS plan_rn_final_control_done
+  ), 0::numeric) AS final_control_done_qty
 ) fc ON true;
 
 COMMENT ON VIEW public.v_production_operations IS
-  'Plan: pre_g4 + G4 + item_id; plan_rn_final_control_done = završna kontrola prijavljena u BigTehn-u.';
+  'Plan: pre_g4 + G4 + item_id; plan_rn_final_control_done = ceo lot prošao završnu kontrolu u BigTehn-u.';
 
 COMMENT ON COLUMN public.v_production_operations.plan_rn_final_control_done IS
-  'TRUE ako postoji stavka završne kontrole (8.3 / heuristika) sa bar jednom is_completed prijavom za taj RN.';
+  'TRUE ako je suma komada (is_completed) na stavkama završne kontrole >= komada_total RN-a.';
 
 GRANT SELECT ON public.v_production_operations TO authenticated;
 REVOKE SELECT ON public.v_production_operations FROM anon;
