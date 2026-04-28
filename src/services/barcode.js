@@ -125,6 +125,30 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
 
   /* ZXing baca `NotFoundException` za svaki frame u kom nema barkoda —
    * to NIJE greška, ignorišemo je. Svi ostali error-i idu u onError. */
+  /**
+   * Primeni torch/zoom na video track. Firefox na Androidu često ignoriše ili
+   * odbija `advanced: [{ … }]` dok isti parametri kao ravni constraint prolaze;
+   * Chromium/WebKit uglavnom prihvataju oba. Probamo prvo ravno, pa legacy.
+   * @param {MediaStreamTrack} track
+   * @param {Record<string, unknown>} flat npr. `{ torch: true }` ili `{ zoom: 2 }`
+   * @returns {Promise<boolean>}
+   */
+  async function applyVideoConstraintCompat(track, flat) {
+    if (!track?.applyConstraints) return false;
+    try {
+      await track.applyConstraints(flat);
+      return true;
+    } catch (e1) {
+      try {
+        await track.applyConstraints({ advanced: [flat] });
+        return true;
+      } catch (e2) {
+        console.warn('[barcode] applyVideoConstraintCompat failed', flat, e1, e2);
+        return false;
+      }
+    }
+  }
+
   const controls = await reader.decodeFromConstraints(
     constraints,
     videoEl,
@@ -165,17 +189,19 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     toggleTorch: async () => {
       const track = getTrack();
       if (!track) return false;
-      const caps = track.getCapabilities?.();
-      if (!caps || !('torch' in caps)) return false;
+      const caps = track.getCapabilities?.() || {};
+      const supported = navigator.mediaDevices?.getSupportedConstraints?.() || {};
+      const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+      const ffAndroid = /Firefox/i.test(ua) && /Android/i.test(ua);
+      /* Gecko na Androidu ponekad ne stavi `torch` u getCapabilities() iako
+       * uređaj podržava — u tom slučaju ipak pokušavamo apply (desktop Firefox
+       * ovde ne upada jer nema /Android/). */
+      const torchAdvertised = 'torch' in caps || supported.torch === true || ffAndroid;
+      if (!torchAdvertised) return false;
       const settings = track.getSettings?.() || {};
       const next = !settings.torch;
-      try {
-        await track.applyConstraints({ advanced: [{ torch: next }] });
-        return next;
-      } catch (e) {
-        console.warn('[barcode] torch toggle failed', e);
-        return false;
-      }
+      const ok = await applyVideoConstraintCompat(track, { torch: next });
+      return ok ? next : false;
     },
 
     /**
@@ -217,13 +243,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     setZoom: async value => {
       const track = getTrack();
       if (!track) return false;
-      try {
-        await track.applyConstraints({ advanced: [{ zoom: value }] });
-        return true;
-      } catch (e) {
-        console.warn('[barcode] zoom failed', e);
-        return false;
-      }
+      return applyVideoConstraintCompat(track, { zoom: value });
     },
 
     /**
