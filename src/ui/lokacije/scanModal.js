@@ -182,7 +182,14 @@ export async function openScanMoveModal({
     showToast('⚠ Ne mogu da učitam modul za skeniranje');
     return;
   }
-  const { isScanSupported, normalizeBarcodeText, parseBigTehnBarcode, startScan, decodeBarcodeFromFile } = barcodeMod;
+  const {
+    isScanSupported,
+    normalizeBarcodeText,
+    parseBigTehnBarcode,
+    startScan,
+    decodeBarcodeFromFile,
+    isAndroidWebCameraTorchZoomHidden,
+  } = barcodeMod;
 
   if (!isScanSupported()) {
     showToast('⚠ Ovaj pregledač ne podržava skeniranje');
@@ -301,8 +308,8 @@ export async function openScanMoveModal({
     </div>
   `;
   document.body.appendChild(overlay);
-  /* Android Web: torch/zoom kroz MediaStream retko rade — sakrij dugme da ne zbunjuje. */
-  if (/Android/i.test(navigator.userAgent || '')) {
+  /* Android (uključ. „Desktop site“ UA): torch ne radi pouzdano — sakrij dugme. */
+  if (isAndroidWebCameraTorchZoomHidden()) {
     overlay.querySelector('.loc-scan-topbar [data-act="torch"]')?.setAttribute('hidden', '');
   }
 
@@ -325,21 +332,28 @@ export async function openScanMoveModal({
   const stageScan = overlay.querySelector('[data-stage="scan"]');
   const stageForm = overlay.querySelector('[data-stage="form"]');
 
-  function canUseAggressiveScanPresentation() {
-    try {
-      return (
-        window.matchMedia('(pointer: coarse)').matches ||
-        /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
-      );
-    } catch {
-      return false;
+  function isIOSDevice() {
+    const ua = navigator.userAgent || '';
+    if (/iPad|iPhone|iPod/i.test(ua)) return true;
+    if (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) {
+      return true;
     }
+    return false;
   }
 
-  /** Širi okvir + laser; na telefonu još fullscreen + landscape gde browser dozvoljava. */
+  /**
+   * Fullscreen + landscape lock samo na Androidu.
+   * iOS Safari/PWA: lock često ne uspe ili ruši layout — laser/reticle ostaju, bez lock-a.
+   */
+  function shouldUseFullscreenLandscapeLock() {
+    if (isIOSDevice()) return false;
+    return isAndroidWebCameraTorchZoomHidden();
+  }
+
+  /** Širi okvir + laser za sve; fullscreen + landscape lock samo gde `shouldUseFullscreenLandscapeLock`. */
   function enterScanPresentation() {
     overlay.classList.add('loc-scan-presentation');
-    if (!canUseAggressiveScanPresentation() || state.scanPresentationActive) return;
+    if (!shouldUseFullscreenLandscapeLock() || state.scanPresentationActive) return;
     state.scanPresentationActive = true;
     const root = stageScan;
     try {
@@ -599,7 +613,7 @@ export async function openScanMoveModal({
    * kad je track.getCapabilities dostupan.
    */
   async function setupZoomUI() {
-    if (/Android/i.test(navigator.userAgent || '')) return;
+    if (isAndroidWebCameraTorchZoomHidden()) return;
     if (!state.scanCtrl || typeof state.scanCtrl.getZoom !== 'function') return;
     const cap = await state.scanCtrl.getZoom();
     const wrap = $('#locScanZoom');
@@ -633,7 +647,7 @@ export async function openScanMoveModal({
    */
   function cameraBlockedUserHint() {
     const ua = navigator.userAgent || '';
-    const isAndroid = /Android/i.test(ua);
+    const isAndroid = isAndroidWebCameraTorchZoomHidden();
     const isIOS =
       /iPad|iPhone|iPod/.test(ua) || (ua.includes('Mac') && 'ontouchend' in document);
     if (isAndroid) {

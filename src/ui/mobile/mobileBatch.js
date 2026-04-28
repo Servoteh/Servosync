@@ -18,6 +18,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
+import { isAndroidWebCameraTorchZoomHidden } from '../../services/barcode.js';
 import { fetchLocations, locCreateMovement } from '../../services/lokacije.js';
 import { enqueueMovement } from '../../services/offlineQueue.js';
 
@@ -102,7 +103,7 @@ export async function renderMobileBatch(mountEl, ctx) {
   const errEl = $('#mBatchErr');
   const toSel = $('#mBatchTo');
 
-  if (/Android/i.test(navigator.userAgent || '')) {
+  if (isAndroidWebCameraTorchZoomHidden()) {
     mountEl.querySelector('.m-batch-torch')?.setAttribute('hidden', '');
   }
 

@@ -76,9 +76,27 @@ export function isScanSupported() {
  * Android (Chrome, Samsung Internet, Firefox, WebView): torch i kontinuirani
  * zoom preko `applyConstraints` retko rade pouzdano na stražnjoj kameri — UI
  * ih ne prikazujemo da korisnik ne misli da je „pokvareno“.
+ *
+ * Pored `User-Agent` sa "Android", uključuje i **Desktop site** režim gde UA
+ * često nema "Android", ali `navigator.userAgentData` i dalje javlja mobilni
+ * Android (brands).
  */
 export function isAndroidWebCameraTorchZoomHidden() {
-  return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/Android/i.test(ua)) return true;
+  try {
+    const uad = /** @type {{ mobile?: boolean, brands?: { brand?: string }[] }} */ (
+      /** @type {unknown} */ (navigator).userAgentData
+    );
+    if (uad && uad.mobile === true && Array.isArray(uad.brands)) {
+      const brands = uad.brands.map(b => String(b.brand || '')).join(' ');
+      if (/Android/i.test(brands)) return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
 }
 
 /**
@@ -109,8 +127,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
   /* Hints-aware reader → značajno brži i pouzdaniji za BigTehn Code128. */
   const reader = new BrowserMultiFormatReader(SCAN_HINTS);
 
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-  const isAndroid = /Android/i.test(ua);
+  const isAndroid = isAndroidWebCameraTorchZoomHidden();
 
   /* Constraint izbor:
    *   - `forceDeviceId` → eksplicitni deviceId (iOS fallback path).
@@ -262,6 +279,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
      * @returns {Promise<boolean>} true ako je uspešno primenjeno.
      */
     setZoom: async value => {
+      if (isAndroidWebCameraTorchZoomHidden()) return false;
       const track = getTrack();
       if (!track) return false;
       return applyVideoConstraintCompat(track, { zoom: value });

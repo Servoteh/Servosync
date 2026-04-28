@@ -2839,6 +2839,13 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
   aspect-ratio:4.2 / 1;
   box-shadow:0 0 0 9999px rgba(0,0,0,.52);
 }
+/* iOS / portret: bez landscape lock-a — už okvir da ne „vise“ preko uskog ekrana */
+@media (orientation:portrait) {
+  .loc-scan-overlay.loc-scan-presentation .loc-scan-reticle {
+    width:min(92vw, 420px);
+    aspect-ratio:3.2 / 1;
+  }
+}
 @media (orientation:landscape) {
   .loc-scan-overlay.loc-scan-presentation .loc-scan-reticle {
     width:min(88vw, 860px);
