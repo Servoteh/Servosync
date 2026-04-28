@@ -17,6 +17,19 @@
   width: 100%;
 }
 
+/* Široki desktop: pun širinski koridor; <1200px ne diramo (telefon/tablet). */
+@media (min-width: 1200px) {
+  .mnt-main {
+    max-width: none;
+    margin: 0;
+    padding: 16px 24px 32px;
+  }
+
+  .mnt-dash-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .mnt-subnav {
   display: flex;
   flex-wrap: wrap;
