@@ -20,6 +20,11 @@ import {
   locCreateMovement,
   updateLocation,
 } from '../../services/lokacije.js';
+import {
+  fetchBigtehnOpSnapshotByRnAndTp,
+  fetchTpOptionsForPredmetOrder,
+} from '../../services/planProizvodnje.js';
+import { getIsOnline } from '../../state/auth.js';
 
 /* TRANSFER je prvi jer je najčešći slučaj u svakodnevnom radu;
  * INITIAL_PLACEMENT je eksplicitno drugačiji tok (samo za nove stavke). */
@@ -37,19 +42,39 @@ const MOVEMENT_TYPES = [
   'INVENTORY_ADJUSTMENT',
 ];
 
-/* Whitelist ERP tabela kojima se može referencirati stavka. `bigtehn_rn` je
- * osnovna u praksi — jer jedan isti broj crteža može biti na više radnih
- * naloga i svaki se zasebno prati po lokacijama. `item_ref_id` tipično nosi
- * broj naloga (npr. "9836/76"). Proširiti po potrebi. */
-const ITEM_REF_TABLES = [
-  { value: 'bigtehn_rn', label: 'bigtehn_rn — radni nalog (BigTehn)' },
-  { value: 'parts', label: 'parts — delovi' },
-  { value: 'tools', label: 'tools — alati' },
-  { value: 'machines', label: 'machines — mašine' },
-  { value: 'consumables', label: 'consumables — potrošni' },
-  { value: 'assemblies', label: 'assemblies — sklopovi' },
-  { value: 'other', label: 'other — ostalo' },
-];
+/** Brzo premeštanje uvek vezuje stavku za BigTehn RN cache (bridge). */
+const LOC_QM_ITEM_REF_TABLE = 'bigtehn_rn';
+
+/* Isti ključ kao scanModal — deli se lokalni keš broja crteža. */
+const DRAWING_CACHE_KEY = 'loc_drawing_cache_v1';
+
+function qmReadDrawingCache() {
+  try {
+    const raw = localStorage.getItem(DRAWING_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function qmGetDrawingCache(orderNo, tp) {
+  if (!orderNo || !tp) return '';
+  return qmReadDrawingCache()[`${orderNo}|${tp}`] || '';
+}
+
+function qmSetDrawingCache(orderNo, tp, drawingNo) {
+  if (!orderNo || !tp || !drawingNo) return;
+  const key = `${orderNo}|${tp}`;
+  const cache = qmReadDrawingCache();
+  cache[key] = String(drawingNo);
+  try {
+    localStorage.setItem(DRAWING_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    /* ignore */
+  }
+}
 
 /**
  * Ne-breaking space indent zavisno od `depth`.
@@ -870,7 +895,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
     id: modalId,
     title: 'Brzo premeštanje',
     subtitle:
-      'Poziva RPC <code>loc_create_movement</code>. Za novu stavku koristi <strong>INITIAL_PLACEMENT</strong>; za postojeći placement <strong>TRANSFER</strong> ili drugi tip.',
+      'Unesi broj predmeta i TP; broj crteža se puni iz BigTehn keša. Za novu stavku <strong>INITIAL_PLACEMENT</strong>; za postojeći placement <strong>TRANSFER</strong> ili drugi tip.',
   });
 
   let unbindEsc = null;
@@ -920,9 +945,6 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       blankLabel: '— izaberi odredište —',
     });
     const movOpts = MOVEMENT_TYPES.map(t => `<option value="${t}">${escHtml(t)}</option>`).join('');
-    const tableOpts = ITEM_REF_TABLES.map(
-      t => `<option value="${escHtml(t.value)}">${escHtml(t.label)}</option>`,
-    ).join('');
 
     /* Index lokacija po UUID-u — za brzi lookup labele u "trenutno na..." pregledu. */
     const locById = new Map(locs.map(l => [l.id, l]));
@@ -932,17 +954,17 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       <form id="locFormQuickMove">
         <div class="emp-form-grid">
           <div class="emp-field">
-            <label for="locQmTable">Ref. tabela *</label>
-            <select id="locQmTable" required>${tableOpts}</select>
+            <label for="locQmOrder">Broj predmeta *</label>
+            <input type="text" id="locQmOrder" required maxlength="40" placeholder="npr. 7351 ili 9400-1" autocomplete="off">
           </div>
           <div class="emp-field">
-            <label for="locQmItemId">Broj crteža * <span class="loc-muted" style="font-weight:400">(npr. 1091063)</span></label>
-            <input type="text" id="locQmItemId" required maxlength="200" placeholder="ERP / sync ID" autocomplete="off">
+            <label for="locQmTp">Broj TP * <span class="loc-muted" style="font-weight:400">(lista iz keša za predmet)</span></label>
+            <input type="text" id="locQmTp" required maxlength="40" list="locQmTpDatalist" placeholder="npr. 1088" autocomplete="off">
+            <datalist id="locQmTpDatalist"></datalist>
           </div>
-
           <div class="emp-field">
-            <label for="locQmOrder">Broj naloga <span class="loc-muted" style="font-weight:400">(opciono — isti crtež sa drugog naloga se vodi odvojeno)</span></label>
-            <input type="text" id="locQmOrder" maxlength="40" placeholder="npr. 9000" autocomplete="off">
+            <label for="locQmDrawing">Broj crteža</label>
+            <input type="text" id="locQmDrawing" readonly tabindex="-1" maxlength="80" placeholder="— automatski —" autocomplete="off" style="background:var(--surface2);cursor:default">
           </div>
 
           <div class="emp-field col-full" id="locQmStateWrap" hidden>
@@ -982,9 +1004,10 @@ export function openQuickMoveModal({ onSuccess } = {}) {
 
     const errEl = overlay.querySelector('#locModalQuickMoveErr');
     const submitBtn = overlay.querySelector('#locQmSubmit');
-    const tableSel = overlay.querySelector('#locQmTable');
-    const itemIdInput = overlay.querySelector('#locQmItemId');
     const orderInput = overlay.querySelector('#locQmOrder');
+    const tpInput = overlay.querySelector('#locQmTp');
+    const drawingInput = overlay.querySelector('#locQmDrawing');
+    const tpDatalist = overlay.querySelector('#locQmTpDatalist');
     const typeSel = overlay.querySelector('#locQmType');
     const qtyInput = overlay.querySelector('#locQmQty');
     const fromWrap = overlay.querySelector('#locQmFromWrap');
@@ -993,9 +1016,11 @@ export function openQuickMoveModal({ onSuccess } = {}) {
     const stateWrap = overlay.querySelector('#locQmStateWrap');
     const stateEl = overlay.querySelector('#locQmState');
 
-    /* Stanje: trenutni placement-i za (table,id) par — mapa location_id → qty. */
+    /* Stanje: trenutni placement-i za (bigtehn_rn, TP, predmet) — mapa location_id → qty. */
     let currentPlacements = [];
     let lookupToken = 0;
+    let tpListToken = 0;
+    let drawingLookupToken = 0;
 
     function refreshFromHint() {
       const locId = fromSel.value;
@@ -1024,13 +1049,12 @@ export function openQuickMoveModal({ onSuccess } = {}) {
         stateEl.innerHTML = '';
         fromSel.innerHTML = '';
         /* Nove stavke default-uju na INITIAL_PLACEMENT. */
-        if (itemIdInput.value.trim()) typeSel.value = 'INITIAL_PLACEMENT';
+        if (tpInput.value.trim()) typeSel.value = 'INITIAL_PLACEMENT';
         applyTypeMode();
         return;
       }
 
-      /* Kada je nalog prazan, prikazujemo sve naloge kao informaciju — u chipu
-       * dodajemo prefiks "9000 · K-A1 · 5"; korisnik klikom na chip popuni nalog. */
+      /* Kada nalog nije sužen, prikazujemo sve bucket-e; klik na chip popuni predmet. */
       const chips = currentPlacements.map(r => {
         const loc = locById.get(r.location_id);
         const locLbl = loc ? `${loc.location_code} — ${loc.name}` : r.location_id;
@@ -1041,8 +1065,8 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       }).join('');
       const total = currentPlacements.reduce((a, r) => a + Number(r.quantity || 0), 0);
       const title = scoped
-        ? `Trenutno smešteno za nalog ${escHtml(orderInput.value.trim())} (ukupno ${escHtml(String(total))} kom.):`
-        : `Svi nalozi za ovaj crtež (ukupno ${escHtml(String(total))} kom.) — klikni nalog da ga popunite:`;
+        ? `Trenutno smešteno za predmet ${escHtml(orderInput.value.trim())} / TP ${escHtml(tpInput.value.trim())} (ukupno ${escHtml(String(total))} kom.):`
+        : `Placement-i za ovaj TP na drugim predmetima (ukupno ${escHtml(String(total))} kom.) — klik na predmet ga upisuje:`;
       stateEl.innerHTML = `
         <div class="loc-current-title">${title}</div>
         <div class="loc-chip-row">${chips}</div>`;
@@ -1051,7 +1075,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       /* From dropdown ima smisla samo kada znamo nalog — inače ne možemo
        * striktno da oduzmemo iz bucketa. */
       if (!scoped) {
-        fromSel.innerHTML = '<option value="">— prvo unesi nalog —</option>';
+        fromSel.innerHTML = '<option value="">— prvo unesi broj predmeta —</option>';
       } else {
         fromSel.innerHTML =
           '<option value="">— izaberi polaznu —</option>' +
@@ -1068,17 +1092,65 @@ export function openQuickMoveModal({ onSuccess } = {}) {
     }
 
     async function refreshItemState() {
-      const table = tableSel.value.trim();
-      const id = itemIdInput.value.trim();
       const order = orderInput.value.trim();
+      const tp = tpInput.value.trim();
       const myToken = ++lookupToken;
-      if (!table || !id) {
+      if (!tp) {
         renderState([], { scoped: false });
         return;
       }
-      const rows = await fetchItemPlacements(table, id, order ? order : undefined);
+      const rows = await fetchItemPlacements(
+        LOC_QM_ITEM_REF_TABLE,
+        tp,
+        order ? order : undefined,
+      );
       if (myToken !== lookupToken) return;
       renderState(rows || [], { scoped: !!order });
+    }
+
+    async function refreshTpDatalist() {
+      const order = orderInput.value.trim();
+      const my = ++tpListToken;
+      if (!order) {
+        tpDatalist.innerHTML = '';
+        return;
+      }
+      if (!getIsOnline()) {
+        tpDatalist.innerHTML = '';
+        return;
+      }
+      const opts = await fetchTpOptionsForPredmetOrder(order);
+      if (my !== tpListToken) return;
+      tpDatalist.innerHTML = (opts || [])
+        .map(
+          o =>
+            `<option value="${escHtml(o.tp)}">${escHtml(o.tp)}${o.broj_crteza ? ` — crtež ${escHtml(o.broj_crteza)}` : ''}</option>`,
+        )
+        .join('');
+    }
+
+    async function refreshDrawingFromErp() {
+      const order = orderInput.value.trim();
+      const tp = tpInput.value.trim();
+      const my = ++drawingLookupToken;
+      if (!order || !tp) {
+        drawingInput.value = '';
+        return;
+      }
+      const cached = qmGetDrawingCache(order, tp);
+      if (!getIsOnline()) {
+        drawingInput.value = cached || '';
+        return;
+      }
+      let snap = null;
+      try {
+        snap = await fetchBigtehnOpSnapshotByRnAndTp(order, tp);
+      } catch (e) {
+        console.warn('[quickMove] ERP snapshot failed', e);
+      }
+      if (my !== drawingLookupToken) return;
+      const erp = snap?.broj_crteza ? String(snap.broj_crteza).trim() : '';
+      drawingInput.value = (erp || cached || '').trim();
     }
 
     /* Debounce da ne zovemo za svaki keypress. */
@@ -1087,33 +1159,59 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       clearTimeout(debounceT);
       debounceT = setTimeout(refreshItemState, 300);
     };
+    let debounceTpList = null;
+    const scheduleTpList = () => {
+      clearTimeout(debounceTpList);
+      debounceTpList = setTimeout(refreshTpDatalist, 400);
+    };
+    let debounceDraw = null;
+    const scheduleDrawing = () => {
+      clearTimeout(debounceDraw);
+      debounceDraw = setTimeout(refreshDrawingFromErp, 280);
+    };
 
-    tableSel.addEventListener('change', refreshItemState);
-    itemIdInput.addEventListener('input', scheduleRefresh);
-    itemIdInput.addEventListener('blur', refreshItemState);
-    orderInput.addEventListener('input', scheduleRefresh);
-    orderInput.addEventListener('blur', refreshItemState);
+    orderInput.addEventListener('input', () => {
+      scheduleRefresh();
+      scheduleTpList();
+      scheduleDrawing();
+    });
+    orderInput.addEventListener('blur', () => {
+      refreshItemState();
+      refreshTpDatalist();
+      refreshDrawingFromErp();
+    });
+    tpInput.addEventListener('input', () => {
+      scheduleRefresh();
+      scheduleDrawing();
+    });
+    tpInput.addEventListener('blur', () => {
+      refreshItemState();
+      refreshDrawingFromErp();
+    });
     typeSel.addEventListener('change', applyTypeMode);
     fromSel.addEventListener('change', refreshFromHint);
 
-    /* Klik na chip sa nalogom u "svi nalozi" prikazu → popuni nalog. */
+    /* Klik na chip sa predmetom u "svi nalozi" prikazu → popuni predmet. */
     stateEl.addEventListener('click', ev => {
       const chipOrder = ev.target.closest?.('[data-qm-order]')?.getAttribute('data-qm-order');
       if (!chipOrder) return;
       orderInput.value = chipOrder;
       refreshItemState();
+      refreshTpDatalist();
+      refreshDrawingFromErp();
     });
 
     overlay.querySelector('#locQmCancel').addEventListener('click', close);
-    itemIdInput.focus();
+    orderInput.focus();
     applyTypeMode();
 
     overlay.querySelector('#locFormQuickMove').addEventListener('submit', async ev => {
       ev.preventDefault();
       errEl.textContent = '';
-      const item_ref_table = tableSel.value.trim();
-      const item_ref_id = itemIdInput.value.trim();
+      const item_ref_table = LOC_QM_ITEM_REF_TABLE;
+      const item_ref_id = tpInput.value.trim();
       const order_no = orderInput.value.trim();
+      const drawing_no = drawingInput.value.trim();
       const to_location_id = overlay.querySelector('#locQmTo').value;
       const movement_type = typeSel.value;
       const note = overlay.querySelector('#locQmNote').value.trim();
@@ -1121,8 +1219,8 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       const needsFrom = movement_type !== 'INITIAL_PLACEMENT' && movement_type !== 'INVENTORY_ADJUSTMENT';
       const from_location_id = needsFrom ? fromSel.value : '';
 
-      if (!item_ref_table || !item_ref_id || !to_location_id || !movement_type) {
-        errEl.textContent = 'Popuni obavezna polja.';
+      if (!order_no || !item_ref_id || !to_location_id || !movement_type) {
+        errEl.textContent = 'Popuni obavezna polja (predmet, TP, odredište).';
         return;
       }
       if (!Number.isFinite(qty) || qty <= 0) {
@@ -1138,16 +1236,22 @@ export function openQuickMoveModal({ onSuccess } = {}) {
         return;
       }
 
+      const noteParts = [];
+      if (note) noteParts.push(note);
+      if (drawing_no) noteParts.push(`Crtež:${drawing_no}`);
+      const noteCombined = noteParts.length ? noteParts.join(' | ') : undefined;
+
       submitBtn.disabled = true;
       const res = await locCreateMovement({
         item_ref_table,
         item_ref_id,
         order_no,
+        drawing_no: drawing_no || undefined,
         to_location_id,
         from_location_id: from_location_id || undefined,
         movement_type,
         quantity: qty,
-        note: note || undefined,
+        note: noteCombined,
       });
       submitBtn.disabled = false;
       if (!res) {
@@ -1157,6 +1261,9 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       if (!res.ok) {
         errEl.textContent = movementErrMsg(res.error, res);
         return;
+      }
+      if (drawing_no && order_no && item_ref_id) {
+        qmSetDrawingCache(order_no, item_ref_id, drawing_no);
       }
       showToast('✓ Premeštanje zabeleženo');
       close();

@@ -548,6 +548,83 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija) {
 }
 
 /**
+ * Distinct brojevi TP za uneti broj predmeta (prvi segment `ident_broj` u
+ * `bigtehn_work_orders_cache`, npr. 7351 ili 9400-1). Za RN bez "/" u ident-u
+ * čita operacije iz `bigtehn_tech_routing_cache`.
+ *
+ * @param {string} orderNo
+ * @returns {Promise<{ tp: string, broj_crteza: string, ident_broj: string }[]>}
+ */
+export async function fetchTpOptionsForPredmetOrder(orderNo) {
+  if (!getIsOnline()) return [];
+  const ident = String(orderNo ?? '').trim();
+  if (!ident) return [];
+
+  const variants = new Set([ident]);
+  if (/^\d+$/.test(ident)) {
+    variants.add(String(parseInt(ident, 10)));
+  }
+
+  const byWoId = new Map();
+  for (const v of variants) {
+    if (!v) continue;
+    const orInner = `ident_broj.eq.${encodeURIComponent(v)},ident_broj.like.${encodeURIComponent(`${v}.*`)}`;
+    const rows = await sbReq(
+      `bigtehn_work_orders_cache?select=id,ident_broj,broj_crteza&or=(${orInner})&limit=500`,
+    );
+    if (!Array.isArray(rows)) continue;
+    for (const r of rows) {
+      if (r?.id == null) continue;
+      byWoId.set(Number(r.id), r);
+    }
+  }
+
+  const out = [];
+  const seenTp = new Set();
+
+  for (const r of byWoId.values()) {
+    const ib = String(r.ident_broj ?? '').trim();
+    const parts = ib.split('/');
+    const tail = parts.length >= 2 ? String(parts[1] ?? '').trim() : '';
+    const dr = r.broj_crteza != null ? String(r.broj_crteza).trim() : '';
+
+    if (tail) {
+      if (seenTp.has(tail)) continue;
+      seenTp.add(tail);
+      out.push({ tp: tail, broj_crteza: dr, ident_broj: ib });
+      continue;
+    }
+
+    const wid = Number(r.id);
+    if (!Number.isFinite(wid)) continue;
+    const p = new URLSearchParams();
+    p.set('select', 'operacija');
+    p.set('work_order_id', `eq.${wid}`);
+    p.set('order', 'operacija.asc');
+    p.set('limit', '800');
+    const routes = await sbReq(`bigtehn_tech_routing_cache?${p.toString()}`);
+    if (!Array.isArray(routes)) continue;
+    for (const row of routes) {
+      if (row?.operacija == null) continue;
+      const tp = String(row.operacija).trim();
+      if (!tp || seenTp.has(tp)) continue;
+      seenTp.add(tp);
+      out.push({ tp, broj_crteza: dr, ident_broj: ib });
+    }
+  }
+
+  out.sort((a, b) => {
+    const na = parseInt(a.tp, 10);
+    const nb = parseInt(b.tp, 10);
+    if (Number.isFinite(na) && Number.isFinite(nb) && String(na) === a.tp && String(nb) === b.tp) {
+      return na - nb;
+    }
+    return String(a.tp).localeCompare(String(b.tp), 'sr', { numeric: true });
+  });
+  return out;
+}
+
+/**
  * @param {number[]} ids — `bigtehn_work_orders_cache.id` (npr. iz projekt_bigtehn_rn)
  * @returns {Promise<object[]>}
  */
