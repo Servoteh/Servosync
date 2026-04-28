@@ -101,6 +101,10 @@ export async function renderMobileBatch(mountEl, ctx) {
   const errEl = $('#mBatchErr');
   const toSel = $('#mBatchTo');
 
+  if (/Android/i.test(navigator.userAgent || '')) {
+    mountEl.querySelector('.m-batch-torch')?.setAttribute('hidden', '');
+  }
+
   function refreshList() {
     if (!rows.length) {
       listEl.innerHTML = `<div class="m-empty-small">Nijedna nalepnica skenirana.</div>`;

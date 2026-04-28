@@ -73,6 +73,15 @@ export function isScanSupported() {
 }
 
 /**
+ * Android (Chrome, Samsung Internet, Firefox, WebView): torch i kontinuirani
+ * zoom preko `applyConstraints` retko rade pouzdano na stražnjoj kameri — UI
+ * ih ne prikazujemo da korisnik ne misli da je „pokvareno“.
+ */
+export function isAndroidWebCameraTorchZoomHidden() {
+  return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
+}
+
+/**
  * Pokreni kontinualno skeniranje. Callback `onResult` se poziva sa SVAKIM
  * validnim dekodiranjem; obično ga zaustavljaš (ctrl.stop()) čim dobiješ
  * prvi hit, ali ostavljamo klijentu da odluči (npr. double-read).
@@ -205,9 +214,8 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
       if (!track) return false;
       const caps = track.getCapabilities?.() || {};
       const supported = navigator.mediaDevices?.getSupportedConstraints?.() || {};
-      /* Samsung/Chrome često ne listaju torch u getCapabilities(), ali
-       * applyConstraints ipak radi posle niže rezolucije — na Androidu uvek pokušaj. */
-      const torchAdvertised = 'torch' in caps || supported.torch === true || isAndroid;
+      if (isAndroidWebCameraTorchZoomHidden()) return false;
+      const torchAdvertised = 'torch' in caps || supported.torch === true;
       if (!torchAdvertised) return false;
       const settings = track.getSettings?.() || {};
       const next = !settings.torch;
@@ -229,8 +237,8 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     getZoom: async () => {
       const track = getTrack();
       if (!track) return null;
+      if (isAndroidWebCameraTorchZoomHidden()) return null;
       const caps = track.getCapabilities?.() || {};
-      const supported = navigator.mediaDevices?.getSupportedConstraints?.() || {};
       const s = track.getSettings?.() || {};
       const zRaw = caps.zoom;
       if (zRaw != null && typeof zRaw === 'object' && !Array.isArray(zRaw)) {
@@ -240,16 +248,6 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
           max: Number(z.max ?? 1),
           step: Number(z.step ?? 0.1),
           current: Number(s.zoom ?? z.min ?? 1),
-        };
-      }
-      /* Android: drajver ponekad ne popuni caps.zoom; ako je zoom u supported
-       * constraints, ipak prikaži slider i pusti setZoom da proba apply. */
-      if (isAndroid && supported.zoom === true) {
-        return {
-          min: 1,
-          max: 5,
-          step: 0.1,
-          current: Number(s.zoom ?? 1),
         };
       }
       return null;

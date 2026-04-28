@@ -300,6 +300,10 @@ export async function openScanMoveModal({
     </div>
   `;
   document.body.appendChild(overlay);
+  /* Android Web: torch/zoom kroz MediaStream retko rade — sakrij dugme da ne zbunjuje. */
+  if (/Android/i.test(navigator.userAgent || '')) {
+    overlay.querySelector('.loc-scan-topbar [data-act="torch"]')?.setAttribute('hidden', '');
+  }
 
   const state = {
     scanCtrl: null,
@@ -537,6 +541,7 @@ export async function openScanMoveModal({
    * kad je track.getCapabilities dostupan.
    */
   async function setupZoomUI() {
+    if (/Android/i.test(navigator.userAgent || '')) return;
     if (!state.scanCtrl || typeof state.scanCtrl.getZoom !== 'function') return;
     const cap = await state.scanCtrl.getZoom();
     const wrap = $('#locScanZoom');
