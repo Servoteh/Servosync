@@ -4,15 +4,17 @@ Ovaj dokument planira sledeći tehnički sloj posle stabilnog pilota.
 
 ## 1. Dnevni snapshot operacija (već u bazi)
 
-View `public.v_maint_cmms_daily_summary` (migracija `add_maint_daily_ops_view.sql`) agregira za trenutnog korisnika (RLS):
+View `public.v_maint_cmms_daily_summary` (migracija `add_maint_daily_ops_view.sql`, a na već postojećim bazama i `extend_maint_cmms_daily_summary.sql`) agregira za trenutnog korisnika (RLS):
 
 - broj aktivnih radnih naloga
 - otvoreni incidenti
 - otvoreni kritični incidenti
 - kasni preventivni rokovi
 - delovi ispod minimalne zalihe
+- otvoreni WO prioriteta P1 (`p1_zastoj`) i P2 (`p2_smetnja`)
+- otvoreni WO sa isteklim `due_at` (kasni radni nalozi)
 
-**Sledeći korak u UI:** kartice na dashboardu koje čitaju ovaj view preko PostgREST (`/rest/v1/v_maint_cmms_daily_summary?limit=1`).
+**UI:** dashboard `/maintenance` učitava isti pregled preko `fetchMaintCmmsDailySummary()` (PostgREST `v_maint_cmms_daily_summary?limit=1`).
 
 ## 2. Automatsko kreiranje WO za preventivu (cron)
 
@@ -44,14 +46,9 @@ Trenutno se redovi queue-uju u `maint_notification_log`. Za stvarno slanje:
 
 ## 4. Dashboard „šta danas“
 
-Predložene kartice:
+Drugi red KPI na dashboardu pokriva: P1/P2 otvoreni WO, kasni WO (`due_at`), kritične incidente i delove ispod `min_stock` (iz `v_maint_cmms_daily_summary`), uz rezervne brojače iz lokalno učitanih WO kada snapshot nije dostupan.
 
-- P1/P2 otvoreni WO
-- WO sa `due_at` u prošlosti
-- Preventiva danas / ove nedelje
-- Delovi ispod `min_stock`
-
-Izvor podataka: kombinacija `v_maint_cmms_daily_summary` i postojećih upita u [`src/ui/odrzavanjeMasina/index.js`](../src/ui/odrzavanjeMasina/index.js) (KPI).
+Dodatno: preventiva danas / ove nedelje i ostali KPI ostaju iz postojećih upita u [`src/ui/odrzavanjeMasina/index.js`](../src/ui/odrzavanjeMasina/index.js). Lista WO podržava filter `?overdue=1` (kasni rok).
 
 ## 5. Zaključavanje WO (proces)
 

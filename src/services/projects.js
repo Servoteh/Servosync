@@ -213,7 +213,6 @@ export async function loadWorkPackagesFromDb(projectId) {
   if (data.length > 0 && Object.prototype.hasOwnProperty.call(data[0], 'assembly_drawing_no')) {
     if (!wpAssemblyDrawingSchemaSupported) {
       wpAssemblyDrawingSchemaSupported = true;
-      console.info('[wp.assembly_drawing_no] Column detected in DB; re-enabling save support.');
     }
   }
   return data.map(mapDbWP);
@@ -227,15 +226,12 @@ export async function loadPhasesFromDb(projectId, wpId) {
     const sample = data[0];
     if (Object.prototype.hasOwnProperty.call(sample, 'linked_drawings') && !phaseLinkedDrawingsSchemaSupported) {
       phaseLinkedDrawingsSchemaSupported = true;
-      console.info('[phase.linked_drawings] Column detected in DB; re-enabling save support.');
     }
     if (Object.prototype.hasOwnProperty.call(sample, 'description') && !phaseDescriptionSchemaSupported) {
       phaseDescriptionSchemaSupported = true;
-      console.info('[phase.description] Column detected in DB; re-enabling save support.');
     }
     if (Object.prototype.hasOwnProperty.call(sample, 'phase_type') && !phaseTypeSchemaSupported) {
       phaseTypeSchemaSupported = true;
-      console.info('[phase.phase_type] Column detected in DB; re-enabling save support.');
     }
   }
   return data.map(mapDbPhase);

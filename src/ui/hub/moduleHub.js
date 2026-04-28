@@ -20,6 +20,7 @@
  * Plan Proizvodnje, Kadrovska, Podešavanja).
  */
 
+import { APP_PRODUCT_NAME } from '../../lib/constants.js';
 import { showToast, escHtml } from '../../lib/dom.js';
 import { toggleTheme } from '../../lib/theme.js';
 import { logout } from '../../services/auth.js';
@@ -47,8 +48,8 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
           <svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.8-.7-.7-2.8 2.5-2.5z"></path></svg>
         </div>
         <div class="hub-brand-text">
-          <span class="hub-brand-title">Servoteh</span>
-          <span class="hub-brand-sub">Interni sistem</span>
+          <span class="hub-brand-title">${APP_PRODUCT_NAME}</span>
+          <span class="hub-brand-sub">Servoteh · MES</span>
         </div>
       </div>
       <div class="hub-header-right">

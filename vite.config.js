@@ -51,9 +51,9 @@ export default defineConfig({
       strategies: 'generateSW',
       includeAssets: ['icons/servoteh-lokacije.svg'],
       manifest: {
-        name: 'Servoteh Lokacije',
-        short_name: 'Lokacije',
-        description: 'Skeniraj barkod i premesti delove u magacinu Servoteh.',
+        name: 'Servosync V1.0',
+        short_name: 'Servosync',
+        description: 'Servoteh MES — mobilne lokacije delova (barkod, magacin).',
         lang: 'sr',
         theme_color: '#0a0e14',
         background_color: '#0a0e14',

@@ -13,7 +13,7 @@
 import { login } from '../../services/auth.js';
 import { setUser, setOnline, setRole } from '../../state/auth.js';
 import { escHtml, showToast } from '../../lib/dom.js';
-import { hasSupabaseConfig, isOfflineModeEnabled } from '../../lib/constants.js';
+import { APP_PRODUCT_NAME, hasSupabaseConfig, isOfflineModeEnabled } from '../../lib/constants.js';
 
 /**
  * @param {object} opts
@@ -44,12 +44,12 @@ export function renderLoginScreen({ onLoginSuccess, onForgotPassword }) {
     <div class="auth-box" role="dialog" aria-labelledby="authTitle" aria-describedby="authSubtitle">
       <div class="auth-brand">
         <div class="auth-brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" role="img" aria-label="Servoteh">
+          <svg viewBox="0 0 24 24" role="img" aria-label="${APP_PRODUCT_NAME}">
             <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.8-.7-.7-2.8 2.5-2.5z"></path>
           </svg>
         </div>
-        <div class="auth-title" id="authTitle">Plan Montaže</div>
-        <div class="auth-subtitle" id="authSubtitle">Servoteh · Sistem za planiranje montaža</div>
+        <div class="auth-title" id="authTitle">${APP_PRODUCT_NAME}</div>
+        <div class="auth-subtitle" id="authSubtitle">Servoteh · MES — planiranje i operacije</div>
       </div>
 
       <form class="auth-form" id="authForm">
@@ -75,7 +75,7 @@ export function renderLoginScreen({ onLoginSuccess, onForgotPassword }) {
 
       <div class="auth-msg" id="authMsg" role="status" aria-live="polite"></div>
 
-      <div class="auth-footer"><strong>SERVOTEH</strong> · Plan Montaže</div>
+      <div class="auth-footer"><strong>SERVOTEH</strong> · ${APP_PRODUCT_NAME}</div>
     </div>
   `;
 

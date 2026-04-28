@@ -45,7 +45,26 @@ SELECT
     FROM public.maint_parts p
     WHERE p.active
       AND p.current_stock < p.min_stock
-  ) AS parts_below_min_stock;
+  ) AS parts_below_min_stock,
+  (
+    SELECT count(*)::bigint
+    FROM public.maint_work_orders w
+    WHERE w.status::text NOT IN ('zavrsen', 'otkazan')
+      AND w.priority = 'p1_zastoj'::public.maint_wo_priority
+  ) AS open_wo_p1,
+  (
+    SELECT count(*)::bigint
+    FROM public.maint_work_orders w
+    WHERE w.status::text NOT IN ('zavrsen', 'otkazan')
+      AND w.priority = 'p2_smetnja'::public.maint_wo_priority
+  ) AS open_wo_p2,
+  (
+    SELECT count(*)::bigint
+    FROM public.maint_work_orders w
+    WHERE w.status::text NOT IN ('zavrsen', 'otkazan')
+      AND w.due_at IS NOT NULL
+      AND w.due_at < now()
+  ) AS overdue_work_orders;
 
 COMMENT ON VIEW public.v_maint_cmms_daily_summary IS
   'CMMS: jedan red agregata za operativni dashboard (RLS preko security_invoker).';

@@ -1,14 +1,14 @@
-# Servoteh ERP — Plan Montaže + Kadrovska + Podešavanja
+# Servosync (MES) — Servoteh ERP
 
 Modularna Vite + vanilla JS aplikacija za:
 
-- **Plan Montaže** — projekti → work packages → faze, Gantt, mobilne kartice, total Gantt, reminders, 3D model panel, eksport (JSON/XLSX/PDF).
+- **Plan montaže** — projekti → work packages → faze, Gantt, mobilne kartice, total Gantt, reminders, 3D model panel, eksport (JSON/XLSX/PDF).
 - **Kadrovska** — zaposleni, odsustva, mesečni grid (Excel-like), sati pojedinačno, ugovori, izveštaji (bolovanja).
 - **Podešavanja** — korisnici / uloge (admin only), **Podeš. predmeta** (admin + menadžment: aktivacija predmeta za Plan + Praćenje), placeholderi za matične i sistem.
 
 Backend: Supabase (Auth + Postgres + RLS).
 
-**Plan Montaže:** [docs/Plan_montaze_modul.md](docs/Plan_montaze_modul.md) · **Lokacije delova:** [docs/Lokacije_modul.md](docs/Lokacije_modul.md) · **Kadrovska:** [docs/Kadrovska_modul.md](docs/Kadrovska_modul.md) · **Planiranje proizvodnje:** [docs/Planiranje_proizvodnje_modul.md](docs/Planiranje_proizvodnje_modul.md)
+**Plan montaže:** [docs/Plan_montaze_modul.md](docs/Plan_montaze_modul.md) · **Lokacije delova:** [docs/Lokacije_modul.md](docs/Lokacije_modul.md) · **Kadrovska:** [docs/Kadrovska_modul.md](docs/Kadrovska_modul.md) · **Planiranje proizvodnje:** [docs/Planiranje_proizvodnje_modul.md](docs/Planiranje_proizvodnje_modul.md)
 
 ---
 

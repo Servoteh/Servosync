@@ -113,6 +113,7 @@ export async function renderMaintWorkOrdersPanel(host, opts) {
     priority: sp.get('priority') || 'all',
     mine: sp.get('mine') === '1',
     openOnly: sp.get('open') !== '0',
+    overdueWo: sp.get('overdue') === '1',
     search: sp.get('q') || '',
   };
 
@@ -122,6 +123,7 @@ export async function renderMaintWorkOrdersPanel(host, opts) {
     if (state.priority !== 'all') q.set('priority', state.priority);
     if (state.mine) q.set('mine', '1');
     if (!state.openOnly) q.set('open', '0');
+    if (state.overdueWo) q.set('overdue', '1');
     if (state.search.trim()) q.set('q', state.search.trim());
     const next = `/maintenance/work-orders${q.toString() ? '?' + q.toString() : ''}`;
     window.history.replaceState(null, '', next);
@@ -129,11 +131,17 @@ export async function renderMaintWorkOrdersPanel(host, opts) {
 
   function filterRows() {
     const q = state.search.trim().toLowerCase();
+    const nowMs = Date.now();
     return raw.filter(w => {
       if (state.status !== 'all' && String(w.status || '') !== state.status) return false;
       if (state.priority !== 'all' && String(w.priority || '') !== state.priority) return false;
       if (state.mine && (!myUid || String(w.assigned_to || '') !== String(myUid))) return false;
       if (state.openOnly && ['zavrsen', 'otkazan'].includes(String(w.status || ''))) return false;
+      if (state.overdueWo) {
+        if (['zavrsen', 'otkazan'].includes(String(w.status || ''))) return false;
+        const due = w.due_at ? new Date(w.due_at).getTime() : NaN;
+        if (!Number.isFinite(due) || due >= nowMs) return false;
+      }
       if (q) {
         const asset = w.maint_assets || {};
         const hay = [
@@ -224,6 +232,7 @@ export async function renderMaintWorkOrdersPanel(host, opts) {
         ${['p1_zastoj', 'p2_smetnja', 'p3_manje', 'p4_planirano'].map(p => `<option value="${escHtml(p)}"${state.priority === p ? ' selected' : ''}>${escHtml(woPriorityLabel(p))}</option>`).join('')}
       </select>
       <label class="mnt-wo-check"><input type="checkbox" id="mntWoOpen"${state.openOnly ? ' checked' : ''}> Samo otvoreni</label>
+      <label class="mnt-wo-check"><input type="checkbox" id="mntWoOverdue"${state.overdueWo ? ' checked' : ''}> Kasni rok (WO)</label>
       <label class="mnt-wo-check"><input type="checkbox" id="mntWoMine"${state.mine ? ' checked' : ''}> Samo moji</label>
       <span class="mnt-muted mnt-wo-count">${rows.length} od ${raw.length}</span>
     </div>
@@ -277,6 +286,10 @@ export async function renderMaintWorkOrdersPanel(host, opts) {
   });
   host.querySelector('#mntWoOpen')?.addEventListener('change', e => {
     state.openOnly = !!e.target.checked;
+    rerender();
+  });
+  host.querySelector('#mntWoOverdue')?.addEventListener('change', e => {
+    state.overdueWo = !!e.target.checked;
     rerender();
   });
   host.querySelector('#mntWoMine')?.addEventListener('change', e => {

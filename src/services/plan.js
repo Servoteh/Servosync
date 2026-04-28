@@ -239,7 +239,6 @@ export async function callReminderEndpoint(buildPayloadFn) {
   const payload = buildPayloadFn ? buildPayloadFn() : [];
   if (!payload.length) return { ok: true, sent: 0, empty: true };
   if (!getIsOnline()) {
-    console.log('Reminder payload:', payload);
     return { ok: true, sent: payload.length, offline: true };
   }
   /* Edge functions endpoint — Authorization je već default kroz sbReq, ali

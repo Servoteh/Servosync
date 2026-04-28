@@ -1,6 +1,6 @@
 {
   "appId": "com.servoteh.lokacije",
-  "appName": "Servoteh Lokacije",
+  "appName": "Servosync",
   "webDir": "dist",
   "server": {
     "androidScheme": "https",

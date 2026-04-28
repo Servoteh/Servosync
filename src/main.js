@@ -1,14 +1,4 @@
-/**
- * Servoteh ERP — Vite entry point.
- *
- * Faza 0: scaffold + env verifikacija.                      ✓
- * Faza 1: import CSS-a iz legacy fajla u src/styles/legacy.css. ✓
- * Faza 2: lib + services + state moduli izvučeni.           ✓
- * Faza 3: Auth screen + Module hub + Theme manager + router. ← (ovaj fajl)
- * Faza 4: Kadrovska modul UI (zameni placeholder).
- * Faza 5: Plan Montaže modul UI (zameni placeholder) + Podešavanja.
- * Faza 6: Production cutover (Cloudflare Pages → dist/).
- */
+/** Vite entry — theme CSS, auth, router. */
 
 import './styles/legacy.css';
 import './styles/planProizvodnje.css';
@@ -16,7 +6,9 @@ import './styles/sastanci.css';
 import './styles/maintenance.css';
 import './styles/mobile.css';
 
-import { hasSupabaseConfig } from './lib/constants.js';
+import { APP_DOCUMENT_TITLE, hasSupabaseConfig } from './lib/constants.js';
+
+document.title = APP_DOCUMENT_TITLE;
 import { showToast } from './lib/dom.js';
 import { restoreSession } from './services/auth.js';
 import { loadAndApplyUserRole } from './services/userRoles.js';
@@ -66,11 +58,6 @@ redirectToMobileIfNative();
  *   3) initRouter → ili login, ili hub, ili poslednji modul iz session-a.
  */
 async function bootstrap() {
-  console.log('[main] Faza 3 bootstrap starting…', {
-    mode: import.meta.env.MODE,
-    supabase: hasSupabaseConfig() ? 'configured' : 'MISSING (proveri .env)',
-  });
-
   if (hasSupabaseConfig()) {
     try {
       const restored = await restoreSession();
@@ -95,8 +82,6 @@ async function bootstrap() {
   }
 
   initRouter(root);
-
-  console.log('[main] Faza 3 bootstrap done.');
 }
 
 bootstrap().catch(e => {

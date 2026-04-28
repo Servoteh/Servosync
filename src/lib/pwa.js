@@ -30,8 +30,7 @@ export async function registerMobilePWA() {
     const { registerSW } = await import('virtual:pwa-register');
     registerSW({
       immediate: true,
-      onRegisteredSW(swUrl, registration) {
-        console.info('[pwa] SW registered', swUrl);
+      onRegisteredSW(_swUrl, registration) {
         if (!registration) return;
         /* Periodični update check — svaki put kad radnik otvori app,
          * pokušamo da skinemo novu verziju. Bez ovoga SW bi update-ovao
@@ -53,9 +52,7 @@ export async function registerMobilePWA() {
         document.addEventListener('visibilitychange', onVisible);
         window.addEventListener('focus', onVisible);
       },
-      onOfflineReady() {
-        console.info('[pwa] Ready for offline use.');
-      },
+      onOfflineReady() {},
       onRegisterError(err) {
         console.error('[pwa] SW registration failed', err);
       },

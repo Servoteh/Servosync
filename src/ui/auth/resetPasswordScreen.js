@@ -25,7 +25,7 @@
  */
 
 import { escHtml } from '../../lib/dom.js';
-import { hasSupabaseConfig } from '../../lib/constants.js';
+import { APP_PRODUCT_NAME, hasSupabaseConfig } from '../../lib/constants.js';
 import {
   updatePassword,
   exchangeCodeForSession,
@@ -212,7 +212,7 @@ function shellHtml() {
     <div class="auth-box" role="dialog" aria-labelledby="resetTitle" aria-describedby="resetSubtitle">
       <div class="auth-brand">
         <div class="auth-brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" role="img" aria-label="Servoteh">
+          <svg viewBox="0 0 24 24" role="img" aria-label="${APP_PRODUCT_NAME}">
             <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.8-.7-.7-2.8 2.5-2.5z"></path>
           </svg>
         </div>
@@ -228,7 +228,7 @@ function shellHtml() {
         <button type="button" class="auth-btn-ghost" id="resetBackBtn">← Nazad na prijavu</button>
       </div>
 
-      <div class="auth-footer"><strong>SERVOTEH</strong> · Plan Montaže</div>
+      <div class="auth-footer"><strong>SERVOTEH</strong> · ${APP_PRODUCT_NAME}</div>
     </div>
   `;
 }

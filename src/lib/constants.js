@@ -5,6 +5,12 @@
  * legacy/index.html.
  */
 
+/** Ime proizvoda (SaaS / MES brend) — naslovi, login, hub. */
+export const APP_PRODUCT_NAME = 'Servosync';
+
+/** Pun naslov u browser tabu / `<title>` (verzija za korisnike). */
+export const APP_DOCUMENT_TITLE = 'Servosync V1.0';
+
 /* ── localStorage ključevi ── */
 export const STORAGE_KEYS = Object.freeze({
   /* Plan Montaže */

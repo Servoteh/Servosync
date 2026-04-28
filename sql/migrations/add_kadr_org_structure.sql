@@ -61,7 +61,9 @@ VALUES
   (8,  'Infrastruktura, logistika i nabavka', 70),
   (9,  'Održavanje i servis',                 80),
   (10, 'Kvalitet',                            90),
-  (11, 'Finansije i administracija',          100)
+  (11, 'Finansije i administracija',          100),
+  (12, 'HAP Fluid',                           108),
+  (13, 'Servoteh',                            109)
 ON CONFLICT (id) DO NOTHING;
 
 SELECT setval('public.departments_id_seq', (SELECT MAX(id) FROM public.departments));

@@ -466,6 +466,25 @@ export async function fetchMaintTaskDueDates(opts = {}) {
 }
 
 /**
+ * Jedan red agregata za CMMS dashboard (`v_maint_cmms_daily_summary`, RLS).
+ * @returns {Promise<object|null>}
+ */
+export async function fetchMaintCmmsDailySummary() {
+  const cols = [
+    'active_work_orders',
+    'open_incidents',
+    'open_critical_incidents',
+    'overdue_preventive_tasks',
+    'parts_below_min_stock',
+    'open_wo_p1',
+    'open_wo_p2',
+    'overdue_work_orders',
+  ].join(',');
+  const rows = await sbReq(`v_maint_cmms_daily_summary?select=${cols}&limit=1`).catch(() => null);
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
+/**
  * Kreira ili vraća postojeći radni nalog za preventivni šablon.
  * @param {string} taskId
  * @returns {Promise<string|null>}

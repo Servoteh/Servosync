@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Servoteh ERP — Plan Montaže + Kadrovska + Podešavanja (Vite + vanilla JS)",
+  "description": "Servosync (MES) — Servoteh ERP: plan montaže, kadrovska, lokacije, održavanje, podešavanja (Vite + vanilla JS)",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

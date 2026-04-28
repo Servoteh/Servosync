@@ -161,7 +161,6 @@ async function loadAndRender(root, workOrderId) {
     const pdfPrimaryBtn = body.querySelector('[data-role="pdf-primary-btn"]');
     const onMobile = isMobileDevice();
     if (pdfSection && header?.broj_crteza) {
-      console.info('[tpm:pdf] start broj=', header.broj_crteza, 'mobile=', onMobile, 'app=', APP_VERSION);
       try {
         const resolved = await resolveBigtehnDrawing(header.broj_crteza);
         if (!resolved) {
@@ -218,7 +217,6 @@ async function loadAndRender(root, workOrderId) {
                 const r = await fetch(url);
                 if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
                 const blob = await r.blob();
-                console.info('[tpm:pdf] blob fetched', blob.size, 'bytes, type=', blob.type);
                 /* Force application/pdf type ako je blob.type prazan/wrong
                    (neki Storage servera vraćaju octet-stream). */
                 const pdfBlob = blob.type === 'application/pdf'
@@ -233,7 +231,6 @@ async function loadAndRender(root, workOrderId) {
                 pdfFrame.src = blobUrl + '#toolbar=1&view=FitH';
                 pdfFrame.classList.add('is-loaded');
                 if (pdfMsg) pdfMsg.remove();
-                console.info('[tpm:pdf] iframe loaded via blob for', resolved.resolvedDrawingNo);
               } catch (e) {
                 console.error('[tpm:pdf] blob fetch failed', e);
                 if (pdfMsg) {

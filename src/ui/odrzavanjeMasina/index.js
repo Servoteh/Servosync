@@ -28,6 +28,7 @@ import {
   patchMaintTask,
   fetchMaintMachineOverride,
   fetchMaintWorkOrders,
+  fetchMaintCmmsDailySummary,
 } from '../../services/maintenance.js';
 import { buildMaintenanceMachinePath } from '../../lib/appPaths.js';
 import { openConfirmCheckModal, openReportIncidentModal } from './maintDialogs.js';
@@ -1190,7 +1191,7 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
   }
 
   if (section === 'dashboard') {
-    const [rows, prof, names, dues, workOrders] = await Promise.all([
+    const [rows, prof, names, dues, workOrders, cmmsSnap] = await Promise.all([
       fetchMaintMachineStatuses(),
       fetchMaintUserProfile(),
       fetchMaintMachines(),
@@ -1198,6 +1199,7 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
          kartica će samo pokazati 0, ne ruši dashboard. */
       fetchMaintTaskDueDates().catch(() => []),
       fetchMaintWorkOrders({ limit: 250 }).catch(() => null),
+      fetchMaintCmmsDailySummary().catch(() => null),
     ]);
     if (disposeRef.disposed || !host.isConnected) return;
 
@@ -1219,7 +1221,36 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
     const woRows = Array.isArray(workOrders) ? workOrders : [];
     const isWoOpen = w => !['zavrsen', 'otkazan'].includes(String(w.status || '').toLowerCase());
     const activeWo = woRows.filter(isWoOpen);
+    const nActiveWo =
+      cmmsSnap && cmmsSnap.active_work_orders != null
+        ? Number(cmmsSnap.active_work_orders) || 0
+        : activeWo.length;
     const nSafetyWo = activeWo.filter(w => !!w.safety_marker).length;
+
+    const woNowMs = Date.now();
+    const nWoP1 =
+      cmmsSnap != null && cmmsSnap.open_wo_p1 != null
+        ? Number(cmmsSnap.open_wo_p1) || 0
+        : activeWo.filter(w => String(w.priority || '') === 'p1_zastoj').length;
+    const nWoP2 =
+      cmmsSnap != null && cmmsSnap.open_wo_p2 != null
+        ? Number(cmmsSnap.open_wo_p2) || 0
+        : activeWo.filter(w => String(w.priority || '') === 'p2_smetnja').length;
+    const nWoOverdue =
+      cmmsSnap != null && cmmsSnap.overdue_work_orders != null
+        ? Number(cmmsSnap.overdue_work_orders) || 0
+        : activeWo.filter(w => {
+            const due = w.due_at ? new Date(w.due_at).getTime() : NaN;
+            return Number.isFinite(due) && due < woNowMs;
+          }).length;
+    const nCritIncSnap =
+      cmmsSnap != null && cmmsSnap.open_critical_incidents != null
+        ? Number(cmmsSnap.open_critical_incidents) || 0
+        : null;
+    const nPartsBelowMinSnap =
+      cmmsSnap != null && cmmsSnap.parts_below_min_stock != null
+        ? Number(cmmsSnap.parts_below_min_stock) || 0
+        : null;
 
     const now = new Date();
     const sod = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1264,10 +1295,10 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
       },
       {
         label: 'Aktivni WO',
-        val: activeWo.length,
+        val: nActiveWo,
         tone: 'maintenance',
         nav: '/maintenance/work-orders?open=1',
-        title: 'Radni nalozi koji nisu završeni ili otkazani',
+        title: 'Radni nalozi koji nisu završeni ili otkazani (iz baze ako je dostupan pregled)',
       },
       {
         label: 'Safety WO',
@@ -1291,13 +1322,70 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
         title: 'Mašine koje rade otežano',
       },
     ];
+    const kpiSnapshotDef = [
+      {
+        label: 'WO P1 (zastoj)',
+        val: nWoP1,
+        tone: 'down',
+        nav: '/maintenance/work-orders?open=1&priority=p1_zastoj',
+        title: 'Otvoreni radni nalozi prioriteta P1 — zastoj',
+      },
+      {
+        label: 'WO P2 (smetnja)',
+        val: nWoP2,
+        tone: 'degraded',
+        nav: '/maintenance/work-orders?open=1&priority=p2_smetnja',
+        title: 'Otvoreni radni nalozi prioriteta P2 — smetnja',
+      },
+      {
+        label: 'Kasni WO',
+        val: nWoOverdue,
+        tone: 'late',
+        nav: '/maintenance/work-orders?open=1&overdue=1',
+        title: 'Otvoreni WO čiji je rok (due_at) prošao',
+      },
+      {
+        label: 'Kritični incidenti',
+        val: nCritIncSnap,
+        tone: 'down',
+        nav: '/maintenance/reports',
+        title:
+          nCritIncSnap === null
+            ? 'Broj iz DB pregleda — učitaj migraciju v_maint_cmms_daily_summary ili proveri mrežu'
+            : 'Otvoreni incidenti sa težinom kritično (iz dnevnog pregleda)',
+      },
+      {
+        label: 'Ispod min. zalihe',
+        val: nPartsBelowMinSnap,
+        tone: 'late',
+        nav: '/maintenance/inventory',
+        title:
+          nPartsBelowMinSnap === null
+            ? 'Broj iz DB pregleda — učitaj migraciju v_maint_cmms_daily_summary ili proveri mrežu'
+            : 'Aktivni delovi ispod minimalne zalihe',
+      },
+    ];
+    const formatKpiVal = v => (v === null || v === undefined ? '—' : String(v));
     const kpiRowHtml = kpiDef.map(k => {
-      const zero = !k.val;
+      const unknown = k.val === null || k.val === undefined;
+      const zero = !unknown && !k.val;
+      const disp = formatKpiVal(k.val);
       return `<button type="button" class="mnt-kpi mnt-kpi--${k.tone}${zero ? ' mnt-kpi--zero' : ''} mnt-kpi--clickable"
         data-mnt-nav="${escHtml(k.nav)}" title="${escHtml(k.title)}"
-        aria-label="${escHtml(k.label)}: ${k.val}">
+        aria-label="${escHtml(k.label)}: ${disp}">
         <span class="mnt-kpi-label">${escHtml(k.label)}</span>
-        <span class="mnt-kpi-val">${k.val}</span>
+        <span class="mnt-kpi-val">${disp}</span>
+      </button>`;
+    }).join('');
+    const kpiSnapshotRowHtml = kpiSnapshotDef.map(k => {
+      const unknown = k.val === null || k.val === undefined;
+      const zero = !unknown && !k.val;
+      const disp = formatKpiVal(k.val);
+      return `<button type="button" class="mnt-kpi mnt-kpi--${k.tone}${zero || unknown ? ' mnt-kpi--zero' : ''} mnt-kpi--clickable"
+        data-mnt-nav="${escHtml(k.nav)}" title="${escHtml(k.title)}"
+        aria-label="${escHtml(k.label)}: ${disp}">
+        <span class="mnt-kpi-label">${escHtml(k.label)}</span>
+        <span class="mnt-kpi-val">${disp}</span>
       </button>`;
     }).join('');
 
@@ -1369,6 +1457,8 @@ async function renderPanel(host, section, machineCode, tab, onNavigateToPath, on
     host.innerHTML = `
       ${profileInfoBannerHtml(prof)}
       <div class="mnt-kpi-row">${kpiRowHtml}</div>
+      <p class="mnt-muted" style="margin:0 0 8px;font-size:13px">Dnevni pregled CMMS (prioriteti WO, kasni rokovi, incidenti, zalihe) — iz pregleda u bazi kada je dostupan.</p>
+      <div class="mnt-kpi-row" style="margin-bottom:16px">${kpiSnapshotRowHtml}</div>
       <div class="mnt-dash-grid">
         <section class="mnt-attention mnt-dash-card">
           <div class="mnt-att-head">
