@@ -315,8 +315,6 @@ export async function openScanMoveModal({
 
   const state = {
     scanCtrl: null,
-    /** Da li smo pokušali fullscreen + orientation.lock (samo coarse/mobile). */
-    scanPresentationActive: false,
     locs: [],
     locById: new Map(),
     currentPlacements: [],
@@ -332,47 +330,16 @@ export async function openScanMoveModal({
   const stageScan = overlay.querySelector('[data-stage="scan"]');
   const stageForm = overlay.querySelector('[data-stage="form"]');
 
-  function isIOSDevice() {
-    const ua = navigator.userAgent || '';
-    if (/iPad|iPhone|iPod/i.test(ua)) return true;
-    if (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) {
-      return true;
-    }
-    return false;
-  }
-
   /**
-   * Fullscreen + landscape lock samo na Androidu.
-   * iOS Safari/PWA: lock često ne uspe ili ruši layout — laser/reticle ostaju, bez lock-a.
+   * Širi okvir + laser (`loc-scan-presentation`).
+   * Bez `requestFullscreen` / `orientation.lock` — na Androidu (npr. Samsung) ruši stabilnost preview-a.
    */
-  function shouldUseFullscreenLandscapeLock() {
-    if (isIOSDevice()) return false;
-    return isAndroidWebCameraTorchZoomHidden();
-  }
-
-  /** Širi okvir + laser za sve; fullscreen + landscape lock samo gde `shouldUseFullscreenLandscapeLock`. */
   function enterScanPresentation() {
     overlay.classList.add('loc-scan-presentation');
-    if (!shouldUseFullscreenLandscapeLock() || state.scanPresentationActive) return;
-    state.scanPresentationActive = true;
-    const root = stageScan;
-    try {
-      const req = root.requestFullscreen || /** @type {any} */ (root).webkitRequestFullscreen;
-      if (typeof req === 'function') void Promise.resolve(req.call(root)).catch(() => {});
-    } catch (_) {
-      /* ignore */
-    }
-    try {
-      const o = screen.orientation;
-      if (o && typeof o.lock === 'function') void o.lock('landscape').catch(() => {});
-    } catch (_) {
-      /* ignore */
-    }
   }
 
   function leaveScanPresentation() {
     overlay.classList.remove('loc-scan-presentation');
-    state.scanPresentationActive = false;
     try {
       const fsEl = /** @type {any} */ (document).fullscreenElement || /** @type {any} */ (document).webkitFullscreenElement;
       if (fsEl && (fsEl === overlay || fsEl === stageScan)) {

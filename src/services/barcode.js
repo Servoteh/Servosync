@@ -100,53 +100,6 @@ export function isAndroidWebCameraTorchZoomHidden() {
 }
 
 /**
- * Android Chrome (posebno stražnja kamera): preview često je horizontalno
- * ogledalo u odnosu na fizički prostor. CSS `scaleX(-1)` ispravlja samo prikaz;
- * `drawImage(video)` / ZXing i dalje čitaju sirove piksele stream-a (bez CSS-a).
- *
- * Postavlja `data-scan-preview-flip-x` kada je flip aktivan — `tapFocus` invertuje x.
- *
- * @param {HTMLVideoElement|null|undefined} videoEl
- */
-export function syncAndroidEnvironmentCameraPreviewMirror(videoEl) {
-  if (!videoEl) return;
-  if (!isAndroidWebCameraTorchZoomHidden()) {
-    videoEl.style.transform = '';
-    videoEl.style.transformOrigin = '';
-    delete videoEl.dataset.scanPreviewFlipX;
-    return;
-  }
-  const stream = /** @type {MediaStream|null} */ (videoEl.srcObject);
-  if (!(stream instanceof MediaStream)) {
-    videoEl.style.transform = '';
-    videoEl.style.transformOrigin = '';
-    delete videoEl.dataset.scanPreviewFlipX;
-    return;
-  }
-  const track = stream.getVideoTracks()[0];
-  if (!track) {
-    videoEl.style.transform = '';
-    videoEl.style.transformOrigin = '';
-    delete videoEl.dataset.scanPreviewFlipX;
-    return;
-  }
-  const s = track.getSettings?.() || {};
-  const label = track.label || '';
-  const fm = s.facingMode;
-  const isUser = fm === 'user' || /front|user|face|selfie/i.test(label);
-  if (isUser) {
-    videoEl.style.transform = '';
-    videoEl.style.transformOrigin = '';
-    delete videoEl.dataset.scanPreviewFlipX;
-    return;
-  }
-  /* Stražnja / environment (uključ. forceDeviceId bez facingMode u settings). */
-  videoEl.style.transformOrigin = 'center center';
-  videoEl.style.transform = 'scaleX(-1)';
-  videoEl.dataset.scanPreviewFlipX = '1';
-}
-
-/**
  * Pokreni kontinualno skeniranje. Callback `onResult` se poziva sa SVAKIM
  * validnim dekodiranjem; obično ga zaustavljaš (ctrl.stop()) čim dobiješ
  * prvi hit, ali ostavljamo klijentu da odluči (npr. double-read).
@@ -253,23 +206,6 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     },
   );
 
-  function syncPreviewMirror() {
-    syncAndroidEnvironmentCameraPreviewMirror(videoEl);
-  }
-  syncPreviewMirror();
-  videoEl.addEventListener('loadedmetadata', syncPreviewMirror);
-  window.addEventListener('orientationchange', syncPreviewMirror);
-  screen.orientation?.addEventListener?.('change', syncPreviewMirror);
-
-  function detachPreviewMirrorSync() {
-    videoEl.removeEventListener('loadedmetadata', syncPreviewMirror);
-    window.removeEventListener('orientationchange', syncPreviewMirror);
-    screen.orientation?.removeEventListener?.('change', syncPreviewMirror);
-    videoEl.style.transform = '';
-    videoEl.style.transformOrigin = '';
-    delete videoEl.dataset.scanPreviewFlipX;
-  }
-
   /** Uzmi aktivni videoTrack ili `null`. */
   function getTrack() {
     const stream = /** @type {MediaStream|null} */ (videoEl.srcObject);
@@ -279,7 +215,6 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
 
   return {
     stop: () => {
-      detachPreviewMirrorSync();
       try {
         controls.stop();
       } catch (e) {
@@ -363,7 +298,6 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
       const track = getTrack();
       if (!track) return false;
       const caps = track.getCapabilities?.() || {};
-      const fx = videoEl.dataset.scanPreviewFlipX === '1' ? 1 - x : x;
       try {
         /** @type {any} */
         const adv = {};
@@ -371,7 +305,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
           adv.focusMode = 'single-shot';
         }
         if ('pointsOfInterest' in caps) {
-          adv.pointsOfInterest = [{ x: Math.min(1, Math.max(0, fx)), y: Math.min(1, Math.max(0, y)) }];
+          adv.pointsOfInterest = [{ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }];
         }
         if (!Object.keys(adv).length) return false;
         await track.applyConstraints({ advanced: [adv] });
@@ -407,50 +341,18 @@ export async function decodeBarcodeFromFile(file) {
   if (!file || !(file instanceof Blob)) return { error: 'not_image' };
   if (!/^image\//.test(file.type || '')) return { error: 'not_image' };
 
-  const reader = new BrowserMultiFormatReader(SCAN_HINTS);
-
-  /* EXIF orijentacija (foto sa telefona): bitmap sa `from-image` — bez CSS mirror-a,
-   * samo ispravna rotacija piksela pre ZXing-a. */
-  if (typeof createImageBitmap === 'function') {
-    try {
-      const bitmap = await createImageBitmap(/** @type {Blob} */ (file), { imageOrientation: 'from-image' });
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(bitmap, 0, 0);
-          try {
-            const result = reader.decodeFromCanvas(canvas);
-            return { text: result.getText(), format: result.getBarcodeFormat?.().toString() };
-          } catch (e) {
-            if (e?.name !== 'NotFoundException') {
-              console.warn('[barcode] decodeFromCanvas (exif) failed', e);
-            }
-          }
-        }
-      } finally {
-        try {
-          bitmap.close();
-        } catch {
-          /* ignore */
-        }
-      }
-    } catch (e) {
-      console.warn('[barcode] createImageBitmap exif path failed', e);
-    }
-  }
-
-  /* Fallback: <img> + ObjectURL (browser često i dalje iscrtava EXIF za prikaz,
-   * ali ZXing putanja ostaje kao rezerva ako canvas bitmap ne uspe). */
+  /* Kreiraj <img> iz File blob-a preko ObjectURL — 10× efikasnije od
+   * FileReader.readAsDataURL (koji base64 encode-uje u memoriji). */
   const url = URL.createObjectURL(file);
   try {
     const img = await loadImage(url);
+    const reader = new BrowserMultiFormatReader(SCAN_HINTS);
     try {
       const result = await reader.decodeFromImageElement(img);
       return { text: result.getText(), format: result.getBarcodeFormat?.().toString() };
     } catch (e) {
+      /* ZXing baca `NotFoundException` kada ne vidi barkod — tretira se
+       * kao "nije pronađen" a ne kao error. */
       if (e?.name === 'NotFoundException') return { error: 'no_barcode' };
       return { error: 'decode_failed', cause: e };
     }
