@@ -318,11 +318,62 @@ export async function openScanMoveModal({
   const stageScan = overlay.querySelector('[data-stage="scan"]');
   const stageForm = overlay.querySelector('[data-stage="form"]');
 
+  /** Oslobodi MediaStream na <video> — bez ovoga neki mobilni browseri ne
+   * ponovo vežu ZXing `decodeFromConstraints` posle prvog uspešnog skena. */
+  function releaseVideoStream(videoEl) {
+    if (!videoEl) return;
+    try {
+      const ms = videoEl.srcObject;
+      if (ms instanceof MediaStream) {
+        for (const t of ms.getTracks()) {
+          try {
+            t.stop();
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      videoEl.srcObject = null;
+      videoEl.load();
+    } catch {
+      /* ignore */
+    }
+  }
+
   function cleanupScan() {
     if (state.scanCtrl) {
-      state.scanCtrl.stop();
+      try {
+        state.scanCtrl.stop();
+      } catch (e) {
+        console.warn('[scan] scanCtrl.stop failed', e);
+      }
       state.scanCtrl = null;
     }
+    releaseVideoStream($('#locScanVideo'));
+  }
+
+  /* ZXing ponekad pošalje isti barkod dva puta u istom kadru — drugi put
+   * cleanupScan već ugasio skener pa onResult ne sme ponovo da zatvara. */
+  let lastBarcodeClean = '';
+  let lastBarcodeAt = 0;
+  const BARCODE_DEDUP_MS = 1200;
+
+  function handleDecodedBarcode(clean) {
+    if (!clean) return;
+    const now = Date.now();
+    if (clean === lastBarcodeClean && now - lastBarcodeAt < BARCODE_DEDUP_MS) {
+      return;
+    }
+    lastBarcodeClean = clean;
+    lastBarcodeAt = now;
+    cleanupScan();
+    if (navigator.vibrate) navigator.vibrate(80);
+    const parsed = parseBigTehnBarcode(clean);
+    showForm(parsed || clean);
   }
 
   /** @param {{ bySuccess?: boolean }} [opts] */
@@ -355,6 +406,9 @@ export async function openScanMoveModal({
     stageForm.hidden = true;
     stageScan.hidden = false;
     const videoEl = $('#locScanVideo');
+    /* Obavezno „čist” video pre novog ZXing stream-a (npr. posle ← sa forme). */
+    releaseVideoStream(videoEl);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     setScanStatus('📷 Tražim kameru…', 'info');
 
@@ -371,11 +425,7 @@ export async function openScanMoveModal({
       state.scanCtrl = await startScan(videoEl, {
         onResult: text => {
           const clean = normalizeBarcodeText(text);
-          if (!clean) return;
-          cleanupScan();
-          if (navigator.vibrate) navigator.vibrate(80);
-          const parsed = parseBigTehnBarcode(clean);
-          showForm(parsed || clean);
+          handleDecodedBarcode(clean);
         },
         onError: err => {
           console.error('[scan] decode error', err);
@@ -506,11 +556,7 @@ export async function openScanMoveModal({
         forceDeviceId: back.deviceId,
         onResult: text => {
           const clean = normalizeBarcodeText(text);
-          if (!clean) return;
-          cleanupScan();
-          if (navigator.vibrate) navigator.vibrate(80);
-          const parsed = parseBigTehnBarcode(clean);
-          showForm(parsed || clean);
+          handleDecodedBarcode(clean);
         },
         onError: err => console.error('[scan] decode error (back)', err),
       });
