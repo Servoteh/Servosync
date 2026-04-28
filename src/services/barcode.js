@@ -100,25 +100,29 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
   /* Hints-aware reader → značajno brži i pouzdaniji za BigTehn Code128. */
   const reader = new BrowserMultiFormatReader(SCAN_HINTS);
 
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  const isAndroid = /Android/i.test(ua);
+
   /* Constraint izbor:
    *   - `forceDeviceId` → eksplicitni deviceId (iOS fallback path).
    *   - Inače → `facingMode: ideal`; scanModal.js detektuje front output i
    *     restart-uje sa `forceDeviceId`.
    *
-   * Rezolucija: diglo sa 1280×720 na 1920×1080. Više piksela po milimetru
-   * barkoda = ZXing može da pročita sitnije kodove (BigTehn Code128 je
-   * ~20mm širok, pa na 720p bar ima ~35px, na 1080p ~50-55px — razlika
-   * između "ne čita" i "čita". iOS 14+ i svi Android telefoni podržavaju
-   * 1080p kamera stream.)
+   * Rezolucija: iOS/desktop ideal 1920×1080 (više px/mm za Code128).
+   * Android: ideal 1280×720 + max do 1080p — mnogi OEM-i ne primenjuju torch/zoom
+   * na punom 1080p streamu; niži ideal često otključa oba u Chrome/Samsung/FF.
    */
-  const videoBase = {
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-    /* `frameRate: ideal 30` je default, ali eksplicitno tražimo 30 da
-     * sprečimo iOS Safari da spusti na 15fps u slabom svetlu (što direktno
-     * smanji broj pokušaja dekodiranja u sekundi). */
-    frameRate: { ideal: 30 },
-  };
+  const videoBase = isAndroid
+    ? {
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 720, max: 1080 },
+        frameRate: { ideal: 30 },
+      }
+    : {
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        frameRate: { ideal: 30 },
+      };
   const constraints = forceDeviceId
     ? { video: { ...videoBase, deviceId: { exact: forceDeviceId } } }
     : { video: { ...videoBase, facingMode: { ideal: 'environment' } } };
@@ -126,27 +130,37 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
   /* ZXing baca `NotFoundException` za svaki frame u kom nema barkoda —
    * to NIJE greška, ignorišemo je. Svi ostali error-i idu u onError. */
   /**
-   * Primeni torch/zoom na video track. Firefox na Androidu često ignoriše ili
-   * odbija `advanced: [{ … }]` dok isti parametri kao ravni constraint prolaze;
-   * Chromium/WebKit uglavnom prihvataju oba. Probamo prvo ravno, pa legacy.
+   * Primeni torch/zoom na video track.
+   * - Android (Chrome/Samsung/FF): često **samo** `advanced: [{ … }]` radi;
+   *   probamo advanced prvo, pa ravan objekat.
+   * - iOS/desktop: prvo ravan constraint (Firefox desktop), pa advanced.
    * @param {MediaStreamTrack} track
    * @param {Record<string, unknown>} flat npr. `{ torch: true }` ili `{ zoom: 2 }`
    * @returns {Promise<boolean>}
    */
   async function applyVideoConstraintCompat(track, flat) {
     if (!track?.applyConstraints) return false;
-    try {
-      await track.applyConstraints(flat);
-      return true;
-    } catch (e1) {
+    const attempts = isAndroid
+      ? [
+          () => track.applyConstraints({ advanced: [flat] }),
+          () => track.applyConstraints(flat),
+        ]
+      : [
+          () => track.applyConstraints(flat),
+          () => track.applyConstraints({ advanced: [flat] }),
+        ];
+    /** @type {unknown} */
+    let lastErr;
+    for (const run of attempts) {
       try {
-        await track.applyConstraints({ advanced: [flat] });
+        await run();
         return true;
-      } catch (e2) {
-        console.warn('[barcode] applyVideoConstraintCompat failed', flat, e1, e2);
-        return false;
+      } catch (e) {
+        lastErr = e;
       }
     }
+    console.warn('[barcode] applyVideoConstraintCompat failed', flat, lastErr);
+    return false;
   }
 
   const controls = await reader.decodeFromConstraints(
@@ -191,12 +205,9 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
       if (!track) return false;
       const caps = track.getCapabilities?.() || {};
       const supported = navigator.mediaDevices?.getSupportedConstraints?.() || {};
-      const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-      const ffAndroid = /Firefox/i.test(ua) && /Android/i.test(ua);
-      /* Gecko na Androidu ponekad ne stavi `torch` u getCapabilities() iako
-       * uređaj podržava — u tom slučaju ipak pokušavamo apply (desktop Firefox
-       * ovde ne upada jer nema /Android/). */
-      const torchAdvertised = 'torch' in caps || supported.torch === true || ffAndroid;
+      /* Samsung/Chrome često ne listaju torch u getCapabilities(), ali
+       * applyConstraints ipak radi posle niže rezolucije — na Androidu uvek pokušaj. */
+      const torchAdvertised = 'torch' in caps || supported.torch === true || isAndroid;
       if (!torchAdvertised) return false;
       const settings = track.getSettings?.() || {};
       const next = !settings.torch;
@@ -218,18 +229,30 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     getZoom: async () => {
       const track = getTrack();
       if (!track) return null;
-      const caps = track.getCapabilities?.();
-      if (!caps || !('zoom' in caps) || typeof caps.zoom === 'object' === false) {
-        return null;
-      }
-      const z = /** @type {any} */ (caps.zoom);
+      const caps = track.getCapabilities?.() || {};
+      const supported = navigator.mediaDevices?.getSupportedConstraints?.() || {};
       const s = track.getSettings?.() || {};
-      return {
-        min: Number(z.min ?? 1),
-        max: Number(z.max ?? 1),
-        step: Number(z.step ?? 0.1),
-        current: Number(s.zoom ?? z.min ?? 1),
-      };
+      const zRaw = caps.zoom;
+      if (zRaw != null && typeof zRaw === 'object' && !Array.isArray(zRaw)) {
+        const z = /** @type {any} */ (zRaw);
+        return {
+          min: Number(z.min ?? 1),
+          max: Number(z.max ?? 1),
+          step: Number(z.step ?? 0.1),
+          current: Number(s.zoom ?? z.min ?? 1),
+        };
+      }
+      /* Android: drajver ponekad ne popuni caps.zoom; ako je zoom u supported
+       * constraints, ipak prikaži slider i pusti setZoom da proba apply. */
+      if (isAndroid && supported.zoom === true) {
+        return {
+          min: 1,
+          max: 5,
+          step: 0.1,
+          current: Number(s.zoom ?? 1),
+        };
+      }
+      return null;
     },
 
     /**
