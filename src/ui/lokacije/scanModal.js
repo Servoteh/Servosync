@@ -369,13 +369,17 @@ export async function openScanMoveModal({
 
     try {
       state.scanCtrl = await startScan(videoEl, {
-        onResult: text => {
+        onResult: async text => {
           const clean = normalizeBarcodeText(text);
           if (!clean) return;
           cleanupScan();
           if (navigator.vibrate) navigator.vibrate(80);
           const parsed = parseBigTehnBarcode(clean);
-          showForm(parsed || clean);
+          try {
+            await showForm(parsed || clean);
+          } catch (e) {
+            console.error('[scan] showForm failed', e);
+          }
         },
         onError: err => {
           console.error('[scan] decode error', err);
@@ -401,7 +405,11 @@ export async function openScanMoveModal({
         if (clean) {
           if (navigator.vibrate) navigator.vibrate(80);
           const parsed = parseBigTehnBarcode(clean);
-          showForm(parsed || clean);
+          try {
+            await showForm(parsed || clean);
+          } catch (e) {
+            console.error('[scan] showForm failed (native)', e);
+          }
           return;
         }
       }
@@ -504,13 +512,17 @@ export async function openScanMoveModal({
         /* deviceId idemo pre nego facingMode, pa u startScan ovo mora i da bude
          * podržano. Dodajemo treći argument — vidi barcode.js promene. */
         forceDeviceId: back.deviceId,
-        onResult: text => {
+        onResult: async text => {
           const clean = normalizeBarcodeText(text);
           if (!clean) return;
           cleanupScan();
           if (navigator.vibrate) navigator.vibrate(80);
           const parsed = parseBigTehnBarcode(clean);
-          showForm(parsed || clean);
+          try {
+            await showForm(parsed || clean);
+          } catch (e) {
+            console.error('[scan] showForm failed (back)', e);
+          }
         },
         onError: err => console.error('[scan] decode error (back)', err),
       });
@@ -807,7 +819,10 @@ export async function openScanMoveModal({
      * šta se desilo sa ERP lookup-om: 'ok' | 'not_found' | 'offline' | 'error' | 'skip'. */
     let erpLookupStatus = 'skip';
     let erpLookupErr = '';
-    if ((format === 'rnz' || format === 'ocr') && orderNo && itemRefId) {
+    /* BigTehn cache: RNZ/OCR + i „short“ (nalog/druga-grupa) — iOS često pročita
+     * samo `7351/1088` bez `RNZ:` pa parser mapira na short sa drawingNo=TP;
+     * fetch po (nalog, drugi broj) kao TP i dalje nalazi red i broj_crteza. */
+    if ((format === 'rnz' || format === 'ocr' || format === 'short') && orderNo && itemRefId) {
       if (!getIsOnline()) {
         erpLookupStatus = 'offline';
       } else {
@@ -823,12 +838,12 @@ export async function openScanMoveModal({
       state.erpSnapshot = erpSnap;
     }
 
-    /* Autofill broja crteža: 1) RNZ iz ERP cache (Plan proizvodnje), 2) short format
-     * sa barkoda, 3) localStorage keš od ranijeg unosa. */
+    /* Autofill broja crteža: 1) ERP (autoritativno), 2) vrednost sa barkoda (short),
+     * 3) localStorage keš. Redosled rešava pogrešan short kada je drugi segment TP. */
     const cachedDrawing =
       !drawingNo && orderNo && itemRefId ? getDrawingCache(orderNo, itemRefId) : '';
     const erpDrawing = erpSnap?.broj_crteza ? String(erpSnap.broj_crteza).trim() : '';
-    const finalDrawing = (drawingNo || erpDrawing || cachedDrawing || '').trim();
+    const finalDrawing = (erpDrawing || drawingNo || cachedDrawing || '').trim();
     $('#locScanDrawing').value = finalDrawing;
 
     const hint = $('#locScanParsed');
@@ -840,12 +855,14 @@ export async function openScanMoveModal({
         ? `<span class="loc-scan-parsed-badge">${escHtml(fmtBadge)}</span> `
         : '';
       let drawingPart = '';
-      if (drawingNo) {
-        drawingPart = `, crtež <strong>${escHtml(drawingNo)}</strong>`;
-      } else if (erpDrawing) {
-        drawingPart = `, crtež <strong>${escHtml(erpDrawing)}</strong> <em class="loc-muted">(iz plana / BigTehn)</em>`;
-      } else if (cachedDrawing) {
-        drawingPart = `, crtež <strong>${escHtml(cachedDrawing)}</strong> <em class="loc-muted">(iz keša)</em>`;
+      if (finalDrawing) {
+        if (erpDrawing && finalDrawing === erpDrawing) {
+          drawingPart = `, crtež <strong>${escHtml(erpDrawing)}</strong> <em class="loc-muted">(iz plana / BigTehn)</em>`;
+        } else if (cachedDrawing && finalDrawing === cachedDrawing) {
+          drawingPart = `, crtež <strong>${escHtml(cachedDrawing)}</strong> <em class="loc-muted">(iz keša)</em>`;
+        } else {
+          drawingPart = `, crtež <strong>${escHtml(finalDrawing)}</strong>`;
+        }
       } else {
         drawingPart = ' <em class="loc-muted">(upiši broj crteža sa teksta nalepnice)</em>';
       }
@@ -876,7 +893,7 @@ export async function openScanMoveModal({
        *     deregistruje service worker + briše caches + reload. Neophodno kad
        *     magacioner vidi stari autofill flow. */
       let diagHtml = '';
-      if (format === 'rnz' || format === 'ocr') {
+      if (format === 'rnz' || format === 'ocr' || format === 'short') {
         const statusTxt =
           erpLookupStatus === 'ok'
             ? '✔ nađen u BigTehn cache-u'
@@ -907,6 +924,9 @@ export async function openScanMoveModal({
       hint.innerHTML = '';
     }
 
+    /* Čekaj fetch lokacija pre „Na lokaciju“ — na iOS sporijoj mreži inače
+     * populateToSelect vidi prazan state.locs i ostane samo placeholder. */
+    await locsReady;
     populateToSelect();
     await refreshPlacements();
   }
@@ -985,7 +1005,7 @@ export async function openScanMoveModal({
     }
 
     const btn = overlay.querySelector('[data-act="submit"]');
-    btn.disabled = true;
+    if (btn) btn.disabled = true;
 
     /* Od v4 migracije `drawing_no` je prvoklasna kolona u movement/placement
      * tabeli (trigger je propagira, RPC prihvata). Ipak, i dalje dupliramo
@@ -1019,50 +1039,56 @@ export async function openScanMoveModal({
     /* Offline fallback: ako telefon nije na WiFi-ju, gurni u queue
      * (services/offlineQueue.js) i obavesti radnika. Kad se signal vrati
      * auto-flush će pokušati da pošalje. */
-    if (!navigator.onLine) {
+    try {
+      if (!navigator.onLine) {
+        try {
+          enqueueMovement(payload);
+          if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
+          showToast('📥 Offline — zapis sačuvan i poslaće se kad se vrati signal');
+          close({ bySuccess: true });
+          onSuccess?.();
+        } catch (e) {
+          err.textContent = `Ne mogu da zapišem u lokalni queue: ${e?.message || e}`;
+        }
+        return;
+      }
+
+      let res;
       try {
+        res = await locCreateMovement(payload);
+      } catch (e) {
+        /* Mrežni pad u sred RPC-a → queue (videti napomenu u offlineQueue.js
+         * o mogućem duplikatu). */
         enqueueMovement(payload);
         if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
-        showToast('📥 Offline — zapis sačuvan i poslaće se kad se vrati signal');
+        showToast('📥 Mreža pala — zapis sačuvan u queue');
         close({ bySuccess: true });
         onSuccess?.();
-      } catch (e) {
-        err.textContent = `Ne mogu da zapišem u lokalni queue: ${e.message}`;
-      } finally {
-        btn.disabled = false;
+        return;
       }
-      return;
-    }
 
-    let res;
-    try {
-      res = await locCreateMovement(payload);
-    } catch (e) {
-      /* Mrežni pad u sred RPC-a → queue (videti napomenu u offlineQueue.js
-       * o mogućem duplikatu). */
-      enqueueMovement(payload);
-      btn.disabled = false;
+      if (!res) {
+        err.textContent = 'Server nije odgovorio.';
+        return;
+      }
+      if (!res.ok) {
+        err.textContent = errMsg(res);
+        return;
+      }
+
+      showToast('✓ Premeštanje zabeleženo');
       if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
-      showToast('📥 Mreža pala — zapis sačuvan u queue');
       close({ bySuccess: true });
       onSuccess?.();
-      return;
+    } catch (e) {
+      console.error('[scan] submit exception', e);
+      err.textContent =
+        e?.name === 'TypeError'
+          ? 'Greška u prikazu forme — osveži stranicu i probaj ponovo.'
+          : `Greška: ${e?.message || String(e)}`;
+    } finally {
+      if (btn) btn.disabled = false;
     }
-    btn.disabled = false;
-
-    if (!res) {
-      err.textContent = 'Server nije odgovorio.';
-      return;
-    }
-    if (!res.ok) {
-      err.textContent = errMsg(res);
-      return;
-    }
-
-    showToast('✓ Premeštanje zabeleženo');
-    if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
-    close({ bySuccess: true });
-    onSuccess?.();
   }
 
   function errMsg(res) {
@@ -1079,6 +1105,11 @@ export async function openScanMoveModal({
       bad_quantity: 'Količina mora biti > 0.',
       bad_order_no: 'Broj naloga je predugačak (max 40 karaktera).',
       not_authenticated: 'Prijavi se ponovo.',
+      missing_fields: 'Nedostaju obavezni podaci (lokacija, stavka ili tip). Osveži listu lokacija pa probaj ponovo.',
+      bad_to_uuid: 'Odredišna lokacija nije validna — izaberi ponovo iz liste.',
+      bad_from_uuid: 'Polazna lokacija nije validna — izaberi ponovo.',
+      from_mismatch: 'Polazna lokacija ne odgovara trenutnom smeštaju stavke.',
+      bad_movement_type: 'Neispravan tip pokreta.',
     };
     return map[code] || code || 'Operacija nije uspela.';
   }
@@ -1140,7 +1171,7 @@ export async function openScanMoveModal({
         startScanner();
         break;
       case 'submit':
-        submit();
+        await submit();
         break;
       case 'reloadApp':
         /* Hard reset PWA cache-a — vidi forceAppReload() za redosled koraka.
@@ -1175,7 +1206,11 @@ export async function openScanMoveModal({
         if (navigator.vibrate) navigator.vibrate(80);
         const clean = normalizeBarcodeText(res.text);
         const parsed = parseBigTehnBarcode(clean);
-        showForm(parsed || clean);
+        try {
+          await showForm(parsed || clean);
+        } catch (e) {
+          console.error('[scan] showForm failed (file)', e);
+        }
       } else if (res.error === 'no_barcode') {
         setScanStatus(
           '❌ Na slici nema prepoznatljivog barkoda.\n' +
@@ -1233,10 +1268,8 @@ export async function openScanMoveModal({
     const locs = await fetchLocations();
     state.locs = Array.isArray(locs) ? locs : [];
     state.locById = new Map(state.locs.map(l => [l.id, l]));
-    if (startMode === 'manual' || prefill) {
-      /* Populate to-select odmah (inače bi ostao prazan dok korisnik ne klikne). */
-      populateToSelect();
-    }
+    /* Uvek osveži odredišta kad stigne lista (showForm može biti ranije). */
+    populateToSelect();
   })();
 
   /* Prefill flow: preskoči scan stage i odmah popuni formu poznatim poljima.
@@ -1265,7 +1298,7 @@ export async function openScanMoveModal({
   } else if (startMode === 'manual') {
     /* Preskoči kamera stage — prikaži formu praznu, fokus na polje `Broj naloga`.
      * Korisno za telefone bez kamere ili kada nalepnica fali. */
-    showForm('');
+    await showForm('');
     setTimeout(() => $('#locScanOrder')?.focus(), 60);
   } else {
     startScanner();

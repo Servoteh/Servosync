@@ -401,7 +401,11 @@ export async function fetchSyncOutboundEvents(limit = 80) {
  * @returns {Promise<{ ok?: boolean, id?: string, error?: string }|null>}
  */
 export async function locCreateMovement(payload) {
-  const row = await sbReq('rpc/loc_create_movement', 'POST', { payload: payload || {} });
+  let row = await sbReq('rpc/loc_create_movement', 'POST', { payload: payload || {} });
+  /* PostgREST ponekad vrati jednorečni niz umesto jednog jsonb objekta. */
+  if (Array.isArray(row) && row.length === 1 && row[0] && typeof row[0] === 'object') {
+    row = row[0];
+  }
   if (!row || typeof row !== 'object') return null;
   return row;
 }
