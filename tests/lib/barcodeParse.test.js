@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   normalizeBarcodeText,
   parseBigTehnBarcode,
+  parsePredmetTpFromLabelText,
   formatBigTehnRnzBarcode,
   formatBigTehnShortBarcode,
 } from '../../src/lib/barcodeParse.js';
@@ -95,6 +96,31 @@ describe('parseBigTehnBarcode — legacy short format', () => {
 
   it('skida Code39 `*` pre parsiranja', () => {
     expect(parseBigTehnBarcode('*9000/1091063*')?.orderNo).toBe('9000');
+  });
+});
+
+describe('parsePredmetTpFromLabelText — OCR sa nalepnice', () => {
+  it('parsira broj predmeta / TP iz jedne linije', () => {
+    expect(parsePredmetTpFromLabelText('7351/1088')).toMatchObject({
+      orderNo: '7351',
+      itemRefId: '1088',
+      format: 'ocr',
+    });
+  });
+
+  it('radi za blok teksta sa oznakama', () => {
+    const t = `Broj predmeta / Tehnološki postupak\n7351/1088`;
+    expect(parsePredmetTpFromLabelText(t)?.itemRefId).toBe('1088');
+  });
+
+  it('toleriše tipične OCR greške u razdvajaču', () => {
+    expect(parsePredmetTpFromLabelText('7351|1088')?.orderNo).toBe('7351');
+    expect(parsePredmetTpFromLabelText('7351\\1088')?.itemRefId).toBe('1088');
+  });
+
+  it('vraća null bez validnog para', () => {
+    expect(parsePredmetTpFromLabelText('')).toBeNull();
+    expect(parsePredmetTpFromLabelText('samo tekst')).toBeNull();
   });
 });
 

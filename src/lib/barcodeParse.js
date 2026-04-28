@@ -33,7 +33,7 @@ export function normalizeBarcodeText(raw) {
  * @property {string} drawingNo Broj crteža ako je u barkodu (short format);
  *   u RNZ formatu je prazno jer barkod ne sadrži crtež — čita se sa teksta
  *   nalepnice ili se auto-popunjava iz prethodnih placement-a.
- * @property {'rnz'|'short'} format Koji je format prepoznat.
+ * @property {'rnz'|'short'|'ocr'} format Koji je format prepoznat (`ocr` = tekst sa nalepnice).
  * @property {string} raw Originalni očišćeni tekst.
  */
 
@@ -94,6 +94,67 @@ export function parseBigTehnBarcode(raw) {
       format: 'short',
       raw: clean,
     };
+  }
+
+  return null;
+}
+
+/**
+ * Iz sirovog OCR teksta (nalepnica: „Broj predmeta / Tehnološki postupak”)
+ * izvuci par nalog/TP oblika `7351/1088`. Koristi se kada barkod ne čita.
+ *
+ * @param {string} raw
+ * @returns {ParsedBarcode | null} `format: 'ocr'`, isti shape kao RNZ za ERP/autofill
+ */
+export function parsePredmetTpFromLabelText(raw) {
+  if (typeof raw !== 'string') return null;
+  const t = raw.replace(/\u00a0/g, ' ').trim();
+  if (!t) return null;
+
+  const tryMatch = (s, pattern) => {
+    const m = s.match(pattern);
+    if (!m) return null;
+    const orderNo = m[1].replace(/\D/g, '').slice(0, 8);
+    const tp = m[2].replace(/\D/g, '').slice(0, 8);
+    if (!orderNo || !tp) return null;
+    return {
+      orderNo,
+      itemRefId: tp,
+      drawingNo: '',
+      format: /** @type {'ocr'} */ ('ocr'),
+      raw: `${orderNo}/${tp}`,
+    };
+  };
+
+  /* Tipičan OCR: cifre + razdvajač (/ \\ - | I l) + cifre */
+  const sep = '[/\\\\\\-_|Il]{1,4}';
+  const core = new RegExp(`(\\d{1,8})\\s*${sep}\\s*(\\d{1,8})`, 'i');
+
+  const blocks = [t, ...t.split(/[\r\n]+/)];
+  for (const block of blocks) {
+    const hit = tryMatch(block, core);
+    if (hit) return hit;
+  }
+
+  /* Retki slučaj: OCR slomi kosu crtu — dva broja u istoj liniji posle „7351“ */
+  const loose = t.match(/\b(\d{3,8})\s+(\d{2,8})\b/g);
+  if (loose) {
+    for (const frag of loose) {
+      const m = frag.match(/\b(\d{3,8})\s+(\d{2,8})\b/);
+      if (m) {
+        const orderNo = m[1].slice(0, 8);
+        const tp = m[2].slice(0, 8);
+        if (orderNo.length >= 3 && tp.length >= 2) {
+          return {
+            orderNo,
+            itemRefId: tp,
+            drawingNo: '',
+            format: 'ocr',
+            raw: `${orderNo}/${tp}`,
+          };
+        }
+      }
+    }
   }
 
   return null;

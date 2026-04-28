@@ -9,6 +9,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
+import { parsePredmetTpFromLabelText } from '../../lib/barcodeParse.js';
 import { getLocationKind } from '../../lib/lokacijeTypes.js';
 import {
   fetchItemPlacements,
@@ -206,9 +207,10 @@ export async function openScanMoveModal({
       </div>
 
       <div class="loc-scan-hint">
-        📏 Drži telefon 10-15 cm od nalepnice<br>
+        📏 Drži telefon 10-15 cm od nalepnice · usmeri gornji desni ugao (broj predmeta/TP) kad koristiš OCR<br>
         Tap-ni na ekran za fokus ·
         <span class="loc-scan-manual" data-act="pickImage">📂 iz slike</span> ·
+        <span class="loc-scan-manual" data-act="ocrScan">OCR skeniraj</span> ·
         <span class="loc-scan-manual" data-act="manual">unesi ručno</span>
       </div>
       <!-- Skriveni file input za upload slike — klik na "iz slike" u hint-u
@@ -326,6 +328,9 @@ export async function openScanMoveModal({
   /** @param {{ bySuccess?: boolean }} [opts] */
   function close(opts = {}) {
     cleanupScan();
+    import('../../services/labelOcr.js')
+      .then(m => m.terminateLabelOcrWorker())
+      .catch(() => {});
     removeModal();
     document.removeEventListener('keydown', onEsc);
     if (!opts.bySuccess) {
@@ -345,48 +350,20 @@ export async function openScanMoveModal({
   }
   document.addEventListener('keydown', onEsc);
 
-  async function startScanner() {
-    /* NATIVE path (Capacitor APK): ML Kit otvara full-screen native overlay,
-     * vraća text, pa mi odmah pređemo na formu. Naš <video> + torch UI
-     * se ne koriste — native scanner ima svoj UI. */
-    const { isNativeCapacitor, scanNativeOnce } = await import('../../services/nativeBarcode.js');
-    if (isNativeCapacitor()) {
-      /* Ne gasimo web video jer se uopšte nije pokrenuo; samo overlay
-       * držimo prazan dok native scanner radi. */
-      const text = await scanNativeOnce();
-      if (text) {
-        const clean = normalizeBarcodeText(text);
-        if (clean) {
-          if (navigator.vibrate) navigator.vibrate(80);
-          const parsed = parseBigTehnBarcode(clean);
-          showForm(parsed || clean);
-          return;
-        }
-      }
-      /* Cancel / permission denied → pokaži manualni unos kao fallback. */
-      showForm('');
-      setTimeout(() => $('#locScanOrder')?.focus(), 50);
-      return;
-    }
-
-    /* WEB path (Chrome/Safari browser) — postojeći ZXing flow. */
+  /** ZXing live scan stage — koristi se u browseru i nakon native barkoda kao OCR fallback. */
+  async function startWebScanner() {
     stageForm.hidden = true;
     stageScan.hidden = false;
     const videoEl = $('#locScanVideo');
 
-    /* Zeleni ok / crveni error banner unutar scan stage (iOS korisnik nema
-     * DevTools, ovo je njegov jedini prozor u stanje kamere). Radi kao
-     * šablon za sve statusne poruke. */
     setScanStatus('📷 Tražim kameru…', 'info');
 
-    /* iOS Safari caveats diagnostika — pre nego što zovemo getUserMedia. */
     const diag = detectIOSCameraPitfalls();
     if (diag.blocker) {
       setScanStatus(diag.blocker, 'error');
       return;
     }
     if (diag.warning) {
-      /* Nije blocker — samo upozori i nastavi. */
       console.warn('[scan] iOS warning:', diag.warning);
     }
 
@@ -397,32 +374,78 @@ export async function openScanMoveModal({
           if (!clean) return;
           cleanupScan();
           if (navigator.vibrate) navigator.vibrate(80);
-          /* BigTehn format je potvrđen kao `NALOG/CRTEŽ` (npr. `9000/1091063`). */
           const parsed = parseBigTehnBarcode(clean);
           showForm(parsed || clean);
         },
         onError: err => {
-          /* ZXing baca `NotFoundException` za svaki frame bez barkoda — to je
-           * tiho ignorisano u barcode.js. Sve što stigne ovde je stvarna
-           * greška (dekoder, stream drop itd.). */
           console.error('[scan] decode error', err);
         },
       });
 
-      /* Kad se stream inicijalizuje, prikaži šta je back kamera uspela da
-       * nam da — ovo user vidi, i ako kaže "front kamera" znamo tačno
-       * problem (facingMode ignoring). */
       setTimeout(() => reportCameraDiag(videoEl), 600);
-      /* Zoom capability detekcija + UI slider init. Radi samo ako kamera
-       * podržava (iPhone 11+, iOS 17.2+, novi Android-i). */
       setTimeout(() => setupZoomUI(), 800);
     } catch (err) {
-      /* Ovde stižemo kada getUserMedia odbije permisiju, nema kamere, ili
-       * kad je sistem zauzeo kameru (npr. FaceTime). */
       const msg = formatCameraError(err);
       setScanStatus(msg, 'error');
       console.error('[scan] camera start failed', err);
-      /* ne zatvaramo modal; user može "manual" da klikne */
+    }
+  }
+
+  async function startScanner() {
+    /* NATIVE path (Capacitor): ML Kit barkod; ako otkaže — otvara web kameru za barkod + OCR. */
+    const { isNativeCapacitor, scanNativeOnce } = await import('../../services/nativeBarcode.js');
+    if (isNativeCapacitor()) {
+      const text = await scanNativeOnce();
+      if (text) {
+        const clean = normalizeBarcodeText(text);
+        if (clean) {
+          if (navigator.vibrate) navigator.vibrate(80);
+          const parsed = parseBigTehnBarcode(clean);
+          showForm(parsed || clean);
+          return;
+        }
+      }
+      await startWebScanner();
+      return;
+    }
+
+    await startWebScanner();
+  }
+
+  /** Snimi gornji desni ugao kadra, OCR, ponudi nalog/TP ako regex nađe par. */
+  async function applyOcrFromVideo() {
+    const videoEl = $('#locScanVideo');
+    if (!videoEl || stageScan.hidden || !state.scanCtrl) {
+      showToast('⚠ Prvo pokreni kameru (Skeniraj ponovo)');
+      return;
+    }
+    setScanStatus('🔤 Čitam tekst (OCR)… može potrajati nekoliko sekundi prvi put', 'info');
+    try {
+      const { cropTopRightLabelRegion, recognizeLabelCanvas } = await import('../../services/labelOcr.js');
+      const canvas = cropTopRightLabelRegion(videoEl);
+      if (!canvas) {
+        setScanStatus('⚠ Sačekaj da kamera stabilizuje kadar, pa probaj ponovo.', 'warn');
+        return;
+      }
+      const res = await recognizeLabelCanvas(canvas);
+      if ('error' in res) {
+        setScanStatus('⚠ OCR nije uspeo — probaj zum ili ručni unos.', 'warn');
+        return;
+      }
+      const parsed = parsePredmetTpFromLabelText(res.text);
+      if (!parsed) {
+        setScanStatus(
+          '❌ Nije prepoznat „broj predmeta / TP”. Usmeri gornji desni ugao liste ili unesi ručno.',
+          'warn',
+        );
+        return;
+      }
+      cleanupScan();
+      if (navigator.vibrate) navigator.vibrate(80);
+      await showForm(parsed);
+    } catch (e) {
+      console.error('[scan] OCR failed', e);
+      setScanStatus('⚠ OCR greška — probaj ponovo ili ručni unos.', 'error');
     }
   }
 
@@ -784,7 +807,7 @@ export async function openScanMoveModal({
      * šta se desilo sa ERP lookup-om: 'ok' | 'not_found' | 'offline' | 'error' | 'skip'. */
     let erpLookupStatus = 'skip';
     let erpLookupErr = '';
-    if (format === 'rnz' && orderNo && itemRefId) {
+    if ((format === 'rnz' || format === 'ocr') && orderNo && itemRefId) {
       if (!getIsOnline()) {
         erpLookupStatus = 'offline';
       } else {
@@ -811,7 +834,8 @@ export async function openScanMoveModal({
     const hint = $('#locScanParsed');
     if (rawHint && (orderNo || itemRefId)) {
       hint.hidden = false;
-      const fmtBadge = format === 'rnz' ? 'RNZ' : format === 'short' ? 'legacy' : '';
+      const fmtBadge =
+        format === 'rnz' ? 'RNZ' : format === 'short' ? 'legacy' : format === 'ocr' ? 'OCR' : '';
       const badgeHtml = fmtBadge
         ? `<span class="loc-scan-parsed-badge">${escHtml(fmtBadge)}</span> `
         : '';
@@ -852,7 +876,7 @@ export async function openScanMoveModal({
        *     deregistruje service worker + briše caches + reload. Neophodno kad
        *     magacioner vidi stari autofill flow. */
       let diagHtml = '';
-      if (format === 'rnz') {
+      if (format === 'rnz' || format === 'ocr') {
         const statusTxt =
           erpLookupStatus === 'ok'
             ? '✔ nađen u BigTehn cache-u'
@@ -1107,6 +1131,9 @@ export async function openScanMoveModal({
          * Preporučeno za slike iz Viber-a / SMS-a gde live camera decode
          * ne radi zbog moire/kompresije. */
         $('#locScanFile')?.click();
+        break;
+      case 'ocrScan':
+        await applyOcrFromVideo();
         break;
       case 'back':
       case 'rescan':
