@@ -3,7 +3,8 @@
  *
  * Sve PostgREST queries za:
  *   - listu mašina (iz bigtehn_machines_cache)
- *   - listu otvorenih operacija po efektivnoj mašini (v_production_operations_effective)
+ *   - listu otvorenih operacija po efektivnoj mašini (v_production_operations_effective;
+ *     isključeni su RN-ovi sa završnom kontrolom 8.3 kucanom u BigTehn-u)
  *   - upsert overlay-a (sort, status, napomena, REASSIGN)
  *   - bulk reorder (drag-drop)
  *
@@ -1097,10 +1098,9 @@ export async function getBigtehnDrawingSignedUrl(brojCrteza, expiresIn = 300) {
 /* ────────────────────────────────────────────────────────────────────────
  * SPRINT F.5b — Tehnološki postupak (sve operacije za jedan RN)
  *
- * Koristi se u modal-u koji se otvara klikom na 📋 pored RN-a u "Po mašini".
- * Vraća:
- *   - operations: sve linije RN-a iz v_production_operations_effective (sa svim
- *     denormalizovanim podacima — mašina, planirano vreme, status, itd.)
+ * Koristi se u modal-u (Plan + Lokacije). Vraća:
+ *   - operations: sve linije RN-a iz v_production_operations (ceo TP; effective view
+ *     skriva RN iz plana posle završne kontrole)
  *   - logs: sve prijave iz bigtehn_tech_routing_cache za taj RN (po opcijama)
  * ──────────────────────────────────────────────────────────────────────── */
 
@@ -1115,14 +1115,14 @@ export async function loadFullTechProcedure(workOrderId) {
     return { operations: [], logs: [], header: null };
   }
 
-  /* 1) Sve operacije za RN (poredak: po Operacija ASC). View već ima
-     denormalizovane podatke (mašina, plan/real time, komada, status…). */
+  /* 1) Sve operacije za RN (poredak: po Operacija ASC). Bazni view (ne effective):
+     posle završne kontrole RN i dalje prikazuje ceo TP u modalu iz Lokacija. */
   const opParams = new URLSearchParams();
   opParams.set('select', '*');
   opParams.set('work_order_id', `eq.${workOrderId}`);
   opParams.set('order', 'operacija.asc');
   opParams.set('limit', '500');
-  const operations = await sbReq(`v_production_operations_effective?${opParams.toString()}`);
+  const operations = await sbReq(`v_production_operations?${opParams.toString()}`);
 
   /* 2) Sve prijave iz tech_routing cache-a (svi radnici, sve operacije). */
   const logParams = new URLSearchParams();
