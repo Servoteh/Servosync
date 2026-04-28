@@ -356,11 +356,66 @@ export async function openScanMoveModal({
     }
   }
 
+  /** Oslobodi MediaStream na <video> — bez ovoga neki mobilni browseri ne
+   * ponovo vežu ZXing `decodeFromConstraints` posle prvog uspešnog skena. */
+  function releaseVideoStream(videoEl) {
+    if (!videoEl) return;
+    try {
+      const ms = videoEl.srcObject;
+      if (ms instanceof MediaStream) {
+        for (const t of ms.getTracks()) {
+          try {
+            t.stop();
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      videoEl.srcObject = null;
+      videoEl.load();
+    } catch {
+      /* ignore */
+    }
+  }
+
   function cleanupScan() {
     leaveScanPresentation();
     if (state.scanCtrl) {
-      state.scanCtrl.stop();
+      try {
+        state.scanCtrl.stop();
+      } catch (e) {
+        console.warn('[scan] scanCtrl.stop failed', e);
+      }
       state.scanCtrl = null;
+    }
+    releaseVideoStream($('#locScanVideo'));
+  }
+
+  /* ZXing ponekad pošalje isti barkod dva puta u istom kadru — drugi put
+   * cleanupScan već ugasio skener pa onResult ne sme ponovo da zatvara. */
+  let lastBarcodeClean = '';
+  let lastBarcodeAt = 0;
+  const BARCODE_DEDUP_MS = 1200;
+
+  async function handleDecodedBarcode(clean) {
+    if (!clean) return;
+    const now = Date.now();
+    if (clean === lastBarcodeClean && now - lastBarcodeAt < BARCODE_DEDUP_MS) {
+      return;
+    }
+    lastBarcodeClean = clean;
+    lastBarcodeAt = now;
+    cleanupScan();
+    if (navigator.vibrate) navigator.vibrate(80);
+    const parsed = parseBigTehnBarcode(clean);
+    try {
+      await showForm(parsed || clean);
+    } catch (e) {
+      console.error('[scan] showForm failed', e);
     }
   }
 
@@ -395,6 +450,9 @@ export async function openScanMoveModal({
     stageScan.hidden = false;
     enterScanPresentation();
     const videoEl = $('#locScanVideo');
+    /* Obavezno „čist” video pre novog ZXing stream-a (npr. posle ← sa forme). */
+    releaseVideoStream(videoEl);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     setScanStatus('📷 Tražim kameru…', 'info');
 
@@ -412,15 +470,7 @@ export async function openScanMoveModal({
       state.scanCtrl = await startScan(videoEl, {
         onResult: async text => {
           const clean = normalizeBarcodeText(text);
-          if (!clean) return;
-          cleanupScan();
-          if (navigator.vibrate) navigator.vibrate(80);
-          const parsed = parseBigTehnBarcode(clean);
-          try {
-            await showForm(parsed || clean);
-          } catch (e) {
-            console.error('[scan] showForm failed', e);
-          }
+          await handleDecodedBarcode(clean);
         },
         onError: err => {
           console.error('[scan] decode error', err);
@@ -557,15 +607,7 @@ export async function openScanMoveModal({
         forceDeviceId: back.deviceId,
         onResult: async text => {
           const clean = normalizeBarcodeText(text);
-          if (!clean) return;
-          cleanupScan();
-          if (navigator.vibrate) navigator.vibrate(80);
-          const parsed = parseBigTehnBarcode(clean);
-          try {
-            await showForm(parsed || clean);
-          } catch (e) {
-            console.error('[scan] showForm failed (back)', e);
-          }
+          await handleDecodedBarcode(clean);
         },
         onError: err => console.error('[scan] decode error (back)', err),
       });
