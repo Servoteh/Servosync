@@ -3,13 +3,14 @@
  *
  * Prikazuje po izabranoj godini:
  *   - Entitlement po zaposlenom (dana_total default 20, dana_preneto)
- *   - Iskorišćeno (iz absences type='godisnji' i work_hours absence_code='go')
+ *   - Iskorišćeno: iz v_vacation_balance (view spaja absences + work_hours go)
+ *     i dodatno iz work_hours za dane sa absence_code=go kao izvor u UI.
  *   - Preostalo
  *
  * Dozvoljene akcije:
  *   - Inline izmena „Dana pravo“ i „Preneto iz prošle godine“
  *   - Dugme „Generiši rešenje o GO“ — otvara print HTML template sa brojem dana
- *     na osnovu postojećeg `absences` zapisa tipa 'godisnji' za tog zaposlenog.
+ *     na osnovu segmenata GO u mesečnom gridu (work_hours) za tog zaposlenog.
  *
  * Izveštajni izvoz: Excel preko `loadXlsx` (lazy).
  *
@@ -26,24 +27,20 @@ import {
 import { canEditKadrovska, canViewEmployeePii } from '../../state/auth.js';
 import {
   kadrovskaState,
-  kadrAbsencesState,
   kadrVacationState,
 } from '../../state/kadrovska.js';
 import {
   ensureEmployeesLoaded,
-  ensureAbsencesLoaded,
   ensureVacationLoaded,
   employeeNameById,
 } from '../../services/kadrovska.js';
-import {
-  saveEntitlementToDb,
-  mapDbEntitlement,
-  loadBalancesFromDb,
-} from '../../services/vacation.js';
+import { countGoDaysByEmployeeForYear, latestGoSegmentForEmployeeYear } from '../../services/workHoursAbsenceReporting.js';
 import { renderSummaryChips } from './shared.js';
 import { loadXlsx } from '../../lib/xlsx.js';
 
 let panelRoot = null;
+/** GO dani iz work_hours za godinu u vacYear (osvežava refreshVacationTab). */
+const vacGoCache = { year: null, byEmp: new Map() };
 
 /* ── HTML ─────────────────────────────────────────────────────────── */
 
@@ -96,7 +93,6 @@ export async function wireVacationTab(panelEl) {
   panelEl.querySelector('#vacExport').addEventListener('click', exportToExcel);
 
   await ensureEmployeesLoaded();
-  await ensureAbsencesLoaded();
   await refreshVacationTab();
 }
 
@@ -104,6 +100,8 @@ async function refreshVacationTab() {
   if (!panelRoot) return;
   const year = Number(panelRoot.querySelector('#vacYear').value || new Date().getFullYear());
   await ensureVacationLoaded(year, true);
+  vacGoCache.year = year;
+  vacGoCache.byEmp = await countGoDaysByEmployeeForYear(year);
   renderRows();
 }
 
@@ -138,21 +136,10 @@ function computeRows() {
     const daysTotal = ent ? ent.daysTotal : 20;
     const daysCarried = ent ? ent.daysCarriedOver : 0;
 
-    /* Fallback obračun iskorišćenog — iz absences (type='godisnji' te godine). */
+    /* Kad nema reda u balance view — isključivo GO dani iz mesečnog grida. */
     let daysUsed = bal ? bal.daysUsed : 0;
     if (!bal) {
-      daysUsed = 0;
-      for (const a of kadrAbsencesState.items) {
-        if (a.type !== 'godisnji' || !a.dateFrom) continue;
-        const y = Number(a.dateFrom.slice(0, 4));
-        if (y !== year) continue;
-        const days = a.daysCount != null
-          ? Number(a.daysCount)
-          : (a.dateFrom && a.dateTo
-              ? (new Date(a.dateTo) - new Date(a.dateFrom)) / (24 * 3600 * 1000) + 1
-              : 0);
-        if (a.employeeId === emp.id) daysUsed += days;
-      }
+      daysUsed = vacGoCache.year === year ? (vacGoCache.byEmp.get(emp.id) ?? 0) : 0;
     }
 
     const remaining = daysTotal + daysCarried - daysUsed;
@@ -274,22 +261,21 @@ async function persistEntitlement(employeeId, year, patch, tr) {
 /* ── REŠENJE O GO — print HTML ──────────────────────────────────── */
 
 function openResenjePrint(employeeId) {
+  void openResenjePrintAsync(employeeId);
+}
+
+async function openResenjePrintAsync(employeeId) {
   const emp = kadrovskaState.employees.find(e => e.id === employeeId);
   if (!emp) { showToast('⚠ Zaposleni nije pronađen'); return; }
 
   const year = Number(panelRoot.querySelector('#vacYear').value);
-  /* Pronađi najnoviji absences zapis tipa 'godisnji' te godine za tog zaposlenog —
-     iz njega uzmi datume + broj dana. Ako ih ima više, prikaži najnoviji.
-     Alternativno: ponudi dialog za ručni unos. */
-  const abs = kadrAbsencesState.items
-    .filter(a => a.type === 'godisnji' && a.employeeId === employeeId && a.dateFrom?.startsWith(String(year)))
-    .sort((a, b) => String(b.dateFrom).localeCompare(String(a.dateFrom)))[0];
+  const seg = await latestGoSegmentForEmployeeYear(employeeId, year);
 
-  let dateFrom = abs?.dateFrom || '';
-  let dateTo = abs?.dateTo || '';
-  let days = abs?.daysCount || 0;
+  let dateFrom = seg?.dateFrom || '';
+  let dateTo = seg?.dateTo || '';
+  let days = seg?.daysCount || 0;
 
-  if (!abs) {
+  if (!seg) {
     const inFrom = prompt(`Unesi datum početka GO (YYYY-MM-DD) za ${employeeDisplayName(emp)}:`, '');
     if (!inFrom) return;
     const inTo = prompt('Unesi datum kraja GO (YYYY-MM-DD):', '');

@@ -30,10 +30,6 @@ import {
   wireEmployeesTab,
 } from './employeesTab.js';
 import {
-  renderAbsencesTab,
-  wireAbsencesTab,
-} from './absencesTab.js';
-import {
   renderWorkHoursTab,
   wireWorkHoursTab,
 } from './workHoursTab.js';
@@ -121,6 +117,7 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
 
 function switchTab(id) {
   if (!rootEl) return;
+  if (id === 'absences') id = 'grid';
   if (kadrovskaState.activeTab === id) return;
   kadrovskaState.activeTab = id;
   setActiveKadrTab(id);
@@ -138,6 +135,8 @@ function switchTab(id) {
 function mountTabBody(id) {
   const host = rootEl?.querySelector('#kadrPanelHost');
   if (!host) return;
+
+  if (id === 'absences') id = 'grid';
 
   host.innerHTML = `<div class="kadr-panel active" id="kadrPanel-${id}" role="tabpanel" aria-label="${id}"></div>`;
   const panel = host.firstElementChild;
@@ -157,7 +156,6 @@ function mountTabBody(id) {
 
   const tabImpl = {
     employees: { render: renderEmployeesTab, wire: wireEmployeesTab },
-    absences: { render: renderAbsencesTab, wire: wireAbsencesTab },
     vacation: { render: renderVacationTab, wire: wireVacationTab },
     grid: {
       render: renderGridPanelBody,

@@ -15,8 +15,8 @@
  *   - Live re-summing na blur, batch upsert u Supabase preko
  *     `work_hours?on_conflict=employee_id,work_date`.
  *   - Export u .xlsx (lazy CDN load).
- *   - Šifre odsustva u gridu (go/bo/sp/…) pri „Sačuvaj izmene" upisuju se u tab
- *     Odsustva (absences) za taj mesec; grid je izvor istine za te tipove.
+ *   - Šifre odsustva (go/bo/sp/…) idu u work_hours; izveštaji i saldo GO čitaju
+ *     isključivo odatle (nema duplog unosa u tabu Odsustva).
  *
  * Bez framework-a / inline handler-a — sve preko `addEventListener`.
  */
@@ -29,9 +29,8 @@ import {
 import { canEditKadrovskaGrid, getIsOnline } from '../../state/auth.js';
 import { hasSupabaseConfig } from '../../services/supabase.js';
 import { kadrovskaState, orgStructureState } from '../../state/kadrovska.js';
-import { ensureEmployeesLoaded, ensureOrgStructureLoaded, ensureAbsencesLoaded } from '../../services/kadrovska.js';
+import { ensureEmployeesLoaded, ensureOrgStructureLoaded } from '../../services/kadrovska.js';
 import { loadGridMonth, batchUpsertGrid } from '../../services/grid.js';
-import { syncAbsencesFromGridMonth } from '../../services/gridAbsencesSync.js';
 import { renderSummaryChips } from './shared.js';
 import { loadXlsx } from '../../lib/xlsx.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
@@ -876,19 +875,8 @@ async function _saveAllGrid() {
       gridState.rowsByEmpDate.get(m.employeeId).set(m.workDate, m);
     });
     const n = gridState.dirty.size;
-    const touchedEmpIds = [...new Set([...gridState.dirty.keys()].map(k => String(k).split('|')[0]))];
     gridState.dirty.clear();
-    const syncRes = await syncAbsencesFromGridMonth(
-      touchedEmpIds,
-      gridState.monthKey,
-      gridState.rowsByEmpDate,
-    );
-    await ensureAbsencesLoaded(true);
-    if (!syncRes.ok) {
-      showToast('⚠ Sati sačuvani; odsustva možda nisu ažurirana (proveri ovlašćenja ili konzolu)');
-    } else {
-      showToast('✅ Sačuvano ' + n + ' izmena');
-    }
+    showToast('✅ Sačuvano ' + n + ' izmena');
     _renderGridBody();
   } catch (err) {
     console.error('[grid] batch save error', err);
@@ -935,7 +923,6 @@ async function _loadAndRender(yyyymm) {
     await loadHolidaysForRange(days[0].ymd, days[days.length - 1].ymd);
     gridState.holidayYmdSet = holidayDateSet();
   }
-  await ensureAbsencesLoaded();
   gridState.monthKey = yyyymm;
   gridState.loaded = true;
   _renderGridBody();
@@ -1136,7 +1123,6 @@ export async function wireGridTab(panel, toolbarHost = null) {
     await Promise.all([
       ensureEmployeesLoaded(true),
       ensureOrgStructureLoaded(),
-      ensureAbsencesLoaded(),
     ]);
   } catch (err) {
     console.warn('[grid] load failed', err);

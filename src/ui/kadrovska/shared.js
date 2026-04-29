@@ -94,7 +94,6 @@ export function employeeOptionsHtml({
  */
 export const KADROVSKA_TAB_DEFS = [
   { id: 'employees', label: 'Zaposleni', badgeId: 'kadrTabCountEmployees' },
-  { id: 'absences', label: 'Odsustva', badgeId: 'kadrTabCountAbsences' },
   { id: 'vacation', label: 'Godišnji odmor', badgeId: 'kadrTabCountVacation' },
   { id: 'grid', label: 'Mesečni grid', badgeId: 'kadrTabCountGrid' },
   { id: 'hours', label: 'Sati', badgeId: 'kadrTabCountHours' },

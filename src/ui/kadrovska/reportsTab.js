@@ -5,6 +5,7 @@
  * tako da se kasnije lako dodaju ostali izveštaji (godišnji, prekovr., teren).
  *
  * Bolovanja izveštaj:
+ *   - Izvor: work_hours (šifra bo u mesečnom gridu), ne tabela absences.
  *   - Filteri: zaposleni, odeljenje (firma), period (manual From/To,
  *     month picker, year picker, ili "sva vremena").
  *   - Per-employee aggregati: count evidencija, ukupno dana u periodu,
@@ -26,22 +27,33 @@ import { canViewEmployeePii } from '../../state/auth.js';
 import { KADR_EDU_LEVEL_LABELS } from '../../lib/constants.js';
 import {
   kadrovskaState,
-  kadrAbsencesState,
   kadrVacationState,
   kadrChildrenState,
   orgStructureState,
 } from '../../state/kadrovska.js';
 import {
   ensureEmployeesLoaded,
-  ensureAbsencesLoaded,
   ensureVacationLoaded,
   ensureOrgStructureLoaded,
 } from '../../services/kadrovska.js';
+import {
+  bolovanjeListFromWorkHours,
+  countGoDaysByEmployeeForYear,
+} from '../../services/workHoursAbsenceReporting.js';
 import { loadChildrenForEmployee } from '../../services/employeeChildren.js';
 import { renderSummaryChips } from './shared.js';
 import { loadXlsx } from '../../lib/xlsx.js';
 
 let panelRoot = null;
+/** Bolovanja iz work_hours (mesečni grid), keš za trenutni period filtera. */
+let sickBolItemsCache = [];
+
+async function _reloadSickBolItems() {
+  const { from: pFrom, to: pTo } = _readPeriod();
+  sickBolItemsCache = (pFrom && pTo)
+    ? await bolovanjeListFromWorkHours(pFrom, pTo)
+    : await bolovanjeListFromWorkHours('', '');
+}
 
 /* ─── HELPERS ──────────────────────────────────────────────────────────── */
 
@@ -290,7 +302,7 @@ function _aggregate() {
   const deptFilter = panelRoot?.querySelector('#repSickDeptFilter')?.value || '';
   const { from: pFrom, to: pTo } = _readPeriod();
 
-  const allSick = (kadrAbsencesState.items || []).filter(a => a.type === 'bolovanje');
+  const allSick = sickBolItemsCache;
   const empById = new Map(kadrovskaState.employees.map(e => [e.id, e]));
   const today = _isoToday();
 
@@ -336,7 +348,13 @@ function _aggregate() {
   return { perEmp, kept, pFrom, pTo, empFilter, deptFilter, empById, today, allSick };
 }
 
-function _renderSickReport() {
+async function _renderSickReport() {
+  try {
+    await _reloadSickBolItems();
+  } catch (err) {
+    console.error('[reports] bolovanje iz work_hours', err);
+    sickBolItemsCache = [];
+  }
   const tbody = panelRoot?.querySelector('#repSickTbody');
   const tfoot = panelRoot?.querySelector('#repSickTfoot');
   const empty = panelRoot?.querySelector('#repSickEmpty');
@@ -571,7 +589,7 @@ async function _exportDemoXlsx() {
    SALDO GO (po godini)
    ═════════════════════════════════════════════════════════════════════ */
 
-function _renderVacReport() {
+async function _renderVacReport() {
   if (!panelRoot) return;
   const tbody = panelRoot.querySelector('#repVacTbody');
   const empty = panelRoot.querySelector('#repVacEmpty');
@@ -579,6 +597,7 @@ function _renderVacReport() {
   if (!tbody) return;
 
   const year = Number(panelRoot.querySelector('#repVacYear').value || new Date().getFullYear());
+  const goFromGrid = await countGoDaysByEmployeeForYear(year);
   const status = panelRoot.querySelector('#repVacStatus').value || 'active';
   const balByEmp = new Map();
   for (const b of kadrVacationState.balances) if (b.year === year) balByEmp.set(b.employeeId, b);
@@ -593,14 +612,7 @@ function _renderVacReport() {
     const daysCarried = ent?.daysCarriedOver ?? 0;
     let daysUsed = bal?.daysUsed ?? 0;
     if (!bal) {
-      daysUsed = 0;
-      kadrAbsencesState.items.forEach(a => {
-        if (a.type === 'godisnji' && a.employeeId === emp.id && a.dateFrom?.startsWith(String(year))) {
-          daysUsed += a.daysCount != null
-            ? Number(a.daysCount)
-            : (a.dateFrom && a.dateTo ? daysInclusive(a.dateFrom, a.dateTo) : 0);
-        }
-      });
+      daysUsed = goFromGrid.get(emp.id) ?? 0;
     }
     return { emp, daysTotal, daysCarried, daysUsed, remaining: daysTotal + daysCarried - daysUsed };
   });
@@ -642,6 +654,7 @@ async function _exportVacXlsx() {
   try { XLSX = await loadXlsx(); } catch { showToast('⚠ XLSX nedostupan'); return; }
   const year = Number(panelRoot.querySelector('#repVacYear').value || new Date().getFullYear());
   const status = panelRoot.querySelector('#repVacStatus').value || 'active';
+  const goFromGrid = await countGoDaysByEmployeeForYear(year);
   const balByEmp = new Map();
   for (const b of kadrVacationState.balances) if (b.year === year) balByEmp.set(b.employeeId, b);
   const entByEmp = new Map();
@@ -655,7 +668,7 @@ async function _exportVacXlsx() {
       const bal = balByEmp.get(emp.id);
       const dt = ent?.daysTotal ?? 20;
       const dc = ent?.daysCarriedOver ?? 0;
-      const du = bal?.daysUsed ?? 0;
+      const du = bal?.daysUsed ?? (goFromGrid.get(emp.id) ?? 0);
       aoa.push([employeeDisplayName(emp) || '', emp.department || '', dt, dc, du, dt + dc - du]);
     });
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -768,7 +781,9 @@ async function _exportToXlsx() {
   const empFilter = panelRoot?.querySelector('#repSickEmpFilter')?.value || '';
   const deptFilter = panelRoot?.querySelector('#repSickDeptFilter')?.value || '';
   const { from: pFrom, to: pTo } = _readPeriod();
-  const allSick = (kadrAbsencesState.items || []).filter(a => a.type === 'bolovanje');
+  const allSick = (pFrom && pTo)
+    ? await bolovanjeListFromWorkHours(pFrom, pTo)
+    : await bolovanjeListFromWorkHours('', '');
   const empById = new Map(kadrovskaState.employees.map(e => [e.id, e]));
   const today = _isoToday();
 
@@ -778,7 +793,15 @@ async function _exportToXlsx() {
     if (!a.employeeId) return;
     if (empFilter && a.employeeId !== empFilter) return;
     const emp = empById.get(a.employeeId);
-    if (deptFilter && (!emp || emp.department !== deptFilter)) return;
+    if (deptFilter) {
+      if (!emp) return;
+      const deptId = parseInt(deptFilter, 10);
+      if (orgStructureState.departments.length && !isNaN(deptId)) {
+        if (emp.departmentId !== deptId) return;
+      } else {
+        if (emp.department !== deptFilter) return;
+      }
+    }
     const days = _intersectingDays(a.dateFrom, a.dateTo, pFrom, pTo);
     if (days <= 0) return;
     const name = emp ? employeeDisplayName(emp) : '(obrisan)';
@@ -849,15 +872,19 @@ export async function wireReportsTab(panel) {
 
   /* Wire filter handlers (po pravilu: promena meseca/godine briše manualni
      range; promena range-a briše mesec; promena godine briše mesec+range) */
-  panel.querySelector('#repSickEmpFilter')?.addEventListener('change', _renderSickReport);
-  panel.querySelector('#repSickDeptFilter')?.addEventListener('change', _renderSickReport);
+  panel.querySelector('#repSickEmpFilter')?.addEventListener('change', () => {
+    void _renderSickReport().catch(err => console.warn('[reports] sick', err));
+  });
+  panel.querySelector('#repSickDeptFilter')?.addEventListener('change', () => {
+    void _renderSickReport().catch(err => console.warn('[reports] sick', err));
+  });
 
   panel.querySelector('#repSickMonth')?.addEventListener('change', () => {
     const f = panel.querySelector('#repSickFrom');
     const t = panel.querySelector('#repSickTo');
     if (f) f.value = '';
     if (t) t.value = '';
-    _renderSickReport();
+    void _renderSickReport().catch(err => console.warn('[reports] sick', err));
   });
   panel.querySelector('#repSickYear')?.addEventListener('change', () => {
     const m = panel.querySelector('#repSickMonth');
@@ -866,12 +893,12 @@ export async function wireReportsTab(panel) {
     if (m) m.value = '';
     if (f) f.value = '';
     if (t) t.value = '';
-    _renderSickReport();
+    void _renderSickReport().catch(err => console.warn('[reports] sick', err));
   });
   const onRange = () => {
     const m = panel.querySelector('#repSickMonth');
     if (m) m.value = '';
-    _renderSickReport();
+    void _renderSickReport().catch(err => console.warn('[reports] sick', err));
   };
   panel.querySelector('#repSickFrom')?.addEventListener('change', onRange);
   panel.querySelector('#repSickTo')?.addEventListener('change', onRange);
@@ -884,7 +911,7 @@ export async function wireReportsTab(panel) {
       });
     const y = panel.querySelector('#repSickYear');
     if (y) y.value = String(new Date().getFullYear());
-    _renderSickReport();
+    _renderSickReport().catch(err => console.warn('[reports] sick', err));
   });
 
   panel.querySelector('#repSickExport')?.addEventListener('click', _exportToXlsx);
@@ -910,7 +937,7 @@ export async function wireReportsTab(panel) {
       if (tab === 'vacation') {
         const year = Number(panel.querySelector('#repVacYear').value);
         await ensureVacationLoaded(year, true);
-        _renderVacReport();
+        await _renderVacReport();
       }
       if (tab === 'children') await _renderChildrenReport();
     });
@@ -924,19 +951,20 @@ export async function wireReportsTab(panel) {
   panel.querySelector('#repVacYear')?.addEventListener('change', async () => {
     const year = Number(panel.querySelector('#repVacYear').value);
     await ensureVacationLoaded(year, true);
-    _renderVacReport();
+    await _renderVacReport();
   });
-  panel.querySelector('#repVacStatus')?.addEventListener('change', _renderVacReport);
+  panel.querySelector('#repVacStatus')?.addEventListener('change', () => {
+    void _renderVacReport().catch(e => console.warn('[reports] vac', e));
+  });
   panel.querySelector('#repVacExport')?.addEventListener('click', _exportVacXlsx);
 
   /* ── Deca listeners ──────────────────────────────── */
   panel.querySelector('#repChildrenExport')?.addEventListener('click', _exportChildrenXlsx);
 
-  /* Učitaj zaposlene + odsustva (paralelno, kako se ne bi blokiralo) */
+  /* Učitaj zaposlene + struktura */
   try {
     await Promise.all([
       ensureEmployeesLoaded(),
-      ensureAbsencesLoaded(),
       ensureOrgStructureLoaded(),
     ]);
   } catch (err) {
@@ -944,5 +972,5 @@ export async function wireReportsTab(panel) {
   }
 
   _populateFilters();
-  _renderSickReport();
+  void _renderSickReport().catch(err => console.warn('[reports] sick render', err));
 }
