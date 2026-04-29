@@ -60,12 +60,12 @@ function cmpTextAsc(a, b) {
 }
 
 /**
- * PostgREST: vrednosti sa tačkom (8.2, 3.10) u filteru `eq.` moraju biti pod navodnicima,
- * inače se `eq.8.2` tumači kao `eq.8` i rezultat je uvek prazan — „nema operacija” za sve mašine.
+ * Jedna vrednost `effective_machine_code` kao PostgREST `in.("X")`.
+ * Za kodove sa tačkom (8.2, 3.10) pouzdanije od `eq.X.Y` kada URL/proksi tumači tačku pogrešno.
  */
-function postgrestDoubleQuoted(val) {
-  const s = String(val ?? '');
-  return `"${s.replace(/"/g, '""')}"`;
+function postgrestInSingleMachineCode(machineCode) {
+  const inner = String(machineCode ?? '').trim().replace(/"/g, '""');
+  return inner ? `in.("${inner}")` : 'in.()';
 }
 
 /**
@@ -177,7 +177,7 @@ export async function loadOperationsForMachine(machineCode) {
   if (!getIsOnline() || !machineCode) return [];
   const params = new URLSearchParams();
   params.set('select', '*');
-  params.set('effective_machine_code', `eq.${postgrestDoubleQuoted(machineCode)}`);
+  params.set('effective_machine_code', postgrestInSingleMachineCode(machineCode));
   params.set('is_done_in_bigtehn', 'eq.false');
   params.set('rn_zavrsen', 'eq.false');
   params.set('is_cooperation_effective', 'eq.false');
@@ -270,7 +270,8 @@ export async function loadOperationsForDept(dept) {
     for (const raw of dept.operationPrefixes) {
       const p = String(raw).trim();
       if (!p) continue;
-      orParts.push(`effective_machine_code.eq.${postgrestDoubleQuoted(p)}`);
+      const q = String(p).replace(/"/g, '""');
+      orParts.push(`effective_machine_code.in.("${q}")`);
       orParts.push(`effective_machine_code.like.${p}.*`);
     }
   }

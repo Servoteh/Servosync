@@ -836,7 +836,10 @@ function renderTable({ allowDragDrop }) {
     let title = 'Nema operacija za prikaz';
     if (dept?.kind === 'machines' && state.selectedMachineCode) {
       hint = 'Sve operacije za ovu mašinu su završene ili nisu još kreirane u BigTehn-u.<br>'
-        + 'Pokušaj <strong>Osveži</strong> ili izaberi drugu mašinu.';
+        + 'Pokušaj <strong>Osveži</strong> ili izaberi drugu mašinu.<br><br>'
+        + '<small>Ako je lista prazna na <strong>svim</strong> mašinama: u pogledu plana učestvuju samo RN čiji je '
+        + '<strong>predmet aktiviran</strong> za plan (<code>predmet_aktivacija.je_aktivan</code>) i RN bez '
+        + 'završene kontrole u planu. Proveri aktivacije i BigTehn/bridge sinhronizaciju.</small>';
     } else if (dept?.kind === 'operations') {
       hint = 'Nema otvorenih operacija u ovom odeljenju.';
     } else if (dept?.isFallback) {
