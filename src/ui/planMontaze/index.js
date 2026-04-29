@@ -172,7 +172,10 @@ function _wireHeader() {
     toggleTheme();
   });
   _mountEl.querySelector('#planExportBtn')?.addEventListener('click', () => {
-    openExportDialog({ onAfterImport: () => _renderShell() });
+    openExportDialog({
+      onAfterImport: () => _renderShell(),
+      onShellRefresh: () => _renderShell(),
+    });
   });
 }
 
