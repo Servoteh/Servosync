@@ -33,6 +33,9 @@ export { BIGTEHN_DRAWINGS_BUCKET };
 
 /* ── Konstante ── */
 
+/** Po mašini: koliko različitih RN (work_order) učitava prvi poziv RPC-a; ostalo preko „Još RN". */
+export const PLAN_PP_MACHINE_WO_PAGE = 100;
+
 export const LOCAL_STATUSES = ['waiting', 'in_progress', 'blocked'];
 /** Sledeći status u ciklusu klika na pill (NE uključuje 'completed' jer to
  *  dolazi iz BigTehn-a, ne pišemo ručno). */
@@ -165,25 +168,42 @@ export async function loadMachines() {
 }
 
 /**
- * Vraća listu OTVORENIH operacija (ne završeni u BigTehn-u + nije
- * lokalno označeno 'completed' + overlay nije arhiviran + RN nije završen).
- *
- * Sort: shift_sort_order ASC NULLS LAST, rok_izrade ASC NULLS LAST,
- *       prioritet_bigtehn ASC.
+ * Vraća OTVORENE operacije po mašini (paginacija po radnom nalogu u istom redosledu kao tabela).
  *
  * @param {string} machineCode — rj_code (npr. "8.3")
+ * @param {{ workOrderLimit?: number, workOrderOffset?: number }} [opts]
+ * @returns {Promise<{ rows: object[], hasMore: boolean, nextWorkOrderOffset: number }>}
  */
-export async function loadOperationsForMachine(machineCode) {
-  if (!getIsOnline() || !machineCode) return [];
-  /* RPC vraća SETOF jsonb (PostgREST ne izlaže pouzdano SETOF view). */
+export async function loadOperationsForMachine(machineCode, opts = {}) {
+  const empty = { rows: [], hasMore: false, nextWorkOrderOffset: 0 };
+  if (!getIsOnline() || !machineCode) return empty;
+
+  const workOrderLimit = opts.workOrderLimit ?? PLAN_PP_MACHINE_WO_PAGE;
+  const workOrderOffset = opts.workOrderOffset ?? 0;
+
   const data = await sbReq(
     'rpc/plan_pp_open_ops_for_machine',
     'POST',
-    { p_machine_code: String(machineCode).trim() },
+    {
+      p_machine_code: String(machineCode).trim(),
+      p_work_order_limit: workOrderLimit,
+      p_work_order_offset: workOrderOffset,
+    },
     { upsert: false },
   );
-  const raw = nonNullRows(data, 'plan_pp_open_ops_for_machine');
-  const rows = raw.map(r => {
+  if (data === null) {
+    const e = new Error('Supabase čitanje nije uspelo (plan_pp_open_ops_for_machine)');
+    e.code = 'SUPABASE_READ_FAILED';
+    throw e;
+  }
+  if (typeof data !== 'object' || data === null || !Array.isArray(data.rows)) {
+    const e = new Error('plan_pp_open_ops_for_machine: očekivan je objekat sa poljem rows (niz)');
+    e.code = 'SUPABASE_UNEXPECTED_SHAPE';
+    throw e;
+  }
+
+  const rawRows = data.rows;
+  const rows = rawRows.map(r => {
     if (typeof r === 'string') {
       try {
         return JSON.parse(r);
@@ -193,7 +213,13 @@ export async function loadOperationsForMachine(machineCode) {
     }
     return r;
   });
-  return sortProductionOperations(rows);
+
+  const nextOff = Number(data.next_work_order_offset);
+  return {
+    rows,
+    hasMore: !!data.has_more,
+    nextWorkOrderOffset: Number.isFinite(nextOff) ? nextOff : workOrderOffset,
+  };
 }
 
 /**

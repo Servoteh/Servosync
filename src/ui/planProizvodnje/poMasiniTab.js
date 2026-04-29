@@ -38,6 +38,7 @@ import {
   loadMachines,
   loadOperationsForMachine,
   loadOperationsForDept,
+  PLAN_PP_MACHINE_WO_PAGE,
   upsertOverlay,
   setCamReady,
   setCooperationManual,
@@ -55,6 +56,7 @@ import {
   formatSecondsHm,
   plannedSeconds,
   filterOperationsByRnOrDrawing,
+  sortProductionOperations,
 } from '../../services/planProizvodnje.js';
 import {
   sanitizeDrawingNo,
@@ -104,6 +106,10 @@ const state = {
   loading: false,
   error: null,
   dragRowKey: null,
+
+  /* Paginacija po RN — samo loadOperationsForMachine (izabrana mašina) */
+  woHasMore: false,
+  woLoadNextOffset: 0,
 };
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -162,6 +168,8 @@ export function teardownPoMasiniTab() {
      u LS pri svakom kliku, pa se i lokalna navigacija očuva. */
   state.selectedDeptSlug = null;
   state.selectedMachineCode = null;
+  state.woHasMore = false;
+  state.woLoadNextOffset = 0;
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -354,6 +362,9 @@ async function renderSveView() {
     await refreshOperationsForMachine();
   } else {
     state.selectedMachineCode = null;
+    state.woHasMore = false;
+    state.woLoadNextOffset = 0;
+    syncWoLoadMoreButton();
     renderEmptyBody('Izaberi mašinu iz dropdown-a iznad da vidiš njene otvorene operacije.');
     setCounter(null);
   }
@@ -503,6 +514,7 @@ function renderToolbarSve() {
     <button class="pp-refresh-btn" id="ppRefreshBtn" disabled title="Osvezi listu operacija">
       <span aria-hidden="true">↻</span> Osveži
     </button>
+    ${renderLoadMoreWoBtnHtml()}
     <div class="pp-toolbar-spacer"></div>
     <span class="pp-counter" id="ppCounter">— operacija</span>
     ${state.canEdit ? '' : '<span class="pp-readonly-badge">🔒 Read-only</span>'}
@@ -514,6 +526,7 @@ function renderToolbarSve() {
 function wireSveToolbar() {
   const sel = state.host?.querySelector('#ppMachineSelect');
   const btn = state.host?.querySelector('#ppRefreshBtn');
+  const loadMore = state.host?.querySelector('#ppLoadMoreWoBtn');
   if (sel) {
     sel.addEventListener('change', async () => {
       state.selectedMachineCode = sel.value || null;
@@ -534,6 +547,13 @@ function wireSveToolbar() {
       }
     });
   }
+  if (loadMore) {
+    loadMore.addEventListener('click', async () => {
+      if (state.loading || !state.selectedMachineCode || !state.woHasMore) return;
+      await refreshOperationsForMachine({ append: true });
+    });
+  }
+  syncWoLoadMoreButton();
 }
 
 function renderToolbarMachineList(dept) {
@@ -567,6 +587,7 @@ function renderToolbarDrillDown(dept) {
     <button class="pp-refresh-btn" id="ppRefreshBtn" title="Osvezi listu operacija">
       <span aria-hidden="true">↻</span> Osveži
     </button>
+    ${renderLoadMoreWoBtnHtml()}
     ${renderBulkReassignButton()}
     ${renderReworkFilterHtml()}
     ${renderRnFilterHtml()}
@@ -581,6 +602,8 @@ function renderToolbarDrillDown(dept) {
        izašao iz drill-down-a, pa lokalno čistimo selectedMachineCode). */
     state.selectedMachineCode = null;
     state.rows = [];
+    state.woHasMore = false;
+    state.woLoadNextOffset = 0;
     await renderActiveView();
   });
   const refresh = tb.querySelector('#ppRefreshBtn');
@@ -588,6 +611,14 @@ function renderToolbarDrillDown(dept) {
     if (state.loading) return;
     await refreshOperationsForMachine({ force: true });
   });
+  const loadMore = tb.querySelector('#ppLoadMoreWoBtn');
+  if (loadMore) {
+    loadMore.addEventListener('click', async () => {
+      if (state.loading || !state.woHasMore) return;
+      await refreshOperationsForMachine({ append: true });
+    });
+  }
+  syncWoLoadMoreButton();
   wireRnFilter();
 }
 
@@ -615,6 +646,24 @@ function renderToolbarOperations(dept, opts = {}) {
   wireBulkReassignButton();
   wireReworkFilter();
   wireRnFilter();
+}
+
+function renderLoadMoreWoBtnHtml() {
+  const n = PLAN_PP_MACHINE_WO_PAGE;
+  return `
+    <button type="button" class="pp-refresh-btn pp-load-more-wo-btn" id="ppLoadMoreWoBtn" hidden
+            title="Dovrši učitavanje: sledećih do ${n} radnih naloga u istom redosledu prioriteta">
+      Još RN (do ${n})…
+    </button>
+  `;
+}
+
+function syncWoLoadMoreButton() {
+  const btn = state.host?.querySelector('#ppLoadMoreWoBtn');
+  if (!btn) return;
+  const show = !!state.selectedMachineCode && state.woHasMore;
+  btn.hidden = !show;
+  btn.disabled = state.loading;
 }
 
 function renderRnFilterHtml() {
@@ -683,25 +732,48 @@ function wireRnFilter() {
  * REFRESH OPERATIONS — dva izvora podataka
  * ──────────────────────────────────────────────────────────────────────── */
 
-async function refreshOperationsForMachine() {
+async function refreshOperationsForMachine(opts = {}) {
+  const append = !!opts.append;
+
   if (!state.selectedMachineCode) {
     renderEmptyBody('Izaberi mašinu da vidiš njene operacije.');
     setCounter(null);
+    state.woHasMore = false;
+    state.woLoadNextOffset = 0;
+    syncWoLoadMoreButton();
     return;
   }
+
   state.loading = true;
   setError(null);
   setRefreshSpinner(true);
+
   try {
-    state.rows = await loadOperationsForMachine(state.selectedMachineCode);
+    const offset = append ? state.woLoadNextOffset : 0;
+    const { rows: newRows, hasMore, nextWorkOrderOffset } = await loadOperationsForMachine(
+      state.selectedMachineCode,
+      {
+        workOrderLimit: PLAN_PP_MACHINE_WO_PAGE,
+        workOrderOffset: offset,
+      },
+    );
+    const merged = append ? [...state.rows, ...newRows] : newRows;
+    state.rows = sortProductionOperations(merged);
+    state.woHasMore = hasMore;
+    state.woLoadNextOffset = nextWorkOrderOffset;
     await annotateRowsWithPdfAvailability(state.rows);
   } catch (e) {
     console.error('[pp] loadOperationsForMachine failed', e);
-    state.rows = [];
+    if (!append) {
+      state.rows = [];
+      state.woHasMore = false;
+      state.woLoadNextOffset = 0;
+    }
     setError('Greška pri učitavanju operacija. Pogledaj konzolu (DevTools) za detalje.');
   } finally {
     state.loading = false;
     setRefreshSpinner(false);
+    syncWoLoadMoreButton();
   }
   renderTable({ allowDragDrop: true });
 }
@@ -1845,6 +1917,7 @@ function setRefreshSpinner(on) {
   if (!span) return;
   if (on) span.classList.add('pp-spin');
   else    span.classList.remove('pp-spin');
+  syncWoLoadMoreButton();
 }
 
 /* ────────────────────────────────────────────────────────────────────────
