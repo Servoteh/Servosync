@@ -72,7 +72,7 @@ export function projectContextCardHtml() {
       <div class="pm-row pm-row--project">
         <div class="pm-project-left">
           <label class="project-select-wrap">
-            <span class="project-select-label">Projekat</span>
+            <span class="project-select-label">PROJEKAT</span>
             <select id="projectSelect" aria-label="Izaberi projekat">${opts}</select>
           </label>
           ${rok}
