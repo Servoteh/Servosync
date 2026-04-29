@@ -905,18 +905,21 @@ async function _loadAndRender(yyyymm) {
   if (wrap) {
     wrap.innerHTML = `<div style="padding:30px;color:var(--text3);font-size:12px;text-align:center">Učitavanje ${escHtml(yyyymm)}…</div>`;
   }
+  const days = _gridDaysInMonth(yyyymm);
   if (getIsOnline() && hasSupabaseConfig()) {
-    const from = days[0].ymd;
-    const to = days[days.length - 1].ymd;
-    await loadHolidaysForRange(from, to);
-    gridState.holidayYmdSet = holidayDateSet();
-    gridState.rowsByEmpDate = await loadGridMonth(days);
+    try {
+      await loadHolidaysForRange(days[0].ymd, days[days.length - 1].ymd);
+      gridState.holidayYmdSet = holidayDateSet();
+      gridState.rowsByEmpDate = await loadGridMonth(days);
     } catch (err) {
       console.error('[grid] load month failed', err);
       gridState.rowsByEmpDate = new Map();
+      gridState.holidayYmdSet = new Set();
     }
   } else {
     gridState.rowsByEmpDate = new Map();
+    await loadHolidaysForRange(days[0].ymd, days[days.length - 1].ymd);
+    gridState.holidayYmdSet = holidayDateSet();
   }
   gridState.monthKey = yyyymm;
   gridState.loaded = true;
