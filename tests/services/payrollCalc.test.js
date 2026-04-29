@@ -298,6 +298,18 @@ describe('payrollCalc — teren i edge cases', () => {
     expect(h.bolovanje100Sati).toBe(8);
   });
 
+  it('gridRedovniUnitsOneDay: GO za praksu = 0 u Σ (usklađeno sa obračunom)', () => {
+    expect(
+      gridRedovniUnitsOneDay('2026-04-14', { hours: 0, absence_code: 'go' }, new Set(), 'praksa'),
+    ).toBe(0);
+  });
+
+  it('gridRedovniUnitsOneDay: radni dan državni praznik automatski 8h, praksa = 0', () => {
+    expect(
+      gridRedovniUnitsOneDay('2026-01-01', { hours: 0 }, new Set(['2026-01-01']), 'praksa'),
+    ).toBe(0);
+  });
+
   it('gridRedovniUnitsOneDay: subota bez šifre = 0 čak i uz državni praznik', () => {
     const u = gridRedovniUnitsOneDay('2026-04-11', { hours: 0 }, new Set(['2026-04-11']));
     expect(u).toBe(0);

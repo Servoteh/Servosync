@@ -4,7 +4,7 @@
  * - kadrovskaHeaderHtml() vraća HTML za header (back/title/theme/role/logout).
  *   Wire-ovi se vežu u root render-u (renderKadrovskaModule).
  * - renderSummaryChips() popunjava .kadr-summary-strip kroz dati ID.
- * - kadrTabsHtml() — top tab bar (Zaposleni / Odsustva / ...).
+ * - kadrTabsHtml() — top tab bar (Kadrovska sekcije).
  *
  * Sva dugmad rade preko addEventListener (selectori po ID-u/data atributu).
  */

@@ -1695,6 +1695,8 @@ body.module-kadrovska > #module-settings { display:none !important; }
   color:var(--accent);
   border-color:color-mix(in srgb, #E25B45 30%, var(--border2));
 }
+/* Tab Odsustva uklonjen iz app-a; stari keširani JS može ga i dalje ubaciti u DOM. */
+.kadrovska-tab[data-kadr-tab="absences"] { display:none !important; }
 
 /* Tab panels ? only active one visible */
 .kadr-panel { display:none; }

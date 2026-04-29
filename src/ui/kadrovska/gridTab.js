@@ -125,6 +125,13 @@ function _gridDirtyKey(empId, ymd) {
   return empId + '|' + ymd;
 }
 
+function _gridEmpWorkType(empOrId) {
+  const id = empOrId && typeof empOrId === 'object' ? empOrId.id : empOrId;
+  if (id == null || id === '') return 'ugovor';
+  const e = kadrovskaState.employees.find(x => String(x.id) === String(id));
+  return e?.workType || 'ugovor';
+}
+
 /** Effective vrednost ćelije: dirty override → DB row → defaults. */
 function _gridEffective(empId, ymd) {
   const dk = _gridDirtyKey(empId, ymd);
@@ -507,7 +514,7 @@ function _renderGridBody() {
           hours: eff.hours,
           absence_code: eff.absence_code,
           absence_subtype: eff.absence_subtype,
-        }, holSet);
+        }, holSet, _gridEmpWorkType(emp));
         sOt += Number(eff.overtime_hours || 0);
         sField += fH;
         sTm += tmH;
@@ -520,7 +527,7 @@ function _renderGridBody() {
           hours: eff.hours,
           absence_code: eff.absence_code,
           absence_subtype: eff.absence_subtype,
-        }, holSet);
+        }, holSet, _gridEmpWorkType(emp));
         colTotals[di].ot += Number(eff.overtime_hours || 0);
         colTotals[di].field += fH;
         if (fH > 0) {
@@ -640,7 +647,7 @@ function _renderSummary(emps, days, gt, companyCount) {
           hours: eff.hours,
           absence_code: eff.absence_code,
           absence_subtype: eff.absence_subtype,
-        }, holSet);
+        }, holSet, _gridEmpWorkType(e));
         g.ot += Number(eff.overtime_hours || 0);
         g.field += fH;
         if (fH > 0) {
@@ -813,7 +820,7 @@ function _gridRefreshSums(empId) {
       hours: eff.hours,
       absence_code: eff.absence_code,
       absence_subtype: eff.absence_subtype,
-    }, holSet);
+    }, holSet, _gridEmpWorkType(empId));
     sOt += Number(eff.overtime_hours || 0);
     const fH = Number(eff.field_hours || 0);
     sField += fH;
@@ -1011,7 +1018,7 @@ async function _exportToXlsx() {
             hours: eff.hours,
             absence_code: eff.absence_code,
             absence_subtype: eff.absence_subtype,
-          }, holSet);
+          }, holSet, _gridEmpWorkType(emp));
           sR += ru;
           sO += Number(eff.overtime_hours || 0);
           sF += fH;
