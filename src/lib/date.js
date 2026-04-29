@@ -52,6 +52,19 @@ export function toIsoDate(d) {
   return dt ? dateToYMD(dt) : null;
 }
 
+/**
+ * PostgREST `date` / `timestamptz` → canonical 'YYYY-MM-DD' u lokalnom kalendaru.
+ * Prvo `YYYY-MM-DD` iz stringa (bez TZ pomake); izbegava pogrešan ključ u Map.
+ */
+export function apiDateToYmd(v) {
+  if (v == null || v === '') return '';
+  const s = String(v).trim();
+  const cal = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (cal) return `${cal[1]}-${cal[2]}-${cal[3]}`;
+  const dt = parseDateLocal(s);
+  return dt ? dateToYMD(dt) : '';
+}
+
 /** Inkluzivna razlika u danima; -1 ako je end < start. */
 export function calcDuration(s, e) {
   const a = parseDateLocal(s);

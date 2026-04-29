@@ -30,6 +30,8 @@
  *      tretiraju kao 0 u obračunu (ne plaćaju se).
  */
 
+import { parseDateLocal } from '../lib/date.js';
+
 /* ── Konstante (po Zakonu o radu RS, najmanji propisani koeficijenti) ── */
 export const REGULAR_DAY_HOURS = 8;
 export const BOLOVANJE_OBICNO_FACTOR = 0.65;       // 65% osnovice
@@ -40,6 +42,13 @@ export const VALID_COMPENSATION_MODELS = ['fiksno', 'dva_dela', 'satnica'];
 const FULL_RIGHTS_WORK_TYPES = new Set(['ugovor']);
 
 const NUM = (v) => (v == null || isNaN(v) ? 0 : Number(v));
+
+/** Šifra odsustva iz API-ja / unosa (trim + lower). */
+function normAbsCode(v) {
+  if (v == null || v === '') return null;
+  const s = String(v).trim().toLowerCase();
+  return s || null;
+}
 
 function pushWarning(arr, code, message, extra = {}) {
   arr.push({ code, message, ...extra });
@@ -336,13 +345,16 @@ export function aggregateWorkHoursForMonth(year, month, rowsByYmd, holidayYmdSet
     const h = r ? NUM(r.hours) : 0;
     const ot = r ? NUM(r.overtimeHours ?? r.overtime_hours) : 0;
     const tm = r ? NUM(r.twoMachineHours ?? r.two_machine_hours) : 0;
-    const abs = r?.absenceCode || r?.absence_code || null;
-    const sub = r?.absenceSubtype || r?.absence_subtype || null;
+    const abs = normAbsCode(r?.absenceCode || r?.absence_code);
+    const sub = normAbsCode(r?.absenceSubtype || r?.absence_subtype);
 
     out.prekovremeniSati += ot;
     out.dveMasineSati += tm;
 
-    const dow = new Date(year, month - 1, day).getDay();
+    const dow = (() => {
+      const dt = parseDateLocal(ymd);
+      return dt ? dt.getDay() : new Date(year, month - 1, day).getDay();
+    })();
     const weekend = dow === 0 || dow === 6;
     const isHol = hol.has(ymd);
 
@@ -461,15 +473,16 @@ export function gridRedovniUnitsOneDay(ymd, row, holidayYmdSet) {
     : new Set(Array.isArray(holidayYmdSet) ? holidayYmdSet : []);
   const eff = row || {};
   const h = NUM(eff.hours);
-  const abs = eff.absence_code || eff.absenceCode || null;
-  const sub = eff.absence_subtype || eff.absenceSubtype || null;
+  const abs = normAbsCode(eff.absence_code || eff.absenceCode);
+  const sub = normAbsCode(eff.absence_subtype || eff.absenceSubtype);
 
   const [yStr, mStr, dStr] = (ymd || '').split('-');
   const y = parseInt(yStr, 10);
   const mo = parseInt(mStr, 10);
   const d = parseInt(dStr, 10);
   if (!y || !mo || !d) return 0;
-  const dow = new Date(y, mo - 1, d).getDay();
+  const dt = parseDateLocal(ymd);
+  const dow = dt ? dt.getDay() : new Date(y, mo - 1, d).getDay();
   const weekend = dow === 0 || dow === 6;
   const isHol = hol.has(ymd);
 

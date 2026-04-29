@@ -312,6 +312,12 @@ describe('payrollCalc — teren i edge cases', () => {
     expect(u).toBe(8);
   });
 
+  it('gridRedovniUnitsOneDay: GO iz API-ja sa velikim slovima = 8h', () => {
+    expect(
+      gridRedovniUnitsOneDay('2026-04-14', { hours: 0, absence_code: 'GO' }, new Set()),
+    ).toBe(8);
+  });
+
   it('aggregateWorkHoursForMonth: GO na subotu = 8h godišnjeg', () => {
     const m = new Map([['2026-04-11', { hours: 0, absenceCode: 'go', absenceSubtype: null }]]);
     const h = aggregateWorkHoursForMonth(2026, 4, m, new Set());

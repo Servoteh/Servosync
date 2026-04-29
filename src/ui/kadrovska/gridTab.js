@@ -34,6 +34,7 @@ import { loadXlsx } from '../../lib/xlsx.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
 import { ssGet, ssSet } from '../../lib/storage.js';
 import { loadHolidaysForRange, holidayDateSet } from '../../services/holidays.js';
+import { parseDateLocal } from '../../lib/date.js';
 import { gridRedovniUnitsOneDay } from '../../services/payrollCalc.js';
 
 /* ─── KONSTANTE ───────────────────────────────────────────────────────── */
@@ -100,8 +101,8 @@ function _gridDaysInMonth(yyyymm) {
   const out = [];
   for (let d = 1; d <= last; d++) {
     const ymd = ymdOf(y, m, d);
-    const dt = new Date(y, m - 1, d);
-    const dow = dt.getDay();
+    const dt = parseDateLocal(ymd);
+    const dow = dt ? dt.getDay() : new Date(y, m - 1, d).getDay();
     out.push({
       day: d,
       ymd,

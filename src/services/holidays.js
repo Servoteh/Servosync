@@ -16,11 +16,12 @@
 import { sbReq } from './supabase.js';
 import { getIsOnline } from '../state/auth.js';
 import { kadrHolidaysState } from '../state/kadrovska.js';
+import { apiDateToYmd } from '../lib/date.js';
 
 export function mapDbHoliday(d) {
   return {
     id: d.id,
-    holidayDate: d.holiday_date || '',
+    holidayDate: apiDateToYmd(d.holiday_date) || '',
     name: d.name || '',
     isWorkday: !!d.is_workday,
     note: d.note || '',

@@ -13,19 +13,30 @@
 
 import { sbReq } from './supabase.js';
 import { canEdit, getIsOnline } from '../state/auth.js';
+import { apiDateToYmd } from '../lib/date.js';
+
+function normalizeAbsenceCode(v) {
+  if (v == null || v === '') return null;
+  const s = String(v).trim().toLowerCase();
+  return s || null;
+}
 
 export function mapDbWorkHour(d) {
   return {
     id: d.id,
     employeeId: d.employee_id,
-    workDate: d.work_date || '',
+    workDate: apiDateToYmd(d.work_date) || '',
     hours: Number(d.hours || 0),
     overtimeHours: Number(d.overtime_hours || 0),
     fieldHours: Number(d.field_hours || 0),
     fieldSubtype: (d.field_subtype === 'domestic' || d.field_subtype === 'foreign') ? d.field_subtype : null,
     twoMachineHours: Number(d.two_machine_hours || 0),
-    absenceCode: d.absence_code || null,
-    absenceSubtype: d.absence_subtype || null,
+    absenceCode: normalizeAbsenceCode(d.absence_code),
+    absenceSubtype: (() => {
+      const st = d.absence_subtype;
+      if (st == null || st === '') return null;
+      return String(st).trim().toLowerCase() || null;
+    })(),
     projectRef: d.project_ref || '',
     note: d.note || '',
     createdAt: d.created_at || null,
