@@ -175,25 +175,14 @@ export async function loadMachines() {
  */
 export async function loadOperationsForMachine(machineCode) {
   if (!getIsOnline() || !machineCode) return [];
-  const params = new URLSearchParams();
-  params.set('select', '*');
-  params.set('effective_machine_code', postgrestInSingleMachineCode(machineCode));
-  params.set('is_done_in_bigtehn', 'eq.false');
-  params.set('rn_zavrsen', 'eq.false');
-  params.set('is_cooperation_effective', 'eq.false');
-  /* PostgREST OR: (local_status.is.null,local_status.neq.completed) */
-  params.set('or', '(local_status.is.null,local_status.neq.completed)');
-  params.set('overlay_archived_at', 'is.null');
-  params.set(
-    'order',
-    'shift_sort_order.asc.nullslast,auto_sort_bucket.asc,rok_izrade.asc.nullslast,prioritet_bigtehn.asc',
+  /* Sigurnosni limit — RPC plan_pp_open_ops_for_machine (migracija 20260508120000). */
+  const data = await sbReq(
+    'rpc/plan_pp_open_ops_for_machine',
+    'POST',
+    { p_machine_code: String(machineCode).trim(), p_limit: 2500 },
+    { upsert: false },
   );
-  /* Sigurnosni limit. Realno najopterećenija mašina ima ~1000 otvorenih
-     operacija; 2500 daje 2.5× headroom. Ako nekada bude veće, dodaj paging. */
-  params.set('limit', '2500');
-
-  const data = await sbReq(`v_production_operations_effective?${params.toString()}`);
-  return sortProductionOperations(nonNullRows(data, 'v_production_operations_effective'));
+  return sortProductionOperations(nonNullRows(data, 'plan_pp_open_ops_for_machine'));
 }
 
 /**
