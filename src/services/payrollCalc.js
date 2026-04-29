@@ -347,8 +347,43 @@ export function aggregateWorkHoursForMonth(year, month, rowsByYmd, holidayYmdSet
     const isHol = hol.has(ymd);
 
     if (weekend) {
-      if (!abs && h > 0) out.redovanRadSati += h;
-      if (isHol && h > 0) out.praznikRadSati += h;
+      if (!abs && h > 0) {
+        out.redovanRadSati += h;
+        continue;
+      }
+      if (isHol && h > 0) {
+        out.praznikRadSati += h;
+        continue;
+      }
+      if (isHol) {
+        if (abs === 'go') {
+          out.godisnjiSati += REGULAR_DAY_HOURS;
+        } else if (abs === 'bo') {
+          if (sub === 'povreda_na_radu' || sub === 'odrzavanje_trudnoce') {
+            out.bolovanje100Sati += REGULAR_DAY_HOURS;
+          } else {
+            out.bolovanje65Sati += REGULAR_DAY_HOURS;
+          }
+        } else if (abs === 'sp') {
+          out.praznikPlaceniSati += REGULAR_DAY_HOURS;
+        } else if (abs === 'sl') {
+          out.slobodniDaniSati += REGULAR_DAY_HOURS;
+        }
+        continue;
+      }
+      if (abs === 'go') {
+        out.godisnjiSati += REGULAR_DAY_HOURS;
+      } else if (abs === 'bo') {
+        if (sub === 'povreda_na_radu' || sub === 'odrzavanje_trudnoce') {
+          out.bolovanje100Sati += REGULAR_DAY_HOURS;
+        } else {
+          out.bolovanje65Sati += REGULAR_DAY_HOURS;
+        }
+      } else if (abs === 'sp') {
+        out.praznikPlaceniSati += REGULAR_DAY_HOURS;
+      } else if (abs === 'sl') {
+        out.slobodniDaniSati += REGULAR_DAY_HOURS;
+      }
       continue;
     }
 
@@ -441,6 +476,18 @@ export function gridRedovniUnitsOneDay(ymd, row, holidayYmdSet) {
   if (weekend) {
     if (!abs && h > 0) return h;
     if (isHol && h > 0) return h;
+    if (isHol) {
+      if (abs === 'go') return REGULAR_DAY_HOURS;
+      if (abs === 'bo') return REGULAR_DAY_HOURS;
+      if (abs === 'sp') return REGULAR_DAY_HOURS;
+      if (abs === 'sl') return REGULAR_DAY_HOURS;
+      if (abs === 'np' || abs === 'pr') return 0;
+      return 0;
+    }
+    if (abs === 'go' || abs === 'sp' || abs === 'sl' || abs === 'bo') {
+      return REGULAR_DAY_HOURS;
+    }
+    if (abs === 'np' || abs === 'pr') return 0;
     return 0;
   }
   if (isHol) {

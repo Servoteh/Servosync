@@ -2035,9 +2035,17 @@ body.module-kadrovska > #module-settings { display:none !important; }
 .grid-cell:disabled { color:var(--text3); cursor:not-allowed; background:transparent; }
 .grid-cell::placeholder { color:transparent; }
 
-/* Cell states */
+/* Cell states — subota/nedelja (tema; vidljivo i na beloj površini) */
 .grid-table thead th.col-day.cell-weekend,
-td.col-day.cell-weekend { background:#f0f0f0; }
+.grid-table thead tr.row-day-letter th.col-day.cell-weekend {
+  background: color-mix(in srgb, var(--text3) 14%, var(--surface2)) !important;
+}
+.grid-table tbody tr:not(.row-totals) td.col-day.cell-weekend:not(.cell-dirty):not(.cell-error) {
+  background: color-mix(in srgb, var(--text3) 12%, var(--surface)) !important;
+}
+.grid-table tr.row-totals td.col-day.cell-weekend {
+  background: color-mix(in srgb, var(--text3) 12%, var(--surface2)) !important;
+}
 td.col-day.cell-today   { box-shadow:inset 0 0 0 1px var(--accent); }
 td.col-day.cell-dirty   { background:color-mix(in srgb, #F2994A 18%, var(--surface)) !important; }
 td.col-day.cell-dirty .grid-cell { color:#F2994A; font-weight:600; }

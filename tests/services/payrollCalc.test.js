@@ -302,4 +302,19 @@ describe('payrollCalc — teren i edge cases', () => {
     const u = gridRedovniUnitsOneDay('2026-04-11', { hours: 0 }, new Set(['2026-04-11']));
     expect(u).toBe(0);
   });
+
+  it('gridRedovniUnitsOneDay: subota sa GO = 8h u zbiru Redovni', () => {
+    const u = gridRedovniUnitsOneDay(
+      '2026-04-11',
+      { hours: 0, absenceCode: 'go', absenceSubtype: null },
+      new Set(),
+    );
+    expect(u).toBe(8);
+  });
+
+  it('aggregateWorkHoursForMonth: GO na subotu = 8h godišnjeg', () => {
+    const m = new Map([['2026-04-11', { hours: 0, absenceCode: 'go', absenceSubtype: null }]]);
+    const h = aggregateWorkHoursForMonth(2026, 4, m, new Set());
+    expect(h.godisnjiSati).toBe(8);
+  });
 });
