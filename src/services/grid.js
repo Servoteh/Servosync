@@ -60,5 +60,20 @@ export async function batchUpsertGrid(dirty) {
   });
   const res = await sbReq('work_hours?on_conflict=employee_id,work_date', 'POST', payload);
   if (!res) return null;
-  return Array.isArray(res) ? res.map(r => mapDbWorkHour(r)) : [];
+  /*
+   * PostgREST često vrati 204 / prazno telo iako je upsert uspeo — `sbReq` tad
+   * parsira `true`, ne niz. Bez merge-a u rowsByEmpDate kasniji sync odsustva
+   * ne vidi absence_code (grid misli da nema GO itd.).
+   */
+  const apiRows = Array.isArray(res) ? res : [];
+  const merged = new Map();
+  for (const r of apiRows) {
+    const m = mapDbWorkHour(r);
+    if (m.employeeId && m.workDate) merged.set(m.employeeId + '|' + m.workDate, m);
+  }
+  for (const row of payload) {
+    const k = row.employee_id + '|' + row.work_date;
+    if (!merged.has(k)) merged.set(k, mapDbWorkHour(row));
+  }
+  return [...merged.values()];
 }
