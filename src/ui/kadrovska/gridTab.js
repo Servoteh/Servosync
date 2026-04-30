@@ -27,7 +27,7 @@ import {
   employeeDisplayName,
 } from '../../lib/employeeNames.js';
 import { canEditKadrovskaGrid, getIsOnline } from '../../state/auth.js';
-import { hasSupabaseConfig } from '../../services/supabase.js';
+import { hasSupabaseConfig, sbReq } from '../../services/supabase.js';
 import { kadrovskaState, orgStructureState } from '../../state/kadrovska.js';
 import { ensureEmployeesLoaded, ensureOrgStructureLoaded } from '../../services/kadrovska.js';
 import { loadGridMonth, batchUpsertGrid } from '../../services/grid.js';
@@ -41,7 +41,17 @@ import { gridRedovniUnitsOneDay } from '../../services/payrollCalc.js';
 
 /* ─── KONSTANTE ───────────────────────────────────────────────────────── */
 
-const GRID_ABS_CODES = ['go', 'bo', 'sp', 'np', 'sl', 'pr'];
+/* Šifre odsustva koje Redovni red prihvata:
+ *   go  = godišnji odmor
+ *   bo  = bolovanje 65% (obicno)
+ *   bop = bolovanje 100% (povreda na radu) — mapira se kao bo+subtype
+ *   bot = bolovanje 100% (odrzavanje trudnoce) — mapira se kao bo+subtype
+ *   sp  = slobodan/plaćeni praznik
+ *   np  = neopravdano (legacy)
+ *   sl  = slobodan dan
+ *   pr  = prazan dan
+ *   nop = neplaćeno odsustvo (odobreno; sati=0, dan se ne plaća) */
+const GRID_ABS_CODES = ['go', 'bo', 'sp', 'np', 'sl', 'pr', 'nop'];
 /* Faza K3.3 — bolovanje subtype kodovi za grid:
    'bo'  → obicno (65%)
    'bop' → povreda na radu (100%)
@@ -415,6 +425,7 @@ export function renderGridPanelBody() {
             <span class="grid-legend-pill abs-np">np = neopravdano</span>
             <span class="grid-legend-pill abs-sl">sl = slobodan dan</span>
             <span class="grid-legend-pill abs-pr">pr = prazan dan</span>
+            <span class="grid-legend-pill abs-nop">nop = neplaćeno odsustvo</span>
           </div>
         </div>
       </div>
@@ -552,7 +563,8 @@ function _renderGridBody() {
         } else {
           regVal = _gridFormatNum(eff.hours);
         }
-        cellsReg.push(`<td class="${dayBase.join(' ')}" data-emp="${empId}" data-ymd="${d.ymd}" data-kind="reg"><input class="${regCls.join(' ')}" type="text" value="${escHtml(regVal)}" maxlength="6" ${editable ? '' : 'disabled'}></td>`);
+        const tdRegTitle = eff.absence_code === 'nop' ? ' title="Neplaceno odsustvo (odobreno)"' : '';
+        cellsReg.push(`<td class="${dayBase.join(' ')}" data-emp="${empId}" data-ymd="${d.ymd}" data-kind="reg"${tdRegTitle}><input class="${regCls.join(' ')}" type="text" value="${escHtml(regVal)}" maxlength="6" ${editable ? '' : 'disabled'}></td>`);
 
         cellsOt.push(`<td class="${dayBase.join(' ')}" data-emp="${empId}" data-ymd="${d.ymd}" data-kind="ot"><input class="grid-cell" type="text" value="${escHtml(_gridFormatNum(eff.overtime_hours))}" maxlength="6" ${editable ? '' : 'disabled'}></td>`);
 
@@ -688,7 +700,7 @@ function _gridOnCellInput(e) {
   }
   e.target.title = '';
   if (kind === 'reg') {
-    e.target.classList.remove('is-absence', 'abs-go', 'abs-bo', 'abs-sp', 'abs-np', 'abs-sl', 'abs-pr');
+    e.target.classList.remove('is-absence', 'abs-go', 'abs-bo', 'abs-sp', 'abs-np', 'abs-sl', 'abs-pr', 'abs-nop');
     if (parsed.kind === 'abs') {
       e.target.classList.add('is-absence', 'abs-' + parsed.code);
     }
@@ -832,6 +844,49 @@ function _gridRefreshSums(empId) {
   if (sumTm) sumTm.textContent = _gridFormatSum(sTm);
 }
 
+/* ─── NOP ↔ ABSENCES SYNC ────────────────────────────────────────────── */
+
+function _collectNopSync() {
+  const toCreate = [], toDelete = [];
+  for (const [key, delta] of gridState.dirty) {
+    const sep = key.indexOf('|');
+    const empId = key.slice(0, sep), ymd = key.slice(sep + 1);
+    const existing = gridState.rowsByEmpDate.get(empId)?.get(ymd);
+    const wasNop = existing?.absence_code === 'nop';
+    const isNop = delta.absence_code === 'nop';
+    if (isNop && !wasNop) toCreate.push({ empId, ymd });
+    else if (!isNop && wasNop) toDelete.push({ empId, ymd });
+  }
+  return { toCreate, toDelete };
+}
+
+async function _syncNopAbsences({ toCreate, toDelete }) {
+  if (!toCreate.length && !toDelete.length) return;
+  const now = new Date().toISOString();
+  const tasks = [
+    ...toCreate.map(({ empId, ymd }) =>
+      sbReq('absences', 'POST', {
+        employee_id: empId,
+        type: 'neplaceno',
+        date_from: ymd,
+        date_to: ymd,
+        days_count: 1,
+        note: '',
+        updated_at: now,
+      })
+    ),
+    ...toDelete.map(({ empId, ymd }) =>
+      sbReq(
+        `absences?employee_id=eq.${encodeURIComponent(empId)}&type=eq.neplaceno&date_from=eq.${encodeURIComponent(ymd)}&date_to=eq.${encodeURIComponent(ymd)}`,
+        'DELETE'
+      )
+    ),
+  ];
+  const results = await Promise.allSettled(tasks);
+  const failCount = results.filter(r => r.status === 'rejected' || r.value === null).length;
+  if (failCount) console.warn(`[grid] nop-absence sync: ${failCount} operation(s) failed`);
+}
+
 /* ─── BATCH SAVE / LOAD ───────────────────────────────────────────────── */
 
 async function _saveAllGrid() {
@@ -852,6 +907,7 @@ async function _saveAllGrid() {
   if (btn) { btn.disabled = true; btn.textContent = 'Snimanje…'; }
 
   try {
+    const nopSync = _collectNopSync();
     const saved = await batchUpsertGrid(gridState.dirty);
     if (saved == null) {
       showToast('⚠ Supabase batch upsert nije uspeo — proveri migraciju add_attendance_grid.sql');
@@ -867,6 +923,7 @@ async function _saveAllGrid() {
     const n = gridState.dirty.size;
     gridState.dirty.clear();
     showToast('✅ Sačuvano ' + n + ' izmena');
+    _syncNopAbsences(nopSync).catch(err => console.warn('[grid] nop-absence sync error', err));
     _renderGridBody();
   } catch (err) {
     console.error('[grid] batch save error', err);

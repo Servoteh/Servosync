@@ -2209,7 +2209,8 @@ td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
 .grid-cell.abs-sp { background:color-mix(in srgb, #2D9CDB 18%, transparent); color:#2D9CDB; }
 .grid-cell.abs-np { background:color-mix(in srgb, #6B7280 28%, transparent); color:var(--text3); }
 .grid-cell.abs-sl { background:color-mix(in srgb, var(--accent) 18%, transparent); color:var(--accent); }
-.grid-cell.abs-pr { background:color-mix(in srgb, #9B51E0 18%, transparent); color:#9B51E0; }
+.grid-cell.abs-pr  { background:color-mix(in srgb, #9B51E0 18%, transparent); color:#9B51E0; }
+.grid-cell.abs-nop { background:color-mix(in srgb, #78909C 20%, transparent); color:#546E7A; }
 
 /* Teren podtipovi: domaci (?uto-amber) vs inostrani (plavo) */
 .grid-cell.is-field-domestic { background:color-mix(in srgb, #F2C94C 22%, transparent); color:#B07B00; font-weight:600; }
@@ -2275,7 +2276,8 @@ td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
 .grid-pill.abs-sp { background:color-mix(in srgb, #2D9CDB 18%, transparent); color:#2D9CDB; border-color:color-mix(in srgb, #2D9CDB 30%, transparent); }
 .grid-pill.abs-np { background:color-mix(in srgb, #6B7280 28%, transparent); color:var(--text3); }
 .grid-pill.abs-sl { background:color-mix(in srgb, var(--accent) 18%, transparent); color:var(--accent); border-color:color-mix(in srgb, var(--accent) 30%, transparent); }
-.grid-pill.abs-pr { background:color-mix(in srgb, #9B51E0 18%, transparent); color:#9B51E0; border-color:color-mix(in srgb, #9B51E0 30%, transparent); }
+.grid-pill.abs-pr  { background:color-mix(in srgb, #9B51E0 18%, transparent); color:#9B51E0; border-color:color-mix(in srgb, #9B51E0 30%, transparent); }
+.grid-pill.abs-nop { background:color-mix(in srgb, #78909C 20%, transparent); color:#546E7A; border-color:color-mix(in srgb, #78909C 30%, transparent); }
 .grid-pill.pill-fdom { background:color-mix(in srgb, #F2C94C 22%, transparent); color:#B07B00; border-color:color-mix(in srgb, #F2C94C 35%, transparent); }
 .grid-pill.pill-ffor { background:color-mix(in srgb, #2F80ED 22%, transparent); color:#1B5BB7; border-color:color-mix(in srgb, #2F80ED 35%, transparent); }
 .grid-pill.pill-tm   { background:color-mix(in srgb, #F2994A 22%, transparent); color:#C26B14; border-color:color-mix(in srgb, #F2994A 35%, transparent); }

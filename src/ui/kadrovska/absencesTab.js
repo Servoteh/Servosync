@@ -51,6 +51,34 @@ const PAID_REASON_OPTS = [
   { v: 'selidba', l: 'Selidba' },
   { v: 'ostalo', l: 'Ostalo' },
 ];
+const SLOBODAN_REASON_OPTS = [
+  { v: 'brak', l: 'Zaključenje braka' },
+  { v: 'rodjenje_deteta', l: 'Rođenje deteta' },
+  { v: 'selidba', l: 'Selidba' },
+  { v: 'smrt_clana_porodice', l: 'Smrt člana porodice' },
+  { v: 'dobrovoljno_davanje_krvi', l: 'Dobrovoljno davanje krvi' },
+  { v: 'slava', l: 'Krsna slava' },
+  { v: 'ostalo', l: 'Ostalo' },
+];
+const SLOBODAN_REASON_LABELS = Object.fromEntries(SLOBODAN_REASON_OPTS.map(o => [o.v, o.l]));
+
+/**
+ * Proverava da li je dati tip odsustva dozvoljen za tip rada zaposlenog.
+ * Vraća { ok:true } ili { ok:false, msg:string }.
+ */
+function validateAbsenceForWorkType(type, slobodanReason, workType) {
+  if (!workType || type === 'neplaceno' || type === 'sluzbeno' || type === 'ostalo') {
+    return { ok: true };
+  }
+  const needsContract = ['godisnji', 'bolovanje', 'placeno', 'slobodan', 'slava'];
+  if (needsContract.includes(type) && workType !== 'ugovor') {
+    return {
+      ok: false,
+      msg: `Tip odsustva nije dozvoljen za tip rada „${workType}" — samo za zaposlene sa ugovorom o radu.`,
+    };
+  }
+  return { ok: true };
+}
 
 export function renderAbsencesTab() {
   return `
@@ -201,6 +229,9 @@ export function refreshAbsencesTab() {
     if (a.type === 'placeno' && a.paidReason) {
       typeLbl += ' — ' + (KADR_PAID_REASON_LABELS[a.paidReason] || a.paidReason);
     }
+    if (a.type === 'slobodan' && a.slobodanReason) {
+      typeLbl += ' — ' + (SLOBODAN_REASON_LABELS[a.slobodanReason] || a.slobodanReason);
+    }
     const id = escHtml(a.id || '');
     return `<tr data-id="${id}">
       <td><div class="emp-name">${escHtml(employeeNameById(a.employeeId))}</div></td>
@@ -254,6 +285,13 @@ function buildAbsenceModalHtml(a) {
               <select id="absPaidReason">
                 <option value="">—</option>
                 ${PAID_REASON_OPTS.map(o => `<option value="${o.v}"${a?.paidReason === o.v ? ' selected' : ''}>${escHtml(o.l)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="emp-field" id="absSlobodanReasonWrap" style="${(a?.type === 'slobodan') ? '' : 'display:none;'}">
+              <label for="absSlobodanReason">Razlog (slobodan dan) *</label>
+              <select id="absSlobodanReason">
+                <option value="">— izaberi razlog —</option>
+                ${SLOBODAN_REASON_OPTS.map(o => `<option value="${o.v}"${a?.slobodanReason === o.v ? ' selected' : ''}>${escHtml(o.l)}</option>`).join('')}
               </select>
             </div>
             <div class="emp-field">
@@ -311,11 +349,14 @@ function openAbsenceModal(id) {
   form.addEventListener('submit', (ev) => { ev.preventDefault(); submitAbsenceForm(); });
   modal.addEventListener('click', (ev) => { if (ev.target === modal) closeAbsenceModal(); });
 
-  /* Toggle razloga plaćenog odsustva po tipu */
+  /* Toggle razloga odsustva po tipu */
   const typeEl = modal.querySelector('#absType');
-  const reasonWrap = modal.querySelector('#absPaidReasonWrap');
+  const paidReasonWrap = modal.querySelector('#absPaidReasonWrap');
+  const slobodanReasonWrap = modal.querySelector('#absSlobodanReasonWrap');
   typeEl?.addEventListener('change', () => {
-    if (reasonWrap) reasonWrap.style.display = typeEl.value === 'placeno' ? '' : 'none';
+    const t = typeEl.value;
+    if (paidReasonWrap) paidReasonWrap.style.display = t === 'placeno' ? '' : 'none';
+    if (slobodanReasonWrap) slobodanReasonWrap.style.display = t === 'slobodan' ? '' : 'none';
   });
 
   setTimeout(() => modal.querySelector('#absEmpId')?.focus(), 50);
@@ -329,6 +370,7 @@ async function submitAbsenceForm() {
   const empId = document.getElementById('absEmpId').value;
   const type = document.getElementById('absType').value;
   const paidReason = document.getElementById('absPaidReason')?.value || '';
+  const slobodanReason = document.getElementById('absSlobodanReason')?.value || '';
   const dateFrom = document.getElementById('absFrom').value;
   const dateTo = document.getElementById('absTo').value;
   let daysCount = document.getElementById('absDays').value;
@@ -343,10 +385,27 @@ async function submitAbsenceForm() {
     errEl.classList.add('visible');
     return;
   }
+  if (type === 'slobodan' && !slobodanReason) {
+    errEl.textContent = 'Za slobodan dan izaberi razlog.';
+    errEl.classList.add('visible');
+    return;
+  }
+  if (type === 'neplaceno' && !note) {
+    errEl.textContent = 'Za neplaćeno odsustvo obavezno unesi napomenu (npr. ko je odobrio i razlog).';
+    errEl.classList.add('visible');
+    return;
+  }
+  /* Validacija po tipu rada */
+  const emp = kadrovskaState.employees.find(e => e.id === empId);
+  const workType = emp?.work_type || emp?.workType;
+  if (workType) {
+    const v = validateAbsenceForWorkType(type, slobodanReason, workType);
+    if (!v.ok) { errEl.textContent = v.msg; errEl.classList.add('visible'); return; }
+  }
   if (daysCount === '' || daysCount == null) daysCount = daysInclusive(dateFrom, dateTo);
   else daysCount = parseInt(daysCount, 10);
 
-  const payload = { id, employeeId: empId, type, paidReason, dateFrom, dateTo, daysCount, note };
+  const payload = { id, employeeId: empId, type, paidReason, slobodanReason, dateFrom, dateTo, daysCount, note };
   btn.disabled = true; btn.textContent = 'Čuvanje…';
   try {
     if (getIsOnline() && hasSupabaseConfig()) {

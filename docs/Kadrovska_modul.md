@@ -67,9 +67,14 @@ add_kadr_holidays.sql            # tabela kadr_holidays + RLS + seed RS praznika
 add_kadr_salary_terms_v2.sql     # salary_terms.compensation_model + 9 polja iznosa po modelu (fiksno/dva_dela/satnica + teren)
 add_kadr_absence_subtype.sql     # absences.absence_subtype + slobodan_reason; work_hours.absence_subtype (CHECK)
 add_kadr_payroll_v2.sql          # salary_payroll: compensation_model + 15 obračunatih polja + warnings JSONB; updated view + RPC
+
+# ── Faza K3.4 — Neplaćeno odsustvo i Slava ────────────────────────────
+add_kadr_neplaceno_slava.sql     # absences.slobodan_reason += 'slava'; work_hours.absence_code += 'nop'
 ```
 
 > **Faza K3.3 — redosled primene:** `add_kadr_work_type.sql` → `add_kadr_holidays.sql` → `add_kadr_salary_terms_v2.sql` → `add_kadr_absence_subtype.sql` → `add_kadr_payroll_v2.sql`. Sve migracije su **aditivne i idempotentne**.
+
+> **Faza K3.4 — redosled primene:** posle kompletne K3.3. Pokreni `add_kadr_neplaceno_slava.sql`. Idempotentna — bezbedno ponoviti.
 
 Zavisnosti izvan ovog lanca (npr. `user_roles`, `add_admin_roles.sql`) moraju već postojati ako migracija to zahteva.
 
@@ -186,15 +191,35 @@ Negativan `Preostalo za isplatu` se prikazuje crveno i generiše warning u `warn
 - **📋 Izveštaj o odsustvima** — filteri: mesec + tip (uključujući bolovanje subtype `obicno/povreda_na_radu/odrzavanje_trudnoce`). Excel kolone: `Zaposleni / Odeljenje / Tip rada / Tip odsustva / Detalj / Od / Do / Dana u mesecu / Napomena`.
 - **💰 Obračun zarada** *(samo admin)* — agregat svih redova `salary_payroll` za izabrani mesec po formulama K3.3. Excel kolone: `Zaposleni / Odeljenje / Tip rada / Tip zarade (model) / Fond sati / Redovan / Prekov. / Praznik plaćeni / Praznik rad / Godišnji / Slobodni / Bolovanje 65% / Bolovanje 100% / 2 mašine / Sati za isplatu / Ukupna zarada / I deo / Preostalo / Tereni dom. (dani) / Tereni ino (dani) / Status / Upozorenja`.
 
-### Mesečni grid — bolovanje subtype
+### Mesečni grid — šifre odsustva
 
 Šifre u `Redovni` ćeliji:
-- `bo` = obično bolovanje (65%)
-- `bop` = povreda na radu (100%)
-- `bot` = održavanje trudnoće (100%)
 
-Internal storage: `work_hours.absence_code='bo'` + `absence_subtype ∈ {obicno|povreda_na_radu|odrzavanje_trudnoce}` (CHECK).
+| Šifra | Opis | Sati |
+|-------|------|------|
+| `go`  | godišnji odmor | 0 |
+| `bo`  | bolovanje 65% (obično) | 0 |
+| `bop` | bolovanje 100% — povreda na radu | 0 |
+| `bot` | bolovanje 100% — održavanje trudnoće | 0 |
+| `sp`  | plaćeni praznik | 0 |
+| `np`  | neopravdano (legacy) | 0 |
+| `sl`  | slobodan dan | 0 |
+| `pr`  | prazan dan | 0 |
+| `nop` | neplaćeno odsustvo (odobreno) *(K3.4)* | 0, dan se ne plaća |
+
+Internal storage za `bo` subtype: `work_hours.absence_code='bo'` + `absence_subtype ∈ {obicno|povreda_na_radu|odrzavanje_trudnoce}` (CHECK).
+
+### Neplaćeno odsustvo (nop) *(K3.4)*
+
+Šifra `nop` u Redovnom redu = odobren neplaćen dan:
+- `work_hours.absence_code = 'nop'`, `hours = 0`
+- Pri snimanju grida automatski se kreira zapis u `absences` (`type='neplaceno'`, `date_from=date_to=ymd`, `days_count=1`). Brisanje `nop` briše odgovarajući zapis.
+- Fond sati: `computeMonthlyFond(y, m, holidays, neplacenoDays)` oduzima `neplacenoDays * 8h`.
+- Model `fiksno`: zarada se proporcionalno smanjuje — `plata * (radni_dani - nop) / radni_dani`.
+- Modeli `dva_dela` / `satnica`: upozorenje `neplaceno_fond` u `warnings`; stvarna zarada zavisi od sati u `work_hours`.
 
 ### Slobodan dan — strukturisan razlog
 
-Modal „Odsustva" za tip `slobodan` traži obavezan `slobodan_reason ∈ {brak, rodjenje_deteta, selidba, smrt_clana_porodice, dobrovoljno_davanje_krvi, ostalo}`. Polje `note` ostaje za slobodan tekst.
+Modal „Odsustva" za tip `slobodan` traži obavezan `slobodan_reason ∈ {brak, rodjenje_deteta, selidba, smrt_clana_porodice, dobrovoljno_davanje_krvi, slava, ostalo}`. Polje `note` ostaje za slobodan tekst.
+
+`slava` je dodata u K3.4 (`add_kadr_neplaceno_slava.sql`) kao nova vrednost za `slobodan_reason`. Nije zaseban tip — evidentira se kao `type='slobodan'` + `slobodan_reason='slava'`.

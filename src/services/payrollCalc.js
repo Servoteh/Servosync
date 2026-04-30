@@ -178,6 +178,8 @@ export function computePayableHours(hours, model) {
  *   @param {object} input.hours                 — sati i odsustva agregirano
  *   @param {object} input.terrain               — { domestic, foreign } (count dana)
  *   @param {number} input.advanceAmount         — ako je već uplaćen prvi deo (RSD)
+ *   @param {number} [input.neplacenoDays=0]     — broj radnih dana neplaćenog odsustva
+ *   @param {number} [input.fondSati]            — fond sati meseca (potreban za fiksno proporciju)
  *
  * @returns {{
  *   compensationModel:string,
@@ -197,6 +199,7 @@ export function computeEarnings(input) {
   const workType = input.workType || 'ugovor';
   const terms = input.terms || {};
   const model = deriveCompensationModel(terms);
+  const neplacenoDays = Math.max(0, NUM(input.neplacenoDays));
 
   if (!model) {
     pushWarning(warnings, 'no_compensation_model',
@@ -215,17 +218,44 @@ export function computeEarnings(input) {
   let prviDeo = 0;
 
   if (model === 'fiksno') {
-    baseEarnings = NUM(terms.fixedAmount);
+    /* Proporcijalno umanjenje za neplaćene dane. */
+    let proporcija = 1;
+    const fondSati = NUM(input.fondSati);
+    if (neplacenoDays > 0 && fondSati > 0) {
+      const radnih = fondSati / REGULAR_DAY_HOURS;
+      const efektivnih = Math.max(0, radnih - neplacenoDays);
+      proporcija = Math.min(1, efektivnih / radnih);
+      pushWarning(warnings, 'neplaceno_fiksno',
+        `Fiksna plata umanjena za ${neplacenoDays} neplaćenih dana (proporcija ${Math.round(proporcija * 100)}%).`,
+        { neplacenoDays, proporcija: round2(proporcija) }
+      );
+    } else if (neplacenoDays > 0) {
+      pushWarning(warnings, 'neplaceno_fiksno',
+        `Neplaćeno odsustvo: ${neplacenoDays} dana. Proporcija nije izračunata — dostavi fondSati u ulazu.`);
+    }
+    baseEarnings = round2(NUM(terms.fixedAmount) * proporcija);
     extraEarnings = payableHours * NUM(terms.fixedExtraHourRate);
     /* Prevoz već uračunat u fixed_amount → 0 dodatno. fixed_transport_component
        je informativna komponenta i NE dodaje se. */
     transportEarnings = 0;
     prviDeo = NUM(input.advanceAmount);
   } else if (model === 'dva_dela') {
+    if (neplacenoDays > 0) {
+      pushWarning(warnings, 'neplaceno_fond',
+        `${neplacenoDays} neplaćenih dana smanjuje fond sati za ${neplacenoDays * REGULAR_DAY_HOURS}h.`,
+        { neplacenoDays }
+      );
+    }
     baseEarnings = NUM(terms.firstPartAmount) + payableHours * NUM(terms.splitHourRate);
     transportEarnings = NUM(terms.splitTransportAmount);
     prviDeo = NUM(terms.firstPartAmount);
   } else if (model === 'satnica') {
+    if (neplacenoDays > 0) {
+      pushWarning(warnings, 'neplaceno_fond',
+        `${neplacenoDays} neplaćenih dana smanjuje fond sati za ${neplacenoDays * REGULAR_DAY_HOURS}h.`,
+        { neplacenoDays }
+      );
+    }
     baseEarnings = payableHours * NUM(terms.hourlyRate);
     transportEarnings = NUM(terms.hourlyTransportAmount);
     prviDeo = NUM(input.advanceAmount);
@@ -278,14 +308,15 @@ function round2(v) {
 
 /**
  * Računa fond sati za mesec: broj radnih dana (pon–pet) MINUS praznici koji
- * padaju na radne dane, sve × REGULAR_DAY_HOURS.
+ * padaju na radne dane, sve × REGULAR_DAY_HOURS. Opciono oduzima neplaćene dane.
  *
  * @param {number} year
- * @param {number} month  1..12
+ * @param {number} month        1..12
  * @param {Set<string>|Array<string>} holidayDates — ymd stringovi 'YYYY-MM-DD'
+ * @param {number} [neplacenoDays=0] — broj radnih dana neplaćenog odsustva; smanjuje fond za N×8h
  * @returns {{fondSati:number, radniDani:number, prazniciNaRadnim:number}}
  */
-export function computeMonthlyFond(year, month, holidayDates) {
+export function computeMonthlyFond(year, month, holidayDates, neplacenoDays = 0) {
   const set = holidayDates instanceof Set
     ? holidayDates
     : new Set(Array.isArray(holidayDates) ? holidayDates : []);
@@ -300,8 +331,9 @@ export function computeMonthlyFond(year, month, holidayDates) {
     const ymd = ymdLocal(dt);
     if (set.has(ymd)) prazniciNaRadnim += 1;
   }
+  const nop = Math.max(0, Math.round(neplacenoDays));
   return {
-    fondSati: (radniDani - prazniciNaRadnim) * REGULAR_DAY_HOURS,
+    fondSati: (radniDani - prazniciNaRadnim) * REGULAR_DAY_HOURS - nop * REGULAR_DAY_HOURS,
     radniDani,
     prazniciNaRadnim,
   };
@@ -417,7 +449,7 @@ export function aggregateWorkHoursForMonth(year, month, rowsByYmd, holidayYmdSet
         out.praznikPlaceniSati += REGULAR_DAY_HOURS;
       } else if (abs === 'sl') {
         out.slobodniDaniSati += REGULAR_DAY_HOURS;
-      } else if (abs === 'np' || abs === 'pr') {
+      } else if (abs === 'np' || abs === 'pr' || abs === 'nop') {
         /* ne plaća se */
       } else {
         /* Državni praznik, bez rada — 8h plaćenog praznika */
@@ -439,8 +471,8 @@ export function aggregateWorkHoursForMonth(year, month, rowsByYmd, holidayYmdSet
       out.praznikPlaceniSati += REGULAR_DAY_HOURS;
     } else if (abs === 'sl') {
       out.slobodniDaniSati += REGULAR_DAY_HOURS;
-    } else if (abs === 'np' || abs === 'pr') {
-      /* 0 */
+    } else if (abs === 'np' || abs === 'pr' || abs === 'nop') {
+      /* neplaćeno odsustvo / praznik / nop — 0 sati */
     } else {
       out.redovanRadSati += h;
     }
@@ -496,13 +528,13 @@ export function gridRedovniUnitsOneDay(ymd, row, holidayYmdSet) {
       if (abs === 'bo') return REGULAR_DAY_HOURS;
       if (abs === 'sp') return REGULAR_DAY_HOURS;
       if (abs === 'sl') return REGULAR_DAY_HOURS;
-      if (abs === 'np' || abs === 'pr') return 0;
+      if (abs === 'np' || abs === 'pr' || abs === 'nop') return 0;
       return 0;
     }
     if (abs === 'go' || abs === 'sp' || abs === 'sl' || abs === 'bo') {
       return REGULAR_DAY_HOURS;
     }
-    if (abs === 'np' || abs === 'pr') return 0;
+    if (abs === 'np' || abs === 'pr' || abs === 'nop') return 0;
     return 0;
   }
   if (isHol) {
@@ -511,13 +543,13 @@ export function gridRedovniUnitsOneDay(ymd, row, holidayYmdSet) {
     if (abs === 'bo') return REGULAR_DAY_HOURS;
     if (abs === 'sp') return REGULAR_DAY_HOURS;
     if (abs === 'sl') return REGULAR_DAY_HOURS;
-    if (abs === 'np' || abs === 'pr') return 0;
+    if (abs === 'np' || abs === 'pr' || abs === 'nop') return 0;
     return REGULAR_DAY_HOURS;
   }
   if (abs === 'go' || abs === 'sp' || abs === 'sl' || abs === 'bo') {
     return REGULAR_DAY_HOURS;
   }
-  if (abs === 'np' || abs === 'pr') return 0;
+  if (abs === 'np' || abs === 'pr' || abs === 'nop') return 0;
   return h;
 }
 

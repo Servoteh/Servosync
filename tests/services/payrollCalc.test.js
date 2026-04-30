@@ -345,3 +345,93 @@ describe('payrollCalc — teren i edge cases', () => {
     expect(h.godisnjiSati).toBe(8);
   });
 });
+
+/* ─── Neplaćeno odsustvo (nop) ─────────────────────────────────────────── */
+
+describe('payrollCalc — neplaćeno odsustvo (nop)', () => {
+  it('1) Fiksno + 0 neplaćeno — ista plata kao pre (regression)', () => {
+    const r = computeEarnings({
+      workType: 'ugovor',
+      terms: termsFiksno({ fixedAmount: 90000, fixedExtraHourRate: 700 }),
+      hours: emptyHours({ redovanRadSati: 168 }),
+      terrain: { domestic: 0, foreign: 0 },
+      advanceAmount: 0,
+      neplacenoDays: 0,
+      fondSati: 176,
+    });
+    expect(r.ukupnaZarada).toBe(90000);
+    expect(r.warnings.filter(w => w.code === 'neplaceno_fiksno')).toHaveLength(0);
+  });
+
+  it('2) Fiksno + 5 neplaćenih dana od 22 radna → fixed_amount * (17/22), warning prisutan', () => {
+    /* Maj 2026: 21 radnih dana. Koristimo 22 kao round testni fond (fondSati=176). */
+    const fixedAmount = 110000;
+    const fondSati = 176; /* 22 radna dana × 8h */
+    const r = computeEarnings({
+      workType: 'ugovor',
+      terms: termsFiksno({ fixedAmount, fixedExtraHourRate: 0 }),
+      hours: emptyHours({ redovanRadSati: 136 }),
+      terrain: { domestic: 0, foreign: 0 },
+      advanceAmount: 0,
+      neplacenoDays: 5,
+      fondSati,
+    });
+    const ocekivano = Math.round(fixedAmount * (17 / 22) * 100) / 100;
+    expect(r.ukupnaZarada).toBe(ocekivano);
+    const warn = r.warnings.find(w => w.code === 'neplaceno_fiksno');
+    expect(warn).toBeDefined();
+    expect(warn.neplacenoDays).toBe(5);
+  });
+
+  it('3) Satnica + 3 neplaćena dana — fond manji za 24h, payable_hours -24, total proporcionalno manji', () => {
+    /* Bazni scenarij: 160h redovnih (ukupna zarada = 160 × 600 + 4000 = 100000). */
+    /* Sa nop: hours=0 za te dane, pa redovnih = 136h. payable=136. */
+    const r = computeEarnings({
+      workType: 'ugovor',
+      terms: termsSatnica({ hourlyRate: 600, hourlyTransportAmount: 4000 }),
+      hours: emptyHours({ redovanRadSati: 136 }), /* 160 - 24 */
+      terrain: { domestic: 0, foreign: 0 },
+      advanceAmount: 0,
+      neplacenoDays: 3,
+    });
+    /* payable = 136; zarada = 136×600 + 4000 = 85600 */
+    expect(r.payableHours).toBe(136);
+    expect(r.ukupnaZarada).toBe(85600);
+    const warn = r.warnings.find(w => w.code === 'neplaceno_fond');
+    expect(warn).toBeDefined();
+    expect(warn.neplacenoDays).toBe(3);
+  });
+
+  it('4) Dva_dela + 2 neplaćena dana — fond -16h, total se smanjuje za 2×8×split_hour_rate', () => {
+    /* Bez nop: redovnih 160h → payable=160, baza=30000+160×500=110000, +5000=115000. */
+    /* Sa nop: 2 dana × 8h = 16h manje → redovnih=144h → payable=144. */
+    const r = computeEarnings({
+      workType: 'ugovor',
+      terms: termsDvaDela({ firstPartAmount: 30000, splitHourRate: 500, splitTransportAmount: 5000 }),
+      hours: emptyHours({ redovanRadSati: 144 }),
+      terrain: { domestic: 0, foreign: 0 },
+      advanceAmount: 0,
+      neplacenoDays: 2,
+    });
+    /* payable=144; baza=30000+144×500=102000; +5000=107000 */
+    expect(r.payableHours).toBe(144);
+    expect(r.ukupnaZarada).toBe(107000);
+    const warn = r.warnings.find(w => w.code === 'neplaceno_fond');
+    expect(warn).toBeDefined();
+  });
+
+  it('5) Praksa + nop — sanitize ne briše nop, nema no_right_* za nop, ali nuluje go ako postoji', () => {
+    /* sanitizeHoursForWorkType ne prima absence_code — proverava agregirane sate. */
+    /* nop → hours=0, godisnjiSati=0 → nema no_right_godisnji ako godisnjiSati=0. */
+    const hNoGo = emptyHours({ redovanRadSati: 80 });
+    const { sanitized: s1, warnings: w1 } = sanitizeHoursForWorkType(hNoGo, 'praksa');
+    expect(w1.filter(w => w.code === 'no_right_godisnji')).toHaveLength(0);
+    expect(s1.redovanRadSati).toBe(80);
+
+    /* Ako ipak postoji godisnjiSati za praksa → nuliše se (existing behaviour). */
+    const hWithGo = emptyHours({ redovanRadSati: 80, godisnjiSati: 8 });
+    const { sanitized: s2, warnings: w2 } = sanitizeHoursForWorkType(hWithGo, 'praksa');
+    expect(w2.map(w => w.code)).toContain('no_right_godisnji');
+    expect(s2.godisnjiSati).toBe(0);
+  });
+});
