@@ -6,9 +6,9 @@
 
 ## 1. Sažetak
 
-- **Tabela sa RLS politikama:** 43
-- **Ukupno efektivnih politika:** 125
-- **SECURITY DEFINER funkcija:** 81
+- **Tabela sa RLS politikama:** 45
+- **Ukupno efektivnih politika:** 132
+- **SECURITY DEFINER funkcija:** 83
 - **Objekata sa anon grant-om:** 2
 
 ## 2. Anon (javni) pristup
@@ -76,6 +76,7 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `maint_incident_row_visible` | `sql/migrations/extend_maint_incidents_assets.sql` |
 | `maint_incidents_autocreate_work_order` | `sql/migrations/link_maint_incidents_to_wo.sql` |
 | `maint_incidents_enqueue_notify` | `sql/migrations/integrate_maint_settings_behavior.sql` |
+| `maint_incidents_log_changes` | `sql/migrations/fix_maint_incidents_insert_policy.sql` |
 | `maint_incidents_set_asset_fields` | `sql/migrations/extend_maint_incidents_assets.sql` |
 | `maint_is_erp_admin` | `sql/migrations/add_maintenance_module.sql` |
 | `maint_is_erp_admin_or_management` | `sql/migrations/add_maint_work_orders.sql` |
@@ -92,6 +93,7 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `maint_wo_row_visible` | `sql/migrations/add_maint_work_orders.sql` |
 | `maint_work_orders_assign_wo_number` | `sql/migrations/add_maint_work_orders.sql` |
 | `mark_in_progress_from_tech_routing` | `sql/migrations/add_production_g6_auto_in_progress.sql` |
+| `pb_get_load_stats` | `sql/migrations/add_pb_module.sql` |
 | `production_machine_group_slug` | `sql/migrations/add_production_g5_reassign_rpc.sql` |
 | `reassign_production_line` | `sql/migrations/add_production_g5_reassign_rpc.sql` |
 | `salary_payroll_set_created_by` | `sql/migrations/add_kadr_salary_payroll.sql` |
@@ -107,7 +109,7 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `sastanci_enqueue_notification` | `sql/migrations/add_sastanci_notification_outbox.sql` |
 | `sastanci_get_or_create_my_prefs` | `sql/migrations/add_sastanci_notification_prefs.sql` |
 | `touch_updated_at` | `sql/migrations/add_plan_proizvodnje.sql` |
-| `update_updated_at` | `sql/migrations/add_kadrovska_phase1.sql` |
+| `update_updated_at` | `sql/migrations/add_pb_module.sql` |
 | `user_roles_set_updated_at` | `sql/migrations/add_admin_roles.sql` |
 
 ## 4. RLS politike po tabeli
@@ -244,6 +246,23 @@ Legenda flag-ova:
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
 | `maint_wo_num_counter_deny` | ALL | `authenticated` | `false` | `false` | ✅ | `sql/migrations/add_maint_work_orders.sql` |
+
+### `pb_tasks`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `pb_tasks_insert_editors` | INSERT | `authenticated` | `` | `public.pb_can_edit_tasks()` | ✅ | `sql/migrations/add_pb_module.sql` |
+| `pb_tasks_select_authenticated` | SELECT | `authenticated` | `deleted_at IS NULL` | `` | ✅ | `sql/migrations/add_pb_module.sql` |
+| `pb_tasks_update_editors` | UPDATE | `authenticated` | `public.pb_can_edit_tasks()` | `public.pb_can_edit_tasks()` | ✅ | `sql/migrations/add_pb_module.sql` |
+
+### `pb_work_reports`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `pb_work_reports_delete_admin` | DELETE | `authenticated` | `public.current_user_is_admin()` | `` | ✅ | `sql/migrations/add_pb_module.sql` |
+| `pb_work_reports_insert_editors` | INSERT | `authenticated` | `` | `public.pb_can_edit_tasks()` | ✅ | `sql/migrations/add_pb_module.sql` |
+| `pb_work_reports_select_authenticated` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_pb_module.sql` |
+| `pb_work_reports_update_editors` | UPDATE | `authenticated` | `public.pb_can_edit_tasks()` | `public.pb_can_edit_tasks()` | ✅ | `sql/migrations/add_pb_module.sql` |
 
 ### `phases`
 
@@ -459,7 +478,7 @@ Legenda flag-ova:
 
 ## 5. Statistika rizika
 
-- Politike sa `USING(true)` (osim INSERT): **25**
+- Politike sa `USING(true)` (osim INSERT): **26**
 - Politike sa `TO anon`: **0**
 - Anon objekt grant-ovi (sa SELECT/INSERT/UPDATE/DELETE): **2**
 

@@ -241,6 +241,20 @@ export function canPrioritizeTeme() {
 }
 
 /**
+ * Projektni biro — modul vide svi autentifikovani osim viewer (read-only blokada na UI).
+ */
+export function canAccessProjektniBiro() {
+  return !!state.user && state.role !== 'viewer';
+}
+
+/**
+ * PB plan — INSERT/UPDATE na pb_tasks; usklađeno sa RLS (has_edit_role ∪ admin).
+ */
+export function canEditProjektniBiro() {
+  return canEditKadrovska();
+}
+
+/**
  * Modul Lokacije delova — svi ulogovani korisnici mogu da otvore (čitanje + pokreti
  * preko RPC; master lokacije: admin/leadpm/pm u RLS-u).
  */

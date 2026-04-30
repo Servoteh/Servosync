@@ -41,6 +41,7 @@ import {
   renderLokacijeModule,
   teardownLokacijeModule,
 } from './lokacije/index.js';
+import { renderPbModule, teardownPbModule } from './pb/index.js';
 import {
   renderMobileHome,
   renderMobileScan,
@@ -59,6 +60,7 @@ import {
   canAccessPlanProizvodnje,
   canAccessSastanci,
   canAccessLokacije,
+  canAccessProjektniBiro,
 } from '../state/auth.js';
 import { resetKadrovskaState } from '../state/kadrovska.js';
 import { resetSastanciState } from '../state/sastanci.js';
@@ -72,6 +74,7 @@ const MODULES = [
   'plan-proizvodnje',
   'pracenje-proizvodnje',
   'kadrovska',
+  'projektni-biro',
   'sastanci',
   'podesavanja',
   'odrzavanje-masina',
@@ -108,6 +111,9 @@ function clearMount(leavingScreen) {
   if (ls === 'odrzavanje-masina') {
     try { teardownMaintenanceShell(); } catch (e) { /* ignore */ }
   }
+  if (ls === 'projektni-biro') {
+    try { teardownPbModule(); } catch (e) { /* ignore */ }
+  }
   if (ls && ls.startsWith('mobile-')) {
     try { currentMobileTeardown?.(); } catch (e) { /* ignore */ }
     currentMobileTeardown = null;
@@ -125,6 +131,7 @@ function clearMount(leavingScreen) {
     'module-lokacije',
     'module-sastanci',
     'module-odrzavanje-masina',
+    'module-projektni-biro',
     'm-body',
   );
 }
@@ -272,6 +279,9 @@ function showModulePlaceholder(moduleId, options = {}) {
   }
   if (moduleId === 'odrzavanje-masina') {
     document.body.classList.add('kadrovska-active', 'module-odrzavanje-masina');
+  }
+  if (moduleId === 'projektni-biro') {
+    document.body.classList.add('kadrovska-active', 'module-projektni-biro');
   }
   setStoredModule(moduleId);
 
@@ -471,6 +481,35 @@ function showModulePlaceholder(moduleId, options = {}) {
     return;
   }
 
+  if (moduleId === 'projektni-biro') {
+    try {
+      renderPbModule(mountEl, {
+        onBackToHub: () => showHub(),
+        onLogout: () => {
+          resetKadrovskaState();
+          showLogin();
+        },
+      });
+    } catch (e) {
+      console.error('[router] Projektni biro render failed', e);
+      mountEl.innerHTML = `
+        <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px">
+          <div class="auth-box" style="max-width:640px">
+            <div class="auth-brand">
+              <div class="auth-title">Greška u modulu Projektni biro</div>
+              <div class="auth-subtitle">${(e && e.message) || String(e)}</div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn" id="pbErrBackBtn">← Nazad na hub</button>
+            </div>
+          </div>
+        </div>
+      `;
+      mountEl.querySelector('#pbErrBackBtn')?.addEventListener('click', () => showHub());
+    }
+    return;
+  }
+
   /* Modul Sastanci. */
   if (moduleId === 'sastanci') {
     try {
@@ -661,6 +700,10 @@ function assertModuleAllowed(moduleId) {
     showToast('🔒 Lokacije delova zahtevaju prijavu');
     return false;
   }
+  if (moduleId === 'projektni-biro' && !canAccessProjektniBiro()) {
+    showToast('🔒 Projektni biro — nemaš pristup');
+    return false;
+  }
   if (moduleId === 'odrzavanje-masina' && !canAccessMaintenance()) {
     showToast('🔒 Održavanje zahteva prijavu');
     return false;
@@ -847,6 +890,7 @@ function restoreOrShowHub() {
     if (last === 'lokacije-delova' && !canAccessLokacije()) return showHub();
     if (last === 'sastanci' && !canAccessSastanci()) return showHub();
     if (last === 'odrzavanje-masina' && !canAccessMaintenance()) return showHub();
+    if (last === 'projektni-biro' && !canAccessProjektniBiro()) return showHub();
     syncBrowserUrl(pathForModule(last), { replace: true });
     return showModulePlaceholder(last, { skipUrlSync: true });
   }

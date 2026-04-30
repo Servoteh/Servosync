@@ -1220,3 +1220,11 @@ Ispod: **Pregledi**, **Enumi**, **Foreign keys**, zatim **flat tabela svih kolon
 | work_packages | is_active | boolean | YES |
 | work_packages | created_at | timestamp with time zone(6) | YES |
 | work_packages | updated_at | timestamp with time zone(6) | YES |
+
+<!--
+  TODO (PB Sprint 1): Posle primene `sql/migrations/add_pb_module.sql` na živoj bazi,
+  regeneriši ovaj dokument (`gen-db-types` / export šeme) — dodaju se tabele:
+    pb_tasks (enum kolone pb_task_status, pb_task_vrsta, pb_prioritet),
+    pb_work_reports,
+  funkcija pb_get_load_stats(integer), helper pb_can_edit_tasks().
+-->

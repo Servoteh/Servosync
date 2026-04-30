@@ -123,6 +123,26 @@ CREATE TABLE IF NOT EXISTS public.bigtehn_machines_cache (
   no_procedure    BOOLEAN NOT NULL DEFAULT FALSE
 );
 
+-- Minimalni stub za FK iz pb_tasks → projects / employees (produkcija puni pun shape).
+CREATE TABLE IF NOT EXISTS public.projects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_code TEXT NOT NULL DEFAULT '',
+  project_name TEXT NOT NULL DEFAULT '',
+  status TEXT DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ci_projects_code ON public.projects(project_code);
+
+CREATE TABLE IF NOT EXISTS public.employees (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  full_name TEXT NOT NULL DEFAULT '',
+  department TEXT DEFAULT '',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- Grant-ovi očekivani u migracijama (PostgREST style).
 GRANT USAGE ON SCHEMA public TO authenticated, anon, service_role;
 GRANT USAGE ON SCHEMA auth TO authenticated, service_role;

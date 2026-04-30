@@ -79,6 +79,9 @@ export function pathnameToRoute(pathname) {
   if (p === '/kadrovska') {
     return { kind: 'module', moduleId: 'kadrovska' };
   }
+  if (p === '/projektni-biro') {
+    return { kind: 'module', moduleId: 'projektni-biro' };
+  }
   if (p === '/sastanci') {
     return { kind: 'module', moduleId: 'sastanci' };
   }
@@ -185,6 +188,7 @@ export function pathForModule(moduleId) {
     'plan-proizvodnje': '/plan-proizvodnje',
     'pracenje-proizvodnje': '/pracenje-proizvodnje',
     kadrovska: '/kadrovska',
+    'projektni-biro': '/projektni-biro',
     sastanci: '/sastanci',
     podesavanja: '/podesavanja',
     'odrzavanje-masina': '/maintenance',

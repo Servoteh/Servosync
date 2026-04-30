@@ -32,6 +32,7 @@ import {
   canAccessSastanci,
   canEditSastanci,
   canAccessLokacije,
+  canAccessProjektniBiro,
 } from '../../state/auth.js';
 
 export function renderModuleHub({ onModuleSelect, onLogout }) {
@@ -68,10 +69,20 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
     <main class="hub-main">
       <div class="hub-intro">
         <h2>Dobrodošli nazad</h2>
-        <p>Izaberi modul sa kojim želiš da radiš. Aktivni moduli: <strong style="color:var(--text)">Plan Montaže</strong>, <strong style="color:var(--text)">Lokacije delova</strong>, <strong style="color:var(--text)">Održavanje mašina</strong> (skelet), <strong style="color:var(--text)">Planiranje proizvodnje</strong>, <strong style="color:var(--text)">Praćenje proizvodnje</strong>, <strong style="color:var(--text)">Sastanci</strong> i <strong style="color:var(--text)">Kadrovska</strong>${canAccessPodesavanja() ? ' i <strong style="color:var(--text)">Podešavanja</strong>' : ''}.</p>
+        <p>Izaberi modul sa kojim želiš da radiš. Aktivni moduli: <strong style="color:var(--text)">Plan Montaže</strong>, <strong style="color:var(--text)">Lokacije delova</strong>, <strong style="color:var(--text)">Održavanje mašina</strong> (skelet), <strong style="color:var(--text)">Planiranje proizvodnje</strong>, <strong style="color:var(--text)">Praćenje proizvodnje</strong>, <strong style="color:var(--text)">Sastanci</strong>, <strong style="color:var(--text)">Projektni biro</strong> i <strong style="color:var(--text)">Kadrovska</strong>${canAccessPodesavanja() ? ' i <strong style="color:var(--text)">Podešavanja</strong>' : ''}.</p>
       </div>
 
       <div class="hub-grid">
+        <button type="button" class="hub-card${canAccessProjektniBiro() ? '' : ' is-disabled'}" data-module="projektni-biro" aria-label="Otvori Projektni biro"${canAccessProjektniBiro() ? '' : ' aria-disabled="true"'}>
+          <div class="hub-card-icon" aria-hidden="true">📐</div>
+          <div class="hub-card-title">Projektni biro</div>
+          <div class="hub-card-desc">Plan rada inženjera po projektima: zadaci, rokovi, opterećenje i alarmi. Kanban i izveštaji u sledećim fazama.</div>
+          <div class="hub-card-footer">
+            <span class="hub-card-cta">${canAccessProjektniBiro() ? 'Otvori →' : 'Pristup zaključan'}</span>
+            <span class="hub-card-badge badge-active">${canAccessProjektniBiro() ? 'PB1' : 'Zaključano'}</span>
+          </div>
+        </button>
+
         <button type="button" class="hub-card" data-module="plan-montaze" aria-label="Otvori Plan Montaže">
           <div class="hub-card-icon" aria-hidden="true">🛠</div>
           <div class="hub-card-title">Plan Montaže</div>
@@ -177,6 +188,10 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
       }
       if (moduleId === 'lokacije-delova' && !canAccessLokacije()) {
         showToast('🔒 Lokacije delova zahtevaju prijavu');
+        return;
+      }
+      if (moduleId === 'projektni-biro' && !canAccessProjektniBiro()) {
+        showToast('🔒 Projektni biro — nemaš pristup');
         return;
       }
       onModuleSelect?.(moduleId);
