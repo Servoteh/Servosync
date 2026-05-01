@@ -1,6 +1,6 @@
 /**
  * Projektni biro — root shell (tabs + Plan + Kanban + Gantt + Izveštaji + Analiza).
- * // TODO(PB4): split Gantt header vs row render na filter change — docs/pb_review_report.md E2
+ * // TODO(PB4): split Gantt header vs row render na filter change — docs/pb_review_report.md §4
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
