@@ -32,5 +32,5 @@
 ## A6. `src/state/auth.js`
 
 - Postoje `canEdit()`, `isAdmin()`, role iz `user_roles`.
-- **Dodata:** `canAccessProjektniBiro()` — svi ulogovani osim „viewer“ u smislu role snapshota (koristi se ista lista kao za širi read pristup drugim modulima: admin, leadpm, pm, menadzment, hr, cnc_operater, magacioner; viewer zadržan kao read-only blokiran).
+- **Dodata:** `canAccessProjektniBiro()` — svi prijavljeni korisnici (viewer samo pregled u PB UI-ju).
 - **Dodata:** `canEditProjektniBiro()` — `has_edit_role` paritet: `canEdit()` ∪ HR (`canEditKadrovska` krug).
