@@ -25,6 +25,7 @@ Interni alat za planiranje i praćenje inženjerskih zadataka po projektima: rok
 ## RPC
 
 - **`pb_get_load_stats(window_days integer DEFAULT 30)`** — agregat opterećenja po aktivnom zaposlenom (`SECURITY DEFINER`, `SET search_path = public, pg_temp`). `GRANT EXECUTE` samo `authenticated`. **Load meter u UI-ju:** samo zaposleni iz pododeljenja **„Mašinsko projektovanje“** unutar odeljenja **„Inženjering i projektovanje“** (`employees.sub_department_id`); ako FK nije podešen, fallback na tekstualno `employees.department` koje sadrži „projektovanje“ i („mašinsko“ ili „masinski“).
+- **`pb_get_mechanical_projecting_engineers()`** — `TABLE(id, full_name, department, email)` lista aktivnih zaposlenih za **isti skup** kao load meter (filter čipovi „Projektanti“ i padajuća lista inženjera u modau). `SECURITY DEFINER`, `SET search_path = public, pg_temp`, `GRANT EXECUTE` `authenticated`.
 - **`pb_enqueue_notifications()`** — puni `pb_notification_log` iz `pb_tasks` + `pb_get_load_stats` prema config-u. **`GRANT EXECUTE` samo `service_role`** (cron).
 - **`pb_dispatch_dequeue(batch_size)`**, **`pb_dispatch_mark_sent(id)`**, **`pb_dispatch_mark_failed(id, error)`** — za Edge worker; samo **`service_role`**.
 
