@@ -442,14 +442,14 @@ GRANT EXECUTE ON FUNCTION public.pb_dispatch_mark_sent(UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION public.pb_dispatch_mark_failed(UUID, TEXT) TO service_role;
 
 -- ── 6) pg_cron (best-effort — na instancama bez cron-a ignoriši grešku)
-DO $$
+DO $cron_wrap$
 BEGIN
   PERFORM cron.schedule(
     'pb-enqueue-notifications',
     '0 7 * * *',
-    $$ SELECT public.pb_enqueue_notifications(); $$
+    $job$ SELECT public.pb_enqueue_notifications(); $job$
   );
 EXCEPTION
   WHEN OTHERS THEN
     RAISE NOTICE 'pb-enqueue-notifications cron skipped: %', SQLERRM;
-END $$;
+END $cron_wrap$;
