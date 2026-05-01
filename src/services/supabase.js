@@ -139,6 +139,101 @@ function parseContentRangeTotal(cr) {
 }
 
 /**
+ * Kao {@link sbReq}, ali baca `Error` na HTTP grešku ili mrežu (za PB i slične servise).
+ * Greška ima `status` (HTTP) i često `code` (PostgREST / aplikacija).
+ *
+ * @param {string} path
+ * @param {'GET'|'POST'|'PATCH'|'DELETE'} [method='GET']
+ * @param {object|null} [body=null]
+ * @param {{ upsert?: boolean, withCount?: boolean }} [options]
+ */
+export async function sbReqThrow(path, method = 'GET', body = null, options = {}) {
+  if (!hasSupabaseConfig()) {
+    const e = new Error('Supabase nije konfigurisan');
+    e.code = 'NO_CONFIG';
+    throw e;
+  }
+
+  const user = getCurrentUser();
+  const token = user?._token || SUPABASE_CONFIG.anonKey;
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_CONFIG.anonKey,
+    'Authorization': `Bearer ${token}`,
+  };
+  if (method === 'POST') {
+    const upsert = options.upsert !== false;
+    headers['Prefer'] = upsert
+      ? 'return=representation,resolution=merge-duplicates'
+      : 'return=representation';
+  } else if (method === 'PATCH') {
+    headers['Prefer'] = 'return=representation';
+  }
+  if (options.withCount && method === 'GET') {
+    headers['Prefer'] = (headers['Prefer'] ? headers['Prefer'] + ',' : '') + 'count=exact';
+  }
+
+  let r;
+  let txt;
+  try {
+    r = await fetch(SUPABASE_CONFIG.url + '/rest/v1/' + path, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    txt = await r.text();
+  } catch (e) {
+    const err = new Error(e instanceof Error ? e.message : String(e));
+    err.code = 'NETWORK';
+    throw err;
+  }
+
+  if (!r.ok) {
+    let msg = txt?.trim() || `HTTP ${r.status}`;
+    try {
+      const j = JSON.parse(txt);
+      if (j && typeof j === 'object' && j.message) msg = String(j.message);
+    } catch {
+      /* ostavi msg */
+    }
+    const err = new Error(msg);
+    err.status = r.status;
+    err.code = String(r.status);
+    try {
+      const j = JSON.parse(txt);
+      if (j && typeof j === 'object' && j.code) err.code = String(j.code);
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  }
+
+  let parsed;
+  if (!txt) {
+    if (method === 'PATCH') parsed = [];
+    else if (method === 'DELETE') parsed = true;
+    else if (method === 'POST') parsed = true;
+    else if (method === 'GET') parsed = [];
+    else parsed = null;
+  } else {
+    try {
+      parsed = JSON.parse(txt);
+    } catch {
+      const err = new Error('Nevalidan JSON odgovor od Supabase-a');
+      err.code = 'PARSE';
+      throw err;
+    }
+  }
+  if (options.withCount && method === 'GET') {
+    const cr = r.headers.get('content-range') || '';
+    const total = parseContentRangeTotal(cr);
+    return { rows: Array.isArray(parsed) ? parsed : [], total };
+  }
+  return parsed;
+}
+
+/**
  * Health-check: pinguj Supabase REST-om. Koristi se za inicijalnu detekciju
  * online/offline statusa. Rezultat upiši kroz state/auth.js -> setOnline().
  */

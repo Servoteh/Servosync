@@ -9,6 +9,7 @@ import {
   groupByEmployee,
 } from './izvestajiObracun.js';
 import { createPbWorkReport, deletePbWorkReport } from '../../services/pb.js';
+import { setPbIzvestajiSpeechRecog } from './shared.js';
 
 function pad2(n) {
   return String(n).padStart(2, '0');
@@ -270,16 +271,22 @@ export function renderIzvestaji(root, ctx) {
       if (recog) {
         try { recog.stop(); } catch { /* */ }
         recog = null;
+        setPbIzvestajiSpeechRecog(null);
         showToast('Mikrofon zaustavljen');
         return;
       }
       recog = new SR();
+      setPbIzvestajiSpeechRecog(recog);
       recog.lang = 'sr-RS';
       recog.continuous = false;
       recog.interimResults = false;
       recog.onresult = ev => {
         const t = ev.results?.[0]?.[0]?.transcript;
         if (t) ta.value = (ta.value ? ta.value + ' ' : '') + t;
+      };
+      recog.onend = () => {
+        recog = null;
+        setPbIzvestajiSpeechRecog(null);
       };
       recog.onerror = () => showToast('Greška mikrofona');
       recog.start();
