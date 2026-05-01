@@ -180,7 +180,7 @@ function showLogin() {
         history.replaceState(null, '', saved);
         applyRouteFromLocation();
       } else {
-        restoreOrShowHub();
+        showHub();
       }
     },
     onForgotPassword: () => {
@@ -212,7 +212,7 @@ function showResetPassword() {
         /* ignore — ako nije moguće, korisnik može ručno da ode na hub */
       }
       history.replaceState(null, '', '/');
-      restoreOrShowHub();
+      showHub();
     },
     onCancel: () => {
       /* Očisti URL od starog query-ja i vrati na login. */
@@ -823,12 +823,13 @@ function applyRouteFromLocation() {
 
   if (route.kind === 'unknown') {
     syncBrowserUrl('/', { replace: true });
-    restoreOrShowHub();
+    showHub();
     return;
   }
 
+  /* `/` uvek prikazuje hub sa svim karticama modula (ne „resume” poslednjeg modula). */
   if (route.kind === 'session') {
-    restoreOrShowHub();
+    showHub();
     return;
   }
 
@@ -877,24 +878,6 @@ function navigateToModule(moduleId) {
   if (!assertModuleAllowed(moduleId)) return;
   syncBrowserUrl(pathForModule(moduleId));
   showModulePlaceholder(moduleId, { skipUrlSync: true });
-}
-
-/** Posle login-a — poslednji modul iz session-a ili hub; URL se usklađuje. */
-function restoreOrShowHub() {
-  const last = getStoredModule();
-  if (last && MODULES.includes(last)) {
-    if (last === 'kadrovska' && !canAccessKadrovska()) return showHub();
-    if (last === 'podesavanja' && !canAccessPodesavanja()) return showHub();
-    if (last === 'plan-proizvodnje' && !canAccessPlanProizvodnje()) return showHub();
-    if (last === 'pracenje-proizvodnje' && !getAuth().user) return showHub();
-    if (last === 'lokacije-delova' && !canAccessLokacije()) return showHub();
-    if (last === 'sastanci' && !canAccessSastanci()) return showHub();
-    if (last === 'odrzavanje-masina' && !canAccessMaintenance()) return showHub();
-    if (last === 'projektni-biro' && !canAccessProjektniBiro()) return showHub();
-    syncBrowserUrl(pathForModule(last), { replace: true });
-    return showModulePlaceholder(last, { skipUrlSync: true });
-  }
-  showHub();
 }
 
 /* ── Public API ── */
