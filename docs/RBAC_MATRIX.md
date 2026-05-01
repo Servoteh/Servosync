@@ -8,7 +8,7 @@
 
 - **Tabela sa RLS politikama:** 47
 - **Ukupno efektivnih politika:** 137
-- **SECURITY DEFINER funkcija:** 87
+- **SECURITY DEFINER funkcija:** 88
 - **Objekata sa anon grant-om:** 2
 
 ## 2. Anon (javni) pristup
@@ -98,6 +98,7 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `pb_dispatch_mark_sent` | `sql/migrations/add_pb_notifications.sql` |
 | `pb_enqueue_notifications` | `sql/migrations/add_pb_notifications.sql` |
 | `pb_get_load_stats` | `sql/migrations/pb_load_stats_mechanical_engineering.sql` |
+| `pb_get_mechanical_projecting_engineers` | `sql/migrations/pb_mechanical_engineers_rpc.sql` |
 | `production_machine_group_slug` | `sql/migrations/add_production_g5_reassign_rpc.sql` |
 | `reassign_production_line` | `sql/migrations/add_production_g5_reassign_rpc.sql` |
 | `salary_payroll_set_created_by` | `sql/migrations/add_kadr_salary_payroll.sql` |
