@@ -49,6 +49,7 @@ sql/migrations/add_pb_module.sql
 sql/migrations/pb_load_stats_mechanical_engineering.sql
 sql/migrations/pb_mechanical_engineers_rpc.sql
 sql/migrations/add_pb_notifications.sql
+sql/migrations/add_pb4_rls_and_agg.sql
 
 # Faza 1 security hardening (2026-04-23). Migracija je idempotentna i
 # preživljava izvrsavanje cak i ako v_production_operations ne postoji

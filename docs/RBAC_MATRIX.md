@@ -7,8 +7,8 @@
 ## 1. Sažetak
 
 - **Tabela sa RLS politikama:** 47
-- **Ukupno efektivnih politika:** 137
-- **SECURITY DEFINER funkcija:** 88
+- **Ukupno efektivnih politika:** 141
+- **SECURITY DEFINER funkcija:** 92
 - **Objekata sa anon grant-om:** 2
 
 ## 2. Anon (javni) pristup
@@ -93,12 +93,16 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `maint_wo_row_visible` | `sql/migrations/add_maint_work_orders.sql` |
 | `maint_work_orders_assign_wo_number` | `sql/migrations/add_maint_work_orders.sql` |
 | `mark_in_progress_from_tech_routing` | `sql/migrations/add_production_g6_auto_in_progress.sql` |
+| `pb_current_employee_id` | `sql/migrations/add_pb4_rls_and_agg.sql` |
+| `pb_current_user_can_see_all_reports` | `sql/migrations/add_pb4_rls_and_agg.sql` |
 | `pb_dispatch_dequeue` | `sql/migrations/add_pb_notifications.sql` |
 | `pb_dispatch_mark_failed` | `sql/migrations/add_pb_notifications.sql` |
 | `pb_dispatch_mark_sent` | `sql/migrations/add_pb_notifications.sql` |
+| `pb_engineering_lead_by_subdept` | `sql/migrations/add_pb4_rls_and_agg.sql` |
 | `pb_enqueue_notifications` | `sql/migrations/add_pb_notifications.sql` |
 | `pb_get_load_stats` | `sql/migrations/pb_load_stats_mechanical_engineering.sql` |
 | `pb_get_mechanical_projecting_engineers` | `sql/migrations/pb_mechanical_engineers_rpc.sql` |
+| `pb_get_work_report_summary` | `sql/migrations/add_pb4_rls_and_agg.sql` |
 | `production_machine_group_slug` | `sql/migrations/add_production_g5_reassign_rpc.sql` |
 | `reassign_production_line` | `sql/migrations/add_production_g5_reassign_rpc.sql` |
 | `salary_payroll_set_created_by` | `sql/migrations/add_kadr_salary_payroll.sql` |
@@ -278,10 +282,14 @@ Legenda flag-ova:
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
+| `pb_work_reports_delete` | DELETE | `authenticated` | `public.current_user_is_admin() OR ( public.pb_current_emplo…` | `` | ✅ | `sql/migrations/add_pb4_rls_and_agg.sql` |
 | `pb_work_reports_delete_admin` | DELETE | `authenticated` | `public.current_user_is_admin()` | `` | ✅ | `sql/migrations/add_pb_module.sql` |
 | `pb_work_reports_delete_own_or_admin` | DELETE | `authenticated` | `public.current_user_is_admin() OR ( created_by IS NOT NULL …` | `` | ✅ | `sql/migrations/add_pb_notifications.sql` |
+| `pb_work_reports_insert` | INSERT | `authenticated` | `` | `public.pb_current_user_can_see_all_reports() OR ( public.pb…` | ✅ | `sql/migrations/add_pb4_rls_and_agg.sql` |
 | `pb_work_reports_insert_editors` | INSERT | `authenticated` | `` | `public.pb_can_edit_tasks()` | ✅ | `sql/migrations/add_pb_module.sql` |
+| `pb_work_reports_select` | SELECT | `authenticated` | `public.pb_current_user_can_see_all_reports() OR ( public.pb…` | `` | ✅ | `sql/migrations/add_pb4_rls_and_agg.sql` |
 | `pb_work_reports_select_authenticated` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_pb_module.sql` |
+| `pb_work_reports_update` | UPDATE | `authenticated` | `public.pb_current_user_can_see_all_reports() OR ( public.pb…` | `public.pb_current_user_can_see_all_reports() OR ( public.pb…` | ✅ | `sql/migrations/add_pb4_rls_and_agg.sql` |
 | `pb_work_reports_update_editors` | UPDATE | `authenticated` | `public.pb_can_edit_tasks()` | `public.pb_can_edit_tasks()` | ✅ | `sql/migrations/add_pb_module.sql` |
 
 ### `phases`

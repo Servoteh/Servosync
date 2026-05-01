@@ -3,13 +3,13 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
+import { sumHours } from './izvestajiObracun.js';
 import {
-  filterWorkReportsByPeriod,
-  sumHours,
-  groupByEmployee,
-} from './izvestajiObracun.js';
-import { createPbWorkReport, deletePbWorkReport } from '../../services/pb.js';
-import { setPbIzvestajiSpeechRecog } from './shared.js';
+  createPbWorkReport,
+  deletePbWorkReport,
+  getPbWorkReportSummary,
+} from '../../services/pb.js';
+import { setPbIzvestajiSpeechRecog, pbErrorMessage } from './shared.js';
 
 function pad2(n) {
   return String(n).padStart(2, '0');
@@ -46,11 +46,13 @@ function hoursForDay(reports, dayStr) {
  * @param {HTMLElement} root
  * @param {{
  *   getWorkReports: () => object[],
+ *   getWorkReportsMonthKey?: () => string|null,
+ *   loadMonthReports: (year: number, month0: number) => Promise<void>,
  *   engineers: object[],
  *   canEdit: boolean,
  *   defaultEmployeeId: string|null,
  *   actorEmail: string|null,
- *   onRefresh: () => Promise<void>|void,
+ *   onRefresh: (year?: number, month0?: number) => Promise<void>|void,
  * }} ctx
  */
 export function renderIzvestaji(root, ctx) {
@@ -197,21 +199,21 @@ export function renderIzvestaji(root, ctx) {
       if (satR) satR.value = String(sliderTicks);
     });
 
-    root.querySelector('#pbIzvPrev')?.addEventListener('click', () => {
+    root.querySelector('#pbIzvPrev')?.addEventListener('click', async () => {
       viewMonth -= 1;
       if (viewMonth < 0) {
         viewMonth = 11;
         viewYear -= 1;
       }
-      paint();
+      await refreshMonth();
     });
-    root.querySelector('#pbIzvNext')?.addEventListener('click', () => {
+    root.querySelector('#pbIzvNext')?.addEventListener('click', async () => {
       viewMonth += 1;
       if (viewMonth > 11) {
         viewMonth = 0;
         viewYear += 1;
       }
-      paint();
+      await refreshMonth();
     });
 
     root.querySelectorAll('[data-day]').forEach(btn => {
@@ -229,18 +231,19 @@ export function renderIzvestaji(root, ctx) {
         showToast('Izaberi inženjera');
         return;
       }
-      const ok = await createPbWorkReport({
-        employee_id: emp,
-        datum: selectedDay,
-        sati: sat,
-        opis,
-      });
-      if (ok) {
+      try {
+        await createPbWorkReport({
+          employee_id: emp,
+          datum: selectedDay,
+          sati: sat,
+          opis,
+        });
         showToast('Sačuvano');
         root.querySelector('#pbIzvOpis').value = '';
-        await ctx.onRefresh?.();
-        paint();
-      } else showToast('Čuvanje nije uspelo');
+        await ctx.onRefresh?.(viewYear, viewMonth);
+      } catch (e) {
+        showToast(pbErrorMessage(e));
+      }
     });
 
     root.querySelector('#pbIzvCancel')?.addEventListener('click', () => {
@@ -251,12 +254,13 @@ export function renderIzvestaji(root, ctx) {
       btn.addEventListener('click', async () => {
         const id = btn.getAttribute('data-id');
         if (!id || !confirm('Obrisati izveštaj?')) return;
-        const ok = await deletePbWorkReport(id);
-        if (ok) {
+        try {
+          await deletePbWorkReport(id);
           showToast('Obrisano');
-          await ctx.onRefresh?.();
-          paint();
-        } else showToast('Brisanje nije uspelo');
+          await ctx.onRefresh?.(viewYear, viewMonth);
+        } catch (e) {
+          showToast(pbErrorMessage(e));
+        }
       });
     });
 
@@ -293,29 +297,63 @@ export function renderIzvestaji(root, ctx) {
       showToast('Slušam… (klik ponovo za stop)');
     });
 
-    function runSum() {
+    async function runSum() {
       const df = root.querySelector('#pbIzvFrom')?.value || '';
       const dt = root.querySelector('#pbIzvTo')?.value || '';
       const eng = root.querySelector('#pbIzvSumEng')?.value || 'all';
-      const filt = filterWorkReportsByPeriod(ctx.getWorkReports() || [], df, dt, eng === 'all' ? null : eng);
-      const totalH = sumHours(filt);
-      const grp = groupByEmployee(filt);
-      const sorted = Object.entries(grp).sort((a, b) => b[1].hours - a[1].hours);
-      const rows = sorted.map(([, v]) => `
-        <div class="pb-izv-sum-row">
-          <span class="pb-avatar">${escHtml(v.name.slice(0, 1))}</span>
-          <span>${escHtml(v.name)}</span>
-          <span>${v.count} izv.</span>
-          <strong>${escHtml(String(v.hours))}h</strong>
-        </div>`).join('');
-      root.querySelector('#pbIzvSumOut').innerHTML = `
-        <p>Ukupno izveštaja: <strong>${filt.length}</strong> · Ukupno sati: <strong>${totalH}h</strong></p>
-        <div class="pb-izv-sum-rows">${rows || '<p class="pb-muted">Nema podataka.</p>'}</div>`;
+      const calcBtn = root.querySelector('#pbIzvCalc');
+      if (!df || !dt) {
+        showToast('Izaberite period za obračun');
+        return;
+      }
+      const empId = eng === 'all' ? null : eng;
+      if (calcBtn) {
+        calcBtn.disabled = true;
+        calcBtn.textContent = 'Učitava…';
+      }
+      try {
+        const summary = await getPbWorkReportSummary(df, dt, empId);
+        const box = root.querySelector('#pbIzvSumOut');
+        if (!box) return;
+        if (!summary.length) {
+          box.innerHTML = `<div style="font-size:12px;color:var(--text3);text-align:center;padding:6px">Nema unosa za odabrani period</div>`;
+          return;
+        }
+        const totalH = summary.reduce((s, r) => s + Number(r.total_hours), 0);
+        const totalN = summary.reduce((s, r) => s + r.report_count, 0);
+        box.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+            <span style="font-size:12px;color:var(--text2)">${totalN} izveštaj${totalN === 1 ? '' : 'a'} · ${escHtml(df)} — ${escHtml(dt)}</span>
+            <span style="font-size:16px;font-weight:600;color:var(--accent)">${totalH.toFixed(1)}h ukupno</span>
+          </div>
+          ${summary.map(r => `
+            <div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)">
+              <span style="color:var(--text2)">${escHtml(r.full_name)}</span>
+              <span style="color:var(--text3)">${r.report_count} izv.</span>
+              <span style="font-weight:600;color:var(--accent)">${Number(r.total_hours).toFixed(1)}h</span>
+            </div>`).join('')}`;
+      } catch (e) {
+        showToast(pbErrorMessage(e));
+      } finally {
+        if (calcBtn) {
+          calcBtn.disabled = false;
+          calcBtn.textContent = 'Izračunaj';
+        }
+      }
     }
 
-    root.querySelector('#pbIzvCalc')?.addEventListener('click', runSum);
-    runSum();
+    root.querySelector('#pbIzvCalc')?.addEventListener('click', () => void runSum());
   }
 
-  paint();
+  async function refreshMonth() {
+    try {
+      await ctx.loadMonthReports(viewYear, viewMonth);
+    } catch (e) {
+      showToast(pbErrorMessage(e));
+      return;
+    }
+    paint();
+  }
+
+  void refreshMonth().catch(e => showToast(pbErrorMessage(e)));
 }
