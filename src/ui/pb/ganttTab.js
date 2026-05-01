@@ -135,6 +135,11 @@ function monthSpans(days) {
  * }} ctx
  */
 export function renderGanttTab(root, ctx) {
+  root._pbGanttAbort?.abort();
+  const ac = new AbortController();
+  root._pbGanttAbort = ac;
+  const sig = ac.signal;
+
   const canEdit = canEditProjektniBiro();
   const mobile = window.matchMedia('(max-width: 767px)').matches;
   const dayW = mobile ? 20 : 28;
@@ -204,7 +209,7 @@ export function renderGanttTab(root, ctx) {
     const cls = statusBarClass(task.status);
     let inner = '';
     if (geo) {
-      inner += `<div class="pb-gantt-bar ${cls}" style="left:${geo.left}px;width:${geo.width}px" tabindex="0">
+      inner += `<div class="pb-gantt-bar ${cls}" data-task-id="${escHtml(task.id)}" style="left:${geo.left}px;width:${geo.width}px" tabindex="0">
         <div class="pb-gantt-bar__prog" style="width:${pct}%"></div>
       </div>`;
       if (task.datum_pocetka_real && task.datum_zavrsetka_real) {
@@ -215,7 +220,7 @@ export function renderGanttTab(root, ctx) {
         };
         const g2 = ganttBarGeometry(tReal, rangeStart, dayW);
         if (g2) {
-          inner += `<div class="pb-gantt-real" style="left:${g2.left}px;width:${g2.width}px"></div>`;
+          inner += `<div class="pb-gantt-real" data-task-id="${escHtml(task.id)}" style="left:${g2.left}px;width:${g2.width}px"></div>`;
         }
       }
     }
@@ -327,78 +332,110 @@ export function renderGanttTab(root, ctx) {
 
   const scrollEl = root.querySelector('.pb-gantt-scroll');
 
-  root.querySelector('#pbGanttPrev')?.addEventListener('click', () => {
-    const d = new Date(baseMonth);
-    d.setMonth(d.getMonth() - 1);
-    ctx.onViewMonthChange?.(d);
-  });
-  root.querySelector('#pbGanttNext')?.addEventListener('click', () => {
-    const d = new Date(baseMonth);
-    d.setMonth(d.getMonth() + 1);
-    ctx.onViewMonthChange?.(d);
-  });
-  root.querySelector('#pbGanttToday')?.addEventListener('click', () => {
-    if (!scrollEl || todayIdx < 0) return;
-    const target = Math.max(0, todayIdx * dayW - 4 * dayW);
-    scrollEl.scrollTo({ left: target, behavior: 'smooth' });
-  });
+  function taskById(id) {
+    return list.find(x => x.id === id);
+  }
 
-  root.querySelector('#pbGanttNew')?.addEventListener('click', () => {
+  function openTaskEditor(task) {
     openTaskEditorModal({
-      task: null,
+      task,
       projects: ctx.projects,
       engineers: ctx.engineers,
       canEdit,
       onSaved: () => ctx.onRefresh?.(),
     });
-  });
+  }
 
-  root.querySelectorAll('.pb-gantt-task-row .pb-gantt-name').forEach(td => {
-    td.addEventListener('click', () => {
-      const tr = td.closest('.pb-gantt-task-row');
-      const id = tr?.getAttribute('data-task-id');
-      const task = list.find(x => x.id === id);
+  root.querySelector('#pbGanttPrev')?.addEventListener(
+    'click',
+    () => {
+      const d = new Date(baseMonth);
+      d.setMonth(d.getMonth() - 1);
+      ctx.onViewMonthChange?.(d);
+    },
+    { signal: sig },
+  );
+  root.querySelector('#pbGanttNext')?.addEventListener(
+    'click',
+    () => {
+      const d = new Date(baseMonth);
+      d.setMonth(d.getMonth() + 1);
+      ctx.onViewMonthChange?.(d);
+    },
+    { signal: sig },
+  );
+  root.querySelector('#pbGanttToday')?.addEventListener(
+    'click',
+    () => {
+      if (!scrollEl || todayIdx < 0) return;
+      const target = Math.max(0, todayIdx * dayW - 4 * dayW);
+      scrollEl.scrollTo({ left: target, behavior: 'smooth' });
+    },
+    { signal: sig },
+  );
+
+  root.querySelector('#pbGanttNew')?.addEventListener(
+    'click',
+    () => {
+      openTaskEditorModal({
+        task: null,
+        projects: ctx.projects,
+        engineers: ctx.engineers,
+        canEdit,
+        onSaved: () => ctx.onRefresh?.(),
+      });
+    },
+    { signal: sig },
+  );
+
+  root.addEventListener(
+    'click',
+    e => {
+      const row = e.target.closest('.pb-gantt-task-row');
+      const barOrReal = e.target.closest('.pb-gantt-bar, .pb-gantt-real');
+      const nameCell = e.target.closest('.pb-gantt-name');
+      const tid =
+        barOrReal?.getAttribute('data-task-id')
+        || row?.getAttribute('data-task-id')
+        || nameCell?.closest('tr')?.getAttribute('data-task-id');
+      if (!tid) {
+        if (!e.target.closest('.pb-gantt-bar') && !e.target.closest('.pb-gantt-tip')) hideTip();
+        return;
+      }
+      const task = taskById(tid);
       if (!task) return;
-      openTaskEditorModal({
-        task,
-        projects: ctx.projects,
-        engineers: ctx.engineers,
-        canEdit,
-        onSaved: () => ctx.onRefresh?.(),
-      });
-    });
-  });
+      if (barOrReal || nameCell) {
+        hideTip();
+        openTaskEditor(task);
+      }
+    },
+    { signal: sig },
+  );
 
-  root.querySelectorAll('.pb-gantt-bar').forEach(bar => {
-    const row = bar.closest('.pb-gantt-task-row');
-    const id = row?.getAttribute('data-task-id');
-    const task = list.find(x => x.id === id);
-    if (!task) return;
-    const html = tooltipHtml(task);
+  root.addEventListener(
+    'mouseover',
+    e => {
+      const bar = e.target.closest('.pb-gantt-bar');
+      if (!bar) return;
+      const tid = bar.getAttribute('data-task-id');
+      const task = tid ? taskById(tid) : null;
+      if (!task || mobile) return;
+      showTip(tooltipHtml(task), e.clientX, e.clientY);
+    },
+    { signal: sig },
+  );
 
-    bar.addEventListener('touchstart', e => {
+  root.addEventListener(
+    'touchstart',
+    e => {
+      const bar = e.target.closest('.pb-gantt-bar');
+      if (!bar) return;
+      const tid = bar.getAttribute('data-task-id');
+      const task = tid ? taskById(tid) : null;
+      if (!task) return;
       const touch = e.changedTouches?.[0];
-      if (touch) showTip(html, touch.clientX, touch.clientY);
-    }, { passive: true });
-
-    bar.addEventListener('mouseenter', e => {
-      if (!mobile) showTip(html, e.clientX, e.clientY);
-    });
-
-    bar.addEventListener('click', e => {
-      e.stopPropagation();
-      hideTip();
-      openTaskEditorModal({
-        task,
-        projects: ctx.projects,
-        engineers: ctx.engineers,
-        canEdit,
-        onSaved: () => ctx.onRefresh?.(),
-      });
-    });
-  });
-
-  root.addEventListener('click', e => {
-    if (!e.target.closest('.pb-gantt-bar') && !e.target.closest('.pb-gantt-tip')) hideTip();
-  });
+      if (touch) showTip(tooltipHtml(task), touch.clientX, touch.clientY);
+    },
+    { passive: true, signal: sig },
+  );
 }

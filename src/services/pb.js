@@ -231,16 +231,50 @@ export async function getPbLoadStats(windowDays = 30) {
 }
 
 /**
+ * Server-side agregat za Izveštaji — obračun po periodu (PB4).
+ * @param {string} dateFrom 'YYYY-MM-DD'
+ * @param {string} dateTo 'YYYY-MM-DD'
+ * @param {string|null} [employeeId] uuid ili null = svi (u okviru RLS)
+ */
+export async function getPbWorkReportSummary(dateFrom, dateTo, employeeId = null) {
+  if (!getIsOnline()) return [];
+  if (!dateFrom || !dateTo) {
+    const e = new Error('Datum od i datum do su obavezni za obračun');
+    e.code = 'VALIDATION';
+    throw e;
+  }
+  if (String(dateTo).slice(0, 10) < String(dateFrom).slice(0, 10)) {
+    const e = new Error('Datum do ne može biti pre datuma od');
+    e.code = 'VALIDATION';
+    throw e;
+  }
+  const body = {
+    p_date_from: dateFrom,
+    p_date_to: dateTo,
+    p_employee_id: employeeId || null,
+  };
+  const data = await sbReqThrow('rpc/pb_get_work_report_summary', 'POST', body, { upsert: false });
+  return Array.isArray(data) ? data : [];
+}
+
+/**
  * @param {{
  *   employeeId?: string|null,
- *   dateFrom?: string|null,
- *   dateTo?: string|null,
+ *   dateFrom: string,
+ *   dateTo: string,
  *   limit?: number,
  *   offset?: number,
  * }} filters
  */
 export async function getPbWorkReports(filters = {}) {
   if (!getIsOnline()) return [];
+  if (!filters.dateFrom || !filters.dateTo) {
+    const e = new Error(
+      'getPbWorkReports zahteva dateFrom i dateTo — koristi getPbWorkReportSummary za agregat',
+    );
+    e.code = 'VALIDATION';
+    throw e;
+  }
   const limit = filters.limit != null ? Number(filters.limit) : 500;
   const offset = filters.offset != null ? Number(filters.offset) : 0;
   let url =
@@ -248,8 +282,8 @@ export async function getPbWorkReports(filters = {}) {
     + '&order=datum.desc,created_at.desc';
   const { employeeId, dateFrom, dateTo } = filters;
   if (employeeId) url += `&employee_id=eq.${encodeURIComponent(employeeId)}`;
-  if (dateFrom) url += `&datum=gte.${encodeURIComponent(dateFrom)}`;
-  if (dateTo) url += `&datum=lte.${encodeURIComponent(dateTo)}`;
+  url += `&datum=gte.${encodeURIComponent(dateFrom)}`;
+  url += `&datum=lte.${encodeURIComponent(dateTo)}`;
   url += `&limit=${encodeURIComponent(String(limit))}`;
   if (offset > 0) url += `&offset=${encodeURIComponent(String(offset))}`;
   const data = await sbReqThrow(url);

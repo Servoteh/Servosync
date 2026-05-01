@@ -11,15 +11,23 @@
 |-----------|-----------------|-------------|
 | **KRITIČNI** | **0** | Nema aktivnih blokada za produkciju u ovom pregledu stanja repozitorijuma. Raniji kritičan propust — **neuspešan production build** jer `sbReqThrow` nije bio eksportovan iz `supabase.js`, pa je CDN/Pages mogao da servira star JS — **rešeno** na `main` (grana `cursor/fix-pb-build-bundle-f9da`). |
 | **VISOKI** | **0** | Nema nezakrpljenih propusta koji zahtevaju hitan patch van PB4 planiranja. Sigurnosni DEFINER RPC-i imaju `SET search_path`; Edge dispatch zahteva service_role JWT. |
-| **SREDNJI** | Backlog | Hardening RLS-a (vidi §5), performanse velikih fetch-eva (Izveštaji), Gantt performanse pri čestom re-renderu — ulaz za PB4 kada prioritet dozvoljava. |
-| **NISKI** | Backlog | UX poboljšanja, WhatsApp kanal, PDF/Excel export, drag-drop Gantt — već u delu dokumentovanih „Potencijalni PB4“ u `Projektni_biro_modul.md`. |
+| **SREDNJI** | Backlog | Ostatak (npr. `pb_notification_config` SELECT `USING(true)` — §5). |
+| **NISKI** | Backlog | UX / export / integracije — vidi `Projektni_biro_modul.md` (Potencijalni PB5). |
+
+### PB4 (rešeno)
+
+| ID | Nalaz | Status |
+|----|--------|--------|
+| **R01** | `pb_work_reports` SELECT `USING(true)` — svi authenticated videli sve sate | **Rešeno** — `add_pb4_rls_and_agg.sql`. |
+| **R02** | Veliki fetch za Izveštaje / obračun na klijentu | **Rešeno** — `pb_get_work_report_summary`, mesec učitavanja, obavezni datumski opseg za REST. |
+| **G01** | Gantt listeneri pri svakom renderu | **Rešeno** — delegacija + `AbortController` (`ganttTab.js`). |
 
 ---
 
 ## 1. Obuhvat pregleda
 
 - **Frontend:** `src/ui/pb/*.js`, `src/styles/pb.css`, `src/services/pb.js`
-- **Backend (SQL):** `sql/migrations/add_pb_module.sql`, `pb_load_stats_mechanical_engineering.sql`, `pb_mechanical_engineers_rpc.sql`, `add_pb_notifications.sql`
+- **Backend (SQL):** `sql/migrations/add_pb_module.sql`, `pb_load_stats_mechanical_engineering.sql`, `pb_mechanical_engineers_rpc.sql`, `add_pb_notifications.sql`, `add_pb4_rls_and_agg.sql`
 - **Edge:** `supabase/functions/pb-notify-dispatch/index.ts`
 - **Testovi:** `src/ui/pb/__tests__/*.js`, Vitest suite
 
@@ -45,26 +53,24 @@
 
 ---
 
-## 4. TODO u kodu → input za PB4
+## 4. TODO u kodu → sledeći sprint
 
-| Lokacija | TODO | Predlog PB4 |
-|----------|------|-------------|
-| `src/ui/pb/index.js` (file header) | Podeliti render Gantt zaglavlja i redova pri promeni filtera (referenca „E2“ u starijem tekstu). | Smanjiti full re-mount slušalaca; koristiti delegiranje / jedan `AbortController` po render ciklusu gde već nije urađeno. |
+| Lokacija | TODO | Napomena |
+|----------|------|----------|
+| `src/ui/pb/index.js` (header) | Dodatno razdvajanje Gantt header vs row render | Opciono — PB4 je dodao delegaciju + abort na `root`. |
 
-*Napomena:* U trenutnom stanju repozitorijuma **nema drugih `TODO(PB4)`** markera u `src/ui/pb/` osim gore; dodatni želje za PB4 su u `docs/Projektni_biro_modul.md` sekcija **„Potencijalni PB4 feature-i“** (Gantt drag-drop, WhatsApp, rezime po inženjeru, PDF/Excel, BigTehn RN integracija).
+Ostatak feature backlog-a: `Projektni_biro_modul.md` (drag-drop Gantt, WhatsApp, PDF/Excel, BigTehn).
 
 ---
 
-## 5. SREDNJI backlog (sigurnost i model)
+## 5. Preostali SREDNJI backlog (sigurnost i model)
 
-- **`pb_work_reports` SELECT** — RLS politika `USING (true)` za sve authenticated (vidi `docs/RBAC_MATRIX.md`). To znači da svaki ulogovani korisnik vidi sve redove izveštaja sati. Ako poslovno treba ograničenje (npr. samo sopstveni + menadžment), potrebna je nova migracija politika — **prioritet SREDNJI** dok se eksplicitno ne traži promena.
 - **`pb_notification_config` SELECT** — `USING (true)`; pragovi notifikacija su vidljivi svima; menjanje samo admin — tipično prihvatljivo; dokumentovati ako treba „tajna“ lista primalaca.
 
 ---
 
 ## 6. SREDNJI backlog (performanse i UX)
 
-- **Izveštaji:** učitavanje velikog broja `pb_work_reports` (npr. godina × limit 8000) — razmotriti server-side agregat ili paginaciju za obračun.
 - **Kanban:** optimistic update sa rollback-om — zadržati paritet sa API greškama.
 - **Plan load meter:** usklađen sa `pb_get_mechanical_projecting_engineers` predikatom (Mašinsko projektovanje + legacy tekst).
 
@@ -78,7 +84,7 @@
 
 ---
 
-## 8. Checklista pre PB4 planiranja
+## 8. Checklista pre sledećeg PB sprinta
 
 1. `npm run build` — mora proći.
 2. `npm test` — postojeći Vitest.

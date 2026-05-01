@@ -1,6 +1,6 @@
 /**
  * Projektni biro — root shell (tabs + Plan + Kanban + Gantt + Izveštaji + Analiza).
- * // TODO(PB4): split Gantt header vs row render na filter change — docs/pb_review_report.md §4
+ * // TODO(PB5 opciono): dodatno razdvajanje Gantt header vs row render ako treba perf — docs/pb_review_report.md §4
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
@@ -52,7 +52,6 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
   let tasks = [];
   let loadStats = [];
   let workReports = [];
-  let workReportsLoaded = false;
 
   function mergeStoredState() {
     const s = loadPbState();
@@ -74,13 +73,13 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     onRefresh: () => loadAll(),
   };
 
-  async function loadWorkReports() {
-    const y = new Date().getFullYear();
-    const first = `${y}-01-01`;
-    const last = `${y}-12-31`;
-    const wr = await getPbWorkReports({ dateFrom: first, dateTo: last, limit: 8000 });
+  async function loadWorkReportsForMonth(year, month0) {
+    const first = new Date(year, month0, 1);
+    const last = new Date(year, month0 + 1, 0);
+    const dateFrom = first.toISOString().slice(0, 10);
+    const dateTo = last.toISOString().slice(0, 10);
+    const wr = await getPbWorkReports({ dateFrom, dateTo, limit: 500 });
     workReports = Array.isArray(wr) ? wr : [];
-    workReportsLoaded = true;
   }
 
   async function loadAll() {
@@ -277,23 +276,22 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       return;
     }
     if (tab === 'izvestaji') {
-      if (!workReportsLoaded) {
-        body.innerHTML = '<p class="pb-muted">Učitavanje…</p>';
-        try {
-          await loadWorkReports();
-        } catch (err) {
-          body.innerHTML = `<p class="pb-muted">${escHtml(pbErrorMessage(err))}</p>`;
-          return;
-        }
-      }
       renderIzvestaji(body, {
         getWorkReports: () => workReports,
+        loadMonthReports: loadWorkReportsForMonth,
         engineers,
         canEdit: canEditProjektniBiro(),
         defaultEmployeeId: null,
         actorEmail: getAuth().user?.emailRaw || getAuth().user?.email || null,
-        onRefresh: async () => {
-          await loadWorkReports();
+        onRefresh: async (year, month0) => {
+          const y = year ?? new Date().getFullYear();
+          const m = month0 ?? new Date().getMonth();
+          try {
+            await loadWorkReportsForMonth(y, m);
+          } catch (err) {
+            showToast(pbErrorMessage(err));
+            return;
+          }
           void mountActiveTab();
         },
       });
