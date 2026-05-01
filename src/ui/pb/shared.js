@@ -249,11 +249,44 @@ export function openTextAreaModal({ title, initial, hint, canEdit, onSave }) {
   document.body.appendChild(wrap);
 }
 
+/** Zaustavlja glasovni unos u Izveštajima pri promeni taba (registracija iz izvestajiTab). */
+let pbIzvestajiSpeechRec = null;
+
+/** @param {SpeechRecognition|null} r */
+export function setPbIzvestajiSpeechRecog(r) {
+  pbIzvestajiSpeechRec = r;
+}
+
+export function stopPbIzvestajiSpeech() {
+  if (!pbIzvestajiSpeechRec) return;
+  try {
+    pbIzvestajiSpeechRec.stop();
+  } catch {
+    /* ignore */
+  }
+  pbIzvestajiSpeechRec = null;
+}
+
+/**
+ * Poruka za korisnika iz greške backend-a ili mreže.
+ * @param {unknown} err
+ */
+export function pbErrorMessage(err) {
+  if (err == null) return 'Nepoznata greška';
+  if (typeof err === 'string') return err;
+  if (typeof err === 'object' && err !== null && 'message' in err && err.message) {
+    return String((/** @type {{ message?: string }} */ (err)).message);
+  }
+  return String(err);
+}
+
 export async function confirmDeletePbTask(id, onDone) {
   if (!id || !confirm('Označiti zadatak kao obrisan (soft delete)?')) return;
-  const ok = await softDeletePbTask(id);
-  if (ok) {
+  try {
+    await softDeletePbTask(id);
     showToast('Zadatak obrisan');
     onDone?.();
-  } else showToast('Brisanje nije uspelo');
+  } catch (e) {
+    showToast(pbErrorMessage(e) || 'Brisanje nije uspelo');
+  }
 }
