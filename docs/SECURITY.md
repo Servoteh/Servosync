@@ -245,6 +245,14 @@ WHERE  table_schema = 'public' AND table_name = 'v_production_operations';
 6. **Auto-generator RBAC matrice** iz `pg_policies` u Markdown.
 7. **Rate limiting** na bulk import-e (Lokacije CSV, Kadrovska grid mass-edit).
 
+### 6.1.1 Faza 2 — status (Sastanci Sprint 1)
+
+| Nalaz | Status | Evidencija |
+|---|---|---|
+| H1 — write RLS parent-scope | ✅ DONE | `sql/migrations/harden_sastanci_write_rls.sql` — `FOR ALL` write politike razdvojene na INSERT/UPDATE/DELETE sa parent-scope proverom. |
+| H2 — locked guard | ✅ DONE | `sql/migrations/add_sastanci_locked_guard.sql` — `sast_check_not_locked()` BEFORE trigger na `sastanci` i child tabelama. |
+| M6 — pgTAP testovi | ✅ DONE | `sql/tests/security_sastanci_rls.sql` — SELECT izolacija, write parent-scope, locked guard, notification prefs. |
+
 ### 6.2 Ide u Fazu 3 (maturity)
 
 1. **Penetration testing** od strane treće strane.
@@ -295,6 +303,7 @@ CI radi `schema-baseline` job na svakom push/PR-u u `main`. Pad → blokira merg
 |---|---|---|---|
 | 1.0 | 2026-04-23 | Faza 1 hardening: offline mode gate, anon REVOKE, schema.sql usklađivanje, CI baseline guard | Nenad + AI |
 | 1.1 | 2026-04-26 | Faza C — `sastanci-notify-dispatch` sa `X-Audit-Actor` atribucijom; SECURITY DEFINER triggeri za outbox; Storage bucket `'sastanci-arhiva'` sa RLS | Nenad + AI |
+| 3.0 | 2026-05-03 | Sastanci Sprint 1: H1 write RLS parent-scope, H2 locked guard trigger, M6 pgTAP testovi | Luka + AI |
 
 ---
 
