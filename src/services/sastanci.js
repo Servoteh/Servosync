@@ -19,6 +19,17 @@
 import { sbReq } from './supabase.js';
 import { getCurrentUser, getIsOnline } from '../state/auth.js';
 
+const SASTANCI_COLUMNS = [
+  'id', 'tip', 'naslov', 'datum', 'vreme', 'mesto', 'projekat_id',
+  'vodio_email', 'vodio_label', 'zapisnicar_email', 'zapisnicar_label',
+  'status', 'zakljucan_at', 'zakljucan_by_email', 'napomena',
+  'created_at', 'created_by_email', 'updated_at',
+].join(',');
+
+const UCESNICI_COLUMNS = [
+  'sastanak_id', 'email', 'label', 'prisutan', 'pozvan', 'napomena',
+].join(',');
+
 /* ── Konstante ── */
 
 export const SASTANAK_TIPOVI = {
@@ -95,7 +106,7 @@ export async function loadSastanci(filters = {}) {
   const orderParam = filters.orderDatum === 'asc'
     ? 'order=datum.asc,vreme.asc.nullsfirst'
     : 'order=datum.desc,vreme.desc.nullslast';
-  const params = ['select=*', orderParam];
+  const params = [`select=${SASTANCI_COLUMNS}`, orderParam];
 
   if (filters.tip) params.push(`tip=eq.${encodeURIComponent(filters.tip)}`);
   if (filters.status) params.push(`status=eq.${encodeURIComponent(filters.status)}`);
@@ -126,14 +137,16 @@ export async function loadNextPlaniranSastanak() {
 
 export async function loadSastanak(id) {
   if (!id || !getIsOnline()) return null;
-  const data = await sbReq(`sastanci?id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+  const data = await sbReq(
+    `sastanci?id=eq.${encodeURIComponent(id)}&select=${SASTANCI_COLUMNS}&limit=1`,
+  );
   return Array.isArray(data) && data.length ? mapDbSastanak(data[0]) : null;
 }
 
 export async function loadUcesnici(sastanakId) {
   if (!sastanakId || !getIsOnline()) return [];
   const data = await sbReq(
-    `sastanak_ucesnici?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=*&order=label.asc`,
+    `sastanak_ucesnici?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=${UCESNICI_COLUMNS}&order=label.asc`,
   );
   return Array.isArray(data) ? data.map(mapDbUcesnik) : [];
 }
@@ -144,7 +157,7 @@ export async function loadUcesniciForMany(sastanakIds) {
   const ids = [...new Set(sastanakIds)].filter(Boolean);
   if (!ids.length) return new Map();
   const data = await sbReq(
-    `sastanak_ucesnici?sastanak_id=in.(${ids.join(',')})&select=*`,
+    `sastanak_ucesnici?sastanak_id=in.(${ids.join(',')})&select=${UCESNICI_COLUMNS}&order=email.asc&limit=500`,
   );
   const map = new Map();
   (Array.isArray(data) ? data : []).forEach(d => {
@@ -207,10 +220,14 @@ export async function saveUcesnici(sastanakId, ucesnici) {
   if (!sastanakId || !getIsOnline()) return false;
   /* Strategija: obriši sve postojeće, pa upiši nove. Mali broj redova
      po sastanku (do ~30 ljudi) — ovo je jednostavnije od diff-a. */
-  await sbReq(
+  const delResult = await sbReq(
     `sastanak_ucesnici?sastanak_id=eq.${encodeURIComponent(sastanakId)}`,
     'DELETE',
   );
+  if (delResult === null) {
+    console.error('[saveUcesnici] DELETE failed', { sastanakId });
+    return false;
+  }
   if (!ucesnici || !ucesnici.length) return true;
   const payload = ucesnici.map(u => ({
     sastanak_id: sastanakId,
@@ -247,7 +264,7 @@ export async function loadDashboardStats() {
   const in14days = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
   const in14Str = in14days.toISOString().slice(0, 10);
 
-  /* Paralelno: 4 count requesta. PostgREST `select=*&head=true` + Prefer:
+  /* Paralelno: 4 count requesta. PostgREST head=true + Prefer:
      count=exact ne ide kroz naš sbReq jer on ne čita header-e. Umesto
      toga čitamo redove sa limit=1 i koristimo `select=id` + odvojen count
      poziv preko `Prefer: count=exact`. Da ne komplikujemo, vraćamo redove. */

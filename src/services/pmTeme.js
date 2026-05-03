@@ -20,6 +20,33 @@
 import { sbReq } from './supabase.js';
 import { getCurrentUser, getIsOnline } from '../state/auth.js';
 
+const PM_TEME_SELECT = [
+  'id',
+  'vrsta',
+  'oblast',
+  'naslov',
+  'opis',
+  'projekat_id',
+  'status',
+  'prioritet',
+  'hitno',
+  'za_razmatranje',
+  'admin_rang',
+  'admin_rang_by_email',
+  'admin_rang_at',
+  'sastanak_id',
+  'predlozio_email',
+  'predlozio_label',
+  'predlozio_at',
+  'resio_email',
+  'resio_label',
+  'resio_at',
+  'resio_napomena',
+  'visual_tag',
+  'created_at',
+  'updated_at',
+].join(',');
+
 export const TEMA_VRSTE = {
   tema: 'Tema',
   problem: 'Problem',
@@ -107,7 +134,7 @@ export async function loadPmTeme(filters = {}) {
   /* Sortiranje: admin_rang (manji prvi, NULLs zadnje), pa hitno DESC,
      pa za_razmatranje DESC, pa prioritet ASC, pa predlozio_at DESC. */
   const params = [
-    'select=*',
+    `select=${PM_TEME_SELECT}`,
     'order=admin_rang.asc.nullslast,hitno.desc,za_razmatranje.desc,prioritet.asc,predlozio_at.desc',
   ];
 
@@ -131,7 +158,7 @@ export async function loadPmTeme(filters = {}) {
 
 export async function loadTema(id) {
   if (!id || !getIsOnline()) return null;
-  const data = await sbReq(`pm_teme?id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+  const data = await sbReq(`pm_teme?id=eq.${encodeURIComponent(id)}&select=${PM_TEME_SELECT}&limit=1`);
   return Array.isArray(data) && data.length ? mapDbTema(data[0]) : null;
 }
 
