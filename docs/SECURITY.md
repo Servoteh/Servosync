@@ -305,6 +305,7 @@ CI radi `schema-baseline` job na svakom push/PR-u u `main`. Pad → blokira merg
 | 1.1 | 2026-04-26 | Faza C — `sastanci-notify-dispatch` sa `X-Audit-Actor` atribucijom; SECURITY DEFINER triggeri za outbox; Storage bucket `'sastanci-arhiva'` sa RLS | Nenad + AI |
 | 3.0 | 2026-05-03 | Sastanci Sprint 1: H1 write RLS parent-scope, H2 locked guard trigger, M6 pgTAP testovi | Luka + AI |
 | 3.1 | 2026-05-03 | Sastanci Sprint 2+3: H3 atomski RPC zakljucavanja, H4 notif dedup, M5 multi-step error handling, M1/M2/M7 select+index+limit | Luka + AI |
+| 3.2 | 2026-05-03 | Sastanci Faza D: draft teme (structured weekly prep), novi statusi, approval RLS, pgTAP E grupa | Luka + AI |
 
 ---
 

@@ -14,7 +14,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(15);
+SELECT plan(22);
 
 -- ─── Helper za JWT simulaciju ────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION test_sast_set_jwt_email(p_email text)
@@ -39,6 +39,14 @@ INSERT INTO public.user_roles (email, role, project_id, is_active) VALUES
   ('sast-vodio@test.local',      'pm',         NULL, true),
   ('sast-viewer@test.local',     'viewer',     NULL, true)
 ON CONFLICT DO NOTHING;
+
+INSERT INTO public.projects (id, project_code, project_name, status)
+VALUES (
+  '55555555-5555-5555-5555-555555555555',
+  'SAST-RLS',
+  'Sastanci RLS test projekat',
+  'active'
+) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.sastanci (
   id, tip, naslov, datum, status,
@@ -341,6 +349,138 @@ SELECT cmp_ok(
   '=',
   3,
   'D3: management vidi sve notification_prefs redove'
+);
+
+RESET ROLE;
+
+-- ============================================================================
+-- GRUPA E: Draft teme
+-- ============================================================================
+
+-- E1: korisnik sa edit rolom može insertovati draft temu.
+SET LOCAL ROLE authenticated;
+SELECT test_sast_set_jwt_email('sast-editor-a@test.local');
+SELECT lives_ok(
+  $$ INSERT INTO public.pm_teme (
+       id, projekat_id, sastanak_id, status, naslov, vrsta, oblast,
+       predlozio_email, predlozio_label
+     ) VALUES (
+       '66666666-6666-6666-6666-666666666666',
+       '55555555-5555-5555-5555-555555555555',
+       NULL,
+       'draft',
+       'E1 draft tema',
+       'tema',
+       'opste',
+       'sast-editor-a@test.local',
+       'Editor A'
+     ) $$,
+  'E1: editor može INSERT draft temu'
+);
+
+-- E2: predlagač vidi svoj draft.
+SELECT is(
+  (SELECT count(*)::int FROM public.pm_teme WHERE id = '66666666-6666-6666-6666-666666666666'),
+  1,
+  'E2: predlagač vidi draft temu koju je predložio'
+);
+
+-- E3: drugi editor vidi tuđi draft.
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT test_sast_set_jwt_email('sast-editor-b@test.local');
+SELECT is(
+  (SELECT count(*)::int FROM public.pm_teme WHERE id = '66666666-6666-6666-6666-666666666666'),
+  1,
+  'E3: drugi editor vidi tuđu draft temu'
+);
+
+-- E4: korisnik bez edit role ne može insertovati draft temu.
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT test_sast_set_jwt_email('sast-viewer@test.local');
+SELECT throws_ok(
+  $$ INSERT INTO public.pm_teme (
+       projekat_id, sastanak_id, status, naslov, vrsta, oblast,
+       predlozio_email, predlozio_label
+     ) VALUES (
+       '55555555-5555-5555-5555-555555555555',
+       NULL,
+       'draft',
+       'E4 forbidden draft',
+       'tema',
+       'opste',
+       'sast-viewer@test.local',
+       'Viewer'
+     ) $$,
+  '42501',
+  NULL,
+  'E4: viewer ne može INSERT draft temu'
+);
+
+-- E5: editor može review draft u usvojeno.
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT test_sast_set_jwt_email('sast-editor-b@test.local');
+SELECT lives_ok(
+  $$ UPDATE public.pm_teme
+        SET status = 'usvojeno',
+            resio_email = 'sast-editor-b@test.local',
+            resio_at = now()
+      WHERE id = '66666666-6666-6666-6666-666666666666'
+        AND status = 'draft' $$,
+  'E5: editor može update draft u usvojeno'
+);
+
+-- Seed dodatni draft za E6/E7.
+RESET ROLE;
+SET LOCAL row_security = off;
+INSERT INTO public.pm_teme (
+  id, projekat_id, sastanak_id, status, naslov, vrsta, oblast,
+  predlozio_email, predlozio_label, resio_napomena
+) VALUES (
+  '77777777-7777-7777-7777-777777777777',
+  '55555555-5555-5555-5555-555555555555',
+  NULL,
+  'draft',
+  'E6 draft tema',
+  'tema',
+  'opste',
+  'sast-editor-a@test.local',
+  'Editor A',
+  NULL
+) ON CONFLICT (id) DO UPDATE SET
+  status = EXCLUDED.status,
+  resio_napomena = EXCLUDED.resio_napomena;
+SET LOCAL row_security = on;
+
+-- E6: editor ne može review draft direktno u zatvoreno.
+SET LOCAL ROLE authenticated;
+SELECT test_sast_set_jwt_email('sast-editor-b@test.local');
+SELECT throws_ok(
+  $$ UPDATE public.pm_teme
+        SET status = 'zatvoreno'
+      WHERE id = '77777777-7777-7777-7777-777777777777'
+        AND status = 'draft' $$,
+  '42501',
+  NULL,
+  'E6: editor ne može update draft direktno u zatvoreno'
+);
+
+-- E7: predlagač vidi napomenu na odbijenoj temi.
+RESET ROLE;
+SET LOCAL row_security = off;
+UPDATE public.pm_teme
+   SET status = 'odbijeno',
+       resio_napomena = 'Nije za ovaj sastanak'
+ WHERE id = '77777777-7777-7777-7777-777777777777';
+SET LOCAL row_security = on;
+SET LOCAL ROLE authenticated;
+SELECT test_sast_set_jwt_email('sast-editor-a@test.local');
+SELECT is(
+  (SELECT resio_napomena FROM public.pm_teme WHERE id = '77777777-7777-7777-7777-777777777777'),
+  'Nije za ovaj sastanak',
+  'E7: predlagač vidi napomenu na odbijenoj temi'
 );
 
 RESET ROLE;

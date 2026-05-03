@@ -336,3 +336,93 @@ export async function odbijTemu(temaId, napomena = '') {
   );
   return Array.isArray(data) && data.length ? mapDbTema(data[0]) : null;
 }
+
+export async function predloziDraftTemu(projektId, tema = {}) {
+  if (!projektId || !getIsOnline()) return null;
+  const cu = getCurrentUser();
+  const payload = {
+    projekat_id: projektId,
+    sastanak_id: null,
+    status: 'draft',
+    vrsta: tema.vrsta || 'tema',
+    oblast: tema.oblast || 'opste',
+    naslov: String(tema.naslov || '').trim(),
+    opis: tema.opis || null,
+    prioritet: tema.prioritet || 2,
+    hitno: tema.hitno === true,
+    predlozio_email: cu?.email || '',
+    predlozio_label: tema.predlozioLabel || cu?.user_metadata?.full_name || cu?.email || '',
+    predlozio_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  if (!payload.naslov || !payload.predlozio_email) return null;
+  const data = await sbReq('pm_teme', 'POST', payload);
+  return Array.isArray(data) && data.length ? mapDbTema(data[0]) : null;
+}
+
+export async function loadDraftTeme(projektId) {
+  if (!projektId || !getIsOnline()) return [];
+  const cols = [
+    'id',
+    'projekat_id',
+    'sastanak_id',
+    'naslov',
+    'opis',
+    'status',
+    'predlozio_email',
+    'predlozio_label',
+    'predlozio_at',
+    'resio_email',
+    'resio_label',
+    'resio_at',
+    'resio_napomena',
+    'created_at',
+    'updated_at',
+  ].join(',');
+  const data = await sbReq(
+    `pm_teme?projekat_id=eq.${encodeURIComponent(projektId)}`
+      + '&status=eq.draft'
+      + '&sastanak_id=is.null'
+      + `&select=${cols}`
+      + '&order=created_at.asc',
+  );
+  return Array.isArray(data) ? data.map(mapDbTema) : [];
+}
+
+export async function pregledajDraftTemu(temaId, odluka, napomena = null) {
+  if (!temaId || !getIsOnline()) return null;
+  const cu = getCurrentUser();
+  const mappedStatus = odluka === 'aktivna'
+    ? 'usvojeno'
+    : odluka === 'odbijena'
+      ? 'odbijeno'
+      : odluka;
+  if (!['usvojeno', 'odbijeno'].includes(mappedStatus)) return null;
+  const payload = {
+    status: mappedStatus,
+    resio_email: cu?.email || null,
+    resio_label: cu?.user_metadata?.full_name || cu?.email || null,
+    resio_at: new Date().toISOString(),
+    resio_napomena: napomena || null,
+    updated_at: new Date().toISOString(),
+  };
+  const data = await sbReq(
+    `pm_teme?id=eq.${encodeURIComponent(temaId)}&status=eq.draft`,
+    'PATCH',
+    payload,
+  );
+  return Array.isArray(data) && data.length ? mapDbTema(data[0]) : null;
+}
+
+export async function uvediDraftTemuNaSastanak(temaId, sastanakId) {
+  if (!temaId || !sastanakId || !getIsOnline()) return null;
+  const data = await sbReq(
+    `pm_teme?id=eq.${encodeURIComponent(temaId)}&status=eq.usvojeno`,
+    'PATCH',
+    {
+      sastanak_id: sastanakId,
+      updated_at: new Date().toISOString(),
+    },
+  );
+  return Array.isArray(data) && data.length ? mapDbTema(data[0]) : null;
+}

@@ -23,6 +23,7 @@ import { buildSastanakDetaljPath } from '../../lib/appPaths.js';
 import { renderDashboardTab, teardownDashboardTab } from './dashboardTab.js';
 import { renderPmTemeTab, teardownPmTemeTab } from './pmTemeTab.js';
 import { renderPregledPoProjektuTab, teardownPregledPoProjektuTab } from './pregledPoProjektuTab.js';
+import { renderDraftTemePanel, teardownDraftTemePanel } from './draftTemePanel.js';
 import { renderAkcioniPlanTab, teardownAkcioniPlanTab } from './akcioniPlanTab.js';
 import { renderSastanciTab, teardownSastanciTab } from './sastanciTab.js';
 import { renderArhivaTab, teardownArhivaTab } from './arhivaTab.js';
@@ -35,6 +36,7 @@ const TABS = [
   { id: 'sastanci',          label: 'Sastanci',          icon: '📅', desc: 'Lista svih sastanaka.' },
   { id: 'pm-teme',           label: 'PM teme',           icon: '💡', desc: 'Predlozi PM-ova za dnevni red.' },
   { id: 'pregled-projekti',  label: 'Po projektu',       icon: '🎯', desc: 'Pregled tema po projektu sa master rangom (admin).' },
+  { id: 'draft-teme',        label: 'Draft teme',        icon: '📝', desc: 'Strukturisana priprema tema po projektu.' },
   { id: 'akcioni-plan',      label: 'Akcioni plan',      icon: '✅', desc: 'Otvorene akcije sa rokovima.' },
   { id: 'arhiva',            label: 'Arhiva',            icon: '🗃', desc: 'Zaključani sastanci i zapisnici.' },
   { id: 'podesavanja-notif', label: 'Podešavanja',       icon: '⚙️',  desc: 'Podešavanja email notifikacija.' },
@@ -176,6 +178,10 @@ function renderTabBody(host, { canEdit }) {
     renderPregledPoProjektuTab(host);
     return;
   }
+  if (state.activeTab === 'draft-teme') {
+    renderDraftTemePanel(host, { canEdit });
+    return;
+  }
   if (state.activeTab === 'akcioni-plan') {
     renderAkcioniPlanTab(host, { canEdit });
     return;
@@ -196,6 +202,7 @@ function teardownActiveTab() {
   if (state.activeTab === 'sastanci') teardownSastanciTab();
   if (state.activeTab === 'pm-teme') teardownPmTemeTab();
   if (state.activeTab === 'pregled-projekti') teardownPregledPoProjektuTab();
+  if (state.activeTab === 'draft-teme') teardownDraftTemePanel();
   if (state.activeTab === 'akcioni-plan') teardownAkcioniPlanTab();
   if (state.activeTab === 'arhiva') teardownArhivaTab();
   if (state.activeTab === 'podesavanja-notif') teardownPodesavanjaNotifikacijaTab();
