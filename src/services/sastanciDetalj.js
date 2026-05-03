@@ -8,6 +8,12 @@
 import { sbReq, getSupabaseHeaders, getSupabaseUrl } from './supabase.js';
 import { getCurrentUser, getIsOnline } from '../state/auth.js';
 import { mapDbSastanak, mapDbUcesnik, loadSastanak, loadUcesnici } from './sastanci.js';
+import { zakljucajSastanakRpc } from './sastanakArhiva.js';
+
+const PRESEK_AKTIVNOSTI_SELECT = 'id,sastanak_id,rb,redosled,naslov,pod_rn,sadrzaj_html,sadrzaj_text,odgovoran_email,odgovoran_label,odgovoran_text,rok,rok_text,status,napomena,created_at,updated_at';
+const PRESEK_SLIKE_SELECT = 'id,sastanak_id,aktivnost_id,storage_path,file_name,mime_type,size_bytes,caption,redosled,uploaded_by_email,uploaded_at';
+const SASTANAK_ARHIVA_SELECT = 'id,sastanak_id,snapshot,zapisnik_storage_path,zapisnik_size_bytes,zapisnik_generated_at,arhivirao_email,arhivirao_label,arhivirano_at';
+const PM_TEME_FOR_SASTANAK_SELECT = 'id,vrsta,oblast,naslov,opis,projekat_id,status,prioritet,hitno,za_razmatranje,admin_rang,sastanak_id,predlozio_email,predlozio_label,predlozio_at,resio_email,resio_label,resio_at,resio_napomena,created_at,updated_at';
 
 /* ── Mappers ── */
 
@@ -94,11 +100,8 @@ export async function pocniSastanak(id) {
 
 /** u_toku → zakljucan */
 export async function zakljucajSastanak(id) {
-  const cu = getCurrentUser();
-  return updateStatus(id, 'zakljucan', {
-    zakljucan_at: new Date().toISOString(),
-    zakljucan_by_email: cu?.email || null,
-  });
+  const result = await zakljucajSastanakRpc(id);
+  return result?.ok ? loadSastanak(id) : null;
 }
 
 /** zakljucan → u_toku (admin/menadzment) */
@@ -111,9 +114,9 @@ export async function otvojiPonovo(id) {
 
 /** * → zakljucan + kreira/ažurira arhiva snapshot */
 export async function zakljucajSaSapisanikom(id) {
-  const sastanak = await zakljucajSastanak(id);
-  if (!sastanak) return null;
-  await saveSnapshot(id);
+  // Zamenjeno sa sast_zakljucaj_sastanak RPC (Sprint 2, H3).
+  const result = await zakljucajSastanakRpc(id);
+  if (!result?.ok) return null;
   return loadSastanak(id);
 }
 
@@ -163,7 +166,7 @@ export async function removeUcesnik(sastanakId, email) {
 export async function loadPresekAktivnosti(sastanakId) {
   if (!sastanakId || !getIsOnline()) return [];
   const data = await sbReq(
-    `presek_aktivnosti?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=*&order=redosled.asc,rb.asc`,
+    `presek_aktivnosti?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=${PRESEK_AKTIVNOSTI_SELECT}&order=redosled.asc,rb.asc`,
   );
   return Array.isArray(data) ? data.map(mapPresekAktivnost) : [];
 }
@@ -223,7 +226,7 @@ export async function reorderPresekAktivnosti(items) {
 export async function loadPresekSlike(sastanakId) {
   if (!sastanakId || !getIsOnline()) return [];
   const data = await sbReq(
-    `presek_slike?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=*&order=redosled.asc,uploaded_at.asc`,
+    `presek_slike?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=${PRESEK_SLIKE_SELECT}&order=redosled.asc,uploaded_at.asc`,
   );
   return Array.isArray(data) ? data.map(mapPresekSlika) : [];
 }
@@ -317,7 +320,7 @@ export async function getPresekSlikaUrl(storagePath) {
 export async function loadArhivaSnapshot(sastanakId) {
   if (!sastanakId || !getIsOnline()) return null;
   const data = await sbReq(
-    `sastanak_arhiva?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=*&limit=1`,
+    `sastanak_arhiva?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=${SASTANAK_ARHIVA_SELECT}&limit=1`,
   );
   return Array.isArray(data) && data.length ? mapArhiva(data[0]) : null;
 }
@@ -369,7 +372,7 @@ export async function saveSnapshot(sastanakId) {
 export async function loadPmTemeForSastanak(sastanakId) {
   if (!sastanakId || !getIsOnline()) return [];
   const data = await sbReq(
-    `pm_teme?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=*&order=prioritet.desc.nullslast,admin_rang.asc.nullslast,created_at.asc`,
+    `pm_teme?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=${PM_TEME_FOR_SASTANAK_SELECT}&order=prioritet.desc.nullslast,admin_rang.asc.nullslast,created_at.asc`,
   );
   if (!Array.isArray(data)) return [];
   return data.map(d => ({

@@ -12,22 +12,13 @@
  *      d) UPDATE sastanci.status = 'zakljucan'
  *   3. UI sad prikazuje sastanak read-only.
  *
- * PDF generisanje je nezavisno — `generatePdfZapisnik(sastanakId)` može da
- * se pozove pre ili posle arhive (ako pre, snimimo path u arhivu; ako posle,
- * UPDATE arhive sa storage path-om).
+ * PDF generisanje je nezavisno — ako je PDF već uploadovan, RPC može da
+ * primi storage path i upiše ga u arhivu.
  */
 
-import { sbReq, getSupabaseUrl, getSupabaseAnonKey } from './supabase.js';
-import { getCurrentUser, getIsOnline } from '../state/auth.js';
-import { loadSastanak, loadUcesnici } from './sastanci.js';
-import { loadPmTeme } from './pmTeme.js';
-import { loadAkcije } from './akcioniPlan.js';
-import {
-  loadAktivnosti,
-  loadSlike,
-  getSlikaSignedUrl,
-  SASTANAK_SLIKE_BUCKET,
-} from './projektniSastanak.js';
+import { sbReq } from './supabase.js';
+import { getIsOnline } from '../state/auth.js';
+import { SASTANAK_SLIKE_BUCKET } from './projektniSastanak.js';
 
 export function mapDbArhiva(d) {
   if (!d) return null;
@@ -49,7 +40,7 @@ export function mapDbArhiva(d) {
 export async function loadArhiva(sastanakId) {
   if (!sastanakId || !getIsOnline()) return null;
   const data = await sbReq(
-    `sastanak_arhiva?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=*&limit=1`,
+    `sastanak_arhiva?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=id,sastanak_id,snapshot,zapisnik_storage_path,zapisnik_size_bytes,zapisnik_generated_at,arhivirao_email,arhivirao_label,arhivirano_at&limit=1`,
   );
   return Array.isArray(data) && data.length ? mapDbArhiva(data[0]) : null;
 }
@@ -57,99 +48,40 @@ export async function loadArhiva(sastanakId) {
 export async function loadSveArhive({ limit = 100 } = {}) {
   if (!getIsOnline()) return [];
   const data = await sbReq(
-    `sastanak_arhiva?select=*&order=arhivirano_at.desc&limit=${limit}`,
+    `sastanak_arhiva?select=id,sastanak_id,snapshot,zapisnik_storage_path,zapisnik_size_bytes,zapisnik_generated_at,arhivirao_email,arhivirao_label,arhivirano_at&order=arhivirano_at.desc&limit=${limit}`,
   );
   return Array.isArray(data) ? data.map(mapDbArhiva) : [];
-}
-
-/* ── Snapshot ── */
-
-/**
- * Skupi sve podatke o sastanku za snapshot.
- */
-async function buildSnapshot(sastanakId) {
-  const sastanak = await loadSastanak(sastanakId);
-  if (!sastanak) return null;
-
-  const [ucesnici, pmTeme, akcije, aktivnosti, slike] = await Promise.all([
-    loadUcesnici(sastanakId),
-    sastanak.tip === 'sedmicni' ? loadPmTeme({ sastanakId, limit: 500 }) : Promise.resolve([]),
-    loadAkcije({ sastanakId, limit: 500 }),
-    sastanak.tip === 'projektni' ? loadAktivnosti(sastanakId) : Promise.resolve([]),
-    sastanak.tip === 'projektni' ? loadSlike(sastanakId) : Promise.resolve([]),
-  ]);
-
-  /* Generiši signed URL-ove za slike u trenutku snapshot-a. */
-  const slikeWithUrl = await Promise.all(
-    slike.map(async (s) => {
-      const url = await getSlikaSignedUrl(s.storagePath);
-      return { ...s, signedUrl: url, signedUrlAt: new Date().toISOString() };
-    }),
-  );
-
-  return {
-    schemaVersion: 1,
-    snapshotAt: new Date().toISOString(),
-    sastanak,
-    ucesnici,
-    pmTeme,
-    akcije,
-    aktivnosti,
-    slike: slikeWithUrl,
-  };
 }
 
 /**
  * Zaključaj i arhiviraj sastanak.
  *
- * Idempotentno: ako već postoji arhiva za sastanak (UNIQUE), prepiše je
- * preko POST + Prefer: merge-duplicates (default u sbReq).
+ * Zamenjeno sa sast_zakljucaj_sastanak RPC (Sprint 2, H3).
  *
  * @returns {Promise<{ ok: boolean, archive?: object, error?: string }>}
  */
-export async function arhivirajSastanak(sastanakId) {
+export async function arhivirajSastanak(sastanakId, { pdfUrl = null, pdfStoragePath = null } = {}) {
   if (!sastanakId || !getIsOnline()) {
     return { ok: false, error: 'Nema sastanka ili nismo online.' };
   }
-  const cu = getCurrentUser();
 
-  /* 1. Provera da li je već arhiviran. */
-  const postojeci = await loadArhiva(sastanakId);
-  if (postojeci) {
-    return { ok: false, error: 'Sastanak je već arhiviran.' };
+  const result = await sbReq('rpc/sast_zakljucaj_sastanak', 'POST', {
+    p_sastanak_id: sastanakId,
+    p_pdf_url: pdfUrl ?? null,
+    p_pdf_storage_path: pdfStoragePath ?? null,
+  });
+
+  if (!result || result.ok === false) {
+    return {
+      ok: false,
+      reason: result?.reason || 'rpc_failed',
+      error: result?.reason === 'already_locked'
+        ? 'Sastanak je već arhiviran.'
+        : 'Zaključavanje sastanka nije uspelo.',
+    };
   }
 
-  /* 2. Build snapshot. */
-  const snapshot = await buildSnapshot(sastanakId);
-  if (!snapshot) {
-    return { ok: false, error: 'Ne mogu da povučem podatke sastanka.' };
-  }
-
-  /* 3. Insert arhiva. */
-  const arhivaPayload = {
-    sastanak_id: sastanakId,
-    snapshot,
-    arhivirao_email: cu?.email || null,
-    arhivirao_label: cu?.email || null,
-  };
-  const arhivaResp = await sbReq('sastanak_arhiva', 'POST', arhivaPayload);
-  if (!Array.isArray(arhivaResp) || !arhivaResp.length) {
-    return { ok: false, error: 'INSERT sastanak_arhiva nije uspeo.' };
-  }
-
-  /* 4. Update sastanci.status = 'zakljucan'. */
-  await sbReq(
-    `sastanci?id=eq.${encodeURIComponent(sastanakId)}`,
-    'PATCH',
-    {
-      status: 'zakljucan',
-      zakljucan_at: new Date().toISOString(),
-      zakljucan_by_email: cu?.email || null,
-      updated_at: new Date().toISOString(),
-    },
-  );
-
-  return { ok: true, archive: mapDbArhiva(arhivaResp[0]) };
+  return { ok: true, result, archive: await loadArhiva(sastanakId) };
 }
 
 /* ── PDF generisanje ── */

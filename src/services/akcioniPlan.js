@@ -14,6 +14,31 @@
 import { sbReq } from './supabase.js';
 import { getCurrentUser, getIsOnline } from '../state/auth.js';
 
+const AKCIJE_SELECT = [
+  'id',
+  'sastanak_id',
+  'tema_id',
+  'projekat_id',
+  'rb',
+  'naslov',
+  'opis',
+  'odgovoran_email',
+  'odgovoran_label',
+  'odgovoran_text',
+  'rok',
+  'rok_text',
+  'status',
+  'effective_status',
+  'dana_do_roka',
+  'prioritet',
+  'zatvoren_at',
+  'zatvoren_by_email',
+  'zatvoren_napomena',
+  'created_at',
+  'created_by_email',
+  'updated_at',
+].join(',');
+
 export const AKCIJA_STATUSI = {
   otvoren: 'Otvoren',
   u_toku: 'U toku',
@@ -78,7 +103,10 @@ export function mapDbAkcija(d) {
  */
 export async function loadAkcije(filters = {}) {
   if (!getIsOnline()) return [];
-  const params = ['select=*', 'order=rok.asc.nullslast,prioritet.asc,created_at.desc'];
+  const params = [
+    `select=${AKCIJE_SELECT}`,
+    'order=rb.asc.nullslast,rok.asc.nullslast,prioritet.asc,created_at.desc',
+  ];
 
   if (filters.sastanakId) params.push(`sastanak_id=eq.${encodeURIComponent(filters.sastanakId)}`);
   if (filters.projekatId) params.push(`projekat_id=eq.${encodeURIComponent(filters.projekatId)}`);
@@ -100,7 +128,7 @@ export async function loadAkcije(filters = {}) {
 export async function loadAkcija(id) {
   if (!id || !getIsOnline()) return null;
   const data = await sbReq(
-    `v_akcioni_plan?id=eq.${encodeURIComponent(id)}&select=*&limit=1`,
+    `v_akcioni_plan?id=eq.${encodeURIComponent(id)}&select=${AKCIJE_SELECT}&limit=1`,
   );
   return Array.isArray(data) && data.length ? mapDbAkcija(data[0]) : null;
 }

@@ -7,8 +7,8 @@
  *   regenerateSastanakPdf(sastanakId)     → boolean
  */
 
-import { getSupabaseHeaders, getSupabaseUrl, sbReq } from './supabase.js';
-import { getCurrentUser, getIsOnline } from '../state/auth.js';
+import { getSupabaseHeaders, getSupabaseUrl } from './supabase.js';
+import { getIsOnline } from '../state/auth.js';
 import { generateSastanakPdf } from '../lib/sastanciPdf.js';
 import { getSastanakFull } from './sastanciDetalj.js';
 
@@ -23,7 +23,6 @@ const BUCKET = 'sastanci-arhiva';
 export async function uploadSastanakPdf(sastanakId, blob) {
   if (!sastanakId || !blob || !getIsOnline()) return null;
 
-  const cu = getCurrentUser();
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const storagePath = `${sastanakId}/${ts}_zapisnik.pdf`;
 
@@ -45,30 +44,6 @@ export async function uploadSastanakPdf(sastanakId, blob) {
 
   if (!uploadRes.ok) {
     console.error('[uploadSastanakPdf] Storage upload failed', await uploadRes.text());
-    return null;
-  }
-
-  // Ažuriraj sastanak_arhiva red sa pdf pathom
-  const existing = await sbReq(
-    `sastanak_arhiva?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=id&limit=1`,
-  );
-
-  const arhivaId = Array.isArray(existing) && existing.length ? existing[0].id : crypto.randomUUID();
-
-  const payload = {
-    id: arhivaId,
-    sastanak_id: sastanakId,
-    zapisnik_storage_path: storagePath,
-    zapisnik_size_bytes: blob.size,
-    zapisnik_generated_at: new Date().toISOString(),
-    arhivirao_email: cu?.email || null,
-    arhivirao_label: cu?.user_metadata?.full_name || cu?.email || null,
-    arhivirano_at: new Date().toISOString(),
-  };
-
-  const data = await sbReq('sastanak_arhiva', 'POST', payload);
-  if (!Array.isArray(data) || !data.length) {
-    console.error('[uploadSastanakPdf] Arhiva upsert failed');
     return null;
   }
 

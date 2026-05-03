@@ -81,7 +81,9 @@ export function mapDbSlika(d) {
 export async function loadAktivnosti(sastanakId) {
   if (!sastanakId || !getIsOnline()) return [];
   const data = await sbReq(
-    `presek_aktivnosti?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=*&order=redosled.asc,rb.asc`,
+    `presek_aktivnosti?sastanak_id=eq.${encodeURIComponent(sastanakId)}`
+    + '&select=id,sastanak_id,rb,redosled,naslov,pod_rn,sadrzaj_html,sadrzaj_text,odgovoran_email,odgovoran_label,odgovoran_text,rok,rok_text,status,napomena,created_at,updated_at'
+    + '&order=redosled.asc,rb.asc',
   );
   return Array.isArray(data) ? data.map(mapDbAktivnost) : [];
 }
@@ -127,12 +129,18 @@ export async function deleteAktivnost(id) {
 export async function reorderAktivnosti(rows) {
   if (!Array.isArray(rows) || !rows.length || !getIsOnline()) return false;
   /* PATCH po redu — male količine, nije bottleneck. */
+  const errors = [];
   for (const r of rows) {
-    await sbReq(
+    const res = await sbReq(
       `presek_aktivnosti?id=eq.${encodeURIComponent(r.id)}`,
       'PATCH',
       { redosled: r.redosled, updated_at: new Date().toISOString() },
     );
+    if (res === null) errors.push(r.id);
+  }
+  if (errors.length > 0) {
+    console.error('reorderAktivnosti: failed for ids', errors);
+    return false;
   }
   return true;
 }
@@ -141,7 +149,9 @@ export async function reorderAktivnosti(rows) {
 
 export async function loadSlike(sastanakId, aktivnostId = null) {
   if (!sastanakId || !getIsOnline()) return [];
-  let url = `presek_slike?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=*&order=redosled.asc,uploaded_at.asc`;
+  let url = `presek_slike?sastanak_id=eq.${encodeURIComponent(sastanakId)}`
+    + '&select=id,sastanak_id,aktivnost_id,storage_path,file_name,mime_type,size_bytes,caption,redosled,uploaded_by_email,uploaded_at'
+    + '&order=redosled.asc,uploaded_at.asc';
   if (aktivnostId) {
     url += `&aktivnost_id=eq.${encodeURIComponent(aktivnostId)}`;
   }

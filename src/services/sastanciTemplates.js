@@ -111,11 +111,12 @@ function mapRow(d) {
  */
 export async function listTemplates() {
   if (!getIsOnline()) return [];
-  const data = await sbReq('sastanci_templates?select=*&order=created_at.desc');
+  const cols = 'id,naziv,tip,mesto,vodio_email,zapisnicar_email,cadence,cadence_dow,cadence_dom,vreme,napomena,is_active,created_by_email,created_at,updated_at';
+  const data = await sbReq(`sastanci_templates?select=${cols}&order=created_at.desc`);
   if (!Array.isArray(data) || !data.length) return [];
   const ids = data.map(r => r.id);
   const ures = await sbReq(
-    `sastanci_template_ucesnici?template_id=in.(${ids.join(',')})&select=*`,
+    `sastanci_template_ucesnici?template_id=in.(${ids.join(',')})&select=template_id,email,label&order=email.asc&limit=200`,
   );
   const byT = new Map();
   (Array.isArray(ures) ? ures : []).forEach(r => {
@@ -159,7 +160,11 @@ export async function createTemplate(s, ucesnici = []) {
       email: String(u.email || '').toLowerCase().trim(),
       label: u.label || null,
     }));
-    await sbReq('sastanci_template_ucesnici', 'POST', up);
+    const inserted = await sbReq('sastanci_template_ucesnici', 'POST', up);
+    if (inserted === null) {
+      console.error('[sastanciTemplates] createTemplate: insert učesnika nije uspeo', id);
+      return null;
+    }
   }
   return { ...mapRow(row), ucesnici: ucesnici || [] };
 }
@@ -173,14 +178,24 @@ export async function updateTemplate(id, s, ucesnici = []) {
     payload,
   );
   const row = Array.isArray(data) && data[0] ? data[0] : null;
-  await sbReq(`sastanci_template_ucesnici?template_id=eq.${encodeURIComponent(id)}`, 'DELETE');
+  if (!row) return null;
+
+  const deleted = await sbReq(`sastanci_template_ucesnici?template_id=eq.${encodeURIComponent(id)}`, 'DELETE');
+  if (deleted === null) {
+    console.error('[sastanciTemplates] updateTemplate: delete učesnika nije uspeo', id);
+    return null;
+  }
   if (ucesnici?.length) {
     const up = ucesnici.map(u => ({
       template_id: id,
       email: String(u.email || '').toLowerCase().trim(),
       label: u.label || null,
     }));
-    await sbReq('sastanci_template_ucesnici', 'POST', up);
+    const inserted = await sbReq('sastanci_template_ucesnici', 'POST', up);
+    if (inserted === null) {
+      console.error('[sastanciTemplates] updateTemplate: insert učesnika nije uspeo', id);
+      return null;
+    }
   }
   return row ? { ...mapRow(row), ucesnici: ucesnici || [] } : null;
 }
@@ -195,8 +210,9 @@ export async function deleteTemplate(id) {
  */
 export async function instantiateTemplate(tpl) {
   if (!getIsOnline() || !tpl?.id) return null;
+  const cols = 'id,naziv,tip,mesto,vodio_email,zapisnicar_email,cadence,cadence_dow,cadence_dom,vreme,napomena,is_active,created_by_email,created_at,updated_at';
   const rows = await sbReq(
-    `sastanci_templates?id=eq.${encodeURIComponent(tpl.id)}&select=*,sastanci_template_ucesnici(email,label)&limit=1`,
+    `sastanci_templates?id=eq.${encodeURIComponent(tpl.id)}&select=${cols},sastanci_template_ucesnici(email,label)&limit=1`,
   );
   const row = Array.isArray(rows) && rows[0];
   const full = row
