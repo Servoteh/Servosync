@@ -235,9 +235,23 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT test_sast_set_jwt_email('sast-editor-b@test.local');
 SELECT throws_ok(
-  $$ UPDATE public.sastanci
-        SET napomena = 'B4 forbidden update'
-      WHERE id = '11111111-1111-1111-1111-111111111111' $$,
+  $$
+  DO $$
+  DECLARE
+    v_rows INT;
+  BEGIN
+    UPDATE public.sastanci
+       SET napomena = 'B4 forbidden update'
+     WHERE id = '11111111-1111-1111-1111-111111111111';
+
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    IF v_rows = 0 THEN
+      RAISE EXCEPTION 'RLS blocked UPDATE on sastanci'
+        USING ERRCODE = '42501';
+    END IF;
+  END
+  $$;
+  $$,
   '42501',
   NULL,
   'B4: editor bez parent-scope ne moze UPDATE sastanci'
