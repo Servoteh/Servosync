@@ -108,7 +108,7 @@ DO $$
 BEGIN
   ALTER TABLE public.user_roles DROP CONSTRAINT IF EXISTS user_roles_role_check;
   ALTER TABLE public.user_roles ADD CONSTRAINT user_roles_role_check
-    CHECK (role IN ('admin','leadpm','pm','user','viewer','hr','menadzment'));
+    CHECK (role IN ('admin','leadpm','pm','user','viewer','hr','menadzment','magacioner'));
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;

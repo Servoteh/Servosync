@@ -6,9 +6,9 @@
 
 ## 1. Sažetak
 
-- **Tabela sa RLS politikama:** 47
-- **Ukupno efektivnih politika:** 141
-- **SECURITY DEFINER funkcija:** 92
+- **Tabela sa RLS politikama:** 51
+- **Ukupno efektivnih politika:** 175
+- **SECURITY DEFINER funkcija:** 100
 - **Objekata sa anon grant-om:** 2
 
 ## 2. Anon (javni) pristup
@@ -105,11 +105,19 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `pb_get_work_report_summary` | `sql/migrations/add_pb4_rls_and_agg.sql` |
 | `production_machine_group_slug` | `sql/migrations/add_production_g5_reassign_rpc.sql` |
 | `reassign_production_line` | `sql/migrations/add_production_g5_reassign_rpc.sql` |
+| `rev_can_manage` | `sql/migrations/add_reversi_module.sql` |
+| `rev_confirm_return` | `sql/migrations/add_reversi_module.sql` |
+| `rev_get_or_create_recipient_location` | `sql/migrations/add_reversi_module.sql` |
+| `rev_issue_reversal` | `sql/migrations/add_reversi_module.sql` |
+| `rev_next_doc_number` | `sql/migrations/add_reversi_module.sql` |
 | `salary_payroll_set_created_by` | `sql/migrations/add_kadr_salary_payroll.sql` |
+| `sast_check_not_locked` | `sql/migrations/add_sastanci_locked_guard.sql` |
+| `sast_pm_teme_draft_status_guard` | `sql/migrations/add_sast_draft_rls.sql` |
 | `sast_trg_akcija_changed` | `sql/migrations/add_sastanci_notification_triggers.sql` |
 | `sast_trg_akcija_new` | `sql/migrations/add_sastanci_notification_triggers.sql` |
 | `sast_trg_meeting_locked` | `sql/migrations/add_sastanci_notification_triggers.sql` |
 | `sast_trg_ucesnik_invite` | `sql/migrations/add_sastanci_notification_triggers.sql` |
+| `sast_zakljucaj_sastanak` | `sql/migrations/add_sast_zakljucaj_rpc.sql` |
 | `sastanci_dispatch_dequeue` | `sql/migrations/add_sastanci_dispatch_rpc.sql` |
 | `sastanci_dispatch_mark_failed` | `sql/migrations/add_sastanci_dispatch_rpc.sql` |
 | `sastanci_dispatch_mark_sent` | `sql/migrations/add_sastanci_dispatch_rpc.sql` |
@@ -117,7 +125,7 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `sastanci_enqueue_meeting_reminders` | `sql/migrations/add_sastanci_reminder_jobs.sql` |
 | `sastanci_enqueue_notification` | `sql/migrations/add_sastanci_notification_outbox.sql` |
 | `sastanci_get_or_create_my_prefs` | `sql/migrations/add_sastanci_notification_prefs.sql` |
-| `touch_updated_at` | `sql/migrations/add_plan_proizvodnje.sql` |
+| `touch_updated_at` | `sql/migrations/add_reversi_module.sql` |
 | `update_updated_at` | `sql/migrations/add_pb_module.sql` |
 | `user_roles_set_updated_at` | `sql/migrations/add_admin_roles.sql` |
 
@@ -142,7 +150,10 @@ Legenda flag-ova:
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
 | `ap_write` | ALL | `authenticated` | `public.has_edit_role()` | `public.has_edit_role()` | ✅ | `sql/migrations/add_sastanci_module.sql` |
+| `ap_delete` | DELETE | `authenticated` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | `` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
+| `ap_insert` | INSERT | `authenticated` | `` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 | `ap_select` | SELECT | `authenticated` | `LOWER(COALESCE(odgovoran_email, '')) = LOWER(COALESCE(auth.…` | `` | ✅ | `sql/migrations/harden_sastanci_rls_phase2.sql` |
+| `ap_update` | UPDATE | `authenticated` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 
 ### `bigtehn_drawings_cache`
 
@@ -306,21 +317,32 @@ Legenda flag-ova:
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
 | `pmt_write` | ALL | `authenticated` | `public.has_edit_role()` | `public.has_edit_role()` | ✅ | `sql/migrations/add_sastanci_module.sql` |
+| `pmt_delete` | DELETE | `authenticated` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | `` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
+| `pm_teme_draft_insert` | INSERT | `authenticated` | `` | `status = 'draft' AND sastanak_id IS NULL AND public.has_edi…` | ✅ | `sql/migrations/add_sast_draft_rls.sql` |
+| `pmt_insert` | INSERT | `authenticated` | `` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 | `pmt_select` | SELECT | `authenticated` | `LOWER(COALESCE(predlozio_email, '')) = LOWER(COALESCE(auth.…` | `` | ✅ | `sql/migrations/harden_sastanci_rls_phase2.sql` |
+| `pm_teme_draft_review` | UPDATE | `authenticated` | `status = 'draft' AND ( public.has_edit_role() OR public.cur…` | `status IN ('usvojeno', 'odbijeno') AND ( public.has_edit_ro…` | ✅ | `sql/migrations/add_sast_draft_rls.sql` |
+| `pmt_update` | UPDATE | `authenticated` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 
 ### `presek_aktivnosti`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
 | `pa_write` | ALL | `authenticated` | `public.has_edit_role()` | `public.has_edit_role()` | ✅ | `sql/migrations/add_sastanci_module.sql` |
+| `pa_delete` | DELETE | `authenticated` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | `` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
+| `pa_insert` | INSERT | `authenticated` | `` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 | `pa_select` | SELECT | `authenticated` | `public.is_sastanak_ucesnik(sastanak_id) OR public.current_u…` | `` | ✅ | `sql/migrations/harden_sastanci_rls_phase2.sql` |
+| `pa_update` | UPDATE | `authenticated` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 
 ### `presek_slike`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
 | `ps_write` | ALL | `authenticated` | `public.has_edit_role()` | `public.has_edit_role()` | ✅ | `sql/migrations/add_sastanci_module.sql` |
+| `ps_delete` | DELETE | `authenticated` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | `` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
+| `ps_insert` | INSERT | `authenticated` | `` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 | `ps_select` | SELECT | `authenticated` | `public.is_sastanak_ucesnik(sastanak_id) OR public.current_u…` | `` | ✅ | `sql/migrations/harden_sastanci_rls_phase2.sql` |
+| `ps_update` | UPDATE | `authenticated` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 
 ### `production_auto_cooperation_groups`
 
@@ -391,6 +413,37 @@ Legenda flag-ova:
 | `reminder_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/schema.sql` |
 | `reminder_update` | UPDATE | `authenticated` | `has_edit_role(project_id)` | `has_edit_role(project_id)` | ✅ | `sql/schema.sql` |
 
+### `rev_document_lines`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `rev_lines_insert` | INSERT | `authenticated` | `` | `rev_can_manage() AND EXISTS ( SELECT 1 FROM rev_documents d…` | ✅ | `sql/migrations/add_reversi_module.sql` |
+| `rev_lines_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_reversi_module.sql` |
+| `rev_lines_update` | UPDATE | `authenticated` | `rev_can_manage()` | `rev_can_manage()` | ✅ | `sql/migrations/add_reversi_module.sql` |
+
+### `rev_documents`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `rev_documents_insert` | INSERT | `authenticated` | `` | `rev_can_manage()` | ✅ | `sql/migrations/add_reversi_module.sql` |
+| `rev_documents_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_reversi_module.sql` |
+| `rev_documents_update` | UPDATE | `authenticated` | `rev_can_manage()` | `rev_can_manage()` | ✅ | `sql/migrations/add_reversi_module.sql` |
+
+### `rev_recipient_locations`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `rev_rl_insert` | INSERT | `authenticated` | `` | `rev_can_manage()` | ✅ | `sql/migrations/add_reversi_module.sql` |
+| `rev_rl_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_reversi_module.sql` |
+
+### `rev_tools`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `rev_tools_insert` | INSERT | `authenticated` | `` | `rev_can_manage()` | ✅ | `sql/migrations/add_reversi_module.sql` |
+| `rev_tools_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_reversi_module.sql` |
+| `rev_tools_update` | UPDATE | `authenticated` | `rev_can_manage()` | `rev_can_manage()` | ✅ | `sql/migrations/add_reversi_module.sql` |
+
 ### `salary_payroll`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
@@ -414,21 +467,30 @@ Legenda flag-ova:
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
 | `sa_write` | ALL | `authenticated` | `public.has_edit_role()` | `public.has_edit_role()` | ✅ | `sql/migrations/add_sastanci_module.sql` |
+| `sa_delete` | DELETE | `authenticated` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | `` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
+| `sa_insert` | INSERT | `authenticated` | `` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 | `sa_select` | SELECT | `authenticated` | `public.is_sastanak_ucesnik(sastanak_id) OR public.current_u…` | `` | ✅ | `sql/migrations/harden_sastanci_rls_phase2.sql` |
+| `sa_update` | UPDATE | `authenticated` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 
 ### `sastanak_ucesnici`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
 | `su_write` | ALL | `authenticated` | `public.has_edit_role()` | `public.has_edit_role()` | ✅ | `sql/migrations/add_sastanci_module.sql` |
+| `su_delete` | DELETE | `authenticated` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | `` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
+| `su_insert` | INSERT | `authenticated` | `` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 | `su_select` | SELECT | `authenticated` | `public.is_sastanak_ucesnik(sastanak_id) OR public.current_u…` | `` | ✅ | `sql/migrations/harden_sastanci_rls_phase2.sql` |
+| `su_update` | UPDATE | `authenticated` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | `public.has_edit_role() AND ( public.is_sastanak_ucesnik(sas…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 
 ### `sastanci`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
 | `sastanci_write` | ALL | `authenticated` | `public.has_edit_role()` | `public.has_edit_role()` | ✅ | `sql/migrations/add_sastanci_module.sql` |
+| `sastanci_delete` | DELETE | `authenticated` | `public.current_user_is_management() OR LOWER(COALESCE(vodio…` | `` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
+| `sastanci_insert` | INSERT | `authenticated` | `` | `public.has_edit_role()` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 | `sastanci_select` | SELECT | `authenticated` | `public.is_sastanak_ucesnik(id) OR public.current_user_is_ma…` | `` | ✅ | `sql/migrations/harden_sastanci_rls_phase2.sql` |
+| `sastanci_update` | UPDATE | `authenticated` | `public.current_user_is_management() OR LOWER(COALESCE(vodio…` | `public.current_user_is_management() OR LOWER(COALESCE(vodio…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 
 ### `sastanci_notification_log`
 
@@ -506,7 +568,7 @@ Legenda flag-ova:
 
 ## 5. Statistika rizika
 
-- Politike sa `USING(true)` (osim INSERT): **27**
+- Politike sa `USING(true)` (osim INSERT): **31**
 - Politike sa `TO anon`: **0**
 - Anon objekt grant-ovi (sa SELECT/INSERT/UPDATE/DELETE): **2**
 

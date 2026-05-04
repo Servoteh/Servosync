@@ -89,7 +89,7 @@ CREATE INDEX phases_linked_drawings_gin_idx ON phases USING gin (linked_drawings
 CREATE TABLE user_roles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('pm','leadpm','viewer')),
+  role TEXT NOT NULL CHECK (role IN ('admin','hr','menadzment','pm','leadpm','viewer','user','magacioner')),
   project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now(),
@@ -414,3 +414,370 @@ CREATE POLICY "contracts_select" ON contracts FOR SELECT TO authenticated USING 
 CREATE POLICY "contracts_insert" ON contracts FOR INSERT TO authenticated WITH CHECK (has_edit_role());
 CREATE POLICY "contracts_update" ON contracts FOR UPDATE TO authenticated USING (has_edit_role()) WITH CHECK (has_edit_role());
 CREATE POLICY "contracts_delete" ON contracts FOR DELETE TO authenticated USING (has_edit_role());
+
+-- ═══════════════════════════════════════════════════════════
+-- Reversi R1 + minimal Lokacije stub (Supabase ima auth + pun loc_* u produ)
+-- RPC rev_issue_reversal / rev_confirm_return: sql/migrations/add_reversi_module.sql
+-- (zavise od loc_create_movement jsonb iz add_loc_v4_drawing_no.sql).
+-- ═══════════════════════════════════════════════════════════
+
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE TABLE IF NOT EXISTS auth.users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE OR REPLACE FUNCTION auth.uid()
+RETURNS UUID
+LANGUAGE plpgsql
+STABLE
+AS $au$
+DECLARE
+  v_sub TEXT := current_setting('request.jwt.claim.sub', true);
+BEGIN
+  IF v_sub IS NULL OR v_sub = '' THEN
+    RETURN NULL;
+  END IF;
+  RETURN v_sub::UUID;
+EXCEPTION WHEN invalid_text_representation THEN
+  RETURN NULL;
+END;
+$au$;
+
+CREATE OR REPLACE FUNCTION auth.jwt()
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+AS $aj$
+DECLARE
+  v TEXT := current_setting('request.jwt.claims', true);
+BEGIN
+  IF v IS NULL OR v = '' THEN
+    RETURN '{}'::JSONB;
+  END IF;
+  RETURN v::JSONB;
+EXCEPTION WHEN others THEN
+  RETURN '{}'::JSONB;
+END;
+$aj$;
+
+CREATE OR REPLACE FUNCTION public.touch_updated_at()
+RETURNS TRIGGER AS $tu$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$tu$ LANGUAGE plpgsql;
+
+DO $loc_type$ BEGIN
+  CREATE TYPE public.loc_type_enum AS ENUM (
+    'WAREHOUSE','RACK','SHELF','BIN','PROJECT','PRODUCTION','ASSEMBLY','SERVICE',
+    'FIELD','TRANSIT','OFFICE','TEMP','SCRAPPED','OTHER'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $loc_type$;
+
+CREATE TABLE IF NOT EXISTS public.loc_locations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  location_code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  location_type public.loc_type_enum NOT NULL,
+  parent_id UUID REFERENCES public.loc_locations(id) ON DELETE RESTRICT,
+  path_cached TEXT NOT NULL DEFAULT '',
+  depth SMALLINT NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  capacity_note TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  CONSTRAINT loc_locations_no_self_parent CHECK (parent_id IS NULL OR parent_id <> id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS loc_locations_code_uq ON public.loc_locations (location_code);
+
+CREATE TABLE IF NOT EXISTS public.rev_tools (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  oznaka TEXT NOT NULL,
+  naziv TEXT NOT NULL,
+  serijski_broj TEXT,
+  datum_kupovine DATE,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'scrapped', 'lost')),
+  napomena TEXT,
+  loc_item_ref_id TEXT UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES auth.users(id),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE OR REPLACE FUNCTION public.rev_tools_set_item_ref()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $rtir$
+BEGIN
+  NEW.loc_item_ref_id := 'rev_tools:' || NEW.id::text;
+  RETURN NEW;
+END;
+$rtir$;
+
+DROP TRIGGER IF EXISTS rev_tools_before_insert ON public.rev_tools;
+CREATE TRIGGER rev_tools_before_insert
+  BEFORE INSERT ON public.rev_tools
+  FOR EACH ROW EXECUTE FUNCTION public.rev_tools_set_item_ref();
+
+DROP TRIGGER IF EXISTS rev_tools_updated_at ON public.rev_tools;
+CREATE TRIGGER rev_tools_updated_at
+  BEFORE UPDATE ON public.rev_tools
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+CREATE TABLE IF NOT EXISTS public.rev_recipient_locations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipient_type TEXT NOT NULL CHECK (recipient_type IN ('EMPLOYEE', 'DEPARTMENT', 'EXTERNAL_COMPANY')),
+  recipient_key TEXT NOT NULL,
+  recipient_label TEXT NOT NULL,
+  loc_location_id UUID NOT NULL REFERENCES public.loc_locations(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (recipient_type, recipient_key)
+);
+
+CREATE TABLE IF NOT EXISTS public.rev_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  doc_number TEXT NOT NULL UNIQUE,
+  doc_type TEXT NOT NULL CHECK (doc_type IN ('TOOL', 'COOPERATION_GOODS')),
+  recipient_type TEXT NOT NULL CHECK (recipient_type IN ('EMPLOYEE', 'DEPARTMENT', 'EXTERNAL_COMPANY')),
+  recipient_employee_id UUID REFERENCES employees(id),
+  recipient_employee_name TEXT,
+  recipient_department TEXT,
+  recipient_company_name TEXT,
+  recipient_company_pib TEXT,
+  recipient_loc_id UUID REFERENCES public.loc_locations(id),
+  expected_return_date DATE,
+  issued_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  issued_by UUID NOT NULL REFERENCES auth.users(id),
+  status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'PARTIALLY_RETURNED', 'RETURNED', 'CANCELLED')),
+  return_confirmed_by UUID REFERENCES auth.users(id),
+  return_confirmed_at TIMESTAMPTZ,
+  return_notes TEXT,
+  pdf_storage_path TEXT,
+  pdf_generated_at TIMESTAMPTZ,
+  napomena TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+DROP TRIGGER IF EXISTS rev_documents_updated_at ON public.rev_documents;
+CREATE TRIGGER rev_documents_updated_at
+  BEFORE UPDATE ON public.rev_documents
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+CREATE TABLE IF NOT EXISTS public.rev_document_lines (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID NOT NULL REFERENCES public.rev_documents(id) ON DELETE CASCADE,
+  sort_order INT NOT NULL DEFAULT 0,
+  line_type TEXT NOT NULL CHECK (line_type IN ('TOOL', 'PRODUCTION_PART')),
+  tool_id UUID REFERENCES public.rev_tools(id),
+  drawing_no TEXT,
+  work_order_id UUID,
+  part_name TEXT,
+  quantity NUMERIC(12,3) NOT NULL DEFAULT 1,
+  unit TEXT NOT NULL DEFAULT 'kom',
+  napomena TEXT,
+  issue_movement_id UUID,
+  returned_quantity NUMERIC(12,3) NOT NULL DEFAULT 0,
+  return_movement_id UUID,
+  line_status TEXT NOT NULL DEFAULT 'ISSUED' CHECK (line_status IN ('ISSUED', 'RETURNED', 'LOST', 'SCRAPPED')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS rev_documents_status_idx ON public.rev_documents (status);
+CREATE INDEX IF NOT EXISTS rev_documents_issued_by_idx ON public.rev_documents (issued_by);
+CREATE INDEX IF NOT EXISTS rev_documents_issued_at_idx ON public.rev_documents (issued_at DESC);
+CREATE INDEX IF NOT EXISTS rev_documents_doc_type_idx ON public.rev_documents (doc_type, status);
+CREATE INDEX IF NOT EXISTS rev_documents_employee_idx ON public.rev_documents (recipient_employee_id)
+  WHERE recipient_employee_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS rev_document_lines_doc_idx ON public.rev_document_lines (document_id);
+CREATE INDEX IF NOT EXISTS rev_document_lines_tool_idx ON public.rev_document_lines (tool_id) WHERE tool_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS rev_document_lines_status_idx ON public.rev_document_lines (line_status);
+CREATE INDEX IF NOT EXISTS rev_tools_status_idx ON public.rev_tools (status);
+CREATE INDEX IF NOT EXISTS rev_tools_oznaka_idx ON public.rev_tools (oznaka);
+
+CREATE OR REPLACE FUNCTION public.rev_can_manage()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $rcm$
+  SELECT EXISTS (
+    SELECT 1 FROM user_roles
+    WHERE lower(email) = lower(auth.jwt() ->> 'email')
+      AND role IN ('admin', 'menadzment', 'pm', 'leadpm', 'magacioner')
+      AND (is_active IS NULL OR is_active = true)
+  );
+$rcm$;
+
+REVOKE ALL ON FUNCTION public.rev_can_manage() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rev_can_manage() TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.rev_get_or_create_recipient_location(
+  p_recipient_type TEXT,
+  p_recipient_key TEXT,
+  p_recipient_label TEXT
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $rgocl$
+DECLARE
+  v_loc_id UUID;
+  v_loc_code TEXT;
+  v_loc_type public.loc_type_enum;
+BEGIN
+  SELECT loc_location_id INTO v_loc_id
+  FROM public.rev_recipient_locations
+  WHERE recipient_type = p_recipient_type AND recipient_key = p_recipient_key;
+
+  IF v_loc_id IS NOT NULL THEN
+    RETURN v_loc_id;
+  END IF;
+
+  CASE p_recipient_type
+    WHEN 'EMPLOYEE' THEN
+      v_loc_type := 'FIELD';
+      v_loc_code := 'ZADU-R-' || substr(p_recipient_key, 1, 8);
+    WHEN 'DEPARTMENT' THEN
+      v_loc_type := 'FIELD';
+      v_loc_code := 'ZADU-O-' || p_recipient_key;
+    WHEN 'EXTERNAL_COMPANY' THEN
+      v_loc_type := 'SERVICE';
+      v_loc_code := 'ZADU-K-' || p_recipient_key;
+    ELSE
+      RAISE EXCEPTION 'Nepoznat tip primaoca: %', p_recipient_type;
+  END CASE;
+
+  INSERT INTO public.loc_locations (location_code, name, location_type, is_active, notes)
+  VALUES (
+    v_loc_code,
+    'Zaduzeno: ' || p_recipient_label,
+    v_loc_type,
+    true,
+    'Automatski kreirana virtuelna lokacija za reversal primalac'
+  )
+  ON CONFLICT (location_code) DO UPDATE
+    SET name = EXCLUDED.name, is_active = true
+  RETURNING id INTO v_loc_id;
+
+  INSERT INTO public.rev_recipient_locations (recipient_type, recipient_key, recipient_label, loc_location_id)
+  VALUES (p_recipient_type, p_recipient_key, p_recipient_label, v_loc_id)
+  ON CONFLICT (recipient_type, recipient_key) DO UPDATE
+    SET recipient_label = EXCLUDED.recipient_label;
+
+  RETURN v_loc_id;
+END;
+$rgocl$;
+
+REVOKE ALL ON FUNCTION public.rev_get_or_create_recipient_location(TEXT, TEXT, TEXT) FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION public.rev_next_doc_number(p_doc_type TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $rndn$
+DECLARE
+  v_prefix TEXT;
+  v_year TEXT;
+  v_max_seq INT;
+BEGIN
+  v_prefix := CASE p_doc_type
+    WHEN 'TOOL' THEN 'REV-TOOL'
+    WHEN 'COOPERATION_GOODS' THEN 'REV-KOOP'
+    ELSE NULL
+  END;
+  IF v_prefix IS NULL THEN
+    RAISE EXCEPTION 'Nepoznat tip dokumenta: %', p_doc_type;
+  END IF;
+  v_year := to_char(now(), 'YYYY');
+  SELECT COALESCE(MAX((regexp_match(doc_number, '-(\d+)$'))[1]::int), 0)
+  INTO v_max_seq
+  FROM public.rev_documents
+  WHERE doc_number LIKE v_prefix || '-' || v_year || '-%';
+  RETURN v_prefix || '-' || v_year || '-' || lpad((v_max_seq + 1)::text, 4, '0');
+END;
+$rndn$;
+
+REVOKE ALL ON FUNCTION public.rev_next_doc_number(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rev_next_doc_number(TEXT) TO authenticated;
+
+ALTER TABLE public.rev_tools ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rev_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rev_document_lines ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rev_recipient_locations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS rev_tools_select ON public.rev_tools;
+CREATE POLICY rev_tools_select ON public.rev_tools FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS rev_tools_insert ON public.rev_tools;
+CREATE POLICY rev_tools_insert ON public.rev_tools FOR INSERT TO authenticated WITH CHECK (public.rev_can_manage());
+DROP POLICY IF EXISTS rev_tools_update ON public.rev_tools;
+CREATE POLICY rev_tools_update ON public.rev_tools FOR UPDATE TO authenticated USING (public.rev_can_manage()) WITH CHECK (public.rev_can_manage());
+
+DROP POLICY IF EXISTS rev_documents_select ON public.rev_documents;
+CREATE POLICY rev_documents_select ON public.rev_documents FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS rev_documents_insert ON public.rev_documents;
+CREATE POLICY rev_documents_insert ON public.rev_documents FOR INSERT TO authenticated WITH CHECK (public.rev_can_manage());
+DROP POLICY IF EXISTS rev_documents_update ON public.rev_documents;
+CREATE POLICY rev_documents_update ON public.rev_documents FOR UPDATE TO authenticated USING (public.rev_can_manage()) WITH CHECK (public.rev_can_manage());
+
+DROP POLICY IF EXISTS rev_lines_select ON public.rev_document_lines;
+CREATE POLICY rev_lines_select ON public.rev_document_lines FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS rev_lines_insert ON public.rev_document_lines;
+CREATE POLICY rev_lines_insert ON public.rev_document_lines FOR INSERT TO authenticated WITH CHECK (
+  public.rev_can_manage()
+  AND EXISTS (SELECT 1 FROM public.rev_documents d WHERE d.id = document_id AND d.status = 'OPEN')
+);
+DROP POLICY IF EXISTS rev_lines_update ON public.rev_document_lines;
+CREATE POLICY rev_lines_update ON public.rev_document_lines FOR UPDATE TO authenticated USING (public.rev_can_manage()) WITH CHECK (public.rev_can_manage());
+
+DROP POLICY IF EXISTS rev_rl_select ON public.rev_recipient_locations;
+CREATE POLICY rev_rl_select ON public.rev_recipient_locations FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS rev_rl_insert ON public.rev_recipient_locations;
+CREATE POLICY rev_rl_insert ON public.rev_recipient_locations FOR INSERT TO authenticated WITH CHECK (public.rev_can_manage());
+
+CREATE OR REPLACE VIEW public.v_rev_my_issued_tools
+WITH (security_invoker = true) AS
+SELECT
+  d.id AS document_id,
+  d.doc_number,
+  d.issued_at,
+  d.expected_return_date,
+  d.status AS document_status,
+  t.oznaka,
+  t.naziv,
+  t.serijski_broj,
+  l.quantity,
+  l.unit,
+  l.napomena AS pribor,
+  l.line_status,
+  d.napomena AS napomena_dokumenta
+FROM public.rev_document_lines l
+JOIN public.rev_documents d ON d.id = l.document_id
+LEFT JOIN public.rev_tools t ON t.id = l.tool_id
+WHERE l.line_type = 'TOOL'
+  AND l.line_status = 'ISSUED'
+  AND d.status IN ('OPEN', 'PARTIALLY_RETURNED')
+  AND d.recipient_employee_id IN (
+    SELECT id FROM public.employees
+    WHERE lower(email) = lower(auth.jwt() ->> 'email')
+  );
+
+REVOKE ALL ON public.v_rev_my_issued_tools FROM anon;
+GRANT SELECT ON public.v_rev_my_issued_tools TO authenticated;
+
+GRANT SELECT, INSERT, UPDATE ON public.rev_tools TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.rev_documents TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.rev_document_lines TO authenticated;
+GRANT SELECT, INSERT ON public.rev_recipient_locations TO authenticated;
