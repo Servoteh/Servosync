@@ -14,7 +14,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { getAuth } from '../../state/auth.js';
+import { getAuth, canAccessReversi } from '../../state/auth.js';
 import { logout } from '../../services/auth.js';
 import { resetKadrovskaState } from '../../state/kadrovska.js';
 import {
@@ -95,6 +95,17 @@ export function renderMobileHome(mountEl, ctx) {
              flow (ne premešta komad, samo pokazuje gde je), ručni unos je
              fallback kad nema barkoda. -->
         <div class="m-section-head">Ostalo</div>
+        ${
+          canAccessReversi()
+            ? `<button type="button" class="m-cta m-cta-secondary" data-act="reversi">
+          <span class="m-cta-ico">🔁</span>
+          <span class="m-cta-txt">
+            <span class="m-cta-title">REVERSI — ALATI</span>
+            <span class="m-cta-sub">Zaduženja, inventar, povraćaji</span>
+          </span>
+        </button>`
+            : ''
+        }
         <button type="button" class="m-cta m-cta-secondary" data-act="lookup">
           <span class="m-cta-ico">🔍</span>
           <span class="m-cta-txt">
@@ -157,6 +168,9 @@ export function renderMobileHome(mountEl, ctx) {
         break;
       case 'scanWarehouse':
         ctx.onNavigate('/m/scan?cat=warehouse');
+        break;
+      case 'reversi':
+        ctx.onNavigate('/reversi');
         break;
       case 'lookup':
         ctx.onNavigate('/m/lookup');
