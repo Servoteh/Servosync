@@ -43,7 +43,7 @@ export function ganttSectionHtml() {
   }
   return `
     ${_ganttToolbarHtml()}
-    <div class="gantt-wrap" id="ganttWrap">${_ganttTableHtml()}</div>
+    <div class="gantt-wrap gantt-wrap--dock" id="ganttWrap"><div class="gantt-wrap-inner">${_ganttTableHtml()}</div></div>
   `;
 }
 
@@ -65,7 +65,8 @@ export function wireGanttSection(root, { onChange } = {}) {
 
   /* Drag/resize */
   const wrapEl = root.querySelector('#ganttWrap');
-  wireGanttDrag(wrapEl, { onChange });
+  const innerEl = wrapEl?.querySelector('.gantt-wrap-inner') || wrapEl;
+  wireGanttDrag(innerEl, { onChange });
 }
 
 /* ── INTERNAL: HTML ──────────────────────────────────────────────────── */
@@ -96,7 +97,7 @@ function _ganttTableHtml() {
   const daysRow = _dayHeaderHtml(days, 'gantt');
 
   let html = `<table class="gantt-table" data-view="gantt"><thead>
-    <tr><th class="gantt-label" rowspan="2">Faza</th>${monthsRow}</tr>
+    <tr><th class="gantt-label gantt-freeze-col" rowspan="2">Faza</th>${monthsRow}</tr>
     <tr>${daysRow}</tr>
   </thead><tbody>`;
 
@@ -169,7 +170,7 @@ function _ganttRowHtml(row, origIdx, days) {
   }).join('');
 
   return `<tr class="gantt-row${rkC}" data-phase-id="${phaseId}" data-ri="${origIdx}">
-    <td class="gantt-label" style="background:var(--surface2);border-right:2px solid var(--border2);border-left:3px solid ${locColor}">
+    <td class="gantt-label gantt-freeze-col" style="background:var(--surface2);border-right:2px solid var(--border2);border-left:3px solid ${locColor}">
       <div class="gantt-label-name">${escHtml(row.name)}</div>
       <div class="gantt-label-sub">
         <span class="gantt-label-loc-dot" style="background:${locColor}"></span>${escHtml(row.loc || '—')}

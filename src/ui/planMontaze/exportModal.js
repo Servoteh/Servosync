@@ -45,8 +45,8 @@ let _onAfterImport = null;
    ovde drzimo kao konstantu zbog defenzivnog inline-a u onclone i
    crtanja legende u PDF header-u. */
 const PDF_ELEC_HATCH_SVG =
-  "<svg xmlns='http://www.w3.org/2000/svg' width='6' height='6'>" +
-  "<path d='M-1 1 L1 -1 M0 6 L6 0 M5 7 L7 5' stroke='%23000' stroke-width='1.6' stroke-opacity='0.6'/>" +
+  "<svg xmlns='http://www.w3.org/2000/svg' width='6' height='6' viewBox='0 0 6 6'>" +
+  "<path d='M-0.5 0.5 L0.5 -0.5 M2 6 L6 2 M5.5 6.5 L6.5 5.5' stroke='%23000' stroke-width='0.9' stroke-opacity='0.38'/>" +
   '</svg>';
 const PDF_ELEC_HATCH_BG = `url("data:image/svg+xml;utf8,${PDF_ELEC_HATCH_SVG}")`;
 
@@ -281,9 +281,10 @@ export async function exportGanttAsPDF(which) {
     return;
   }
 
-  /* Nađi DOM kontejner za snapshot. */
+  /* Nađi DOM kontejner za snapshot (samo tabela — bez spoljašnjeg scroll wrap-a). */
   const wrapId = which === 'gantt' ? 'ganttWrap' : 'totalGanttWrap';
-  const el = document.getElementById(wrapId);
+  const wrap = document.getElementById(wrapId);
+  const el = wrap?.querySelector('.gantt-wrap-inner') || wrap;
   if (!el) {
     showToast('⚠ Gant nije renderovan — otvori prvo Gant view');
     return;
@@ -315,6 +316,10 @@ export async function exportGanttAsPDF(which) {
             bodyEl.classList.add('pdf-export');
             bodyEl.classList.add(which === 'gantt' ? 'pdf-export-gantt' : 'pdf-export-total');
           }
+          clonedDoc.querySelectorAll('.gantt-freeze-col').forEach(c => {
+            c.style.setProperty('position', 'static', 'important');
+            c.style.setProperty('box-shadow', 'none', 'important');
+          });
           /* Defenzivno: html2canvas 1.4.1 ume da preskoci `background-image`
              postavljen samo preko CSS pravila (narocito kada je `background-color`
              postavljen inline sa !important). Eksplicitno injektujemo SVG hatch
@@ -396,10 +401,10 @@ export async function exportGanttAsPDF(which) {
    preko jsPDF API-ja (vector) tako da je ostro citljiva u svakom zoom-u.
    `topMm` je y koordinata reda u kome je vec ispisan title. */
 function _drawTypeLegend(pdf, pageW, topMm) {
-  const swW = 8;
-  const swH = 3.6;
+  const swW = 7.2;
+  const swH = 3.2;
   const yLine = topMm - 1.5;
-  const ySwatch = topMm - 4.4;
+  const ySwatch = topMm - 4.2;
 
   const labelMech = 'Masinska';
   const labelElec = 'Elektro';
@@ -423,13 +428,13 @@ function _drawTypeLegend(pdf, pageW, topMm) {
   pdf.setFillColor(77, 163, 255);
   pdf.rect(x, ySwatch, swW, swH, 'F');
   pdf.setDrawColor(120, 120, 120);
+  pdf.setLineWidth(0.15);
   pdf.rect(x, ySwatch, swW, swH, 'S');
   pdf.text(labelMech, x + swW + 1.2, yLine);
 
   x += blockMechW + gap;
 
-  /* Elektro — solid plava + nacrtane tanke dijagonalne linije (vector).
-     Linije crtamo unutar clip-ovanog pravougaonika tako da nema overflow-a. */
+  /* Elektro — plava pozadina + šrafura strogo unutar okvira (clip). */
   pdf.setFillColor(77, 163, 255);
   pdf.rect(x, ySwatch, swW, swH, 'F');
 
@@ -445,10 +450,9 @@ function _drawTypeLegend(pdf, pageW, topMm) {
   }
 
   pdf.setDrawColor(0, 0, 0);
-  pdf.setLineWidth(0.18);
-  const step = 1.4;
+  pdf.setLineWidth(0.1);
+  const step = 0.85;
   for (let t = -swH; t <= swW + swH; t += step) {
-    /* Linija od (x+t, ySwatch) do (x+t+swH, ySwatch+swH) (45deg dole-desno). */
     const x1 = x + t;
     const y1 = ySwatch;
     const x2 = x + t + swH;
@@ -456,7 +460,6 @@ function _drawTypeLegend(pdf, pageW, topMm) {
     if (hasClipApi) {
       pdf.line(x1, y1, x2, y2);
     } else {
-      /* Manuelni clip ako nemamo saveGraphicsState. */
       const cx1 = Math.max(x, x1);
       const cy1 = y1 + (cx1 - x1);
       const cx2 = Math.min(x + swW, x2);
@@ -470,7 +473,7 @@ function _drawTypeLegend(pdf, pageW, topMm) {
   if (hasClipApi) pdf.restoreGraphicsState();
 
   pdf.setDrawColor(120, 120, 120);
-  pdf.setLineWidth(0.2);
+  pdf.setLineWidth(0.15);
   pdf.rect(x, ySwatch, swW, swH, 'S');
   pdf.text(labelElec, x + swW + 1.2, yLine);
 }

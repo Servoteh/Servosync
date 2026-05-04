@@ -11,6 +11,17 @@ body.module-projektni-biro {
   padding: 0 12px 96px;
 }
 
+@media (min-width: 768px) {
+  body.desktop-erp-module:not(.hub-active):not(.m-body) .pb-module {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding-left: 16px;
+    padding-right: 16px;
+    box-sizing: border-box;
+  }
+}
+
 .pb-header .theme-toggle {
   background: transparent;
   border: none;
