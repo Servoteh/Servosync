@@ -129,6 +129,8 @@ COMMENT ON FUNCTION public.sastanci_get_or_create_my_prefs() IS
 REVOKE ALL    ON FUNCTION public.sastanci_get_or_create_my_prefs() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sastanci_get_or_create_my_prefs() TO authenticated;
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sastanci_notification_prefs TO authenticated;
+
 -- ── 5) Verifikacija ───────────────────────────────────────────────────────────
 
 SELECT 'sastanci_notification_prefs' AS tabela,

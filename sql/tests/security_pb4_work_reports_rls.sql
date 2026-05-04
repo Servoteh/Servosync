@@ -11,7 +11,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(9);
+SELECT plan(8);
 
 -- ─── Seed (postgres bypass RLS gde treba) ───────────────────────────────────
 SET LOCAL row_security = off;
@@ -148,8 +148,6 @@ SELECT is(
   NULL::uuid,
   'pb_current_employee_id NULL bez employee rekorda'
 );
-
--- TODO: Test 9 za Rukovodstvo inženjeringa — seed employees.sub_department_id + sub_departments 'Rukovodstvo inženjeringa'
 
 SELECT * FROM finish();
 ROLLBACK;
