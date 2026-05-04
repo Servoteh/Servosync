@@ -32,6 +32,7 @@ import {
   canAccessSastanci,
   canEditSastanci,
   canAccessLokacije,
+  canAccessReversi,
 } from '../../state/auth.js';
 
 export function renderModuleHub({ onModuleSelect, onLogout }) {
@@ -75,7 +76,7 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
           <span class="hub-quick-links-sep" aria-hidden="true">·</span>
           <a href="/plan-montaze" class="hub-quick-link" data-module="plan-montaze">Plan Montaže</a>
           <span class="hub-quick-links-sep" aria-hidden="true">·</span>
-          <a href="/plan-proizvodnje" class="hub-quick-link" data-module="plan-proizvodnje">Plan proizvodnje</a>
+          <a href="/reversi" class="hub-quick-link" data-module="reversi">Reversi</a>
         </nav>
       </div>
 
@@ -108,6 +109,16 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
           <div class="hub-card-footer">
             <span class="hub-card-cta">${canAccessLokacije() ? 'Otvori →' : 'Prijavi se'}</span>
             <span class="hub-card-badge badge-active">${canAccessLokacije() ? 'Aktivno' : 'Zaključano'}</span>
+          </div>
+        </button>
+
+        <button type="button" class="hub-card${canAccessReversi() ? '' : ' is-disabled'}" data-module="reversi" aria-label="Otvori Reversi"${canAccessReversi() ? '' : ' aria-disabled="true"'}>
+          <div class="hub-card-icon" aria-hidden="true">🔁</div>
+          <div class="hub-card-title">Reversi</div>
+          <div class="hub-card-desc">Zaduženja alata i kooperacione robe: inventar, dokumenti, povraćaji u magacin.</div>
+          <div class="hub-card-footer">
+            <span class="hub-card-cta">${canAccessReversi() ? 'Otvori →' : 'Prijavi se'}</span>
+            <span class="hub-card-badge badge-active">${canAccessReversi() ? 'Aktivno' : 'Zaključano'}</span>
           </div>
         </button>
 
@@ -194,6 +205,10 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
     }
     if (moduleId === 'lokacije-delova' && !canAccessLokacije()) {
       showToast('🔒 Lokacije delova zahtevaju prijavu');
+      return;
+    }
+    if (moduleId === 'reversi' && !canAccessReversi()) {
+      showToast('🔒 Reversi zahteva prijavu');
       return;
     }
     onModuleSelect?.(moduleId);

@@ -40,6 +40,10 @@ import {
   renderLokacijeModule,
   teardownLokacijeModule,
 } from './lokacije/index.js';
+import {
+  renderReversiModule,
+  teardownReversiModule,
+} from './reversi/index.js';
 import { renderPbModule, teardownPbModule } from './pb/index.js';
 import {
   renderMobileHome,
@@ -59,6 +63,7 @@ import {
   canAccessPlanProizvodnje,
   canAccessSastanci,
   canAccessLokacije,
+  canAccessReversi,
 } from '../state/auth.js';
 import { resetKadrovskaState } from '../state/kadrovska.js';
 import { resetSastanciState } from '../state/sastanci.js';
@@ -69,6 +74,7 @@ import { renderMaintenanceShell, teardownMaintenanceShell } from './odrzavanjeMa
 const MODULES = [
   'plan-montaze',
   'lokacije-delova',
+  'reversi',
   'plan-proizvodnje',
   'pracenje-proizvodnje',
   'kadrovska',
@@ -106,6 +112,9 @@ function clearMount(leavingScreen) {
   if (ls === 'lokacije-delova') {
     try { teardownLokacijeModule(); } catch (e) { /* ignore */ }
   }
+  if (ls === 'reversi') {
+    try { teardownReversiModule(); } catch (e) { /* ignore */ }
+  }
   if (ls === 'odrzavanje-masina') {
     try { teardownMaintenanceShell(); } catch (e) { /* ignore */ }
   }
@@ -130,6 +139,7 @@ function clearMount(leavingScreen) {
     'module-sastanci',
     'module-odrzavanje-masina',
     'module-projektni-biro',
+    'module-reversi',
     'm-body',
   );
 }
@@ -274,6 +284,9 @@ function showModulePlaceholder(moduleId, options = {}) {
   }
   if (moduleId === 'lokacije-delova') {
     document.body.classList.add('kadrovska-active', 'module-lokacije');
+  }
+  if (moduleId === 'reversi') {
+    document.body.classList.add('kadrovska-active', 'module-reversi');
   }
   if (moduleId === 'odrzavanje-masina') {
     document.body.classList.add('kadrovska-active', 'module-odrzavanje-masina');
@@ -475,6 +488,35 @@ function showModulePlaceholder(moduleId, options = {}) {
       `;
       const back = mountEl.querySelector('#locErrBackBtn');
       back?.addEventListener('click', () => showHub());
+    }
+    return;
+  }
+
+  if (moduleId === 'reversi') {
+    try {
+      renderReversiModule(mountEl, {
+        onBackToHub: () => showHub(),
+        onLogout: () => {
+          resetKadrovskaState();
+          showLogin();
+        },
+      });
+    } catch (e) {
+      console.error('[router] Reversi render failed', e);
+      mountEl.innerHTML = `
+        <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px">
+          <div class="auth-box" style="max-width:640px">
+            <div class="auth-brand">
+              <div class="auth-title">Greška u modulu Reversi</div>
+              <div class="auth-subtitle">${(e && e.message) || String(e)}</div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn" id="revErrBackBtn">← Nazad na hub</button>
+            </div>
+          </div>
+        </div>
+      `;
+      mountEl.querySelector('#revErrBackBtn')?.addEventListener('click', () => showHub());
     }
     return;
   }
@@ -696,6 +738,10 @@ function assertModuleAllowed(moduleId) {
   }
   if (moduleId === 'lokacije-delova' && !canAccessLokacije()) {
     showToast('🔒 Lokacije delova zahtevaju prijavu');
+    return false;
+  }
+  if (moduleId === 'reversi' && !canAccessReversi()) {
+    showToast('🔒 Reversi zahteva prijavu');
     return false;
   }
   if (moduleId === 'odrzavanje-masina' && !canAccessMaintenance()) {
