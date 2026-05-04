@@ -9,11 +9,16 @@ import {
   issueReversal,
   confirmReturn,
   fetchDocumentLines,
+  fetchDocumentById,
+  fetchEmployeeDepartment,
+  uploadReversalPdf,
+  updateDocPdfMeta,
   insertTool,
   initialPlacementForTool,
   getMagacinLocationId,
   clearMagacinLocationCache,
 } from '../../services/reversiService.js';
+import { generateReversalPdf, openPdfInNewTab, getPdfBlob } from '../../lib/reversiPdf.js';
 
 function modalShell(title, bodyHtml, footerHtml, id) {
   const wrap = document.createElement('div');
@@ -636,6 +641,101 @@ export function openAddToolModal({ onSuccess } = {}) {
     closeOverlay(overlay);
     onSuccess?.();
   });
+}
+
+/**
+ * Generiše PDF, otvara tab, upload u pozadini (greška storage-a samo u konzoli).
+ * @param {{ docId: string, docNumber: string, docRow?: object|null }} p
+ */
+export async function handleReversalPdfClick({ docId, docNumber, docRow: docRowOpt }) {
+  const lr = await fetchDocumentLines(docId);
+  const lines = lr.ok && Array.isArray(lr.data) ? lr.data : [];
+  let docRow = docRowOpt;
+  if (!docRow) {
+    const dr = await fetchDocumentById(docId);
+    if (!dr.ok) throw new Error(dr.error || 'Dokument nije učitan');
+    docRow = dr.data;
+  }
+  let employeeDepartment = null;
+  if (docRow.recipient_type === 'EMPLOYEE' && docRow.recipient_employee_id) {
+    const er = await fetchEmployeeDepartment(docRow.recipient_employee_id);
+    employeeDepartment = er.ok ? er.data : null;
+  }
+  const pdf = await generateReversalPdf(docRow, lines, { employeeDepartment });
+  openPdfInNewTab(pdf);
+  void (async () => {
+    try {
+      const path = await uploadReversalPdf(docNumber, getPdfBlob(pdf));
+      await updateDocPdfMeta(docId, path);
+    } catch (err) {
+      console.warn('PDF storage upload nije uspeo:', err);
+    }
+  })();
+}
+
+/**
+ * Modal detalja dokumenta sa tabelom stavki i dugmetom za PDF.
+ * @param {{ document: object, onPdfSuccess?: () => void }} opts
+ */
+export function openDocumentDetailsModal(opts) {
+  const doc = opts.document;
+  const id = `revDet_${Date.now()}`;
+  const overlay = modalShell(
+    `Dokument — ${doc.doc_number || ''}`,
+    '<div id="revDetBody"><p>Učitavanje…</p></div>',
+    `<button type="button" class="btn" data-rev-close>Zatvori</button>
+     <button type="button" class="btn btn-primary" id="revDetPdf">📄 Generiši PDF</button>`,
+    id,
+  );
+  document.body.appendChild(overlay);
+  attachClose(overlay, opts.onClose);
+
+  void (async () => {
+    const body = overlay.querySelector('#revDetBody');
+    if (!body) return;
+
+    const lr = await fetchDocumentLines(doc.id);
+    const lines = lr.ok && Array.isArray(lr.data) ? lr.data : [];
+
+    const html = lines
+      .map(ln => {
+        const tr = ln.rev_tools;
+        const t = Array.isArray(tr) ? tr[0] : tr;
+        let name = '—';
+        if (ln.line_type === 'TOOL' || doc.doc_type === 'TOOL') {
+          name = t ? `${t.oznaka} — ${t.naziv}` : ln.drawing_no || ln.part_name || '—';
+        } else {
+          name = [ln.drawing_no, ln.part_name].filter(Boolean).join(' — ') || '—';
+        }
+        return `<tr><td>${escHtml(name)}</td><td>${escHtml(ln.napomena || '—')}</td><td>${escHtml(String(ln.quantity ?? 1))}</td><td>${escHtml(ln.line_status)}</td></tr>`;
+      })
+      .join('');
+
+    body.innerHTML = `
+      <p class="rev-muted"><strong>Primalac:</strong> ${escHtml(
+        doc.recipient_employee_name || doc.recipient_department || doc.recipient_company_name || '—',
+      )}</p>
+      <table class="rev-table"><thead><tr><th>Stavka</th><th>Pribor / napomena</th><th>Kol</th><th>Status</th></tr></thead><tbody>${html || '<tr><td colspan="4">Nema stavki</td></tr>'}</tbody></table>`;
+
+    overlay.querySelector('#revDetPdf')?.addEventListener('click', async () => {
+      const btn = overlay.querySelector('#revDetPdf');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳';
+      }
+      try {
+        await handleReversalPdfClick({ docId: doc.id, docNumber: doc.doc_number, docRow: doc });
+        opts.onPdfSuccess?.();
+      } catch (e) {
+        showToast(`Greška pri generisanju PDF-a: ${e instanceof Error ? e.message : String(e)}`, 'error');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '📄 Generiši PDF';
+        }
+      }
+    });
+  })();
 }
 
 export { fmtDateShort };
