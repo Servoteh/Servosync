@@ -95,15 +95,6 @@ body.module-projektni-biro {
   color: var(--accent, #6ea8fe);
 }
 
-.pb-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--border, #333);
-  padding-bottom: 8px;
-}
-
 .pb-tab-btn {
   padding: 8px 14px;
   border: none;
@@ -120,18 +111,25 @@ body.module-projektni-biro {
 
 .pb-chrome {
   flex-shrink: 0;
+}
+
+.pb-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border, #333);
+  padding-bottom: 8px;
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--bg, #111);
-  box-shadow: 0 1px 0 var(--border, #333);
+  background: var(--bg, #fff);
 }
 
 .pb-tab-body {
   flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 24px;
+  min-height: 240px;
+  padding-top: 16px;
 }
 
 .pb-stats-grid {
