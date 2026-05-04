@@ -28,24 +28,27 @@ export function normalizeBarcodeText(raw) {
  * @property {string} orderNo Broj radnog naloga (npr. "7351").
  * @property {string} itemRefId Kompozitni ili prost identifikator stavke
  *   koji ide u `loc_item_placements.item_ref_id`:
- *     - RNZ format → broj tehnološkog postupka (TP, npr. "1088");
+ *     - RNZ format → TP ref (npr. "1088" ili alfanumerički "7-5-S1");
  *     - short format → broj crteža (legacy, npr. "1091063").
  * @property {string} drawingNo Broj crteža ako je u barkodu (short format);
  *   u RNZ formatu je prazno jer barkod ne sadrži crtež — čita se sa teksta
  *   nalepnice ili se auto-popunjava iz prethodnih placement-a.
  * @property {'rnz'|'short'|'ocr'} format Koji je format prepoznat (`ocr` = tekst sa nalepnice).
  * @property {string} raw Originalni očišćeni tekst.
+ * @property {string} [idrn] RNZ: interni ID dokumenta (prvi broj posle RNZ:).
+ * @property {string} [varijanta] RNZ: segment posle TP.
+ * @property {string} [field4] RNZ: poslednji numerički segment (npr. Windows timer u štampi).
  */
 
 /**
  * Parsiraj BigTehn barkod iz jednog od dva potvrđena formata.
  *
  * **Format A — RNZ (trenutno u produkciji):**
- *   `RNZ:8693:7351/1088:0:39757`
+ *   `RNZ:8693:7351/1088:0:39757` ili `RNZ:9833:9400/7-5-S1:1:44963`
  *     - `RNZ`          prefix (konstantan)
- *     - `8693`         interni BigTehn ID — ignorišemo
- *     - `7351/1088`    **broj naloga / broj TP** ← koristimo
- *     - `0:39757`      interni separatori/ID-ovi — ignorišemo
+ *     - `8693`         interni BigTehn ID (`idrn`) — čuva se, UI ga ne mora koristiti
+ *     - `7351/1088`    **broj naloga / TP ref** (`itemRefId` može biti alfanumerički + `.-_`)
+ *     - `0:39757`      `varijanta` i `field4` — čuvaju se; crtež i dalje iz ERP-a
  *
  *   U ovom formatu broj crteža NIJE u barkodu — samo na štampanom tekstu
  *   nalepnice. Parser vraća `drawingNo = ''`; UI ga auto-popunjava iz
@@ -65,19 +68,26 @@ export function parseBigTehnBarcode(raw) {
   const clean = normalizeBarcodeText(raw);
   if (!clean) return null;
 
-  /* RNZ format — isprobava se PRVI jer je stroža regex (mora da počne sa
-   * RNZ:). Ako ne prolazi, fallback na short. */
+  /* RNZ format — isprobava se PRVI jer je stroža regex (mora da počne sa RNZ:).
+   *
+   * PRE (regresija alfanumeričkog TP): drugi segment posle `/` je bio samo \d{1,8},
+   *   npr. /^RNZ\s*[:|]\s*\d{1,10}\s*[:|]\s*(\d{1,8})\s*[/\\\-_ ]\s*(\d{1,8})\s*[:|]\s*\d+\s*[:|]\s*\d+\s*$/i
+   *   → ne prolazi za TP "7-5-S1".
+   */
   const rnz = clean.match(
-    /^RNZ\s*[:|]\s*\d{1,10}\s*[:|]\s*(\d{1,8})\s*[/\\\-_ ]\s*(\d{1,8})\s*[:|]\s*\d+\s*[:|]\s*\d+\s*$/i,
+    /^RNZ\s*[:|]\s*(\d{1,10})\s*[:|]\s*(\d{1,8})\s*[/\\\-_ ]\s*([A-Za-z0-9._-]{1,64})\s*[:|]\s*(\d+)\s*[:|]\s*(\d+)\s*$/i,
   );
   if (rnz) {
-    const [, orderNo, tpNo] = rnz;
+    const [, idrn, orderNo, itemRefId, varijanta, field4] = rnz;
     return {
       orderNo,
-      itemRefId: tpNo,
+      itemRefId,
       drawingNo: '',
       format: 'rnz',
       raw: clean,
+      idrn,
+      varijanta,
+      field4,
     };
   }
 

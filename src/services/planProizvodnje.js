@@ -460,7 +460,7 @@ export async function listAutoCooperationGroups() {
  * `bigtehn_tech_routing_cache` da predlog količine bude "preostalo".
  *
  * @param {string} rnIdentBroj  npr. `"9000"`
- * @param {string|number|null} operacija  broj TP (npr. `522`); može biti null
+ * @param {string|number|null} operacija  TP: numerički (npr. `522`) ili alfanumerički string (npr. `7-5-S1`); može biti null
  * @returns {Promise<{
  *   rn_ident_broj: string,
  *   broj_crteza: string,
@@ -471,16 +471,18 @@ export async function listAutoCooperationGroups() {
  *   dimenzija_materijala: string|null,
  *   customer_id: number|null,
  *   work_order_id: number|null,
- *   operacija: number|null,
+ *   operacija: number|string|null,
  * } | null>}
  */
 export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija) {
   if (!getIsOnline() || rnIdentBroj == null || rnIdentBroj === '') return null;
   const ident = String(rnIdentBroj).trim();
   if (!ident) return null;
-  const opNum =
-    operacija == null || operacija === '' ? null : parseInt(String(operacija).trim(), 10);
+  const opRaw = operacija == null || operacija === '' ? '' : String(operacija).trim();
+  /** Samo čisto numerički TP ide u `operacija` (broj) za tech_routing; alfanumerički (npr. 7-5-S1) ostaje string za ident_broj. */
+  const opNum = opRaw === '' ? null : /^\d+$/.test(opRaw) ? parseInt(opRaw, 10) : null;
   const opFinite = Number.isFinite(opNum);
+  const opForIdent = opRaw === '' ? '' : opFinite ? String(opNum) : opRaw;
 
   /* 1) Direktno iz aktivnog RN view-a — nezavisno od BigTehn open/closed statusa,
    * ali poštuje ručnu MES listu aktivnih naloga.
@@ -490,6 +492,7 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija) {
    * barkoda `RNZ:XXXX:9000/522:…` tražimo PRVO po punom
    * kombinovanom ident_broj-u (`orderNo + '/' + operacija`), pa tek
    * fallback na samo `orderNo` (ako bi se negde koristio drugi format).
+   * Za alfanumerički TP (npr. `7-5-S1`) šaljemo ceo string: `9400/7-5-S1`.
    */
   const woCols = [
     'id',
@@ -515,12 +518,12 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija) {
 
   /* Primarni lookup: "nalog/operacija" (kombinovani ident_broj u BigTehn-u). */
   const candidates = [];
-  if (opFinite) {
-    candidates.push(`${ident}/${opNum}`);
+  if (opForIdent) {
+    candidates.push(`${ident}/${opForIdent}`);
     /* Ako je nalog sa vodećim nulama (npr. "07351") a u cache-u je "7351/1088". */
     if (/^\d+$/.test(ident)) {
       const normalized = String(parseInt(ident, 10));
-      if (normalized !== ident) candidates.push(`${normalized}/${opNum}`);
+      if (normalized !== ident) candidates.push(`${normalized}/${opForIdent}`);
     }
   }
   /* Fallback: samo nalog bez TP (legacy, ako se ikad koristi). */
@@ -547,7 +550,7 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija) {
   const workOrderId = wo.id != null ? Number(wo.id) : null;
   const total = wo.komada != null ? Number(wo.komada) : null;
 
-  /* 2) Ako imamo TP, pokušaj da dohvatiš komada_done iz tech routing cache-a. */
+  /* 2) Ako imamo numerički TP, pokušaj da dohvatiš komada_done iz tech routing cache-a. */
   let done = null;
   if (opFinite && workOrderId != null) {
     try {
@@ -598,7 +601,7 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija) {
     customer_name: customerName,
     customer_short: customerShort,
     work_order_id: workOrderId,
-    operacija: opFinite ? opNum : null,
+    operacija: opFinite ? opNum : opRaw === '' ? null : opRaw,
   };
 }
 

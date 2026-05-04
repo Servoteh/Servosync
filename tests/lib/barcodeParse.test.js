@@ -33,20 +33,45 @@ describe('normalizeBarcodeText', () => {
 describe('parseBigTehnBarcode — RNZ format (current production)', () => {
   it('parsira realan RNZ barkod iz magacina', () => {
     expect(parseBigTehnBarcode('RNZ:8693:7351/1088:0:39757')).toEqual({
+      idrn: '8693',
       orderNo: '7351',
       itemRefId: '1088',
       drawingNo: '',
       format: 'rnz',
       raw: 'RNZ:8693:7351/1088:0:39757',
+      varijanta: '0',
+      field4: '39757',
     });
   });
 
-  it('ignoriše interne brojeve (8693, 0, 39757)', () => {
-    /* 8693 = neki interni ID, 0 = flag, 39757 = drugi ID — nas ne zanima. */
+  it('parsira alfanumerički TP (crtice + slova)', () => {
+    const r1 = parseBigTehnBarcode('RNZ:9833:9400/7-5-S1:1:44963');
+    expect(r1).not.toBeNull();
+    expect(r1?.format).toBe('rnz');
+    expect(r1?.orderNo).toBe('9400');
+    expect(r1?.itemRefId).toBe('7-5-S1');
+    expect(r1?.idrn).toBe('9833');
+    expect(r1?.varijanta).toBe('1');
+    expect(r1?.field4).toBe('44963');
+    expect(r1?.drawingNo).toBe('');
+  });
+
+  it('ne regresira čisto numerički TP', () => {
+    const r2 = parseBigTehnBarcode('RNZ:9466:8069/830:0:44586');
+    expect(r2).not.toBeNull();
+    expect(r2?.orderNo).toBe('8069');
+    expect(r2?.itemRefId).toBe('830');
+    expect(r2?.idrn).toBe('9466');
+  });
+
+  it('izdvaja idrn, varijantu i field4', () => {
     const a = parseBigTehnBarcode('RNZ:1:5000/100:0:99999');
     expect(a?.orderNo).toBe('5000');
     expect(a?.itemRefId).toBe('100');
     expect(a?.format).toBe('rnz');
+    expect(a?.idrn).toBe('1');
+    expect(a?.varijanta).toBe('0');
+    expect(a?.field4).toBe('99999');
   });
 
   it('toleriše razmake između segmenata', () => {
@@ -125,6 +150,10 @@ describe('parsePredmetTpFromLabelText — OCR sa nalepnice', () => {
 });
 
 describe('parseBigTehnBarcode — invalid input', () => {
+  it('vraća null za random string', () => {
+    expect(parseBigTehnBarcode('RANDOM_STRING')).toBeNull();
+  });
+
   it('vraća null za plain broj crteža (samo drawing no)', () => {
     expect(parseBigTehnBarcode('1091063')).toBeNull();
     expect(parseBigTehnBarcode('1084924')).toBeNull();
