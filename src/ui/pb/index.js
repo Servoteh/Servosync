@@ -319,7 +319,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
 
   root.className = 'pb-module kadrovska-section';
   root.innerHTML = `
-    <div id="pbHubSlot"></div>
+    <div id="pbHubSlot" class="pb-chrome"></div>
     <main id="pbTabBody" class="pb-tab-body pb-tab-body--loading" aria-busy="true">
       <div class="pb-loading-skel">
         <div class="pb-skel-line pb-skel-line--lg"></div>
