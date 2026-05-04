@@ -10,6 +10,9 @@
 #     idempotentne DDL naredbe bi prošle, ali je redundantno.
 # =============================================================================
 
+# Minimalni storage.* stub za CI (plain Postgres nema Supabase Storage šemu).
+sql/ci/storage_stub.sql
+
 sql/migrations/add_loc_module.sql
 sql/migrations/add_loc_step2_ci_unique.sql
 sql/migrations/add_loc_step3_cleanup.sql
@@ -32,6 +35,7 @@ sql/migrations/add_maintenance_module.sql
 
 # Reversi — zavisi od loc_* + touch_updated_at() (add_maintenance_module)
 sql/migrations/add_reversi_module.sql
+sql/migrations/add_reversi_reversal_pdf_storage.sql
 
 sql/migrations/add_maint_machines_catalog.sql
 sql/migrations/add_maint_machine_responsible.sql

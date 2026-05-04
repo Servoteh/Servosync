@@ -102,16 +102,14 @@ Nakon koraka 2, klikni „Novo zaduženje” u UI modulu Reversi i odaberi alat.
 ## PDF potpisnica i arhiva (Sprint R4)
 
 - **Generisanje:** dugme 📄 u listi dokumenata ili „Generiši PDF” u modalu detalja — otvara PDF u novom tabu (Roboto font iz `public/fonts/`, isti obrazac kao Sastanci PDF).
-- **Storage bucket:** `reversal-pdf` — **ne kreira se iz koda**. Ako bucket ne postoji, u Supabase Dashboard → Storage → **New bucket** → ime `reversal-pdf`, **Private** (ne javni).
+- **Storage bucket `reversal-pdf`:** DDL je u repou — `sql/migrations/add_reversi_reversal_pdf_storage.sql` (i kopija `supabase/migrations/20260504100000__add_reversi_reversal_pdf_storage.sql` za Supabase CLI). Na novom projektu primeni tu migraciju (SQL Editor ili `supabase db push`). Bucket je **private**, PDF samo `application/pdf`, limit 10 MB po fajlu.
 
-### Politike na `storage.objects` (Dashboard → Storage → reversal-pdf → Policies)
+### Politike na `storage.objects` (iste migracije)
 
-Primer (prilagoditi JWT claimovima projekta ako je potrebno):
+- **`reversal_pdf_select`:** `authenticated`, `SELECT` za `bucket_id = 'reversal-pdf'`.
+- **`reversal_pdf_insert` / `reversal_pdf_update`:** `authenticated`, uz **`public.rev_can_manage()`** (isti skup uloga kao za reversal u aplikaciji); `UPDATE` je potreban jer upload koristi upsert.
 
-- **Čitanje (`SELECT`):** `authenticated` može čitati objekte u bucket-u `reversal-pdf` kada je ime fajla vezano za dokument koji korisnik sme da vidi (npr. policy po `auth.uid()` i join na `rev_documents` ako želite strože; ili privremeno čitanje za sve ulogovane uz uslov `bucket_id = 'reversal-pdf'` — proceni rizik).
-- **Upload (`INSERT`) i prepis (`UPDATE` za upsert):** samo korisnici koji prolaze `rev_can_manage()` u aplikaciji — u Storage RLS to tipično znači provera uloge preko JWT-a ili membership tabele (isti skup kao za `rev_can_manage`: admin, menadzment, pm, leadpm, magacioner).
-
-Kada bucket/policy nisu podešeni, PDF i dalje radi u tabu; upload u pozadini će tišina pasti u konzolu (`console.warn`).
+Ako migracija nije primenjena, PDF i dalje radi u tabu; upload u pozadini će pasti u konzolu (`console.warn`).
 
 ### Kolone `rev_documents`
 
