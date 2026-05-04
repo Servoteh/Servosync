@@ -67,7 +67,7 @@ INSERT INTO public.sastanci (
     'sedmicni',
     'Sastanci RLS test zakljucan',
     CURRENT_DATE,
-    'zakljucan',
+    'planiran',
     'sast-vodio@test.local',
     'sast-organizer@test.local',
     'sast-organizer@test.local'
@@ -86,6 +86,10 @@ ON CONFLICT (sastanak_id, email) DO UPDATE SET
   label = EXCLUDED.label,
   prisutan = EXCLUDED.prisutan,
   pozvan = EXCLUDED.pozvan;
+
+UPDATE public.sastanci
+   SET status = 'zakljucan'
+ WHERE id = '22222222-2222-2222-2222-222222222222';
 
 INSERT INTO public.akcioni_plan (
   id, sastanak_id, naslov, odgovoran_email, status, created_by_email

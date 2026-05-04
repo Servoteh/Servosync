@@ -7,7 +7,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(10);
+SELECT plan(11);
 
 -- ─── Seed: user_roles + auth binding + zaposleni + lokacija + alat ─────────
 SET LOCAL row_security = off;
