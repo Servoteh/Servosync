@@ -2,7 +2,7 @@
  * Reversi modul — Supabase pozivi (rev_*, loc_*, view).
  */
 
-import { sbReq, sbReqWithCount, sbReqThrow, hasSupabaseConfig } from './supabase.js';
+import { sbReq, sbReqWithCount, sbReqThrow, hasSupabaseConfig, getSupabaseUrl, getSupabaseHeaders } from './supabase.js';
 import { locCreateMovement } from './lokacije.js';
 
 const MAG_CODE = 'ALAT-MAG-01';
@@ -317,4 +317,92 @@ export async function fetchActiveLocations() {
     );
     return Array.isArray(rows) ? rows : [];
   })();
+}
+
+/**
+ * Jedan reversal dokument (zaglavlje).
+ * @param {string} documentId
+ */
+export async function fetchDocumentById(documentId) {
+  return wrap(async () => {
+    const rows = await sbReq(
+      `rev_documents?id=eq.${encodeURIComponent(documentId)}&select=*&limit=1`,
+    );
+    const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    if (!row) throw new Error('Dokument nije pronađen');
+    return row;
+  })();
+}
+
+/**
+ * @param {string|null|undefined} employeeId
+ * @returns {{ ok: boolean, data?: string|null, error?: string }}
+ */
+export async function fetchEmployeeDepartment(employeeId) {
+  return wrap(async () => {
+    if (!employeeId) return null;
+    const rows = await sbReq(
+      `employees?id=eq.${encodeURIComponent(employeeId)}&select=department&limit=1`,
+    );
+    const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    return row?.department ?? null;
+  })();
+}
+
+/**
+ * Upload-uje PDF blob u Storage bucket `reversal-pdf`.
+ * Path u bucket-u: `{docNumber}.pdf`
+ * @param {string} docNumber
+ * @param {Blob} pdfBlob
+ * @returns {Promise<string>} Putanja unutar bucket-a (npr. `REV-TOOL-2026-0001.pdf`)
+ */
+export async function uploadReversalPdf(docNumber, pdfBlob) {
+  if (!hasSupabaseConfig()) throw new Error('Supabase nije konfigurisan');
+  const safeName = String(docNumber || 'document').replace(/[^\w.\-]+/g, '_');
+  const path = `${safeName}.pdf`;
+  const url = `${getSupabaseUrl().replace(/\/$/, '')}/storage/v1/object/reversal-pdf/${encodeURIComponent(path)}`;
+
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {
+      ...getSupabaseHeaders(),
+      'Content-Type': 'application/pdf',
+      'x-upsert': 'true',
+    },
+    body: pdfBlob,
+  });
+
+  const txt = await r.text();
+  if (!r.ok) {
+    let msg = txt?.trim() || `HTTP ${r.status}`;
+    try {
+      const j = JSON.parse(txt);
+      if (j?.message) msg = String(j.message);
+    } catch {
+      /* ignore */
+    }
+    throw new Error(`PDF upload nije uspeo: ${msg}`);
+  }
+
+  return path;
+}
+
+/**
+ * Ažurira pdf_storage_path i pdf_generated_at na rev_documents redu.
+ * @param {string} docId
+ * @param {string} storagePath
+ */
+export async function updateDocPdfMeta(docId, storagePath) {
+  const rows = await sbReqThrow(
+    `rev_documents?id=eq.${encodeURIComponent(docId)}`,
+    'PATCH',
+    {
+      pdf_storage_path: storagePath,
+      pdf_generated_at: new Date().toISOString(),
+    },
+    { upsert: false },
+  );
+  if (!Array.isArray(rows) || !rows[0]) {
+    throw new Error('PDF meta update nije vratio red');
+  }
 }

@@ -15,9 +15,15 @@ import {
   fetchMyIssuedTools,
   getMagacinLocationId,
   fetchActiveLocations,
-  fetchDocumentLines,
 } from '../../services/reversiService.js';
-import { openIssueReversalModal, openConfirmReturnModal, openAddToolModal, fmtDateShort } from './modals.js';
+import {
+  openIssueReversalModal,
+  openConfirmReturnModal,
+  openAddToolModal,
+  openDocumentDetailsModal,
+  fmtDateShort,
+  handleReversalPdfClick,
+} from './modals.js';
 
 const TABS = [
   { id: 'zaduzenja', label: 'Zaduženja' },
@@ -260,7 +266,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
                     <td class="rev-actions">
                       <button type="button" class="btn btn-sm" title="Detalji" data-act="det" data-id="${escHtml(d.id)}">👁</button>
                       ${canRet ? `<button type="button" class="btn btn-sm" title="Potvrdi povraćaj" data-act="ret" data-id="${escHtml(d.id)}">↩</button>` : ''}
-                      <button type="button" class="btn btn-sm" disabled title="Dostupno u sledećoj verziji">📄</button>
+                      <button type="button" class="btn btn-sm" title="Potpisnica PDF" data-act="pdf" data-pdf-btn="${escHtml(d.id)}" data-num="${escHtml(d.doc_number)}">📄</button>
                     </td>
                   </tr>`;
                 })
@@ -274,30 +280,34 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
           </div>`;
 
         dtHost.querySelectorAll('[data-act="det"]').forEach(btn => {
-          btn.addEventListener('click', async () => {
+          btn.addEventListener('click', () => {
             const did = btn.getAttribute('data-id');
-            const lr = await fetchDocumentLines(did);
-            const lines = lr.ok && Array.isArray(lr.data) ? lr.data : [];
-            const html = lines
-              .map(ln => {
-                const tr = ln.rev_tools;
-                const t = Array.isArray(tr) ? tr[0] : tr;
-                const name = t ? `${t.oznaka} — ${t.naziv}` : ln.drawing_no || ln.part_name || '—';
-                return `<tr><td>${escHtml(name)}</td><td>${escHtml(ln.napomena || '—')}</td><td>${escHtml(ln.line_status)}</td></tr>`;
-              })
-              .join('');
-            const ov = document.createElement('div');
-            ov.className = 'kadr-modal-overlay rev-modal-overlay';
-            ov.innerHTML = `<div class="kadr-modal rev-modal"><div class="kadr-modal-header"><h2>Stavke dokumenta</h2><button type="button" class="kadr-modal-close" data-x>×</button></div>
-              <div class="kadr-modal-body"><table class="rev-table"><thead><tr><th>Stavka</th><th>Pribor</th><th>Status</th></tr></thead><tbody>${html}</tbody></table></div></div>`;
-            document.body.appendChild(ov);
-            ov.querySelector('[data-x]')?.addEventListener('click', () => ov.remove());
-            ov.addEventListener('click', e => {
-              if (e.target === ov) ov.remove();
+            const doc = rows.find(r => r.id === did);
+            if (!doc) return;
+            openDocumentDetailsModal({
+              document: doc,
+              onPdfSuccess: () => void refreshBody(),
             });
           });
         });
 
+        dtHost.querySelectorAll('[data-act="pdf"]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const did = btn.getAttribute('data-pdf-btn');
+            const num = btn.getAttribute('data-num');
+            const doc = rows.find(r => r.id === did);
+            btn.disabled = true;
+            btn.textContent = '⏳';
+            try {
+              await handleReversalPdfClick({ docId: did, docNumber: num, docRow: doc });
+            } catch (e) {
+              showToast(`Greška pri generisanju PDF-a: ${e instanceof Error ? e.message : String(e)}`, 'error');
+            } finally {
+              btn.disabled = false;
+              btn.textContent = '📄';
+            }
+          });
+        });
         dtHost.querySelectorAll('[data-act="ret"]').forEach(btn => {
           btn.addEventListener('click', () => {
             const did = btn.getAttribute('data-id');

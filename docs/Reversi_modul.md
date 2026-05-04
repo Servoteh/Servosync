@@ -97,5 +97,28 @@ Nakon koraka 2, klikni „Novo zaduženje” u UI modulu Reversi i odaberi alat.
 
 ## Sledeci sprintovi
 
-- **R3** — UI: inventar alata, lista reversal dokumenata, filteri
-- **R4** — jsPDF potpisnica (obrazac sa prostorom za potpis)
+- **R4** — jsPDF potpisnica (generisanje u pregledaču, Storage `reversal-pdf`)
+
+## PDF potpisnica i arhiva (Sprint R4)
+
+- **Generisanje:** dugme 📄 u listi dokumenata ili „Generiši PDF” u modalu detalja — otvara PDF u novom tabu (Roboto font iz `public/fonts/`, isti obrazac kao Sastanci PDF).
+- **Storage bucket:** `reversal-pdf` — **ne kreira se iz koda**. Ako bucket ne postoji, u Supabase Dashboard → Storage → **New bucket** → ime `reversal-pdf`, **Private** (ne javni).
+
+### Politike na `storage.objects` (Dashboard → Storage → reversal-pdf → Policies)
+
+Primer (prilagoditi JWT claimovima projekta ako je potrebno):
+
+- **Čitanje (`SELECT`):** `authenticated` može čitati objekte u bucket-u `reversal-pdf` kada je ime fajla vezano za dokument koji korisnik sme da vidi (npr. policy po `auth.uid()` i join na `rev_documents` ako želite strože; ili privremeno čitanje za sve ulogovane uz uslov `bucket_id = 'reversal-pdf'` — proceni rizik).
+- **Upload (`INSERT`) i prepis (`UPDATE` za upsert):** samo korisnici koji prolaze `rev_can_manage()` u aplikaciji — u Storage RLS to tipično znači provera uloge preko JWT-a ili membership tabele (isti skup kao za `rev_can_manage`: admin, menadzment, pm, leadpm, magacioner).
+
+Kada bucket/policy nisu podešeni, PDF i dalje radi u tabu; upload u pozadini će tišina pasti u konzolu (`console.warn`).
+
+### Kolone `rev_documents`
+
+Nakon uspešnog upload-a ažuriraju se `pdf_storage_path` i `pdf_generated_at` (već u šemi od R1).
+
+```sql
+SELECT doc_number, pdf_storage_path, pdf_generated_at
+FROM rev_documents
+WHERE pdf_storage_path IS NOT NULL;
+```
