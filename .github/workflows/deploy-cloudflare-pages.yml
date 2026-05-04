@@ -1,0 +1,63 @@
+# Produkcijski deploy frontenda na Cloudflare Pages (Vite → dist).
+#
+# Na svaki push na `main` (i ručno workflow_dispatch).
+#
+# GitHub Secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN      — token sa pravom Account → Cloudflare Pages → Edit
+#   CLOUDFLARE_ACCOUNT_ID
+#   CLOUDFLARE_PROJECT_NAME   — ime Pages projekta (npr. servoteh-plan-montaze)
+#   VITE_SUPABASE_URL
+#   VITE_SUPABASE_ANON_KEY
+#
+# Opciono: VITE_APP_VERSION (inače vite.config koristi GITHUB_SHA)
+#
+# Bez ovih secret-a job će pasti na build/deploy — namerno.
+
+name: Deploy Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    name: Build and deploy to Pages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (Vite)
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_APP_VERSION: ${{ secrets.VITE_APP_VERSION }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ secrets.CLOUDFLARE_PROJECT_NAME }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
