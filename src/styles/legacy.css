@@ -560,10 +560,25 @@ textarea.note-area:focus { border-color: var(--accent); box-shadow: 0 0 0 2px va
 
 /* --- GANTT --- */
 .gantt-wrap { overflow-x: auto; border-radius: var(--radius-lg); border: 1px solid var(--border2); box-shadow: var(--shadow-sm); }
-.gantt-table { border-collapse: collapse; font-size: 11px; min-width: 100%; }
+.gantt-wrap-inner { display: block; min-width: 100%; }
+.gantt-table { border-collapse: separate; border-spacing: 0; font-size: 11px; min-width: 100%; }
 .gantt-table th { background: var(--surface2); color: var(--text3); font-weight: 600; font-size: 9px; padding: 5px 6px; text-align: left; border: 1px solid var(--border); white-space: nowrap; }
 .gantt-table td { border: 1px solid var(--border); padding: 0; height: 28px; }
 .gantt-label { padding: 2px 10px; white-space: nowrap; min-width: 200px; }
+.gantt-table th.gantt-freeze-col,
+.gantt-table td.gantt-freeze-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  box-shadow: 4px 0 8px -4px rgba(0, 0, 0, 0.25);
+}
+.gantt-table thead th.gantt-freeze-col {
+  z-index: 4;
+  background: var(--surface2);
+}
+.gantt-table tbody td.gantt-freeze-col {
+  background: var(--surface2);
+}
 .gantt-label-name { color: var(--text); font-weight: 500; font-size: 11px; }
 .gantt-label-sub { font-size: 9px; font-family: var(--mono); margin-top: 1px; }
 .gantt-label-sub { color: var(--text3); }
@@ -1401,6 +1416,68 @@ body.module-kadrovska > #module-settings { display:none !important; }
   min-height:100vh;
   background:var(--bg);
   display:flex; flex-direction:column;
+}
+
+/* Desktop ERP moduli: #app puni visinu da Gantt / flex layout može min-height:0 */
+@media (min-width: 768px) {
+  html:has(body.desktop-erp-module:not(.hub-active):not(.m-body)),
+  body.desktop-erp-module:not(.hub-active):not(.m-body) {
+    height: 100%;
+    min-height: 100%;
+  }
+  body.desktop-erp-module:not(.hub-active):not(.m-body) #app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    height: 100%;
+  }
+  body.desktop-erp-module:not(.hub-active):not(.m-body) #app > * {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .pb-module.kadrovska-section {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .kadrovska-section.plan-module-mount {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .plan-shell-flex {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .plan-module-mount--gantt.kadrovska-section {
+    min-height: 0;
+  }
+  .plan-main--full-gantt {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 12px;
+  }
+  .plan-body--fill {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+  }
+  .plan-body--fill .gantt-toolbar {
+    flex: 0 0 auto;
+  }
+  .plan-body--fill .gantt-wrap--dock {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* Sticky: top nav + tabovi + (opciono) mesečni grid toolbar */
@@ -2483,6 +2560,24 @@ td.td-loc .loc-select { border-left: 3px solid transparent; }
    Shell, project bar overrides, view tabs, generic modal/form helpers.
    ----------------------------------------------------------------------- */
 .plan-main { padding:18px 24px 32px; min-height:calc(100vh - 64px); background:var(--bg); }
+
+@media (min-width: 768px) {
+  body.desktop-erp-module:not(.hub-active):not(.m-body) .plan-main {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    box-sizing: border-box;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  body.desktop-erp-module:not(.hub-active):not(.m-body) main.kadrovska-tabpanel {
+    max-width: none !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box;
+  }
+}
 .plan-toolbar { display:flex; flex-direction:column; gap:12px; margin-bottom:18px; }
 .plan-body { display:flex; flex-direction:column; gap:12px; }
 
@@ -4079,7 +4174,8 @@ body.pdf-export .gantt-wrap {
 body.pdf-export .gantt-table {
   background: #ffffff !important;
   color: #000 !important;
-  border-collapse: collapse !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
 }
 body.pdf-export .gantt-table th,
 body.pdf-export .gantt-table td {
@@ -4116,6 +4212,11 @@ body.pdf-export .gantt-label {
   background: #fafafa !important;
   color: #000 !important;
   border-right: 2px solid #888 !important;
+}
+body.pdf-export .gantt-table th.gantt-freeze-col,
+body.pdf-export .gantt-table td.gantt-freeze-col {
+  position: static !important;
+  box-shadow: none !important;
 }
 body.pdf-export .gantt-label-name,
 body.pdf-export .gantt-label-sub,

@@ -54,7 +54,7 @@ export function totalGanttSectionHtml() {
     ${_filtersHtml()}
     ${_wpFilterHtml()}
     ${_toolbarHtml()}
-    <div class="gantt-wrap" id="totalGanttWrap">${_tableHtml()}</div>
+    <div class="gantt-wrap gantt-wrap--dock" id="totalGanttWrap"><div class="gantt-wrap-inner">${_tableHtml()}</div></div>
   `;
 }
 
@@ -103,7 +103,8 @@ export function wireTotalGanttSection(root, { onChange } = {}) {
 
   /* Drag / resize */
   const wrapEl = root.querySelector('#totalGanttWrap');
-  wireGanttDrag(wrapEl, { onChange });
+  const innerEl = wrapEl?.querySelector('.gantt-wrap-inner') || wrapEl;
+  wireGanttDrag(innerEl, { onChange });
 }
 
 /* ── INTERNAL: filter UI ────────────────────────────────────────────── */
@@ -255,7 +256,7 @@ function _tableHtml() {
 
   const tc = days.length;
   let html = `<table class="gantt-table" data-view="total"><thead>
-    <tr><th class="gantt-label" rowspan="2" style="min-width:260px">Projekat / Pozicija / Faza</th>${monthsRow}</tr>
+    <tr><th class="gantt-label gantt-freeze-col" rowspan="2" style="min-width:260px">Projekat / Pozicija / Faza</th>${monthsRow}</tr>
     <tr>${daysRow}</tr>
   </thead><tbody>`;
 
@@ -319,7 +320,7 @@ function _phaseRowHtml(row, project, wp, days) {
   }).join('');
 
   return `<tr class="gantt-row${rkC}" data-phase-id="${phaseId}" data-project-id="${escHtml(project.id)}" data-wp-id="${escHtml(wp.id)}">
-    <td class="gantt-label tg-phase-label" style="border-left:3px solid ${locColor}">
+    <td class="gantt-label gantt-freeze-col tg-phase-label" style="border-left:3px solid ${locColor}">
       <div class="gantt-label-name">${escHtml(row.name)}</div>
       <div class="gantt-label-sub">
         <span class="gantt-label-loc-dot" style="background:${locColor}"></span>${escHtml(row.loc || '—')}

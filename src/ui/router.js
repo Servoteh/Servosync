@@ -129,6 +129,7 @@ function clearMount(leavingScreen) {
   document.body.classList.remove(
     'hub-active',
     'kadrovska-active',
+    'desktop-erp-module',
     'module-kadrovska',
     'module-settings',
     'plan-active',
@@ -263,36 +264,36 @@ function showModulePlaceholder(moduleId, options = {}) {
      na #module-kadrovska / #module-settings ako odgovarajuća klasa nije setovana).
      Dok ne migriramo te selektore u Vite-only verziju, postavi obe klase. */
   if (moduleId === 'kadrovska') {
-    document.body.classList.add('kadrovska-active', 'module-kadrovska');
+    document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-kadrovska');
   }
   if (moduleId === 'podesavanja') {
-    document.body.classList.add('module-settings');
+    document.body.classList.add('desktop-erp-module', 'module-settings');
   }
   if (moduleId === 'plan-montaze') {
-    document.body.classList.add('plan-active', 'module-plan');
+    document.body.classList.add('plan-active', 'desktop-erp-module', 'module-plan');
   }
   if (moduleId === 'plan-proizvodnje') {
     /* Koristimo isti kadrovska body class jer modul deli layout primitive-e
        (kadrovska-section, kadrovska-header, kadrovska-tabs). */
-    document.body.classList.add('kadrovska-active', 'module-plan-proizvodnje');
+    document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-plan-proizvodnje');
   }
   if (moduleId === 'pracenje-proizvodnje') {
-    document.body.classList.add('kadrovska-active', 'module-pracenje-proizvodnje');
+    document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-pracenje-proizvodnje');
   }
   if (moduleId === 'sastanci') {
-    document.body.classList.add('kadrovska-active', 'module-sastanci');
+    document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-sastanci');
   }
   if (moduleId === 'lokacije-delova') {
-    document.body.classList.add('kadrovska-active', 'module-lokacije');
+    document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-lokacije');
   }
   if (moduleId === 'reversi') {
     document.body.classList.add('kadrovska-active', 'module-reversi');
   }
   if (moduleId === 'odrzavanje-masina') {
-    document.body.classList.add('kadrovska-active', 'module-odrzavanje-masina');
+    document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-odrzavanje-masina');
   }
   if (moduleId === 'projektni-biro') {
-    document.body.classList.add('kadrovska-active', 'module-projektni-biro');
+    document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-projektni-biro');
   }
   setStoredModule(moduleId);
 
@@ -788,7 +789,7 @@ function showMaintenanceFromRoute(route, searchParsed, opts = {}) {
     }
     syncBrowserUrl(wantPath);
   }
-  document.body.classList.add('kadrovska-active', 'module-odrzavanje-masina');
+  document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-odrzavanje-masina');
   setStoredModule('odrzavanje-masina');
   const section =
     route.section === 'machines'

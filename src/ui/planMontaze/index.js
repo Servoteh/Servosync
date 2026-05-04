@@ -39,6 +39,7 @@ import { ganttSectionHtml, wireGanttSection } from './gantt.js';
 import { totalGanttSectionHtml, wireTotalGanttSection } from './totalGantt.js';
 import { mountStatusPanel, unmountStatusPanel } from './statusPanel.js';
 import { openExportDialog } from './exportModal.js';
+import { wireGanttScrollDock } from './ganttScrollDock.js';
 
 let _mountEl = null;
 let _onLogoutCb = null;
@@ -49,6 +50,7 @@ let _authUnsubscribe = null;
 
 export async function renderPlanMontazeModule(mountEl, options = {}) {
   _mountEl = mountEl;
+  _mountEl.className = 'kadrovska-section plan-module-mount';
   _onLogoutCb = options.onLogout || null;
   _onBackToHubCb = options.onBackToHub || null;
 
@@ -100,6 +102,7 @@ function _renderShell() {
 
   _mountEl.innerHTML = `
     ${planHeaderHtml()}
+    <div class="plan-shell-flex">
     <main class="plan-main" id="planMain">
       <section class="plan-toolbar" id="planToolbar">
         ${projectContextCardHtml()}
@@ -109,7 +112,15 @@ function _renderShell() {
         ${_planBodyHtml()}
       </section>
     </main>
+    </div>
   `;
+
+  const main = _mountEl.querySelector('#planMain');
+  const body = _mountEl.querySelector('#planBody');
+  const isGanttView = planMontazeState.activeView === 'gantt' || planMontazeState.activeView === 'total';
+  main?.classList.toggle('plan-main--full-gantt', isGanttView);
+  body?.classList.toggle('plan-body--fill', isGanttView);
+  _mountEl.classList.toggle('plan-module-mount--gantt', isGanttView);
 
   _wireHeader();
   _wireToolbar();
@@ -127,8 +138,10 @@ function _wireBody() {
     wireMobileCards(body, { onChange });
   } else if (planMontazeState.activeView === 'gantt') {
     wireGanttSection(body, { onChange });
+    wireGanttScrollDock(body.querySelector('#ganttWrap'));
   } else if (planMontazeState.activeView === 'total') {
     wireTotalGanttSection(body, { onChange });
+    wireGanttScrollDock(body.querySelector('#totalGanttWrap'));
   }
 }
 
