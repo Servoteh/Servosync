@@ -258,6 +258,22 @@ export function canEditProjektniBiro() {
  * Modul Lokacije delova — svi ulogovani korisnici mogu da otvore (čitanje + pokreti
  * preko RPC; master lokacije: admin/leadpm/pm u RLS-u).
  */
+/**
+ * Faza K3.5 — Tab Odsustva: ko može da edituje (kreira/menja/briše)?
+ * Menadzment je read-only u Listingu; Pregled je uvek read-only po prirodi.
+ */
+export function canEditOdsustva() {
+  return ['admin', 'hr', 'leadpm', 'pm'].includes(state.role);
+}
+
+/**
+ * Faza K3.5 — Ko vidi tab Odsustva (Pregled + Listing)?
+ * Menadzment dobija read-only pristup od ove faze.
+ */
+export function canAccessOdsustvaPregled() {
+  return ['admin', 'hr', 'leadpm', 'pm', 'menadzment'].includes(state.role);
+}
+
 export function canAccessLokacije() {
   /* Svi ulogovani korisnici uključujući magacioner i cnc_operater. */
   return !!state.user;

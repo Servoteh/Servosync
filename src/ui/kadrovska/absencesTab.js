@@ -13,7 +13,8 @@
 import { escHtml, showToast } from '../../lib/dom.js';
 import { formatDate, formatYMD, daysInclusive } from '../../lib/date.js';
 import { canEditKadrovska, getIsOnline } from '../../state/auth.js';
-import { hasSupabaseConfig, KADR_ABS_TYPE_LABELS, KADR_PAID_REASON_LABELS } from '../../lib/constants.js';
+import { hasSupabaseConfig, KADR_ABS_TYPE_LABELS, KADR_PAID_REASON_LABELS, SESSION_KEYS } from '../../lib/constants.js';
+import { ssGet, ssSet } from '../../lib/storage.js';
 import {
   kadrovskaState,
   kadrAbsencesState,
@@ -31,8 +32,10 @@ import {
   employeeNameById,
 } from '../../services/kadrovska.js';
 import { renderSummaryChips, employeeOptionsHtml } from './shared.js';
+import { renderOdsustvaPregledHtml, wireOdsustvaPregledTab } from './odsustvaPregledTab.js';
 
-let panelRef = null;
+let panelRef = null;       // listing sub-container
+let hostPanelRef = null;   // outer tab panel
 
 const ABS_TYPE_OPTS = [
   { v: 'godisnji', l: 'Godišnji odmor' },
@@ -80,7 +83,59 @@ function validateAbsenceForWorkType(type, slobodanReason, workType) {
   return { ok: true };
 }
 
+/* ── Sub-view host (public API, poziva index.js) ─────────────────────── */
+
 export function renderAbsencesTab() {
+  return `
+    <div class="kadr-odsustva-host" id="odsustvaHost">
+      <div class="kadr-subtab-strip" id="odsustvaSubtabStrip" role="tablist" aria-label="Odsustva — pogled">
+        <button class="kadr-subtab active" data-subtab="pregled" role="tab" aria-selected="true">Pregled</button>
+        <button class="kadr-subtab" data-subtab="listing" role="tab" aria-selected="false">Listing</button>
+      </div>
+      <div id="odsustvaContent"></div>
+    </div>`;
+}
+
+export async function wireAbsencesTab(panelEl, opts = {}) {
+  hostPanelRef = panelEl;
+  const savedSubtab = ssGet(SESSION_KEYS.KADR_ODSUSTVA_SUBTAB, 'pregled');
+  _updateSubtabButtons(panelEl, savedSubtab);
+  await _mountSubtab(savedSubtab, panelEl, opts.onNavigateGrid);
+
+  panelEl.querySelectorAll('.kadr-subtab').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const subtab = btn.dataset.subtab;
+      ssSet(SESSION_KEYS.KADR_ODSUSTVA_SUBTAB, subtab);
+      _updateSubtabButtons(panelEl, subtab);
+      await _mountSubtab(subtab, panelEl, opts.onNavigateGrid);
+    });
+  });
+}
+
+function _updateSubtabButtons(panelEl, active) {
+  panelEl.querySelectorAll('.kadr-subtab').forEach(btn => {
+    const isActive = btn.dataset.subtab === active;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', String(isActive));
+  });
+}
+
+async function _mountSubtab(subtab, panelEl, onNavigateGrid) {
+  const content = panelEl.querySelector('#odsustvaContent');
+  if (!content) return;
+  if (subtab === 'pregled') {
+    content.innerHTML = renderOdsustvaPregledHtml();
+    await wireOdsustvaPregledTab(content, onNavigateGrid || null);
+  } else {
+    content.innerHTML = _renderListingHtml();
+    panelRef = content;
+    await _wireListingView(content);
+  }
+}
+
+/* ── Listing sub-view (bivsi renderAbsencesTab / wireAbsencesTab) ────── */
+
+function _renderListingHtml() {
   return `
     <div class="kadr-summary-strip" id="absSummary"></div>
     <div class="kadrovska-toolbar">
@@ -119,15 +174,13 @@ export function renderAbsencesTab() {
     </main>`;
 }
 
-export async function wireAbsencesTab(panelEl) {
-  panelRef = panelEl;
-  panelEl.querySelector('#absEmpFilter').addEventListener('change', refreshAbsencesTab);
-  panelEl.querySelector('#absTypeFilter').addEventListener('change', refreshAbsencesTab);
-  panelEl.querySelector('#absFromFilter').addEventListener('change', refreshAbsencesTab);
-  panelEl.querySelector('#absToFilter').addEventListener('change', refreshAbsencesTab);
-  panelEl.querySelector('#absAddBtn').addEventListener('click', () => openAbsenceModal(null));
-
-  /* Zaposleni nam trebaju za prikaz imena i populate-ovanje filtera/modal-a. */
+async function _wireListingView(containerEl) {
+  panelRef = containerEl;
+  containerEl.querySelector('#absEmpFilter')?.addEventListener('change', refreshAbsencesTab);
+  containerEl.querySelector('#absTypeFilter')?.addEventListener('change', refreshAbsencesTab);
+  containerEl.querySelector('#absFromFilter')?.addEventListener('change', refreshAbsencesTab);
+  containerEl.querySelector('#absToFilter')?.addEventListener('change', refreshAbsencesTab);
+  containerEl.querySelector('#absAddBtn')?.addEventListener('click', () => openAbsenceModal(null));
   await ensureEmployeesLoaded();
   await ensureAbsencesLoaded(true);
   refreshAbsencesTab();

@@ -17,6 +17,8 @@ import { canAccessKadrovska, canAccessSalary } from '../../state/auth.js';
 import { showToast } from '../../lib/dom.js';
 import { logout } from '../../services/auth.js';
 import { toggleTheme } from '../../lib/theme.js';
+import { SESSION_KEYS } from '../../lib/constants.js';
+import { ssSet } from '../../lib/storage.js';
 
 import {
   kadrovskaHeaderHtml,
@@ -54,6 +56,7 @@ import {
   wireHrNotificationsTab,
 } from './hrNotificationsTab.js';
 import { renderComingSoonTab } from './comingSoon.js';
+import { renderAbsencesTab, wireAbsencesTab } from './absencesTab.js';
 
 let rootEl = null;
 let onBackToHubCb = null;
@@ -115,10 +118,9 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
   mountTabBody(activeTab);
 }
 
-function switchTab(id) {
+function switchTab(id, opts = {}) {
   if (!rootEl) return;
-  if (id === 'absences') id = 'grid';
-  if (kadrovskaState.activeTab === id) return;
+  if (kadrovskaState.activeTab === id && !opts.gridMonth) return;
   kadrovskaState.activeTab = id;
   setActiveKadrTab(id);
 
@@ -129,14 +131,12 @@ function switchTab(id) {
     btn.setAttribute('aria-selected', String(active));
   });
 
-  mountTabBody(id);
+  mountTabBody(id, opts);
 }
 
-function mountTabBody(id) {
+function mountTabBody(id, opts = {}) {
   const host = rootEl?.querySelector('#kadrPanelHost');
   if (!host) return;
-
-  if (id === 'absences') id = 'grid';
 
   host.innerHTML = `<div class="kadr-panel active" id="kadrPanel-${id}" role="tabpanel" aria-label="${id}"></div>`;
   const panel = host.firstElementChild;
@@ -161,6 +161,15 @@ function mountTabBody(id) {
       render: renderGridPanelBody,
       wire: p => wireGridTab(p, id === 'grid' ? rootEl?.querySelector('#kadrGridToolbarSlot') : null),
     },
+    odsustva: {
+      render: renderAbsencesTab,
+      wire: p => wireAbsencesTab(p, {
+        onNavigateGrid: (empName, yyyymm) => {
+          ssSet(SESSION_KEYS.KADR_GRID_SEARCH, empName);
+          switchTab('grid', { gridMonth: yyyymm });
+        },
+      }),
+    },
     hours: { render: renderWorkHoursTab, wire: wireWorkHoursTab },
     contracts: { render: renderContractsTab, wire: wireContractsTab },
     salary: { render: renderSalaryTab, wire: wireSalaryTab, adminOnly: true },
@@ -178,6 +187,11 @@ function mountTabBody(id) {
   }
   if (impl) {
     panel.innerHTML = impl.render();
+    /* Pre-fill grid month input synchronously before async wire runs. */
+    if (opts.gridMonth && id === 'grid') {
+      const monthInput = panel.querySelector('#gridMonth');
+      if (monthInput) monthInput.value = opts.gridMonth;
+    }
     Promise.resolve()
       .then(() => impl.wire(panel))
       .catch(e => {

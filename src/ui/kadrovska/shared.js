@@ -10,7 +10,7 @@
  */
 
 import { escHtml } from '../../lib/dom.js';
-import { getAuth, canEdit, canAccessSalary } from '../../state/auth.js';
+import { getAuth, canEdit, canAccessSalary, canAccessOdsustvaPregled } from '../../state/auth.js';
 import { kadrovskaState } from '../../state/kadrovska.js';
 import {
   compareEmployeesByLastFirst,
@@ -90,21 +90,28 @@ export function employeeOptionsHtml({
 }
 
 /**
- * Definicije tabova (redosled = strip). `adminOnly` = samo canAccessSalary().
+ * Definicije tabova (redosled = strip).
+ *   adminOnly    — prikazuje se samo ako canAccessSalary()
+ *   pregledOnly  — prikazuje se samo ako canAccessOdsustvaPregled()
  */
 export const KADROVSKA_TAB_DEFS = [
+  { id: 'grid', label: 'Mesecni grid', badgeId: 'kadrTabCountGrid' },
+  { id: 'odsustva', label: 'Odsustva', badgeId: 'kadrTabCountAbsences', pregledOnly: true },
   { id: 'employees', label: 'Zaposleni', badgeId: 'kadrTabCountEmployees' },
-  { id: 'vacation', label: 'Godišnji odmor', badgeId: 'kadrTabCountVacation' },
-  { id: 'grid', label: 'Mesečni grid', badgeId: 'kadrTabCountGrid' },
+  { id: 'vacation', label: 'Godisnji odmor', badgeId: 'kadrTabCountVacation' },
   { id: 'hours', label: 'Sati', badgeId: 'kadrTabCountHours' },
   { id: 'contracts', label: 'Ugovori', badgeId: 'kadrTabCountContracts' },
   { id: 'salary', label: 'Zarade', badgeId: 'kadrTabCountSalary', adminOnly: true },
   { id: 'notifications', label: 'Notifikacije', badgeId: 'kadrTabCountNotif' },
-  { id: 'reports', label: 'Izveštaji', badgeId: 'kadrTabCountReports' },
+  { id: 'reports', label: 'Izvestaji', badgeId: 'kadrTabCountReports' },
 ];
 
 export function kadrVisibleTabDefs() {
-  return KADROVSKA_TAB_DEFS.filter(t => !t.adminOnly || canAccessSalary());
+  return KADROVSKA_TAB_DEFS.filter(t => {
+    if (t.adminOnly) return canAccessSalary();
+    if (t.pregledOnly) return canAccessOdsustvaPregled();
+    return true;
+  });
 }
 
 /** Tab bar sa badge-ovima. Active tab se kontroliše classList.add('active'). */

@@ -4866,3 +4866,167 @@ body.pdf-export .tg-wp-filter { display: none !important; }
   flex-direction: column;
   gap: 4px;
 }
+
+/* ── Kadrovska — Odsustva sub-view toggle ──────────────────────────────── */
+.kadr-odsustva-host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.kadr-subtab-strip {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px 0;
+  border-bottom: 1px solid var(--border2);
+  flex-shrink: 0;
+}
+.kadr-subtab {
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.kadr-subtab:hover {
+  color: var(--text);
+  background: var(--surface3);
+}
+.kadr-subtab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Kadrovska — Pregled odsustava panel ───────────────────────────────── */
+.kadr-pregled-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0 0;
+  min-height: 0;
+}
+.kadr-pregled-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.kadr-pregled-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.kadr-preset-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--border2);
+  background: var(--surface3);
+  color: var(--text2);
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.kadr-preset-btn:hover {
+  background: var(--surface4);
+  color: var(--text);
+}
+.kadr-preset-btn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.kadr-pregled-period-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.kadr-pregled-search-row {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.kadr-pregled-wrap {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+/* ── Pregled table ─────────────────────────────────────────────────────── */
+.kadr-pregled-table {
+  width: max-content;
+  min-width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+.kadr-pregled-table th,
+.kadr-pregled-table td {
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.kadr-pregled-table thead th {
+  background: var(--surface3);
+  color: var(--text2);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.kadr-pregled-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.kadr-pregled-row {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.kadr-pregled-row:hover {
+  background: var(--surface3);
+}
+.kadr-pregled-footer {
+  background: var(--surface2);
+  font-weight: 700;
+}
+.kadr-pregled-footer td {
+  color: var(--text);
+}
+
+/* Sortable column header */
+.kadr-col-sort {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-right: 18px !important;
+}
+.kadr-col-sort::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 4px solid transparent;
+  border-bottom: 5px solid var(--border3);
+  margin-top: -3px;
+}
+.kadr-col-sort.asc::after {
+  border-bottom-color: var(--accent);
+  border-top: none;
+}
+.kadr-col-sort.desc::after {
+  border-top: 5px solid var(--accent);
+  border-bottom: none;
+  margin-top: 3px;
+}
+
+/* Null placeholder */
+.kadr-null {
+  color: var(--text3);
+  font-style: italic;
+}

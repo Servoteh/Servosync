@@ -21,7 +21,7 @@ Izvor: `src/state/auth.js` + `src/ui/kadrovska/shared.js` + tabovi (`canEditKadr
 | **admin** | da | svi uključujući Zarade | da | da | da |
 | **hr** | da | svi osim Zarade | da | da | ne |
 | **leadpm**, **pm** | da | svi osim Zarade | da | da | ne |
-| **menadzment** | da | **samo „Mesečni grid"** (ostali tabovi skriveni) | ne (read-only na ostalo nije dostupno jer nema tabova) | da | ne |
+| **menadzment** | da | **Mesečni grid + Odsustva (read-only Pregled)** | ne | da | ne |
 | **viewer** | obično ne; ako nema `canAccessKadrovska` — nema pristup | — | — | — | ne |
 
 Osetljiva polja zaposlenog (JMBG, adresa, račun, deca, …): **`isHrOrAdmin()`** — praktično **HR ili admin** u UI.
@@ -34,10 +34,10 @@ Aktivni tab modula: **`SESSION_KEYS.KADR_TAB`** → `plan_montaze_kadr_active_ta
 
 | Tab | Sadržaj | UI | Servisi (tipično) |
 |-----|---------|-----|-------------------|
-| Zaposleni | CRUD, filteri, osetljiva polja po pravu | `employeesTab.js` | `employees.js`, `kadrovska.js`, `employeeChildren.js` |
-| Odsustva | Tipovi odsustva, kalendari | `absencesTab.js` | `absences.js` |
-| Godišnji odmor | Entitlementi, saldo, štampa rešenja | `vacationTab.js` | `vacation.js` |
 | Mesečni grid | Excel-like unos sati/odsustava po danima; iznad tabele pretraga po imenu (klijent-side, sessionStorage) | `gridTab.js` | `grid.js` |
+| **Odsustva** | Sub-view: **Pregled** (pivot tabela svih odsustava, period selector, Excel) + **Listing** (CRUD); dostupan i menadžmentu (read-only Pregled) | `absencesTab.js`, `odsustvaPregledTab.js` | `absences.js`, `grid.js` (work_hours za period) |
+| Zaposleni | CRUD, filteri, osetljiva polja po pravu | `employeesTab.js` | `employees.js`, `kadrovska.js`, `employeeChildren.js` |
+| Godišnji odmor | Entitlementi, saldo, štampa rešenja | `vacationTab.js` | `vacation.js` |
 | Sati (pojedinačno) | Detaljni unos sati | `workHoursTab.js` | `workHours.js` |
 | Ugovori | Ugovori o radu | `contractsTab.js` | `contracts.js` |
 | **Zarade** | Samo admin; sub-tabovi **Uslovi** / **Mesečni obračun** (`pm_salary_subtab`) | `salaryTab.js`, `salaryPayrollTab.js` | `salary.js`, `salaryPayroll.js` |
@@ -223,3 +223,80 @@ Internal storage za `bo` subtype: `work_hours.absence_code='bo'` + `absence_subt
 Modal „Odsustva" za tip `slobodan` traži obavezan `slobodan_reason ∈ {brak, rodjenje_deteta, selidba, smrt_clana_porodice, dobrovoljno_davanje_krvi, slava, ostalo}`. Polje `note` ostaje za slobodan tekst.
 
 `slava` je dodata u K3.4 (`add_kadr_neplaceno_slava.sql`) kao nova vrednost za `slobodan_reason`. Nije zaseban tip — evidentira se kao `type='slobodan'` + `slobodan_reason='slava'`.
+
+---
+
+## Faza K3.5 — Tab Odsustva: Pregled (pivot tabela)
+
+**Bez SQL migracija** — sva agregacija je klijent-side.
+
+### Sub-view arhitektura
+
+Tab „Odsustva" (`absencesTab.js`) sada ima dva pod-pogleda:
+
+| Sub-tab | Opis | Fajl |
+|---------|------|------|
+| **Pregled** (default) | Pivot tabela: 1 red = 1 zaposleni, 15 zbirnih kolona za period | `odsustvaPregledTab.js` |
+| **Listing** | Postojeći CRUD listing odsustava (bez izmena logike) | `absencesTab.js` (interno `_renderListingHtml` / `_wireListingView`) |
+
+Aktivni sub-tab se persist-uje u `SESSION_KEYS.KADR_ODSUSTVA_SUBTAB`.
+
+### Period selector
+
+4 brza preset-a + custom date pickeri:
+
+| Preset | Opseg |
+|--------|-------|
+| Tekuća god. | 01.01.tekuće godine → danas |
+| Preth. god. | 01.01. → 31.12. prethodne godine |
+| Tekući mes. | 01. tekućeg meseca → danas |
+| Preth. mes. | puni prethodni mesec |
+| Custom | slobodan unos datuma |
+
+Default pri prvom otvaranju: **tekuća godina**. Persist-uje u `SESSION_KEYS.KADR_ODSUSTVA_PERIOD` (JSON `{from, to, preset}`).
+
+### Kolone Pregleda
+
+| Ključ | Labela | Opis |
+|-------|--------|------|
+| `name` | Zaposleni | Ime i prezime |
+| `dept` | Odeljenje | `employees.department` |
+| `workType` | Tip rada | `employees.work_type` |
+| `radnihDana` | RD | Broj dana sa evidentiranim satima u period-u |
+| `goDays` | GO | Iskorišćeni godišnji odmor (clamped u period) |
+| `goSaldo` | GO saldo | `ent.daysTotal + ent.daysCarriedOver - bal.daysUsed` za godinu perioda; `—` ako nema entitlementa |
+| `bo65` | Bo 65% | Bolovanje `obicno` + NULL subtype (clamped) |
+| `bo100` | Bo 100% | Bolovanje `povreda_na_radu` + `odrzavanje_trudnoce` (clamped) |
+| `slobodni` | Slobodni | `type='slobodan'` svi razlozi (clamped) |
+| `slava` | Slava | Subset slobodnih: `slobodan_reason='slava'` (clamped) |
+| `neplaceno` | Nepl. | `type='neplaceno'` (clamped) |
+| `terrDom` | Ter.D | Broj jedinstvenih dana sa `field_subtype='domestic'` |
+| `terrIno` | Ter.I | Broj jedinstvenih dana sa `field_subtype='foreign'` |
+| `praznici` | Pr.rad | Broj dana sa satima koji padaju na praznik (iz `kadr_holidays`) |
+| `ukupnoOdsutan` | Ukupno ods. | GO + Bo65 + Bo100 + Slobodni + Neplaćeno |
+
+Clamping: ako odsustvo delomično pada u period, broje se samo presečni dani (`daysInclusive(max(from,dateFrom), min(to,dateTo))`).
+
+### Podaci koji se učitavaju
+
+- `ensureEmployeesLoaded()` — lista aktivnih zaposlenih
+- `ensureAbsencesLoaded()` — sve absences (global cache); filtrira na period pre agregacije
+- `ensureVacationLoaded(year)` — entitlementi + saldo za godinu `to` datuma
+- `loadWorkHoursForPeriod(from, to)` — work_hours za period (poseban fetch, ne globalni keš)
+- `loadHolidaysForRange(from, to)` — praznici za period (za `praznici` kolonu)
+
+### Navigacija → Mesečni grid
+
+Klik na red u Pregledu prebacuje na Mesečni grid sa:
+- pretraga po imenu zaposlenog (`SESSION_KEYS.KADR_GRID_SEARCH`)
+- mesec = poslednji mesec perioda (`period.to.slice(0,7)` → `#gridMonth` input)
+
+Implementacija: callback `onNavigateGrid(empName, yyyymm)` prosljeđen iz `index.js` → `wireAbsencesTab` → `wireOdsustvaPregledTab`.
+
+### Excel export
+
+Dugme „📊 Excel" u toolbar-u generiše `.xlsx` sa svim vidljivim redovima (posle filter/sort). Kolumne = sve iz tabele + zaglavlje perioda. Naziv fajla: `Pregled_odsustava_YYYY-MM-DD_YYYY-MM-DD.xlsx`.
+
+### Pristup (uloge)
+
+Odsustva tab se prikazuje ako `canAccessOdsustvaPregled()` → `['admin','hr','leadpm','pm','menadzment']`. Listing sub-tab (CRUD) zahteva `canEditKadrovska()` za operacije izmene; menadžment može videti Pregled ali ne i Listing CRUD dugmad.

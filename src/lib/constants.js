@@ -52,6 +52,14 @@ export const SESSION_KEYS = Object.freeze({
   KADR_TAB: 'plan_montaze_kadr_active_tab_v1',
   /** Pretraga u Mesečnom gridu (Kadrovska) — vidljivost redova, ne lokalni storage */
   KADR_GRID_SEARCH: 'plan_montaze_kadr_grid_search_v1',
+  /** Pregled odsustava — aktivni sub-tab ('pregled' | 'listing') */
+  KADR_ODSUSTVA_SUBTAB: 'plan_montaze_kadr_odsustva_subtab_v1',
+  /** Pregled odsustava — period i preset, JSON {from, to, preset} */
+  KADR_ODSUSTVA_PERIOD: 'plan_montaze_kadr_odsustva_period_v1',
+  /** Pregled odsustava — pretraga po imenu */
+  KADR_ODSUSTVA_SEARCH: 'plan_montaze_kadr_odsustva_search_v1',
+  /** Pregled odsustava — sortiranje, JSON {col, dir} */
+  KADR_ODSUSTVA_SORT: 'plan_montaze_kadr_odsustva_sort_v1',
   MODULE_HUB: 'plan_montaze_v51_active_module',
   SETTINGS_TAB: 'plan_montaze_v51_settings_tab',
   /** Posle login-a: pun path + query (npr. /maintenance/machines/8.3?tab=checks) */

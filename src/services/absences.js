@@ -17,6 +17,7 @@ export function mapDbAbsence(d) {
     note: d.note || '',
     paidReason: d.paid_reason || '',
     slobodanReason: d.slobodan_reason || '',
+    absenceSubtype: d.absence_subtype || null,
     createdAt: d.created_at || null,
     updatedAt: d.updated_at || null,
   };

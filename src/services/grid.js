@@ -33,6 +33,26 @@ export async function loadGridMonth(days) {
 }
 
 /**
+ * Učitaj work_hours za period — za Pregled odsustava pivot tabelu.
+ * @param {string} from  'YYYY-MM-DD'
+ * @param {string} to    'YYYY-MM-DD'
+ * @returns {Promise<Map<string, object[]>>} Map<employeeId, workHourRow[]>
+ */
+export async function loadWorkHoursForPeriod(from, to) {
+  const out = new Map();
+  if (!from || !to) return out;
+  const data = await sbReq(`work_hours?work_date=gte.${from}&work_date=lte.${to}&select=*`);
+  if (!Array.isArray(data)) return out;
+  data.forEach(r => {
+    const m = mapDbWorkHour(r);
+    if (!m.employeeId) return;
+    if (!out.has(m.employeeId)) out.set(m.employeeId, []);
+    out.get(m.employeeId).push(m);
+  });
+  return out;
+}
+
+/**
  * Batch upsert dirty mape. Vraća array novih mapped redova ili null pri grešci.
  * @param {Map<string, object>} dirty  Map<'empId|ymd', { hours, overtime_hours, ...}>
  * @returns {Promise<object[]|null>}
