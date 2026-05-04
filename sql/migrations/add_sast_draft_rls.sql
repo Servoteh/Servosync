@@ -16,7 +16,7 @@ CREATE POLICY "pmt_select" ON public.pm_teme
       OR (sastanak_id IS NOT NULL AND public.is_sastanak_ucesnik(sastanak_id))
     )
     OR (
-      status = 'draft'
+      status IN ('draft', 'usvojeno', 'odbijeno')
       AND sastanak_id IS NULL
       AND public.has_edit_role()
     )
