@@ -45,14 +45,25 @@ export async function login(email, password) {
       },
       body: JSON.stringify({ email: cleanEmail, password: cleanPass }),
     });
-    const d = await r.json();
-    if (d.error) {
-      return { ok: false, error: d.error_description || d.error };
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.error) {
+      return { ok: false, error: d.error_description || d.msg || d.message || d.error || 'Prijava nije uspela' };
+    }
+    if (!d.access_token) {
+      return { ok: false, error: 'Supabase nije vratio access token. Proveri anon key i Auth podešavanja.' };
+    }
+
+    let authUser = d.user;
+    if (!authUser?.email || !authUser?.id) {
+      authUser = await fetchAuthUser(d.access_token);
+    }
+    if (!authUser?.email || !authUser?.id) {
+      return { ok: false, error: 'Supabase nije vratio podatke korisnika. Proveri Auth konfiguraciju.' };
     }
     const user = {
-      email: (d.user.email || cleanEmail).toLowerCase(),
-      emailRaw: String(d.user?.email || cleanEmail || '').trim(),
-      id: d.user.id,
+      email: (authUser.email || cleanEmail).toLowerCase(),
+      emailRaw: String(authUser.email || cleanEmail || '').trim(),
+      id: authUser.id,
       _token: d.access_token,
     };
     setUser(user);
@@ -60,12 +71,29 @@ export async function login(email, password) {
     persistSession({
       access_token: d.access_token,
       refresh_token: d.refresh_token,
-      user: d.user,
+      user: authUser,
     });
     return { ok: true, user };
   } catch (e) {
     console.error('[auth] login error', e);
     return { ok: false, error: 'Greška pri prijavi' };
+  }
+}
+
+async function fetchAuthUser(accessToken) {
+  if (!accessToken) return null;
+  try {
+    const r = await fetch(SUPABASE_CONFIG.url + '/auth/v1/user', {
+      headers: {
+        apikey: SUPABASE_CONFIG.anonKey,
+        Authorization: 'Bearer ' + accessToken,
+      },
+    });
+    const d = await r.json().catch(() => ({}));
+    return r.ok && !d.error ? d : null;
+  } catch (e) {
+    console.error('[auth] fetch user error', e);
+    return null;
   }
 }
 
