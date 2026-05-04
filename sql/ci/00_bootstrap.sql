@@ -45,8 +45,8 @@ CREATE TABLE IF NOT EXISTS auth.users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-/* Stub auth.uid() — vraća GUC "request.jwt.claim.sub" ako je postavljen
- * (tako pgTAP testovi mogu simulirati ulogovanog korisnika preko SET LOCAL).
+/* Stub auth.uid() — vraća GUC "request.jwt.claim.sub" ako je postavljen,
+ * a zatim "sub" iz request.jwt.claims JSON-a.
  * U produkciji Supabase obezbeđuje native implementaciju — ne diramo. */
 CREATE OR REPLACE FUNCTION auth.uid()
 RETURNS UUID
@@ -55,10 +55,13 @@ STABLE
 AS $fn$
 DECLARE
   v_sub TEXT := current_setting('request.jwt.claim.sub', true);
+  v_claims JSONB;
 BEGIN
   IF v_sub IS NULL OR v_sub = '' THEN
-    RETURN NULL;
+    v_claims := auth.jwt();
+    v_sub := v_claims ->> 'sub';
   END IF;
+  IF v_sub IS NULL OR v_sub = '' THEN RETURN NULL; END IF;
   RETURN v_sub::UUID;
 EXCEPTION WHEN invalid_text_representation THEN
   RETURN NULL;
@@ -79,6 +82,16 @@ BEGIN
   RETURN v::JSONB;
 EXCEPTION WHEN others THEN
   RETURN '{}'::JSONB;
+END;
+$fn$;
+
+CREATE OR REPLACE FUNCTION public.update_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
 END;
 $fn$;
 

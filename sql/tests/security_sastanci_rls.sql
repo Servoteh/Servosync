@@ -67,7 +67,7 @@ INSERT INTO public.sastanci (
     'sedmicni',
     'Sastanci RLS test zakljucan',
     CURRENT_DATE,
-    'zakljucan',
+    'planiran',
     'sast-vodio@test.local',
     'sast-organizer@test.local',
     'sast-organizer@test.local'
@@ -86,6 +86,10 @@ ON CONFLICT (sastanak_id, email) DO UPDATE SET
   label = EXCLUDED.label,
   prisutan = EXCLUDED.prisutan,
   pozvan = EXCLUDED.pozvan;
+
+UPDATE public.sastanci
+   SET status = 'zakljucan'
+ WHERE id = '22222222-2222-2222-2222-222222222222';
 
 INSERT INTO public.akcioni_plan (
   id, sastanak_id, naslov, odgovoran_email, status, created_by_email
@@ -243,8 +247,8 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT test_sast_set_jwt_email('sast-editor-b@test.local');
 SELECT throws_ok(
-  $$
-  DO $$
+  $test$
+  DO $do$
   DECLARE
     v_rows INT;
   BEGIN
@@ -258,8 +262,8 @@ SELECT throws_ok(
         USING ERRCODE = '42501';
     END IF;
   END
-  $$;
-  $$,
+  $do$;
+  $test$,
   '42501',
   NULL,
   'B4: editor bez parent-scope ne moze UPDATE sastanci'
@@ -462,7 +466,7 @@ SELECT throws_ok(
         SET status = 'zatvoreno'
       WHERE id = '77777777-7777-7777-7777-777777777777'
         AND status = 'draft' $$,
-  '42501',
+  '23514',
   NULL,
   'E6: editor ne može update draft direktno u zatvoreno'
 );

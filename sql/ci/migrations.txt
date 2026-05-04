@@ -37,6 +37,16 @@ sql/migrations/add_maintenance_module.sql
 sql/migrations/add_reversi_module.sql
 sql/migrations/add_reversi_reversal_pdf_storage.sql
 
+# Sastanci — baza + RLS hardening + prefs/draft/lock/RPC koje pokrivaju pgTAP testovi
+sql/migrations/add_sastanci_module.sql
+sql/migrations/harden_sastanci_rls_phase2.sql
+sql/migrations/harden_sastanci_write_rls.sql
+sql/migrations/add_sastanci_locked_guard.sql
+sql/migrations/add_sastanci_notification_prefs.sql
+sql/migrations/add_sast_pm_teme_draft.sql
+sql/migrations/add_sast_draft_rls.sql
+sql/migrations/add_sast_zakljucaj_rpc.sql
+
 sql/migrations/add_maint_machines_catalog.sql
 sql/migrations/add_maint_machine_responsible.sql
 sql/migrations/add_maint_locations.sql

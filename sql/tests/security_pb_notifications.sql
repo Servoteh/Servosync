@@ -4,7 +4,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(8);
+SELECT plan(7);
 
 -- ─── Seed admin + običan korisnik (kao security_pb_rls) ───────────────────
 SET LOCAL row_security = off;
@@ -78,13 +78,16 @@ SELECT lives_ok(
   'authenticated može SELECT pb_notification_config'
 );
 
--- 5) Config UPDATE — non-admin NE SME
-SELECT throws_ok(
-  $$ UPDATE public.pb_notification_config SET deadline_warning_days = 5 WHERE id = 1 $$,
-  '42501',
-  NULL,
+-- 5) Config UPDATE — non-admin ne menja red (RLS filtrira UPDATE na 0 rows)
+UPDATE public.pb_notification_config SET deadline_warning_days = 5 WHERE id = 1;
+RESET ROLE;
+SET LOCAL row_security = off;
+SELECT is(
+  (SELECT deadline_warning_days FROM public.pb_notification_config WHERE id = 1),
+  3,
   'viewer NE može UPDATE pb_notification_config'
 );
+SET LOCAL row_security = on;
 
 RESET ROLE;
 SET LOCAL ROLE authenticated;

@@ -60,7 +60,7 @@ export async function loadSveArhive({ limit = 100 } = {}) {
  *
  * @returns {Promise<{ ok: boolean, archive?: object, error?: string }>}
  */
-export async function arhivirajSastanak(sastanakId, { pdfUrl = null, pdfStoragePath = null } = {}) {
+export async function zakljucajSastanakRpc(sastanakId, { pdfUrl = null, pdfStoragePath = null } = {}) {
   if (!sastanakId || !getIsOnline()) {
     return { ok: false, error: 'Nema sastanka ili nismo online.' };
   }
@@ -81,7 +81,14 @@ export async function arhivirajSastanak(sastanakId, { pdfUrl = null, pdfStorageP
     };
   }
 
-  return { ok: true, result, archive: await loadArhiva(sastanakId) };
+  return { ok: true, result };
+}
+
+export async function arhivirajSastanak(sastanakId, { pdfUrl = null, pdfStoragePath = null } = {}) {
+  const locked = await zakljucajSastanakRpc(sastanakId, { pdfUrl, pdfStoragePath });
+  if (!locked.ok) return locked;
+
+  return { ok: true, result: locked.result, archive: await loadArhiva(sastanakId) };
 }
 
 /* ── PDF generisanje ── */

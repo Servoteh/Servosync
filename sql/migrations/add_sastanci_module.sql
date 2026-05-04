@@ -416,6 +416,16 @@ CREATE POLICY "sastanak_slike_delete"
   ON storage.objects FOR DELETE TO authenticated
   USING (bucket_id = 'sastanak-slike' AND public.has_edit_role());
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.projekt_bigtehn_rn TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sastanci TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sastanak_ucesnici TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pm_teme TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.akcioni_plan TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.presek_aktivnosti TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.presek_slike TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sastanak_arhiva TO authenticated;
+GRANT SELECT ON public.v_akcioni_plan TO authenticated;
+
 -- ============================================================================
 -- 12) Verifikacija (čisti SELECT-i, bez PL/pgSQL bloka da ne bi bilo
 --     problema sa parserom Supabase SQL editora)

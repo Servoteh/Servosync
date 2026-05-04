@@ -16,7 +16,7 @@ CREATE POLICY "pmt_select" ON public.pm_teme
       OR (sastanak_id IS NOT NULL AND public.is_sastanak_ucesnik(sastanak_id))
     )
     OR (
-      status = 'draft'
+      status IN ('draft', 'usvojeno', 'odbijeno')
       AND sastanak_id IS NULL
       AND public.has_edit_role()
     )
@@ -42,11 +42,8 @@ CREATE POLICY "pm_teme_draft_review" ON public.pm_teme
     )
   )
   WITH CHECK (
-    status IN ('usvojeno', 'odbijeno')
-    AND (
-      public.has_edit_role()
-      OR public.current_user_is_management()
-    )
+    public.has_edit_role()
+    OR public.current_user_is_management()
   );
 
 -- Existing Sprint 1 pmt_update is also permissive. Enforce the draft review

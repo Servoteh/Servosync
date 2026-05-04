@@ -729,6 +729,23 @@ GRANT EXECUTE ON FUNCTION rev_confirm_return(jsonb) TO authenticated;
 -- 13. View: v_rev_my_issued_tools
 -- ------------------------------------------------------------
 
+CREATE OR REPLACE FUNCTION public.rev_current_employee_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT id
+  FROM public.employees
+  WHERE lower(email) = lower(auth.jwt() ->> 'email')
+    AND is_active IS TRUE
+  LIMIT 1;
+$$;
+
+REVOKE ALL ON FUNCTION public.rev_current_employee_id() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rev_current_employee_id() TO authenticated;
+
 CREATE OR REPLACE VIEW v_rev_my_issued_tools
 WITH (security_invoker = true)
 AS
@@ -753,10 +770,7 @@ WHERE
   l.line_type    = 'TOOL'
   AND l.line_status = 'ISSUED'
   AND d.status   IN ('OPEN', 'PARTIALLY_RETURNED')
-  AND d.recipient_employee_id IN (
-    SELECT id FROM employees
-    WHERE lower(email) = lower(auth.jwt() ->> 'email')
-  );
+  AND d.recipient_employee_id = public.rev_current_employee_id();
 
 REVOKE ALL ON v_rev_my_issued_tools FROM anon;
 GRANT SELECT ON v_rev_my_issued_tools TO authenticated;
