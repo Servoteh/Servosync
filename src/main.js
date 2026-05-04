@@ -5,6 +5,7 @@ import './styles/planProizvodnje.css';
 import './styles/sastanci.css';
 import './styles/maintenance.css';
 import './styles/pb.css';
+import './styles/reversi.css';
 import './styles/mobile.css';
 
 import { APP_DOCUMENT_TITLE, hasSupabaseConfig } from './lib/constants.js';

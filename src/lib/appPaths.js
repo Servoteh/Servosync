@@ -70,6 +70,9 @@ export function pathnameToRoute(pathname) {
   if (p === '/lokacije-delova') {
     return { kind: 'module', moduleId: 'lokacije-delova' };
   }
+  if (p === '/reversi') {
+    return { kind: 'module', moduleId: 'reversi' };
+  }
   if (p === '/plan-proizvodnje') {
     return { kind: 'module', moduleId: 'plan-proizvodnje' };
   }
@@ -185,6 +188,7 @@ export function pathForModule(moduleId) {
   const map = {
     'plan-montaze': '/plan-montaze',
     'lokacije-delova': '/lokacije-delova',
+    reversi: '/reversi',
     'plan-proizvodnje': '/plan-proizvodnje',
     'pracenje-proizvodnje': '/pracenje-proizvodnje',
     kadrovska: '/kadrovska',

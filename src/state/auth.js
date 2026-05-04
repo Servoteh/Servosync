@@ -263,6 +263,17 @@ export function canAccessLokacije() {
   return !!state.user;
 }
 
+/** Reversi — kreiranje dokumenata i potvrda povraćaja (paritet sa rev_can_manage u bazi). */
+export function canManageReversi() {
+  if (!state.user) return false;
+  return ['admin', 'menadzment', 'pm', 'leadpm', 'magacioner'].includes(state.role);
+}
+
+/** Reversi modul — svi prijavljeni (čitanje + „moja zaduženja”). */
+export function canAccessReversi() {
+  return !!state.user;
+}
+
 /** Sync monitor (loc_sync_outbound_events) — samo admin po RLS-u. */
 export function canViewLokacijeSync() {
   return state.role === 'admin';
