@@ -454,7 +454,9 @@ export async function listAutoCooperationGroups() {
  *
  * Čita prvo iz `v_active_bigtehn_work_orders` (po `ident_broj`, opciono i
  * `varijanta` kada je prosleđena iz RNZ barkoda) — tu su **broj crteža** i
- * **ukupna količina**. Zatim, ako je TP **čisto numerički**, pokušava
+ * **ukupna količina**. Ako red nije u MES aktivnoj listi, fallback na isti
+ * `ident_broj` u `bigtehn_work_orders_cache` (autofill crteža i dalje).
+ * Zatim, ako je TP **čisto numerički**, pokušava
  * `komada_done` iz `bigtehn_tech_routing_cache` (operacija = broj).
  *
  * @param {string} rnIdentBroj  npr. `"9000"` (prvi segment `ident_broj`)
@@ -508,7 +510,7 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
     'status_rn',
   ].join(',');
 
-  const tryFetchWo = async idCandidate => {
+  const tryFetchWo = async (table, idCandidate) => {
     const p = new URLSearchParams();
     p.set('select', woCols);
     p.set('ident_broj', `eq.${idCandidate}`);
@@ -516,7 +518,7 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
       p.set('varijanta', `eq.${varFilter}`);
     }
     p.set('limit', '8');
-    const data = await sbReq(`v_active_bigtehn_work_orders?${p.toString()}`);
+    const data = await sbReq(`${table}?${p.toString()}`);
     return Array.isArray(data) ? data : [];
   };
 
@@ -538,8 +540,17 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
   let woRows = [];
   for (const c of candidates) {
     if (!c) continue;
-    woRows = await tryFetchWo(c);
+    woRows = await tryFetchWo('v_active_bigtehn_work_orders', c);
     if (woRows.length > 0) break;
+  }
+  /* RN postoji u BigTehn cache-u ali još nije u ručnoj MES listi — i dalje
+   * autofill-ujemo crtež / id sa istog ident_broj+varijanta reda. */
+  if (woRows.length === 0) {
+    for (const c of candidates) {
+      if (!c) continue;
+      woRows = await tryFetchWo('bigtehn_work_orders_cache', c);
+      if (woRows.length > 0) break;
+    }
   }
   if (woRows.length === 0) return null;
   if (woRows.length > 1) {
