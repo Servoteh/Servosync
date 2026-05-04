@@ -247,8 +247,8 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT test_sast_set_jwt_email('sast-editor-b@test.local');
 SELECT throws_ok(
-  $$
-  DO $$
+  $test$
+  DO $do$
   DECLARE
     v_rows INT;
   BEGIN
@@ -262,8 +262,8 @@ SELECT throws_ok(
         USING ERRCODE = '42501';
     END IF;
   END
-  $$;
-  $$,
+  $do$;
+  $test$,
   '42501',
   NULL,
   'B4: editor bez parent-scope ne moze UPDATE sastanci'
