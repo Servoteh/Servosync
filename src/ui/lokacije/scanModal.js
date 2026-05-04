@@ -637,9 +637,12 @@ export async function openScanMoveModal({
     range.min = String(cap.min);
     range.max = String(cap.max);
     range.step = String(cap.step || 0.1);
-    range.value = String(cap.current || cap.min);
-    label.textContent = `${Number(range.value).toFixed(1)}×`;
+    /* Auto-start na 2× da radnik ne mora da zumuira ručno za A4 nalepnice. */
+    const autoZoom = Math.min(cap.max, Math.max(cap.min, 2.0));
+    range.value = String(autoZoom);
+    label.textContent = `${autoZoom.toFixed(1)}×`;
     wrap.hidden = false;
+    if (state.scanCtrl?.setZoom) await state.scanCtrl.setZoom(autoZoom);
     /* Live update — iOS Safari može da primeni zoom sinhronizovano (hardware),
      * Android često ima 200-300ms latenciju. Radi i jedno i drugo. */
     range.addEventListener('input', async () => {
