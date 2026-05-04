@@ -44,8 +44,58 @@ Za svakog primaoca kreira se virtuelna `loc_locations` lokacija (lazy, pri prvom
 | Citanje liste svih reversala | svi ulogovani |
 | Moja zaduzenja (self-service) | svi ulogovani (view `v_rev_my_issued_tools`) |
 
+## Seed iz xlsx (Sprint R2)
+
+Skripta: `scripts/seed-reversi-tools.mjs`. Kopiraj `Akumulatorske_brusilice.xlsx` i `Akumulatorske_s_rafilice_hilti.xlsx` u `scripts/data/` (vidi `scripts/data/README.txt`). Env: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SEED_ISSUED_BY_USER_ID`, plus `SUPABASE_ANON_KEY` i `SEED_USER_JWT` (JWT korisnika koji sme da poziva `loc_create_movement`, jer koristi `auth.uid()`). Preporuka: `DRY_RUN=true node scripts/seed-reversi-tools.mjs`, zatim pravo pokretanje.
+
+## Ručni unos alata
+
+Novi alat se unosi u dva koraka iz Supabase SQL Editora (ili iz budućeg UI-a):
+
+### Korak 1 — Dodaj alat u rev_tools
+
+```sql
+INSERT INTO rev_tools (oznaka, naziv, serijski_broj, datum_kupovine, napomena, status)
+VALUES (
+  '19',                              -- Jedinstvena oznaka alata
+  'Brusilica aku. Bosch GWS 18V-10', -- Pun naziv
+  '3601JN9003',                      -- Serijski broj (opciono)
+  '2026-05-04',                      -- Datum kupovine (opciono)
+  '2 baterije 4Ah, punjač',          -- Pribor (opciono)
+  'active'
+);
+```
+
+### Korak 2 — Postavi početni smeštaj u magacin alata
+
+```sql
+-- Dohvati id alata koji si upravo uneo
+WITH tool AS (
+  SELECT id, loc_item_ref_id FROM rev_tools WHERE oznaka = '19'
+),
+-- Dohvati id magacina alata
+mag AS (
+  SELECT id FROM loc_locations WHERE location_code = 'ALAT-MAG-01'
+)
+SELECT loc_create_movement(jsonb_build_object(
+  'item_ref_table',  'rev_tools',
+  'item_ref_id',     tool.loc_item_ref_id,
+  'to_location_id',  mag.id,
+  'movement_type',   'INITIAL_PLACEMENT',
+  'movement_reason', 'Ručni unos',
+  'note',            '',
+  'quantity',        1,
+  'order_no',        '',
+  'drawing_no',      ''
+))
+FROM tool, mag;
+```
+
+### Ako alat odmah zadužuješ
+
+Nakon koraka 2, klikni „Novo zaduženje” u UI modulu Reversi i odaberi alat.
+
 ## Sledeci sprintovi
 
-- **R2** — Seed alata iz xlsx fajlova (brusilice + srafilice Hilti)
 - **R3** — UI: inventar alata, lista reversal dokumenata, filteri
 - **R4** — jsPDF potpisnica (obrazac sa prostorom za potpis)
