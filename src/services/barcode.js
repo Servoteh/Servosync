@@ -21,27 +21,30 @@ import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 export { normalizeBarcodeText, parseBigTehnBarcode } from '../lib/barcodeParse.js';
 
 /**
- * ZXing decode hints koje značajno poboljšavaju uspešnost na malim/
- * blurry barkodovima (BigTehn Code128 na A4 nalepnicama).
+ * ZXing hints za **live kameru** (kontinuirani decode po frejmu).
  *
- *   - POSSIBLE_FORMATS: ograničavamo ZXing da ne proba 14+ formata za svaki
- *     frame. Code128 je BigTehn standard; Code39 rezerva; QR ako neko kasnije
- *     stampa QR; EAN fallback. Ovo samo po sebi ~2× ubrzava dekodiranje.
- *   - TRY_HARDER: ZXing ulaže više CPU-a po frame-u (rotira, skaluje, probava
- *     više binarizacija). Na iPhone 11+ to znači samo +5-10ms po frame-u, a
- *     uspešnost na manjim/blurry kodovima skače znatno.
- *   - ASSUME_GS1: ne koristimo GS1 format, isključujemo ga eksplicitno da
- *     ZXing ne trati ciklus na tom grani.
+ * BigTehn RNZ nalepnice su Code128 (ponekad Code39). QR/EAN u listi znače da
+ * ZXing za svaki frame prođe kroz više dekodera — osećaj „sporo“ na velikom
+ * A4 gde je linija tanka u odnosu na ceo kadar. Zato ovde samo 1D formati.
+ *
+ * TRY_HARDER na live feed-u značajno podiže CPU po frejmu (rotacije, više
+ * binarizacija). Namenski 1D skener to radi u hardveru; ovde biramo brži
+ * put — pouzdanost na mutnom kodu i dalje preko više px (1080p) i „iz slike“.
  */
-const SCAN_HINTS = new Map();
-SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
+const LIVE_SCAN_HINTS = new Map();
+LIVE_SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
   BarcodeFormat.CODE_128,
   BarcodeFormat.CODE_39,
-  BarcodeFormat.QR_CODE,
-  BarcodeFormat.EAN_13,
-  BarcodeFormat.EAN_8,
 ]);
-SCAN_HINTS.set(DecodeHintType.TRY_HARDER, true);
+LIVE_SCAN_HINTS.set(DecodeHintType.TRY_HARDER, false);
+
+/** Jednokratni decode iz fajla — jedan frejm, TRY_HARDER pomaže bez „lag“ osećaja. */
+const STILL_IMAGE_SCAN_HINTS = new Map();
+STILL_IMAGE_SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
+  BarcodeFormat.CODE_128,
+  BarcodeFormat.CODE_39,
+]);
+STILL_IMAGE_SCAN_HINTS.set(DecodeHintType.TRY_HARDER, true);
 
 /**
  * @typedef {object} ScanController
@@ -99,30 +102,10 @@ export function isAndroidWebCameraTorchZoomHidden() {
   return false;
 }
 
-/**
- * Mobilni / tablet: niži ideal (1280×720) → brži `getUserMedia` i `video.play`
- * nego 1080p; i dalje dovoljno za Code128 na nalepnici. Desktop zadržava 1080p.
- * @returns {boolean}
- */
-function prefersFastCameraConstraints() {
-  try {
-    if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) return true;
-  } catch {
-    /* ignore */
-  }
-  if (isAndroidWebCameraTorchZoomHidden()) return true;
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-  if (/iPhone|iPod|iPad/i.test(ua)) return true;
-  if (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) {
-    return true;
-  }
-  return false;
-}
-
 /** @zxing/browser podrazumevano 500 ms između NotFound pokušaja — previše spor „osećaj“. */
 const ZXING_READER_OPTIONS = {
-  delayBetweenScanAttempts: 80,
-  delayBetweenScanSuccess: 280,
+  delayBetweenScanAttempts: 50,
+  delayBetweenScanSuccess: 200,
   tryPlayVideoTimeout: 5000,
 };
 
@@ -151,8 +134,8 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     throw e;
   }
 
-  /* Hints-aware reader → značajno brži i pouzdaniji za BigTehn Code128. */
-  const reader = new BrowserMultiFormatReader(SCAN_HINTS, ZXING_READER_OPTIONS);
+  /* Uži format + bez TRY_HARDER na live = bliže brzini namenskog 1D skenera. */
+  const reader = new BrowserMultiFormatReader(LIVE_SCAN_HINTS, ZXING_READER_OPTIONS);
 
   const isAndroid = isAndroidWebCameraTorchZoomHidden();
 
@@ -161,20 +144,15 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
    *   - Inače → `facingMode: ideal`; scanModal.js detektuje front output i
    *     restart-uje sa `forceDeviceId`.
    *
-   * Rezolucija: na telefonu/tabletu 1280×720 (brži start kamere od 1080p);
-   * desktop 1920×1080 za više px/mm na sitnim kodovima.
+   * Rezolucija: uvek 1080p ideal i na mobilnom — na A4 nalepnici barkod je
+   * često mali deo kadra; 720p je ubrzao start kamere ali smanjio je uspeh
+   * brzine dekodiranja (manje px/mm po modulu).
    */
-  const videoBase = prefersFastCameraConstraints()
-    ? {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 30 },
-      }
-    : {
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        frameRate: { ideal: 30 },
-      };
+  const videoBase = {
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30 },
+  };
   const constraints = forceDeviceId
     ? { video: { ...videoBase, deviceId: { exact: forceDeviceId } } }
     : { video: { ...videoBase, facingMode: { ideal: 'environment' } } };
@@ -372,7 +350,7 @@ export async function decodeBarcodeFromFile(file) {
   const url = URL.createObjectURL(file);
   try {
     const img = await loadImage(url);
-    const reader = new BrowserMultiFormatReader(SCAN_HINTS);
+    const reader = new BrowserMultiFormatReader(STILL_IMAGE_SCAN_HINTS);
     try {
       const result = await reader.decodeFromImageElement(img);
       return { text: result.getText(), format: result.getBarcodeFormat?.().toString() };
