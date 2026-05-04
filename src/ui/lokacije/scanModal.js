@@ -914,7 +914,11 @@ export async function openScanMoveModal({
         erpLookupStatus = 'offline';
       } else {
         try {
-          erpSnap = await fetchBigtehnOpSnapshotByRnAndTp(orderNo, itemRefId);
+          const erpOpts =
+            format === 'rnz' && payload.varijanta != null && String(payload.varijanta).trim() !== ''
+              ? { varijanta: payload.varijanta }
+              : {};
+          erpSnap = await fetchBigtehnOpSnapshotByRnAndTp(orderNo, itemRefId, erpOpts);
           erpLookupStatus = erpSnap ? 'ok' : 'not_found';
         } catch (e) {
           console.warn('[scan] ERP snapshot failed', e);

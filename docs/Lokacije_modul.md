@@ -84,7 +84,10 @@ Jednokratni seed: `sql/seed/loc_seed_bigtehn_positions.sql`.
 
 `src/lib/lokacijeTypes.js` — zajedničko značenje HALA/POLICA tipova za desktop i mobilni UI  
 `src/ui/lokacije/` — `index.js`, `modals.js`, `scanModal.js`, `labelsPrint.js`, `lookupModals.js`  
-`src/services/lokacije.js` (servis za RPC `loc_report_parts_by_locations` i `fetchAll…`) · `src/state/lokacije.js` (tab `report`, filteri, sort, paginacija) · `src/lib/lokacijeFilters.js` · `src/lib/barcodeParse.js` (parser + encoderi `formatBigTehnRnzBarcode`/`formatBigTehnShortBarcode`)  
+`src/services/lokacije.js` (servis za RPC `loc_report_parts_by_locations` i `fetchAll…`) · `src/state/lokacije.js` (tab `report`, filteri, sort, paginacija) · `src/lib/lokacijeFilters.js` · `src/lib/barcodeParse.js` (parser + encoderi `formatBigTehnRnzBarcode`/`formatBigTehnShortBarcode`)
+
+RNZ barkod: `RNZ:{idrn}:{orderNo}/{itemRefId}:{varijanta}:{field4}` — `orderNo` je broj; `itemRefId` može biti alfanumerički (npr. `7-5-S1`); ERP lookup koristi `ident_broj = orderNo/itemRefId` i opciono `varijanta` iz barkoda; `drawingNo` iz ERP-a (`fetchBigtehnOpSnapshotByRnAndTp`).
+
 Mobilno: `src/ui/mobile/mobileHome.js`, `mobileLookup.js`, `mobileHistory.js`, `mobileBatch.js`  
 Stil: `src/styles/legacy.css` (prefiks `loc-`)  
 PWA: `docs/MOBILE.md`

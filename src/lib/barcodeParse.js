@@ -35,17 +35,21 @@ export function normalizeBarcodeText(raw) {
  *   nalepnice ili se auto-popunjava iz prethodnih placement-a.
  * @property {'rnz'|'short'|'ocr'} format Koji je format prepoznat (`ocr` = tekst sa nalepnice).
  * @property {string} raw Originalni očišćeni tekst.
+ * @property {string} [idrn] RNZ: prvi broj (ID dokumenta).
+ * @property {string} [varijanta] RNZ: segment posle TP (ERP kolona `varijanta`).
+ * @property {string} [field4] RNZ: poslednji broj u barkodu (npr. timer — ne koristi se za lookup).
  */
 
 /**
  * Parsiraj BigTehn barkod iz jednog od dva potvrđena formata.
  *
  * **Format A — RNZ (trenutno u produkciji):**
- *   `RNZ:8693:7351/1088:0:39757`
+ *   `RNZ:8693:7351/1088:0:39757` ili `RNZ:9833:9400/7-5-S1:1:44963`
  *     - `RNZ`          prefix (konstantan)
- *     - `8693`         interni BigTehn ID — ignorišemo
- *     - `7351/1088`    **broj naloga / broj TP** ← koristimo
- *     - `0:39757`      interni separatori/ID-ovi — ignorišemo
+ *     - `9833`         `idrn` (interni ID dokumenta)
+ *     - `9400/7-5-S1`  **broj naloga / TP ref** (`itemRefId` može biti alfanumerički + `.-_`)
+ *     - `1`            `varijanta` (ERP; lookup po `varijanta` kad je u barkodu)
+ *     - `44963`        `field4` (npr. timer — ne mapira se na crtež u parseru)
  *
  *   U ovom formatu broj crteža NIJE u barkodu — samo na štampanom tekstu
  *   nalepnice. Parser vraća `drawingNo = ''`; UI ga auto-popunjava iz
@@ -65,19 +69,21 @@ export function parseBigTehnBarcode(raw) {
   const clean = normalizeBarcodeText(raw);
   if (!clean) return null;
 
-  /* RNZ format — isprobava se PRVI jer je stroža regex (mora da počne sa
-   * RNZ:). Ako ne prolazi, fallback na short. */
+  /* RNZ — PRE regex je zahtevao TP kao \d{1,8} (npr. 1088), pa "7-5-S1" nije prolazio. */
   const rnz = clean.match(
-    /^RNZ\s*[:|]\s*\d{1,10}\s*[:|]\s*(\d{1,8})\s*[/\\\-_ ]\s*(\d{1,8})\s*[:|]\s*\d+\s*[:|]\s*\d+\s*$/i,
+    /^RNZ\s*[:|]\s*(\d{1,10})\s*[:|]\s*(\d{1,8})\s*[/\\\-_ ]\s*([A-Za-z0-9._-]{1,64})\s*[:|]\s*(\d+)\s*[:|]\s*(\d+)\s*$/i,
   );
   if (rnz) {
-    const [, orderNo, tpNo] = rnz;
+    const [, idrn, orderNo, itemRefId, varijanta, field4] = rnz;
     return {
       orderNo,
-      itemRefId: tpNo,
+      itemRefId,
       drawingNo: '',
       format: 'rnz',
       raw: clean,
+      idrn,
+      varijanta,
+      field4,
     };
   }
 

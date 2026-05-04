@@ -33,20 +33,38 @@ describe('normalizeBarcodeText', () => {
 describe('parseBigTehnBarcode — RNZ format (current production)', () => {
   it('parsira realan RNZ barkod iz magacina', () => {
     expect(parseBigTehnBarcode('RNZ:8693:7351/1088:0:39757')).toEqual({
+      idrn: '8693',
       orderNo: '7351',
       itemRefId: '1088',
       drawingNo: '',
       format: 'rnz',
       raw: 'RNZ:8693:7351/1088:0:39757',
+      varijanta: '0',
+      field4: '39757',
     });
   });
 
-  it('ignoriše interne brojeve (8693, 0, 39757)', () => {
-    /* 8693 = neki interni ID, 0 = flag, 39757 = drugi ID — nas ne zanima. */
+  it('parsira alfanumerički TP i varijantu (RNZ)', () => {
+    const r = parseBigTehnBarcode('RNZ:9833:9400/7-5-S1:1:44963');
+    expect(r).toMatchObject({
+      format: 'rnz',
+      idrn: '9833',
+      orderNo: '9400',
+      itemRefId: '7-5-S1',
+      varijanta: '1',
+      field4: '44963',
+      drawingNo: '',
+    });
+  });
+
+  it('izdvaja idrn, varijantu i field4', () => {
     const a = parseBigTehnBarcode('RNZ:1:5000/100:0:99999');
     expect(a?.orderNo).toBe('5000');
     expect(a?.itemRefId).toBe('100');
     expect(a?.format).toBe('rnz');
+    expect(a?.idrn).toBe('1');
+    expect(a?.varijanta).toBe('0');
+    expect(a?.field4).toBe('99999');
   });
 
   it('toleriše razmake između segmenata', () => {
