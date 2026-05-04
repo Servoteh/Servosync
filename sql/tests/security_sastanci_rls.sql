@@ -466,7 +466,7 @@ SELECT throws_ok(
         SET status = 'zatvoreno'
       WHERE id = '77777777-7777-7777-7777-777777777777'
         AND status = 'draft' $$,
-  '42501',
+  '23514',
   NULL,
   'E6: editor ne može update draft direktno u zatvoreno'
 );

@@ -42,11 +42,8 @@ CREATE POLICY "pm_teme_draft_review" ON public.pm_teme
     )
   )
   WITH CHECK (
-    status IN ('usvojeno', 'odbijeno')
-    AND (
-      public.has_edit_role()
-      OR public.current_user_is_management()
-    )
+    public.has_edit_role()
+    OR public.current_user_is_management()
   );
 
 -- Existing Sprint 1 pmt_update is also permissive. Enforce the draft review
