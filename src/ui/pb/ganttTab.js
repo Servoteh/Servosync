@@ -1,14 +1,15 @@
 /**
- * Gantt tab — timeline po inženjeru, plan vs real trake.
+ * Gantt tab — timeline po inženjeru, plan + ostvareni trake, drag datuma, selekcija kolone.
  */
 
-import { escHtml } from '../../lib/dom.js';
+import { escHtml, showToast } from '../../lib/dom.js';
 import { openTaskEditorModal } from './shared.js';
 import { canEditProjektniBiro } from '../../state/auth.js';
+import { updatePbTask } from '../../services/pb.js';
 
 /**
  * @param {object} task
- * @param {Date|string} startDate — prvi dan vidljivog opsega
+ * @param {Date|string} startDate
  * @param {number} dayWidthPx
  * @returns {{ left: number, width: number } | null}
  */
@@ -34,6 +35,13 @@ function parseYmd(s) {
   if (!s) return null;
   const d = new Date(String(s).slice(0, 10) + 'T12:00:00');
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function addDays(dateStr, n) {
+  const d = parseYmd(dateStr);
+  if (!d) return dateStr;
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 function firstOfMonth(d = new Date()) {
@@ -161,6 +169,10 @@ export function renderGanttTab(root, ctx) {
   let tipTimer = null;
   let tipNode = null;
 
+  // Column selection state
+  let selectedCols = new Set();
+  let shiftAnchor = null;
+
   function hideTip() {
     if (tipTimer) clearTimeout(tipTimer);
     tipTimer = null;
@@ -193,14 +205,15 @@ export function renderGanttTab(root, ctx) {
         )
         : '—';
     return [
-      escHtml(task.naziv || ''),
+      `<strong>${escHtml(task.naziv || '')}</strong>`,
       `Projekat: ${escHtml(task.project_code || '—')}`,
       `Plan: ${escHtml((task.datum_pocetka_plan || '').slice(0, 10))} — ${escHtml((task.datum_zavrsetka_plan || '').slice(0, 10))}`,
+      task.datum_pocetka_real ? `Ostvaren: ${escHtml((task.datum_pocetka_real || '').slice(0, 10))} — ${escHtml((task.datum_zavrsetka_real || '').slice(0, 10))}` : '',
       `Trajanje: ${dur} dana`,
       `Status: ${escHtml(task.status || '')}`,
       `Inženjer: ${escHtml(task.engineer_name || '—')}`,
       `Završenost: ${pct}%`,
-    ].join('<br/>');
+    ].filter(Boolean).join('<br/>');
   }
 
   function barsHtml(task) {
@@ -209,9 +222,14 @@ export function renderGanttTab(root, ctx) {
     const cls = statusBarClass(task.status);
     let inner = '';
     if (geo) {
-      inner += `<div class="pb-gantt-bar ${cls}" data-task-id="${escHtml(task.id)}" style="left:${geo.left}px;width:${geo.width}px" tabindex="0">
+      // Plan bar (top)
+      inner += `<div class="pb-gantt-bar pb-gantt-bar--plan ${cls}" data-task-id="${escHtml(task.id)}" data-drag-type="move" style="left:${geo.left}px;width:${geo.width}px" tabindex="0" title="Plan">
+        <div class="pb-gantt-drag-l" data-task-id="${escHtml(task.id)}" data-drag-type="left"></div>
         <div class="pb-gantt-bar__prog" style="width:${pct}%"></div>
+        <div class="pb-gantt-drag-r" data-task-id="${escHtml(task.id)}" data-drag-type="right"></div>
       </div>`;
+
+      // Ostvareni bar (bottom)
       if (task.datum_pocetka_real && task.datum_zavrsetka_real) {
         const tReal = {
           ...task,
@@ -220,7 +238,7 @@ export function renderGanttTab(root, ctx) {
         };
         const g2 = ganttBarGeometry(tReal, rangeStart, dayW);
         if (g2) {
-          inner += `<div class="pb-gantt-real" data-task-id="${escHtml(task.id)}" style="left:${g2.left}px;width:${g2.width}px"></div>`;
+          inner += `<div class="pb-gantt-bar pb-gantt-bar--real" data-task-id="${escHtml(task.id)}" style="left:${g2.left}px;width:${g2.width}px" title="Ostvaren"></div>`;
         }
       }
     }
@@ -233,7 +251,7 @@ export function renderGanttTab(root, ctx) {
   ).join('');
 
   const today = new Date();
-  const dayRow = days.map(d => {
+  const dayRow = days.map((d, idx) => {
     const dow = d.getDay();
     const isW = dow === 0 || dow === 6;
     const isToday =
@@ -243,7 +261,7 @@ export function renderGanttTab(root, ctx) {
     let cls = 'pb-gantt-daycell';
     if (isW) cls += ' pb-gantt-daycell--wknd';
     if (isToday) cls += ' pb-gantt-daycell--today';
-    return `<th class="${cls}" style="width:${dayW}px;min-width:${dayW}px">${escHtml(String(d.getDate()).padStart(2, '0'))}</th>`;
+    return `<th class="${cls}" style="width:${dayW}px;min-width:${dayW}px" data-day-idx="${idx}" title="${d.toLocaleDateString('sr-Latn')}">${escHtml(String(d.getDate()).padStart(2, '0'))}</th>`;
   }).join('');
 
   let todayIdx = -1;
@@ -293,8 +311,8 @@ export function renderGanttTab(root, ctx) {
       <span><span class="pb-gantt-dot pb-gantt-bar--progress"></span> U toku</span>
       <span><span class="pb-gantt-dot pb-gantt-bar--review"></span> Pregled</span>
       <span><span class="pb-gantt-dot pb-gantt-bar--blocked"></span> Blokirano</span>
-      <span><span class="pb-gantt-dot pb-gantt-bar--done"></span> Završeno</span>
-      <span><span class="pb-gantt-real-leg"></span> Ostvareni period</span>
+      <span><span class="pb-gantt-dot pb-gantt-bar--done"></span> Završeno (plan)</span>
+      <span><span class="pb-gantt-dot pb-gantt-bar--real"></span> Ostvaren period</span>
       <span><span class="pb-gantt-today-mark"></span> Danas</span>
     </div>` : '';
 
@@ -346,96 +364,209 @@ export function renderGanttTab(root, ctx) {
     });
   }
 
-  root.querySelector('#pbGanttPrev')?.addEventListener(
-    'click',
-    () => {
-      const d = new Date(baseMonth);
-      d.setMonth(d.getMonth() - 1);
-      ctx.onViewMonthChange?.(d);
-    },
-    { signal: sig },
-  );
-  root.querySelector('#pbGanttNext')?.addEventListener(
-    'click',
-    () => {
-      const d = new Date(baseMonth);
-      d.setMonth(d.getMonth() + 1);
-      ctx.onViewMonthChange?.(d);
-    },
-    { signal: sig },
-  );
-  root.querySelector('#pbGanttToday')?.addEventListener(
-    'click',
-    () => {
-      if (!scrollEl || todayIdx < 0) return;
-      const target = Math.max(0, todayIdx * dayW - 4 * dayW);
-      scrollEl.scrollTo({ left: target, behavior: 'smooth' });
-    },
-    { signal: sig },
-  );
+  // --- Column selection ---
+  function renderColSelections() {
+    if (!scrollEl) return;
+    scrollEl.querySelectorAll('.pb-gantt-col-sel').forEach(el => el.remove());
+    for (const idx of selectedCols) {
+      const div = document.createElement('div');
+      div.className = 'pb-gantt-col-sel';
+      div.style.left = `${leftColW + idx * dayW}px`;
+      div.style.width = `${dayW}px`;
+      scrollEl.appendChild(div);
+    }
+  }
 
-  root.querySelector('#pbGanttNew')?.addEventListener(
-    'click',
-    () => {
-      openTaskEditorModal({
-        task: null,
-        projects: ctx.projects,
-        engineers: ctx.engineers,
-        canEdit,
-        onSaved: () => ctx.onRefresh?.(),
-      });
-    },
-    { signal: sig },
-  );
+  root.querySelectorAll('.pb-gantt-daycell').forEach((th, idx) => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', e => {
+      if (e.shiftKey && shiftAnchor !== null) {
+        const lo = Math.min(shiftAnchor, idx);
+        const hi = Math.max(shiftAnchor, idx);
+        selectedCols = new Set();
+        for (let i = lo; i <= hi; i++) selectedCols.add(i);
+      } else if (selectedCols.has(idx) && selectedCols.size === 1) {
+        selectedCols.clear();
+        shiftAnchor = null;
+      } else {
+        selectedCols = new Set([idx]);
+        shiftAnchor = idx;
+      }
+      renderColSelections();
+    }, { signal: sig });
+  });
 
-  root.addEventListener(
-    'click',
-    e => {
-      const row = e.target.closest('.pb-gantt-task-row');
-      const barOrReal = e.target.closest('.pb-gantt-bar, .pb-gantt-real');
-      const nameCell = e.target.closest('.pb-gantt-name');
-      const tid =
-        barOrReal?.getAttribute('data-task-id')
-        || row?.getAttribute('data-task-id')
-        || nameCell?.closest('tr')?.getAttribute('data-task-id');
-      if (!tid) {
-        if (!e.target.closest('.pb-gantt-bar') && !e.target.closest('.pb-gantt-tip')) hideTip();
+  // --- Drag to change dates ---
+  if (canEdit && !mobile) {
+    let dragState = null;
+
+    function startDrag(e, taskId, dragType) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const task = taskById(taskId);
+      if (!task) return;
+
+      const startX = e.clientX;
+      const origStart = task.datum_pocetka_plan;
+      const origEnd = task.datum_zavrsetka_plan;
+
+      const barEl = root.querySelector(`.pb-gantt-bar--plan[data-task-id="${CSS.escape(taskId)}"]`);
+      if (barEl) barEl.classList.add('dragging');
+
+      dragState = { taskId, dragType, startX, origStart, origEnd, barEl };
+
+      function onMove(ev) {
+        if (!dragState) return;
+        const dx = ev.clientX - startX;
+        const deltaDays = Math.round(dx / dayW);
+        if (deltaDays === 0) return;
+
+        const task2 = taskById(dragState.taskId);
+        if (!task2 || !dragState.barEl) return;
+
+        let newStart = origStart;
+        let newEnd = origEnd;
+
+        if (dragType === 'move') {
+          newStart = addDays(origStart, deltaDays);
+          newEnd = addDays(origEnd, deltaDays);
+        } else if (dragType === 'right') {
+          newEnd = addDays(origEnd, deltaDays);
+          if (newEnd < newStart) newEnd = newStart;
+        } else if (dragType === 'left') {
+          newStart = addDays(origStart, deltaDays);
+          if (newStart > newEnd) newStart = newEnd;
+        }
+
+        const previewTask = { ...task2, datum_pocetka_plan: newStart, datum_zavrsetka_plan: newEnd };
+        const g = ganttBarGeometry(previewTask, rangeStart, dayW);
+        if (g) {
+          dragState.barEl.style.left = `${g.left}px`;
+          dragState.barEl.style.width = `${g.width}px`;
+        }
+      }
+
+      async function onUp(ev) {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (!dragState) return;
+
+        const dx = ev.clientX - startX;
+        const deltaDays = Math.round(dx / dayW);
+        dragState.barEl?.classList.remove('dragging');
+
+        if (deltaDays !== 0) {
+          let newStart = origStart;
+          let newEnd = origEnd;
+          if (dragType === 'move') {
+            newStart = addDays(origStart, deltaDays);
+            newEnd = addDays(origEnd, deltaDays);
+          } else if (dragType === 'right') {
+            newEnd = addDays(origEnd, deltaDays);
+            if (newEnd < newStart) newEnd = newStart;
+          } else if (dragType === 'left') {
+            newStart = addDays(origStart, deltaDays);
+            if (newStart > newEnd) newStart = newEnd;
+          }
+          try {
+            await updatePbTask(dragState.taskId, {
+              datum_pocetka_plan: newStart,
+              datum_zavrsetka_plan: newEnd,
+            });
+            ctx.onRefresh?.();
+          } catch (err) {
+            showToast('Greška pri čuvanju datuma');
+            ctx.onRefresh?.();
+          }
+        }
+        dragState = null;
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    }
+
+    root.addEventListener('mousedown', e => {
+      const handle = e.target.closest('.pb-gantt-drag-l, .pb-gantt-drag-r');
+      const bar = e.target.closest('.pb-gantt-bar--plan');
+      if (handle) {
+        const tid = handle.getAttribute('data-task-id');
+        const dtype = handle.classList.contains('pb-gantt-drag-l') ? 'left' : 'right';
+        startDrag(e, tid, dtype);
         return;
       }
-      const task = taskById(tid);
-      if (!task) return;
-      if (barOrReal || nameCell) {
-        hideTip();
-        openTaskEditor(task);
+      if (bar && !e.target.closest('.pb-gantt-drag-l, .pb-gantt-drag-r')) {
+        const tid = bar.getAttribute('data-task-id');
+        startDrag(e, tid, 'move');
       }
-    },
-    { signal: sig },
-  );
+    }, { signal: sig });
+  }
 
-  root.addEventListener(
-    'mouseover',
-    e => {
-      const bar = e.target.closest('.pb-gantt-bar');
-      if (!bar) return;
+  // --- Navigation ---
+  root.querySelector('#pbGanttPrev')?.addEventListener('click', () => {
+    const d = new Date(baseMonth);
+    d.setMonth(d.getMonth() - 1);
+    ctx.onViewMonthChange?.(d);
+  }, { signal: sig });
+
+  root.querySelector('#pbGanttNext')?.addEventListener('click', () => {
+    const d = new Date(baseMonth);
+    d.setMonth(d.getMonth() + 1);
+    ctx.onViewMonthChange?.(d);
+  }, { signal: sig });
+
+  root.querySelector('#pbGanttToday')?.addEventListener('click', () => {
+    if (!scrollEl || todayIdx < 0) return;
+    const target = Math.max(0, todayIdx * dayW - 4 * dayW);
+    scrollEl.scrollTo({ left: target, behavior: 'smooth' });
+  }, { signal: sig });
+
+  root.querySelector('#pbGanttNew')?.addEventListener('click', () => {
+    openTaskEditorModal({
+      task: null,
+      projects: ctx.projects,
+      engineers: ctx.engineers,
+      canEdit,
+      onSaved: () => ctx.onRefresh?.(),
+    });
+  }, { signal: sig });
+
+  // --- Click to open editor ---
+  root.addEventListener('click', e => {
+    if (e.target.closest('.pb-gantt-drag-l, .pb-gantt-drag-r')) return;
+    const bar = e.target.closest('.pb-gantt-bar');
+    const nameCell = e.target.closest('.pb-gantt-name');
+    if (bar && !e.target.closest('.pb-gantt-drag-l, .pb-gantt-drag-r')) {
       const tid = bar.getAttribute('data-task-id');
       const task = tid ? taskById(tid) : null;
-      if (!task || mobile) return;
-      showTip(tooltipHtml(task), e.clientX, e.clientY);
-    },
-    { signal: sig },
-  );
-
-  root.addEventListener(
-    'touchstart',
-    e => {
-      const bar = e.target.closest('.pb-gantt-bar');
-      if (!bar) return;
-      const tid = bar.getAttribute('data-task-id');
+      if (task) { hideTip(); openTaskEditor(task); }
+      return;
+    }
+    if (nameCell) {
+      const tid = nameCell.closest('tr')?.getAttribute('data-task-id');
       const task = tid ? taskById(tid) : null;
-      if (!task) return;
-      const touch = e.changedTouches?.[0];
-      if (touch) showTip(tooltipHtml(task), touch.clientX, touch.clientY);
-    },
-    { passive: true, signal: sig },
-  );
+      if (task) { hideTip(); openTaskEditor(task); }
+    }
+  }, { signal: sig });
+
+  // --- Tooltip on hover ---
+  root.addEventListener('mouseover', e => {
+    const bar = e.target.closest('.pb-gantt-bar--plan');
+    if (!bar) return;
+    const tid = bar.getAttribute('data-task-id');
+    const task = tid ? taskById(tid) : null;
+    if (!task || mobile) return;
+    showTip(tooltipHtml(task), e.clientX, e.clientY);
+  }, { signal: sig });
+
+  root.addEventListener('touchstart', e => {
+    const bar = e.target.closest('.pb-gantt-bar--plan');
+    if (!bar) return;
+    const tid = bar.getAttribute('data-task-id');
+    const task = tid ? taskById(tid) : null;
+    if (!task) return;
+    const touch = e.changedTouches?.[0];
+    if (touch) showTip(tooltipHtml(task), touch.clientX, touch.clientY);
+  }, { passive: true, signal: sig });
 }

@@ -50,26 +50,49 @@ body.module-projektni-biro {
 
 .pb-chip-scroll {
   display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 10px;
+}
+
+.pb-eng-search-wrap {
+  flex-shrink: 0;
+}
+
+.pb-eng-search {
+  width: 120px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #444);
+  background: var(--surface, #1a1a1a);
+  color: inherit;
+  font-size: 0.85rem;
+}
+
+.pb-chip-list {
+  display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 8px 0 16px;
   scrollbar-width: thin;
+  padding-bottom: 2px;
 }
 
 .pb-chip {
   flex: 0 0 auto;
-  padding: 8px 14px;
+  padding: 6px 14px;
   border-radius: 999px;
   border: 1px solid var(--border, #555);
   background: var(--surface2, #252525);
   color: var(--text, #eee);
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
 }
 
 .pb-chip.active {
   border-color: var(--accent, #6ea8fe);
   background: rgba(110, 168, 254, 0.15);
+  color: var(--accent, #6ea8fe);
 }
 
 .pb-tabs {
@@ -125,20 +148,38 @@ body.module-projektni-biro {
 }
 
 .pb-stat-card {
-  padding: 12px;
+  padding: 14px 16px;
   border-radius: 10px;
   background: var(--surface2, #252525);
   border: 1px solid var(--border, #333);
 }
 
-.pb-stat-card span {
+.pb-stat-card--alert {
+  border-color: rgba(217, 83, 79, 0.4);
+}
+
+.pb-stat-card > span {
   display: block;
-  font-size: 0.8rem;
-  color: var(--text2, #999);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text3, #777);
+  margin-bottom: 4px;
 }
 
 .pb-stat-card strong {
-  font-size: 1.25rem;
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.pb-stat-sub {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text3, #777);
+  margin-top: 2px;
 }
 
 .pb-alarm-box {
@@ -167,23 +208,39 @@ body.module-projektni-biro {
 }
 
 .pb-section-title {
-  margin: 0 0 8px;
-  font-size: 1rem;
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text3, #777);
+}
+
+.pb-load-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px 24px;
+}
+
+@media (max-width: 767px) {
+  .pb-load-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .pb-load-row {
   display: grid;
-  grid-template-columns: 1fr minmax(120px, 2fr) 48px;
-  gap: 10px;
+  grid-template-columns: 1fr minmax(80px, 2fr) 48px;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 8px;
 }
 
 .pb-load-name {
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .pb-load-bar {
@@ -212,6 +269,7 @@ body.module-projektni-biro {
   font-size: 0.85rem;
 }
 
+/* --- Stari filter bar (zadrzan radi kompatibilnosti) --- */
 .pb-filter-bar {
   display: flex;
   flex-wrap: wrap;
@@ -243,6 +301,147 @@ body.module-projektni-biro {
   align-items: center;
   gap: 6px;
   font-size: 0.9rem;
+}
+
+/* --- Novi filter bar (pb-filter-bar2) --- */
+.pb-filter-bar2 {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pb-filter-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pb-search2 {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #444);
+  background: var(--surface, #1a1a1a);
+  color: inherit;
+  font-size: 0.9rem;
+}
+
+.pb-filter-chips2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.pb-fchip-select {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #444);
+  background: var(--surface2, #252525);
+  color: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  appearance: auto;
+}
+
+.pb-fchip-select.active {
+  border-color: var(--accent, #6ea8fe);
+  color: var(--accent, #6ea8fe);
+}
+
+.pb-fchip-btn {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #444);
+  background: var(--surface2, #252525);
+  color: var(--text2, #aaa);
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pb-fchip-btn.active {
+  border-color: var(--accent, #6ea8fe);
+  background: rgba(110, 168, 254, 0.12);
+  color: var(--accent, #6ea8fe);
+}
+
+.pb-fchip-reset {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #444);
+  background: transparent;
+  color: var(--text3, #777);
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.pb-fchip-reset:hover {
+  border-color: var(--text3, #777);
+  color: var(--text, #eee);
+}
+
+/* --- "Novi zadatak" row iznad tabele --- */
+.pb-new-task-row {
+  padding: 8px 0 10px;
+  text-align: center;
+}
+
+.pb-new-task-btn {
+  padding: 7px 20px;
+  border-radius: 8px;
+  border: 1px dashed var(--border, #555);
+  background: transparent;
+  color: var(--text2, #aaa);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pb-new-task-btn:hover {
+  border-color: var(--accent, #6ea8fe);
+  color: var(--accent, #6ea8fe);
+}
+
+/* --- Date display u tabeli --- */
+.pb-td-dates {
+  min-width: 130px;
+  line-height: 1.4;
+}
+
+.pb-td-dates-plan,
+.pb-td-dates-real {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.pb-td-dates-real {
+  color: var(--text2, #999);
+  margin-top: 2px;
+}
+
+.pb-date-lbl {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--text3, #777);
+  text-transform: uppercase;
+  min-width: 44px;
+}
+
+.pb-date-lbl--real {
+  color: var(--green, #5cb85c);
+}
+
+.pb-date-sep {
+  color: var(--text3, #777);
 }
 
 .pb-plan-split {
@@ -761,10 +960,10 @@ body.module-projektni-biro {
 .pb-gantt-real-leg {
   display: inline-block;
   width: 18px;
-  height: 4px;
+  height: 8px;
   border-radius: 2px;
   background: var(--green, #5cb85c);
-  opacity: 0.7;
+  opacity: 0.8;
   margin-right: 4px;
   vertical-align: middle;
 }
@@ -883,32 +1082,41 @@ body.module-projektni-biro {
   color: var(--accent, #6ea8fe);
 }
 
-.pb-gantt-track {
-  position: relative;
-  padding: 0;
-  border-bottom: 1px solid var(--border, #333);
-  height: 36px;
-  vertical-align: top;
-}
-
 .pb-gantt-track--grp {
   height: 32px;
   background: var(--surface3, #2a2a2a);
 }
 
-.pb-gantt-bar-host {
-  position: relative;
-  height: 36px;
-}
-
 .pb-gantt-bar {
   position: absolute;
-  top: 6px;
-  height: 22px;
   border-radius: 4px;
   box-sizing: border-box;
   cursor: pointer;
   overflow: hidden;
+}
+
+/* Plan bar — gornja traka */
+.pb-gantt-bar--plan {
+  top: 4px;
+  height: 18px;
+  cursor: grab;
+}
+
+.pb-gantt-bar--plan.dragging {
+  cursor: grabbing;
+  opacity: 0.75;
+  z-index: 5;
+}
+
+/* Ostvareni bar — donja traka */
+.pb-gantt-bar--real {
+  top: 26px;
+  height: 10px;
+  background: var(--green, #5cb85c);
+  opacity: 0.8;
+  border-radius: 3px;
+  cursor: default;
+  pointer-events: none;
 }
 
 .pb-gantt-bar__prog {
@@ -919,6 +1127,48 @@ body.module-projektni-biro {
   background: rgba(0, 0, 0, 0.22);
   pointer-events: none;
   border-radius: 4px 0 0 4px;
+}
+
+/* Drag handles */
+.pb-gantt-drag-l,
+.pb-gantt-drag-r {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.pb-gantt-drag-l { left: 0; }
+.pb-gantt-drag-r { right: 0; }
+
+/* Track row — povećana visina za dva bara */
+.pb-gantt-track {
+  position: relative;
+  padding: 0;
+  border-bottom: 1px solid var(--border, #333);
+  height: 44px;
+  vertical-align: top;
+}
+
+.pb-gantt-bar-host {
+  position: relative;
+  height: 44px;
+}
+
+/* Column selection overlay */
+.pb-gantt-col-sel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(110, 168, 254, 0.13);
+  border-left: 1px solid rgba(110, 168, 254, 0.3);
+  border-right: 1px solid rgba(110, 168, 254, 0.3);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .pb-gantt-bar--new {
@@ -940,16 +1190,6 @@ body.module-projektni-biro {
 
 .pb-gantt-bar--done {
   background: var(--green, #5cb85c);
-}
-
-.pb-gantt-real {
-  position: absolute;
-  top: 26px;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--green, #5cb85c);
-  opacity: 0.7;
-  pointer-events: none;
 }
 
 .pb-gantt-today-line {

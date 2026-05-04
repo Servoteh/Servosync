@@ -55,6 +55,14 @@ function delayRealEnd(task) {
   return diff > 0 ? diff : null;
 }
 
+function fmtDate(s) {
+  if (!s) return '—';
+  const d = s.slice(0, 10);
+  const parts = d.split('-');
+  if (parts.length !== 3) return d;
+  return `${parts[2]}.${parts[1]}.`;
+}
+
 function filterTasks(tasks, f) {
   let list = tasks.slice();
   const q = (f.search || '').trim().toLowerCase();
@@ -202,44 +210,62 @@ export function renderPlanTab(root, ctx) {
 
     const loadHtml = (ctx.loadStats || []).map(r => {
       const p = Number(r.load_pct) || 0;
-      let bar = 'pb-load-bar__fill';
-      if (p >= 80 && p <= 100) bar += ' pb-load-bar__fill--warn';
-      if (p > 100) bar += ' pb-load-bar__fill--danger';
-      else if (p < 80) bar += ' pb-load-bar__fill--ok';
+      let barCls = 'pb-load-bar__fill';
+      if (p > 100) barCls += ' pb-load-bar__fill--danger';
+      else if (p >= 80) barCls += ' pb-load-bar__fill--warn';
+      else barCls += ' pb-load-bar__fill--ok';
       return `
         <div class="pb-load-row">
           <span class="pb-load-name">${escHtml(r.full_name || '')}</span>
-          <div class="pb-load-bar" aria-hidden="true"><div class="${bar}" style="width:${Math.min(p, 150)}%"></div></div>
+          <div class="pb-load-bar" aria-hidden="true"><div class="${barCls}" style="width:${Math.min(p, 150)}%"></div></div>
           <span class="pb-load-pct">${p}%</span>
         </div>`;
     }).join('');
 
     const statsHtml = `
       <div class="pb-stats-grid">
-        <div class="pb-stat-card"><span>Ukupno zadataka</span><strong>${total}</strong></div>
-        <div class="pb-stat-card"><span>Završeno</span><strong>${pctDone}%</strong></div>
-        <div class="pb-stat-card"><span>Norma ∑ (h/dan)</span><strong>${normSum}</strong></div>
-        <div class="pb-stat-card"><span>Blokirano</span><strong>${blockedN}</strong></div>
+        <div class="pb-stat-card">
+          <span>Zadaci</span><strong>${total}</strong>
+          <small class="pb-stat-sub">u toku: ${tasks.filter(t => t.status === 'U toku').length}</small>
+        </div>
+        <div class="pb-stat-card">
+          <span>Završeno</span><strong>${pctDone}%</strong>
+          <small class="pb-stat-sub">${doneN} / ${total}</small>
+        </div>
+        <div class="pb-stat-card">
+          <span>Norma ∑ (h/dan)</span><strong>${normSum}</strong>
+          <small class="pb-stat-sub">h dnevni prosek</small>
+        </div>
+        <div class="pb-stat-card pb-stat-card--alert">
+          <span>Blokirano</span><strong>${blockedN}</strong>
+          <small class="pb-stat-sub">Akcije</small>
+        </div>
       </div>`;
 
+    const hasActiveFilter = filters.status !== 'all' || filters.vrsta !== 'all' || filters.prioritet !== 'all' || filters.problemOnly || filters.showDone || filters.search;
+
     const filterHtml = `
-      <div class="pb-filter-bar">
-        <input type="search" class="pb-search" placeholder="Pretraži naziv…" id="pbSearch" value="${escHtml(filters.search)}" />
-        <select id="pbFStatus">
-          <option value="all">Status: svi</option>
-          ${PB_TASK_STATUS.map(s => `<option value="${escHtml(s)}" ${filters.status === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
-        </select>
-        <select id="pbFVrsta">
-          <option value="all">Vrsta: sve</option>
-          ${PB_TASK_VRSTA.map(s => `<option value="${escHtml(s)}" ${filters.vrsta === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
-        </select>
-        <select id="pbFPrio">
-          <option value="all">Prioritet: svi</option>
-          ${PB_PRIORITET.map(s => `<option value="${escHtml(s)}" ${filters.prioritet === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
-        </select>
-        <label class="pb-check"><input type="checkbox" id="pbFDone" ${filters.showDone ? 'checked' : ''} /> Prikaži završene</label>
-        <button type="button" class="btn btn-sm" id="pbFProb">${filters.problemOnly ? '✓ ' : ''}Samo sa problemom</button>
-        <button type="button" class="btn btn-sm" id="pbFReset">Resetuj</button>
+      <div class="pb-filter-bar2">
+        <div class="pb-filter-search-row">
+          <input type="search" class="pb-search2" placeholder="Pretraži naziv…" id="pbSearch" value="${escHtml(filters.search)}" />
+          ${hasActiveFilter ? `<button type="button" class="pb-fchip-reset" id="pbFReset">✕ Reset</button>` : ''}
+        </div>
+        <div class="pb-filter-chips2">
+          <select id="pbFStatus" class="pb-fchip-select ${filters.status !== 'all' ? 'active' : ''}">
+            <option value="all">Status</option>
+            ${PB_TASK_STATUS.map(s => `<option value="${escHtml(s)}" ${filters.status === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
+          </select>
+          <select id="pbFPrio" class="pb-fchip-select ${filters.prioritet !== 'all' ? 'active' : ''}">
+            <option value="all">Prioritet</option>
+            ${PB_PRIORITET.map(s => `<option value="${escHtml(s)}" ${filters.prioritet === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
+          </select>
+          <select id="pbFVrsta" class="pb-fchip-select ${filters.vrsta !== 'all' ? 'active' : ''}">
+            <option value="all">Vrsta</option>
+            ${PB_TASK_VRSTA.map(s => `<option value="${escHtml(s)}" ${filters.vrsta === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
+          </select>
+          <button type="button" class="pb-fchip-btn ${filters.problemOnly ? 'active' : ''}" id="pbFProb">⚠ Problemi</button>
+          <button type="button" class="pb-fchip-btn ${filters.showDone ? 'active' : ''}" id="pbFDoneBtn">☐ Završeni</button>
+        </div>
       </div>`;
 
     const cardsHtml = sorted.map(t => {
@@ -261,10 +287,10 @@ export function renderPlanTab(root, ctx) {
             <span>${escHtml(t.engineer_name || '—')}</span>
           </div>
           <div class="pb-card-dates">
-            <span>Plan poč.</span><span>${escHtml((t.datum_pocetka_plan || '').slice(0, 10) || '—')}</span>
-            <span>Plan rok</span><span>${escHtml((t.datum_zavrsetka_plan || '').slice(0, 10) || '—')}</span>
-            <span>Real poč.</span><span>${escHtml((t.datum_pocetka_real || '').slice(0, 10) || '—')}</span>
-            <span>Real zavr.</span><span>${escHtml((t.datum_zavrsetka_real || '').slice(0, 10) || '—')} ${delayTxt ? `<em>${escHtml(delayTxt)}</em>` : ''}</span>
+            <span>Plan poč.</span><span>${escHtml(fmtDate(t.datum_pocetka_plan))}</span>
+            <span>Plan rok</span><span>${escHtml(fmtDate(t.datum_zavrsetka_plan))}</span>
+            <span>Ostvaren poč.</span><span>${escHtml(fmtDate(t.datum_pocetka_real))}</span>
+            <span>Ostvaren zavr.</span><span>${escHtml(fmtDate(t.datum_zavrsetka_real))} ${delayTxt ? `<em>${escHtml(delayTxt)}</em>` : ''}</span>
           </div>
           <div class="pb-card-metrics">
             <span>Trajanje</span><strong>${wd != null ? wd + ' rd' : '—'}</strong>
@@ -291,13 +317,17 @@ export function renderPlanTab(root, ctx) {
       const wd = countWorkdaysBetween(t.datum_pocetka_plan, t.datum_zavrsetka_plan);
       const proj = [t.project_code, t.project_name].filter(Boolean).join(' ');
       const strike = t.status === 'Završeno' ? ' class="pb-done"' : '';
+      const hasReal = t.datum_pocetka_real || t.datum_zavrsetka_real;
       return `<tr${strike}>
         <td>${i + 1}</td>
         <td>${escHtml(t.naziv || '')}</td>
         <td>${escHtml(proj)}</td>
         <td>${escHtml(t.engineer_name || '—')}</td>
         <td>${escHtml(t.vrsta || '')}</td>
-        <td>${escHtml((t.datum_pocetka_plan || '').slice(0, 10))} → ${escHtml((t.datum_zavrsetka_plan || '').slice(0, 10))}</td>
+        <td class="pb-td-dates">
+          <div class="pb-td-dates-plan"><span class="pb-date-lbl">PLAN</span> ${escHtml(fmtDate(t.datum_pocetka_plan))} <span class="pb-date-sep">→</span> ${escHtml(fmtDate(t.datum_zavrsetka_plan))}</div>
+          ${hasReal ? `<div class="pb-td-dates-real"><span class="pb-date-lbl pb-date-lbl--real">OSTVAREN</span> ${escHtml(fmtDate(t.datum_pocetka_real))} <span class="pb-date-sep">→</span> ${escHtml(fmtDate(t.datum_zavrsetka_real))}</div>` : ''}
+        </td>
         <td>${wd != null ? wd : '—'}</td>
         <td><span class="${statusBadgeClass(t.status)}">${escHtml(t.status || '')}</span></td>
         <td>${Number(t.procenat_zavrsenosti) || 0}%</td>
@@ -312,21 +342,27 @@ export function renderPlanTab(root, ctx) {
       </tr>`;
     }).join('');
 
+    const newTaskRow = canEdit ? `
+      <div class="pb-new-task-row">
+        <button type="button" class="pb-new-task-btn" id="pbNewTaskInline">+ Novi zadatak</button>
+      </div>` : '';
+
     root.innerHTML = `
       ${statsHtml}
       ${alarmHtml}
-      <section class="pb-load-section" aria-label="Opterećenje inženjera">
-        <h3 class="pb-section-title">Load meter (30 radnih dana)</h3>
-        <div class="pb-load-list">${loadHtml || '<p class="pb-muted">Nema podataka</p>'}</div>
+      <section class="pb-load-section" aria-label="Opterećenost inženjera">
+        <h3 class="pb-section-title">Prikaz opterećenosti narednih 20 radnih dana (A/S — 3/8, max 18h)</h3>
+        <div class="pb-load-grid">${loadHtml || '<p class="pb-muted">Nema podataka</p>'}</div>
       </section>
       ${filterHtml}
       <div class="pb-plan-split">
         <div class="pb-cards-wrap">${cardsHtml || '<p class="pb-muted">Nema zadataka za filter.</p>'}</div>
         <div class="pb-table-wrap">
+          ${newTaskRow}
           <table class="pb-table">
             <thead><tr>
               <th>#</th>
-              ${th('naziv', 'Naziv')}
+              ${th('naziv', 'Naziv zadatka')}
               ${th('project', 'Projekat')}
               ${th('engineer', 'Inženjer')}
               ${th('vrsta', 'Vrsta')}
@@ -334,7 +370,7 @@ export function renderPlanTab(root, ctx) {
               ${th('trajanje', 'Trajanje')}
               ${th('status', 'Status')}
               ${th('pct', '%')}
-              ${th('prio', 'Prio')}
+              ${th('prio', 'Prioritet')}
               ${th('norma', 'Norma')}
               <th></th>
             </tr></thead>
@@ -360,8 +396,8 @@ export function renderPlanTab(root, ctx) {
       filters.prioritet = e.target.value;
       paint();
     });
-    root.querySelector('#pbFDone')?.addEventListener('change', e => {
-      filters.showDone = e.target.checked;
+    root.querySelector('#pbFDoneBtn')?.addEventListener('click', () => {
+      filters.showDone = !filters.showDone;
       syncPbModuleFilters({ moduleShowDone: filters.showDone });
       paint();
     });
@@ -388,6 +424,16 @@ export function renderPlanTab(root, ctx) {
     });
 
     const findTask = id => (ctx.tasks || []).find(x => x.id === id);
+
+    root.querySelector('#pbNewTaskInline')?.addEventListener('click', () => {
+      openTaskEditorModal({
+        task: null,
+        projects: ctx.projects,
+        engineers: ctx.engineers,
+        canEdit,
+        onSaved: () => ctx.onRefresh?.(),
+      });
+    });
 
     root.querySelectorAll('.pb-act-edit').forEach(btn => {
       btn.addEventListener('click', () => {

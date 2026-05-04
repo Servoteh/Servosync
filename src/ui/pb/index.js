@@ -99,7 +99,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
           ...projFilter,
           ...engFilter,
         }),
-        getPbLoadStats(30),
+        getPbLoadStats(20),
       ]);
       projects = p;
       engineers = e;
@@ -201,12 +201,28 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
 
   function renderEngineerChips(host, st) {
     if (!host) return;
+    const searchVal = host._engSearch || '';
+    const filtered = searchVal
+      ? engineers.filter(en => en.full_name.toLowerCase().includes(searchVal.toLowerCase()))
+      : engineers;
+
     host.innerHTML = `
-      <button type="button" class="pb-chip ${st.activeEngineer === 'all' ? 'active' : ''}" data-eng="all" title="Svi mašinski projektanti (Inženjering i projektovanje)">Projektanti</button>
-      ${engineers.map(en => `
-        <button type="button" class="pb-chip ${st.activeEngineer === en.id ? 'active' : ''}" data-eng="${escHtml(en.id)}">${escHtml(en.full_name)}</button>
-      `).join('')}
+      <div class="pb-eng-search-wrap">
+        <input type="search" class="pb-eng-search" placeholder="Inženjer..." id="pbEngSearch" value="${escHtml(searchVal)}" />
+      </div>
+      <div class="pb-chip-list">
+        <button type="button" class="pb-chip ${st.activeEngineer === 'all' ? 'active' : ''}" data-eng="all" title="Svi mašinski projektanti">Svi</button>
+        ${filtered.map(en => `
+          <button type="button" class="pb-chip ${st.activeEngineer === en.id ? 'active' : ''}" data-eng="${escHtml(en.id)}">${escHtml(en.full_name)}</button>
+        `).join('')}
+      </div>
     `;
+
+    host.querySelector('#pbEngSearch')?.addEventListener('input', e => {
+      host._engSearch = e.target.value;
+      renderEngineerChips(host, st);
+    });
+
     host.querySelectorAll('[data-eng]').forEach(btn => {
       btn.addEventListener('click', () => {
         st.activeEngineer = btn.getAttribute('data-eng') || 'all';
