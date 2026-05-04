@@ -270,6 +270,7 @@ export async function openScanMoveModal({
                 </span>
               </label>
               <input type="text" id="locScanDrawing" autocomplete="off" maxlength="40" placeholder="npr. 1128816">
+              <div id="locScanRevHint" class="loc-muted" style="font-size:12px;margin-top:4px" hidden></div>
             </div>
           </div>
 
@@ -939,6 +940,17 @@ export async function openScanMoveModal({
     const erpDrawing = erpSnap?.broj_crteza ? String(erpSnap.broj_crteza).trim() : '';
     const finalDrawing = (erpDrawing || drawingNo || cachedDrawing || '').trim();
     $('#locScanDrawing').value = finalDrawing;
+    const revHint = $('#locScanRevHint');
+    if (revHint) {
+      const r = erpSnap?.revizija ? String(erpSnap.revizija).trim() : '';
+      if (r && erpDrawing && finalDrawing === erpDrawing) {
+        revHint.hidden = false;
+        revHint.textContent = `Revizija crteža (BigTehn): ${r}`;
+      } else {
+        revHint.hidden = true;
+        revHint.textContent = '';
+      }
+    }
 
     const hint = $('#locScanParsed');
     if (rawHint && (orderNo || itemRefId)) {
@@ -950,8 +962,12 @@ export async function openScanMoveModal({
         : '';
       let drawingPart = '';
       if (finalDrawing) {
+        const revS =
+          erpSnap?.revizija && erpDrawing && finalDrawing === erpDrawing
+            ? ` <span class="loc-muted">(rev. ${escHtml(String(erpSnap.revizija).trim())})</span>`
+            : '';
         if (erpDrawing && finalDrawing === erpDrawing) {
-          drawingPart = `, crtež <strong>${escHtml(erpDrawing)}</strong> <em class="loc-muted">(iz plana / BigTehn)</em>`;
+          drawingPart = `, crtež <strong>${escHtml(erpDrawing)}</strong>${revS} <em class="loc-muted">(iz plana / BigTehn)</em>`;
         } else if (cachedDrawing && finalDrawing === cachedDrawing) {
           drawingPart = `, crtež <strong>${escHtml(cachedDrawing)}</strong> <em class="loc-muted">(iz keša)</em>`;
         } else {

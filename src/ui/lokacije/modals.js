@@ -973,6 +973,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
           <div class="emp-field">
             <label for="locQmDrawing">Broj crteža</label>
             <input type="text" id="locQmDrawing" readonly tabindex="-1" maxlength="80" placeholder="— automatski —" autocomplete="off" style="background:var(--surface2);cursor:default">
+            <div id="locQmRevHint" class="loc-muted" style="font-size:11px;margin-top:4px" hidden></div>
           </div>
 
           <div class="emp-field col-full" id="locQmStateWrap" hidden>
@@ -1027,6 +1028,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
     const orderInput = overlay.querySelector('#locQmOrder');
     const tpInput = overlay.querySelector('#locQmTp');
     const drawingInput = overlay.querySelector('#locQmDrawing');
+    const revHintEl = overlay.querySelector('#locQmRevHint');
     const tpDatalist = overlay.querySelector('#locQmTpDatalist');
     const typeSel = overlay.querySelector('#locQmType');
     const qtyInput = overlay.querySelector('#locQmQty');
@@ -1149,7 +1151,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       tpDatalist.innerHTML = (opts || [])
         .map(
           o =>
-            `<option value="${escHtml(o.tp)}">${escHtml(o.tp)}${o.broj_crteza ? ` — crtež ${escHtml(o.broj_crteza)}` : ''}</option>`,
+            `<option value="${escHtml(o.tp)}">${escHtml(o.tp)}${o.broj_crteza ? ` — crtež ${escHtml(o.broj_crteza)}${o.revizija ? ` rev.${escHtml(o.revizija)}` : ''}` : ''}</option>`,
         )
         .join('');
     }
@@ -1175,7 +1177,17 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       }
       if (my !== drawingLookupToken) return;
       const erp = snap?.broj_crteza ? String(snap.broj_crteza).trim() : '';
+      const rev = snap?.revizija ? String(snap.revizija).trim() : '';
       drawingInput.value = (erp || cached || '').trim();
+      if (revHintEl) {
+        if (rev && erp) {
+          revHintEl.hidden = false;
+          revHintEl.textContent = `Revizija crteža (BigTehn): ${rev}`;
+        } else {
+          revHintEl.hidden = true;
+          revHintEl.textContent = '';
+        }
+      }
     }
 
     /* Debounce da ne zovemo za svaki keypress. */

@@ -473,6 +473,7 @@ export async function listAutoCooperationGroups() {
  *   customer_id: number|null,
  *   work_order_id: number|null,
  *   operacija: number|string|null,
+ *   revizija: string|null,
  * } | null>}
  */
 export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, opts = {}) {
@@ -508,6 +509,7 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
     'customer_id',
     'rok_izrade',
     'status_rn',
+    'revizija',
   ].join(',');
 
   const tryFetchWo = async (table, idCandidate) => {
@@ -616,6 +618,10 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
     customer_short: customerShort,
     work_order_id: workOrderId,
     operacija: opFinite ? opNum : opRaw === '' ? null : opRaw,
+    revizija:
+      wo.revizija != null && String(wo.revizija).trim() !== ''
+        ? String(wo.revizija).trim()
+        : null,
   };
 }
 
@@ -625,7 +631,7 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
  * čita operacije iz `bigtehn_tech_routing_cache`.
  *
  * @param {string} orderNo
- * @returns {Promise<{ tp: string, broj_crteza: string, ident_broj: string }[]>}
+ * @returns {Promise<{ tp: string, broj_crteza: string, ident_broj: string, revizija: string }[]>}
  */
 export async function fetchTpOptionsForPredmetOrder(orderNo) {
   if (!getIsOnline()) return [];
@@ -642,7 +648,7 @@ export async function fetchTpOptionsForPredmetOrder(orderNo) {
     if (!v) continue;
     const orInner = `ident_broj.eq.${encodeURIComponent(v)},ident_broj.like.${encodeURIComponent(`${v}.*`)}`;
     const rows = await sbReq(
-      `bigtehn_work_orders_cache?select=id,ident_broj,broj_crteza&or=(${orInner})&limit=500`,
+      `bigtehn_work_orders_cache?select=id,ident_broj,broj_crteza,revizija&or=(${orInner})&limit=500`,
     );
     if (!Array.isArray(rows)) continue;
     for (const r of rows) {
@@ -659,11 +665,12 @@ export async function fetchTpOptionsForPredmetOrder(orderNo) {
     const parts = ib.split('/');
     const tail = parts.length >= 2 ? String(parts[1] ?? '').trim() : '';
     const dr = r.broj_crteza != null ? String(r.broj_crteza).trim() : '';
+    const rv = r.revizija != null ? String(r.revizija).trim() : '';
 
     if (tail) {
       if (seenTp.has(tail)) continue;
       seenTp.add(tail);
-      out.push({ tp: tail, broj_crteza: dr, ident_broj: ib });
+      out.push({ tp: tail, broj_crteza: dr, ident_broj: ib, revizija: rv });
       continue;
     }
 
@@ -681,7 +688,7 @@ export async function fetchTpOptionsForPredmetOrder(orderNo) {
       const tp = String(row.operacija).trim();
       if (!tp || seenTp.has(tp)) continue;
       seenTp.add(tp);
-      out.push({ tp, broj_crteza: dr, ident_broj: ib });
+      out.push({ tp, broj_crteza: dr, ident_broj: ib, revizija: rv });
     }
   }
 
