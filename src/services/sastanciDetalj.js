@@ -8,7 +8,7 @@
 import { sbReq, getSupabaseHeaders, getSupabaseUrl } from './supabase.js';
 import { getCurrentUser, getIsOnline } from '../state/auth.js';
 import { mapDbSastanak, mapDbUcesnik, loadSastanak, loadUcesnici } from './sastanci.js';
-import { zakljucajSastanakRpc } from './sastanakArhiva.js';
+import { arhivirajSastanak as zakljucajSastanakRpc } from './sastanakArhiva.js';
 
 const PRESEK_AKTIVNOSTI_SELECT = 'id,sastanak_id,rb,redosled,naslov,pod_rn,sadrzaj_html,sadrzaj_text,odgovoran_email,odgovoran_label,odgovoran_text,rok,rok_text,status,napomena,created_at,updated_at';
 const PRESEK_SLIKE_SELECT = 'id,sastanak_id,aktivnost_id,storage_path,file_name,mime_type,size_bytes,caption,redosled,uploaded_by_email,uploaded_at';
