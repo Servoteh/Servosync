@@ -540,7 +540,7 @@ async function saveAllRows() {
   let ok = 0, fail = 0;
   for (const r of valid) {
     const res = await saveEmployeeToDb(r);
-    if (res) ok++;
+    if (res.ok && res.rows?.length) ok++;
     else fail++;
   }
 

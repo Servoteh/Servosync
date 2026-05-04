@@ -15,6 +15,24 @@ import { getCurrentUser } from '../state/auth.js';
 
 export { hasSupabaseConfig };
 
+/** Izvlači čitljiv tekst iz PostgREST / Postgres JSON greške (REST telo kao string). */
+export function parsePostgrestErrorMessage(bodyText) {
+  const raw = (bodyText || '').trim();
+  if (!raw) return 'Nepoznata greška od servera.';
+  try {
+    const j = JSON.parse(raw);
+    if (j && typeof j === 'object') {
+      if (typeof j.message === 'string' && j.message) return j.message;
+      if (typeof j.error === 'string' && j.error) return j.error;
+      if (typeof j.hint === 'string' && j.hint) return j.hint;
+    }
+  } catch {
+    /* nije JSON */
+  }
+  if (raw.length > 400) return raw.slice(0, 400) + '…';
+  return raw;
+}
+
 export function getSupabaseUrl() {
   return SUPABASE_CONFIG.url;
 }
@@ -38,17 +56,24 @@ export function getSupabaseHeaders() {
  *                          ili 'rpc/get_my_user_roles' za RPC.
  * @param {'GET'|'POST'|'PATCH'|'DELETE'} [method='GET']
  * @param {object|null} [body=null]
- * @param {{ upsert?: boolean, withCount?: boolean }} [options]
+ * @param {{ upsert?: boolean, withCount?: boolean, returnMeta?: boolean }} [options]
  *        `upsert` (default `true`) — na POST pridružuje `resolution=merge-duplicates`
  *        kako bi UNIQUE konflikti odradili UPSERT; prosledi `false` kada želiš
  *        klasičan INSERT koji na duplikat vraća 409 (npr. kreiranje master zapisa).
  *        `withCount` — kada je `true` koristi internu grananu varijantu koja
  *        vraća `{ rows, total }`. NE koristi ovo sa sbReq direktno; postoji
  *        {@link sbReqWithCount} wrapper radi type-safety.
- * @returns {Promise<any|null>}
+ *        `returnMeta` — kada je `true`, vraća `{ data, error, status }` umesto
+ *        samo podataka ili `null` (ne meša se sa `withCount`).
+ * @returns {Promise<any|null|{ data: any, error: string|null, status: number }>}
  */
 export async function sbReq(path, method = 'GET', body = null, options = {}) {
-  if (!hasSupabaseConfig()) return options.withCount ? { rows: null, total: null } : null;
+  const wantMeta = options.returnMeta === true;
+  if (!hasSupabaseConfig()) {
+    if (options.withCount) return { rows: null, total: null };
+    if (wantMeta) return { data: null, error: 'Supabase nije konfigurisan.', status: 0 };
+    return null;
+  }
 
   const user = getCurrentUser();
   const token = user?._token || SUPABASE_CONFIG.anonKey;
@@ -79,7 +104,9 @@ export async function sbReq(path, method = 'GET', body = null, options = {}) {
     });
     const txt = await r.text();
     if (!r.ok) {
+      const errMsg = parsePostgrestErrorMessage(txt);
       console.error('SB err', { path, method, status: r.status, body: txt });
+      if (wantMeta) return { data: null, error: errMsg, status: r.status };
       return options.withCount ? { rows: null, total: null } : null;
     }
     /* PostgREST ponekad vrati prazno telo uz 2xx (npr. 204); ranije je to bilo kao greška (null). */
@@ -103,6 +130,13 @@ export async function sbReq(path, method = 'GET', body = null, options = {}) {
           body: txt,
           parseErr,
         });
+        if (wantMeta) {
+          return {
+            data: null,
+            error: 'Nevalidan JSON odgovor od servera.',
+            status: r.status,
+          };
+        }
         return options.withCount ? { rows: null, total: null } : null;
       }
     }
@@ -111,9 +145,17 @@ export async function sbReq(path, method = 'GET', body = null, options = {}) {
       const total = parseContentRangeTotal(cr);
       return { rows: Array.isArray(parsed) ? parsed : [], total };
     }
+    if (wantMeta) return { data: parsed, error: null, status: r.status };
     return parsed;
   } catch (e) {
     console.error('SB fetch failed', { path, method, error: e });
+    if (wantMeta) {
+      return {
+        data: null,
+        error: e instanceof Error ? e.message : String(e),
+        status: 0,
+      };
+    }
     return options.withCount ? { rows: null, total: null } : null;
   }
 }
@@ -190,13 +232,8 @@ export async function sbReqThrow(path, method = 'GET', body = null, options = {}
   }
 
   if (!r.ok) {
-    let msg = txt?.trim() || `HTTP ${r.status}`;
-    try {
-      const j = JSON.parse(txt);
-      if (j && typeof j === 'object' && j.message) msg = String(j.message);
-    } catch {
-      /* ostavi msg */
-    }
+    let msg = parsePostgrestErrorMessage(txt);
+    if (msg === 'Nepoznata greška od servera.') msg = txt?.trim() || `HTTP ${r.status}`;
     const err = new Error(msg);
     err.status = r.status;
     err.code = String(r.status);

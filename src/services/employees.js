@@ -141,23 +141,63 @@ export async function loadEmployeesFromDb() {
   return data.map(mapDbEmployee);
 }
 
+/**
+ * @returns {Promise<{ ok: boolean, rows: any[]|null, error: string|null, status: number }>}
+ */
 export async function saveEmployeeToDb(emp) {
-  if (!getIsOnline() || !canEditKadrovska()) return null;
-  const res = await sbReq('employees', 'POST', buildEmployeePayload(emp));
-  if (res === null) {
-    console.warn('[kadrovska] Save failed. Is migracija add_kadr_employee_extended.sql primenjena?');
+  if (!getIsOnline() || !canEditKadrovska()) {
+    return { ok: false, rows: null, error: 'Niste u mreži ili nemate prava za izmenu.', status: 0 };
   }
-  return res;
+  const { data, error, status } = await sbReq(
+    'employees',
+    'POST',
+    buildEmployeePayload(emp),
+    { returnMeta: true },
+  );
+  if (error) {
+    console.warn('[kadrovska] employees INSERT failed', { status, error });
+    return { ok: false, rows: null, error, status };
+  }
+  const rows = Array.isArray(data) ? data : [];
+  if (!rows.length) {
+    return {
+      ok: false,
+      rows: null,
+      error: 'Server nije vratio sačuvan red (prazan odgovor).',
+      status,
+    };
+  }
+  return { ok: true, rows, error: null, status };
 }
 
+/**
+ * @returns {Promise<{ ok: boolean, rows: any[]|null, error: string|null, status: number }>}
+ */
 export async function updateEmployeeInDb(emp) {
-  if (!getIsOnline() || !canEditKadrovska() || !emp.id) return null;
+  if (!getIsOnline() || !canEditKadrovska() || !emp.id) {
+    return { ok: false, rows: null, error: 'Niste u mreži, nemate prava ili nedostaje ID.', status: 0 };
+  }
   const { id, ...rest } = buildEmployeePayload(emp);
-  return await sbReq(
+  const { data, error, status } = await sbReq(
     `employees?id=eq.${encodeURIComponent(emp.id)}`,
     'PATCH',
     rest,
+    { returnMeta: true },
   );
+  if (error) {
+    console.warn('[kadrovska] employees UPDATE failed', { status, error });
+    return { ok: false, rows: null, error, status };
+  }
+  const rows = Array.isArray(data) ? data : [];
+  if (!rows.length) {
+    return {
+      ok: false,
+      rows: null,
+      error: 'Izmena nije potvrđena (nema redova u odgovoru).',
+      status,
+    };
+  }
+  return { ok: true, rows, error: null, status };
 }
 
 export async function deleteEmployeeFromDb(id) {
