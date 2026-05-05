@@ -211,11 +211,22 @@ export const KADR_CON_TYPE_LABELS = Object.freeze({
  * DEFENZIVNO čišćenje vrednosti — Cloudflare Pages UI ponekad ostavi
  * trailing whitespace ili newline kad korisnik paste-uje URL/anon key.
  * Bez `.trim()` browser pokuša da reši `xyz.supabase.co%20` (razmak je
- * URL-encoded kao %20) → ERR_NAME_NOT_RESOLVED. Skidamo i trailing `/`
- * jer `sbReq()` već dodaje vodeći `/` na rest path-u.
+ * URL-encoded kao %20) → ERR_NAME_NOT_RESOLVED.
+ *
+ * Za hosted Supabase čuvamo samo origin (`https://<ref>.supabase.co`): ako je u
+ * secret-u ostao path tipa `/rest/v1`, auth ne sme ići na `/rest/v1/auth/v1` (404).
+ * `sbReq()` i dalje eksplicitno dodaje `/rest/v1/` na putanju.
  */
 function _cleanEnvUrl(v) {
-  return String(v || '').trim().replace(/\/+$/, '');
+  let s = String(v || '').trim().replace(/\/+$/, '');
+  if (!s) return '';
+  try {
+    const u = new URL(s.includes('://') ? s : `https://${s}`);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    s = s.replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
+    return s;
+  }
 }
 function _cleanEnvKey(v) {
   return String(v || '').trim();
