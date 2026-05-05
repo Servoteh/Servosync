@@ -41,6 +41,14 @@ import {
 } from '../../services/vacationRequests.js';
 import { compareEmployeesByLastFirst, employeeDisplayName } from '../../lib/employeeNames.js';
 
+/* ── Helperi ────────────────────────────────────────────────────── */
+
+/** 'MMDD' → 'DD.MM.' (npr. '1219' → '19.12.') */
+function _formatSlavaDay(mmdd) {
+  if (!mmdd || mmdd.length !== 4) return mmdd || '';
+  return `${mmdd.slice(2)}.${mmdd.slice(0, 2)}.`;
+}
+
 /* ── Konstante ──────────────────────────────────────────────────── */
 
 const STATUS_LABEL = { pending: 'Na čekanju', approved: 'Odobreno', rejected: 'Odbijeno' };
@@ -265,6 +273,7 @@ function _profileCardHtml() {
           ${escHtml(emp.position || '—')}${emp.department ? ` · ${escHtml(emp.department)}` : ''}${emp.team ? ` · ${escHtml(emp.team)}` : ''}
         </div>
         <div style="color:var(--text3,var(--text2));font-size:.8rem;margin-top:4px;">${escHtml(email)}</div>
+        ${emp.slava ? `<div style="font-size:.8rem;margin-top:5px;color:var(--text2);">🕯 Slava: <strong style="color:var(--text)">${escHtml(emp.slava)}</strong>${emp.slavaDay ? ` <span style="opacity:.7">(${_formatSlavaDay(emp.slavaDay)})</span>` : ''}</div>` : ''}
       </div>
       ${emp.hireDate ? `<div style="text-align:right;color:var(--text2);font-size:.8rem;">Zaposlen/a od<br><strong style="color:var(--text)">${escHtml(formatDate(emp.hireDate))}</strong></div>` : ''}
     </div>`;

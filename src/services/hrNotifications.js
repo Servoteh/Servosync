@@ -6,7 +6,7 @@
  * Insert redova ide ISKLJUČIVO kroz SECURITY DEFINER schedule funkciju.
  */
 
-import { sbReq } from './supabase.js';
+import { sbReq, getSupabaseUrl, getSupabaseHeaders } from './supabase.js';
 import { isHrOrAdmin, getIsOnline } from '../state/auth.js';
 
 /* ── CONFIG (singleton) ──────────────────────────────────────────── */
@@ -178,4 +178,25 @@ export async function queuePayrollNotifications(year, month) {
     return Number(val ?? 0);
   }
   return typeof data === 'number' ? data : null;
+}
+
+/**
+ * Ručno pokreće `hr-notify-dispatch` edge funkciju — odmah šalje sve
+ * redove iz `kadr_notification_log` koji su na čekanju (status=queued).
+ * @returns {Promise<{ok:boolean, processed?:number, sent?:number, failed?:number, error?:string}|null>}
+ */
+export async function triggerHrDispatch() {
+  if (!getIsOnline()) return null;
+  try {
+    const r = await fetch(getSupabaseUrl() + '/functions/v1/hr-notify-dispatch', {
+      method: 'POST',
+      headers: getSupabaseHeaders(),
+    });
+    const txt = await r.text();
+    if (!r.ok) return { ok: false, error: `HTTP ${r.status}: ${txt.slice(0, 200)}` };
+    if (!txt) return { ok: true, processed: 0, sent: 0, failed: 0 };
+    try { return JSON.parse(txt); } catch { return { ok: true, processed: 0, sent: 0, failed: 0 }; }
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
 }

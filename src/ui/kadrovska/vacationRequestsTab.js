@@ -26,6 +26,7 @@ import {
   mapDbVacReq,
 } from '../../services/vacationRequests.js';
 import { mapDbAbsence, saveAbsenceToDb } from '../../services/absences.js';
+import { triggerHrDispatch } from '../../services/hrNotifications.js';
 import { ensureEmployeesLoaded, employeeNameById } from '../../services/kadrovska.js';
 import { renderSummaryChips } from './shared.js';
 
@@ -50,6 +51,7 @@ export function renderVacationRequestsTab() {
       <input type="number" class="kadrovska-filter" id="vacReqYear" min="2020" max="2100"
              value="${new Date().getFullYear()}" style="max-width:80px;" title="Godina">
       <div class="kadrovska-toolbar-spacer"></div>
+      <button class="btn" id="vacReqDispatchBtn" title="Odmah pošalji sve čekaće notifikacije (ne čekaj cron)">🔔 Pošalji čekaće</button>
       <span class="kadrovska-count" id="vacReqCount">0 zahteva</span>
     </div>
     <main class="kadrovska-main">
@@ -83,6 +85,27 @@ export async function wireVacationRequestsTab(panelEl) {
   panelEl.querySelector('#vacReqStatusFilter').addEventListener('change', _renderRows);
   panelEl.querySelector('#vacReqSearch').addEventListener('input', _renderRows);
   panelEl.querySelector('#vacReqYear').addEventListener('change', _renderRows);
+  panelEl.querySelector('#vacReqDispatchBtn').addEventListener('click', async () => {
+    const btn = panelEl.querySelector('#vacReqDispatchBtn');
+    btn.disabled = true; btn.textContent = 'Slanje…';
+    try {
+      const res = await triggerHrDispatch();
+      if (!res) {
+        showToast('⚠ Nema veze sa serverom');
+      } else if (!res.ok) {
+        showToast(`⚠ Greška: ${res.error || 'nepoznata'}`);
+      } else {
+        const { processed = 0, sent = 0, failed = 0 } = res;
+        if (processed === 0) {
+          showToast('ℹ Nema čekajućih notifikacija u redu');
+        } else {
+          showToast(`📧 Dispatch: ${sent} poslato, ${failed} neuspešno (od ${processed} u redu)`);
+        }
+      }
+    } finally {
+      btn.disabled = false; btn.textContent = '🔔 Pošalji čekaće';
+    }
+  });
 
   await ensureEmployeesLoaded();
   await _loadRequests(true);
