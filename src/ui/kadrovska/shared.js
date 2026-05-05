@@ -10,7 +10,7 @@
  */
 
 import { escHtml } from '../../lib/dom.js';
-import { getAuth, canEdit, canAccessSalary, canAccessOdsustvaPregled } from '../../state/auth.js';
+import { getAuth, canEdit, canAccessSalary, canAccessOdsustvaPregled, canManageVacationRequests } from '../../state/auth.js';
 import { kadrovskaState } from '../../state/kadrovska.js';
 import {
   compareEmployeesByLastFirst,
@@ -102,14 +102,16 @@ export const KADROVSKA_TAB_DEFS = [
   { id: 'hours', label: 'Sati', badgeId: 'kadrTabCountHours' },
   { id: 'contracts', label: 'Ugovori', badgeId: 'kadrTabCountContracts' },
   { id: 'salary', label: 'Zarade', badgeId: 'kadrTabCountSalary', adminOnly: true },
+  { id: 'vac-requests', label: 'Zahtevi GO', badgeId: 'kadrTabCountVacReq', requestsOnly: true },
   { id: 'notifications', label: 'Notifikacije', badgeId: 'kadrTabCountNotif' },
   { id: 'reports', label: 'Izvestaji', badgeId: 'kadrTabCountReports' },
 ];
 
 export function kadrVisibleTabDefs() {
   return KADROVSKA_TAB_DEFS.filter(t => {
-    if (t.adminOnly) return canAccessSalary();
-    if (t.pregledOnly) return canAccessOdsustvaPregled();
+    if (t.adminOnly)    return canAccessSalary();
+    if (t.pregledOnly)  return canAccessOdsustvaPregled();
+    if (t.requestsOnly) return canManageVacationRequests();
     return true;
   });
 }

@@ -157,3 +157,25 @@ export async function triggerScheduleHrReminders() {
     configMissing: !!r.config_missing,
   };
 }
+
+/**
+ * Upisuje email + WhatsApp obračun sati za sve zaposlene koji imaju
+ * upisane sate za dati mesec. Koristi SECURITY DEFINER SQL funkciju.
+ * @param {number} year  – YYYY
+ * @param {number} month – 1-12
+ * @returns {Promise<number|null>} broj upisanih notifikacionih redova, ili null ako greška
+ */
+export async function queuePayrollNotifications(year, month) {
+  if (!getIsOnline()) return null;
+  const data = await sbReq('rpc/kadr_queue_payroll_notifications', 'POST', {
+    p_period_year:  Number(year),
+    p_period_month: Number(month),
+  });
+  if (data === null) return null;
+  /* RPC vraća scalar int — sbReq ga obično wrappuje u [{kadr_queue_payroll_notifications: N}] */
+  if (Array.isArray(data) && data.length > 0) {
+    const val = Object.values(data[0])[0];
+    return Number(val ?? 0);
+  }
+  return typeof data === 'number' ? data : null;
+}

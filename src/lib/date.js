@@ -102,3 +102,30 @@ export function ymdAddDays(ymd, days) {
   d.setDate(d.getDate() + days);
   return dateToYMD(d);
 }
+
+/**
+ * Broj radnih dana između fromStr i toStr (inkluzivno), isključujući:
+ *   - vikende (subota, nedjelja)
+ *   - državne praznike iz `holidayYmdSet`
+ *
+ * @param {string} fromStr      'YYYY-MM-DD'
+ * @param {string} toStr        'YYYY-MM-DD'
+ * @param {Set<string>} [holidayYmdSet]  set neradnih datuma kao 'YYYY-MM-DD'
+ * @returns {number}
+ */
+export function workDaysInclusive(fromStr, toStr, holidayYmdSet = new Set()) {
+  const a = parseDateLocal(fromStr);
+  const b = parseDateLocal(toStr);
+  if (!a || !b || b < a) return 0;
+  let count = 0;
+  const cur = new Date(a);
+  while (cur <= b) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) {
+      const ymd = dateToYMD(cur);
+      if (!holidayYmdSet.has(ymd)) count++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}

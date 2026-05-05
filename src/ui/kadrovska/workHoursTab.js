@@ -29,6 +29,7 @@ import {
   employeeNameById,
 } from '../../services/kadrovska.js';
 import { renderSummaryChips, employeeOptionsHtml } from './shared.js';
+import { queuePayrollNotifications } from '../../services/hrNotifications.js';
 
 let panelRef = null;
 
@@ -42,6 +43,7 @@ export function renderWorkHoursTab() {
       <input type="month" class="kadrovska-filter" id="whMonthFilter" title="Mesec">
       <div class="kadrovska-toolbar-spacer"></div>
       <span class="kadrovska-count" id="whCount">0 unosa</span>
+      <button class="btn" id="whSendPayrollBtn" title="Pošalji obračun sati svim zaposlenim za izabrani mesec" style="display:none;">📧 Pošalji obračun</button>
       <button class="btn btn-primary" id="whAddBtn">+ Unesi sate</button>
     </div>
     <main class="kadrovska-main">
@@ -86,8 +88,34 @@ export function renderWorkHoursTab() {
 export async function wireWorkHoursTab(panelEl) {
   panelRef = panelEl;
   panelEl.querySelector('#whEmpFilter').addEventListener('change', refreshWorkHoursTab);
-  panelEl.querySelector('#whMonthFilter').addEventListener('change', refreshWorkHoursTab);
+  panelEl.querySelector('#whMonthFilter').addEventListener('change', () => {
+    refreshWorkHoursTab();
+    const monthVal = panelEl.querySelector('#whMonthFilter').value;
+    const sendBtn = panelEl.querySelector('#whSendPayrollBtn');
+    if (sendBtn) sendBtn.style.display = monthVal ? '' : 'none';
+  });
   panelEl.querySelector('#whAddBtn').addEventListener('click', () => openWorkHourModal(null));
+  panelEl.querySelector('#whSendPayrollBtn').addEventListener('click', async () => {
+    const monthVal = panelRef?.querySelector('#whMonthFilter')?.value || '';
+    if (!monthVal) return;
+    const [yearStr, monthStr] = monthVal.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const label = new Date(year, month - 1, 1).toLocaleString('sr-Latn', { month: 'long', year: 'numeric' });
+    if (!confirm(`Poslati obračun sati za ${label} svim zaposlenim koji imaju upisane sate?\n\nBiće upisane notifikacije u red čekanja (email + WhatsApp gde postoji kontakt).`)) return;
+    const btn = panelRef.querySelector('#whSendPayrollBtn');
+    btn.disabled = true; btn.textContent = 'Slanje…';
+    try {
+      const count = await queuePayrollNotifications(year, month);
+      if (count === null) {
+        showToast('⚠ Greška pri upisivanju notifikacija — pokrenite migraciju add_kadr_vacation_notifications.sql');
+      } else {
+        showToast(`📧 Upisano ${count} notifikacija za ${label} — hr-notify-dispatch ih šalje u roku od 5 min`);
+      }
+    } finally {
+      btn.disabled = false; btn.textContent = '📧 Pošalji obračun';
+    }
+  });
 
   await ensureEmployeesLoaded();
   await ensureWorkHoursLoaded(true);

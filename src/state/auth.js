@@ -290,6 +290,32 @@ export function canAccessReversi() {
   return !!state.user;
 }
 
+/**
+ * Self-service modul „Moj profil” — dostupan svim ulogovanim korisnicima
+ * (viewer, pm, hr, admin...). Svako vidi SAMO SVOJE podatke.
+ */
+export function canAccessSelfService() {
+  return !!state.user;
+}
+
+/**
+ * Ko može da odobri ili odbije zahtev za GO?
+ * admin, hr, menadzment, leadpm, pm — sinhronizovano sa DB
+ * `current_user_can_manage_vacreq()`.
+ */
+export function canManageVacationRequests() {
+  return ['admin', 'hr', 'menadzment', 'leadpm', 'pm'].includes(state.role);
+}
+
+/**
+ * Ko može da podnese zahtev za GO u ime drugog zaposlenog?
+ * Iste role kao canManageVacationRequests.
+ * Viewer podnosi SAMO ZA SEBE (employee_id = sopstveni).
+ */
+export function canSubmitVacationRequestForOthers() {
+  return ['admin', 'hr', 'menadzment', 'leadpm', 'pm'].includes(state.role);
+}
+
 /** Sync monitor (loc_sync_outbound_events) — samo admin po RLS-u. */
 export function canViewLokacijeSync() {
   return state.role === 'admin';

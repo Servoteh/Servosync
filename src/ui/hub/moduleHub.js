@@ -33,6 +33,7 @@ import {
   canEditSastanci,
   canAccessLokacije,
   canAccessReversi,
+  canAccessSelfService,
 } from '../../state/auth.js';
 
 export function renderModuleHub({ onModuleSelect, onLogout }) {
@@ -77,6 +78,8 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
           <a href="/plan-montaze" class="hub-quick-link" data-module="plan-montaze">Plan Montaže</a>
           <span class="hub-quick-links-sep" aria-hidden="true">·</span>
           <a href="/reversi" class="hub-quick-link" data-module="reversi">Reversi</a>
+          <span class="hub-quick-links-sep" aria-hidden="true">·</span>
+          <a href="/moj-profil" class="hub-quick-link" data-module="moj-profil">Moj profil</a>
         </nav>
       </div>
 
@@ -162,6 +165,17 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
           </div>
         </button>
 
+        <button type="button" class="hub-card hub-card--moj-profil" data-module="moj-profil" aria-label="Otvori Moj profil">
+          <div class="hub-card-icon" aria-hidden="true">👤</div>
+          <div class="hub-card-title">Moj profil</div>
+          <div class="hub-card-subtitle">Godišnji odmor · Zahtevi · Odsustva</div>
+          <div class="hub-card-desc">Pregled sopstvenog GO salda, podnetih zahteva i evidencije odsustava. Podnesi zahtev za godišnji odmor za sebe — ili u ime zaposlenog ako si rukovodilac.</div>
+          <div class="hub-card-footer">
+            <span class="hub-card-cta">Otvori →</span>
+            <span class="hub-card-badge badge-active">Aktivno</span>
+          </div>
+        </button>
+
         <button type="button" class="hub-card${canAccessKadrovska() ? '' : ' is-disabled'}" data-module="kadrovska" aria-label="Otvori Kadrovsku"${canAccessKadrovska() ? '' : ' aria-disabled="true"'}>
           <div class="hub-card-icon" aria-hidden="true">👥</div>
           <div class="hub-card-title">Kadrovska</div>
@@ -195,6 +209,10 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
   });
 
   function trySelectModule(moduleId) {
+    if (moduleId === 'moj-profil') {
+      onModuleSelect?.('moj-profil');
+      return;
+    }
     if (moduleId === 'kadrovska' && !canAccessKadrovska()) {
       showToast('🔒 Kadrovska je dostupna samo HR/admin korisnicima');
       return;

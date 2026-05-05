@@ -95,6 +95,9 @@ export function pathnameToRoute(pathname) {
   if (sd) {
     return { kind: 'module', moduleId: 'sastanci', sastanakId: sd[1] };
   }
+  if (p === '/moj-profil') {
+    return { kind: 'self-service' };
+  }
   if (p === '/podesavanja') {
     return { kind: 'module', moduleId: 'podesavanja' };
   }
@@ -196,6 +199,7 @@ export function pathForModule(moduleId) {
     sastanci: '/sastanci',
     podesavanja: '/podesavanja',
     'odrzavanje-masina': '/maintenance',
+    'moj-profil': '/moj-profil',
   };
   return map[moduleId] || '/';
 }

@@ -35,6 +35,8 @@ export const STORAGE_KEYS = Object.freeze({
   USERS_CACHE: 'plan_montaze_users_v1',
   /* Theme */
   THEME: 'pm_theme_v1',
+  /* Moj profil — self-service */
+  VAC_REQUESTS_CACHE: 'plan_montaze_vac_requests_v1',
 });
 
 /* ── Role labele za UI ── */
@@ -74,6 +76,8 @@ export const SESSION_KEYS = Object.freeze({
   SAST_DETALJ_TAB: 'sastanci:detalj_tab',
   /** Lista / Kanban u Akcionom planu ('lista'|'kanban') */
   SAST_AKCIONI_VIEW: 'sastanci:akcioni_view',
+  /** Moj profil — aktivni sub-tab ('zahtevi'|'odsustva') */
+  MOJ_PROFIL_TAB: 'plan_montaze_moj_profil_tab_v1',
 });
 
 /* ── Role hijerarhija (priority: admin > leadpm > pm > menadzment > hr > viewer) ── */

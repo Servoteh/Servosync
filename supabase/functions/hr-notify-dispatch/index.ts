@@ -144,7 +144,7 @@ async function sendEmail(row: HrNotificationRow) {
       from: RESEND_FROM,
       to: [row.recipient],
       subject: row.subject ?? 'HR obaveštenje',
-      text: row.body,
+      html: row.body,
     }),
   });
   if (res.ok) return { ok: true as const };

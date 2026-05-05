@@ -86,6 +86,14 @@ export const kadrPayrollState = {
   byPeriod: new Map(),
 };
 
+/* Faza K5 — zahtevi za godišnji odmor (vacation_requests) */
+export const kadrVacReqState = {
+  /** Svi zahtevi (za HR/admin/menadzment prikaz u KADROVI tabeli) */
+  items: [],
+  loaded: false,
+  _schema: true,
+};
+
 /* Državni praznici / neradni dani za mesečni grid i obračun. */
 export const kadrHolidaysState = {
   /** Map<'YYYY-MM-DD', holidayRow> */
@@ -155,4 +163,6 @@ export function resetKadrovskaState() {
   kadrPayrollState.selectedMonth = new Date().getMonth() + 1;
   kadrHolidaysState.byDate.clear();
   kadrHolidaysState.loadedYears.clear();
+  kadrVacReqState.items = [];
+  kadrVacReqState.loaded = false;
 }

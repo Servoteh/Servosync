@@ -45,6 +45,7 @@ import {
   teardownReversiModule,
 } from './reversi/index.js';
 import { renderPbModule, teardownPbModule } from './pb/index.js';
+import { renderMojProfilModule } from './mojProfil/index.js';
 import {
   renderMobileHome,
   renderMobileScan,
@@ -64,6 +65,7 @@ import {
   canAccessSastanci,
   canAccessLokacije,
   canAccessReversi,
+  canAccessSelfService,
 } from '../state/auth.js';
 import { resetKadrovskaState } from '../state/kadrovska.js';
 import { resetSastanciState } from '../state/sastanci.js';
@@ -230,6 +232,39 @@ function showResetPassword() {
     },
   });
   mountEl.appendChild(screen);
+}
+
+function showSelfService() {
+  const leaving = currentScreen;
+  currentScreen = 'moj-profil';
+  clearMount(leaving);
+  syncBrowserUrl('/moj-profil');
+  document.body.classList.add('kadrovska-active', 'desktop-erp-module');
+  setStoredModule(null);
+  try {
+    renderMojProfilModule(mountEl, {
+      onBackToHub: () => showHub(),
+      onLogout: () => {
+        resetKadrovskaState();
+        showLogin();
+      },
+    });
+  } catch (e) {
+    console.error('[router] Moj profil render failed', e);
+    mountEl.innerHTML = `
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px">
+        <div class="auth-box" style="max-width:640px">
+          <div class="auth-brand">
+            <div class="auth-title">Greška u Moj profil modulu</div>
+            <div class="auth-subtitle">${(e && e.message) || String(e)}</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn" id="mpErrBackBtn">← Nazad na hub</button>
+          </div>
+        </div>
+      </div>`;
+    mountEl.querySelector('#mpErrBackBtn')?.addEventListener('click', () => showHub());
+  }
 }
 
 function showHub() {
@@ -879,6 +914,16 @@ function applyRouteFromLocation() {
     return;
   }
 
+  if (route.kind === 'self-service') {
+    if (!canAccessSelfService()) {
+      syncBrowserUrl('/', { replace: true });
+      showHub();
+      return;
+    }
+    showSelfService();
+    return;
+  }
+
   if (route.kind === 'maintenance') {
     if (!canAccessMaintenance()) {
       showToast('🔒 Održavanje zahteva prijavu.');
@@ -916,6 +961,11 @@ function applyRouteFromLocation() {
 }
 
 function navigateToModule(moduleId) {
+  if (moduleId === 'moj-profil') {
+    syncBrowserUrl('/moj-profil');
+    showSelfService();
+    return;
+  }
   if (!assertModuleAllowed(moduleId)) return;
   syncBrowserUrl(pathForModule(moduleId));
   showModulePlaceholder(moduleId, { skipUrlSync: true });

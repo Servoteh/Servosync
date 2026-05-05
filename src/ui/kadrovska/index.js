@@ -13,7 +13,7 @@
  *   renderKadrovskaModule(rootEl);
  */
 
-import { canAccessKadrovska, canAccessSalary } from '../../state/auth.js';
+import { canAccessKadrovska, canAccessSalary, canManageVacationRequests } from '../../state/auth.js';
 import { showToast } from '../../lib/dom.js';
 import { logout } from '../../services/auth.js';
 import { toggleTheme } from '../../lib/theme.js';
@@ -57,6 +57,7 @@ import {
 } from './hrNotificationsTab.js';
 import { renderComingSoonTab } from './comingSoon.js';
 import { renderAbsencesTab, wireAbsencesTab } from './absencesTab.js';
+import { renderVacationRequestsTab, wireVacationRequestsTab, refreshVacReqBadge } from './vacationRequestsTab.js';
 
 let rootEl = null;
 let onBackToHubCb = null;
@@ -116,6 +117,21 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
   });
 
   mountTabBody(activeTab);
+
+  /* Badge za pending GO zahteve — učitaj u pozadini samo za upravljačke role */
+  if (canManageVacationRequests()) {
+    import('../../services/vacationRequests.js').then(({ loadAllVacationRequestsFromDb }) => {
+      import('../../state/kadrovska.js').then(({ kadrVacReqState }) => {
+        loadAllVacationRequestsFromDb().then(data => {
+          if (data) {
+            kadrVacReqState.items = data;
+            kadrVacReqState.loaded = true;
+            refreshVacReqBadge();
+          }
+        });
+      });
+    });
+  }
 }
 
 function switchTab(id, opts = {}) {
@@ -173,6 +189,7 @@ function mountTabBody(id, opts = {}) {
     hours: { render: renderWorkHoursTab, wire: wireWorkHoursTab },
     contracts: { render: renderContractsTab, wire: wireContractsTab },
     salary: { render: renderSalaryTab, wire: wireSalaryTab, adminOnly: true },
+    'vac-requests': { render: renderVacationRequestsTab, wire: wireVacationRequestsTab },
     notifications: { render: renderHrNotificationsTab, wire: wireHrNotificationsTab },
     reports: { render: renderReportsTab, wire: wireReportsTab },
   };
