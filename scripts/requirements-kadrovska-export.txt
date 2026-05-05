@@ -1,0 +1,2 @@
+# Opciono: za employees_kadrovska_export.xlsx
+openpyxl>=3.1.0

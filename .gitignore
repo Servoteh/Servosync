@@ -43,6 +43,35 @@ __pycache__/
 /m_*.json
 /scripts/_mcp_*.sql
 
+# Root-level scratch files (MCP debug, ad-hoc chunks)
+/._*.json
+/._*.sql
+/._*.txt
+/._*.cjs
+/_*.json
+/_*.sql
+/_*.txt
+/_chunk_line_*.sql
+/_exec_*.sql
+/_mwo_*.sql
+/_mwo_*.json
+/_mwo_*.txt
+/_run_*.sql
+/_smoke_*.sql
+/_wrapped_*.sql
+
+# IDE / AI tool config (lokalno, ne deli se)
+.claude/
+.cursorrules
+
+# Data export fajlovi (generisani, ne idu u git)
+/docs/reports/employees_*.csv
+/docs/reports/employees_*.xlsx
+/docs/reports/employees_*.html
+/docs/reports/employees_*.tsv
+/scripts/employees_snapshot.tsv
+/scripts/_payroll_sync_report.json
+
 # Android / Capacitor build artifacts
 android/.gradle/
 android/build/
