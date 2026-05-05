@@ -71,14 +71,32 @@ export function statusBadgeClass(status) {
   const s = String(status || '');
   if (s === 'Završeno') return 'pb-badge pb-badge--ok';
   if (s === 'Blokirano') return 'pb-badge pb-badge--danger';
-  if (s === 'U toku' || s === 'Pregled') return 'pb-badge pb-badge--warn';
-  return 'pb-badge';
+  if (s === 'U toku') return 'pb-badge pb-badge--progress';
+  if (s === 'Pregled') return 'pb-badge pb-badge--review';
+  if (s === 'Nije počelo') return 'pb-badge pb-badge--muted';
+  return 'pb-badge pb-badge--muted';
+}
+
+/** Boja tačke za chip inženjera (ciklično, deterministički po imenu). */
+export function engineerDotClass(name) {
+  const palette = ['pb-eng-dot--a', 'pb-eng-dot--b', 'pb-eng-dot--c', 'pb-eng-dot--d'];
+  const s = String(name || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return palette[h % palette.length];
 }
 
 export function prioClass(p) {
   if (p === 'Visok') return 'pb-prio pb-prio--high';
   if (p === 'Nizak') return 'pb-prio pb-prio--low';
   return 'pb-prio pb-prio--mid';
+}
+
+/** Tačka prioriteta u tabeli (kolona Prioritet). */
+export function prioDotClass(p) {
+  if (p === 'Visok') return 'pb-prio-dot pb-prio-dot--high';
+  if (p === 'Nizak') return 'pb-prio-dot pb-prio-dot--low';
+  return 'pb-prio-dot pb-prio-dot--mid';
 }
 
 /** @param {HTMLElement} root */
