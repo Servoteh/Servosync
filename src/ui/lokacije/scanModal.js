@@ -189,6 +189,7 @@ export async function openScanMoveModal({
     startScan,
     decodeBarcodeFromFile,
     isAndroidWebCameraTorchZoomHidden,
+    isAndroidChromeBrowser,
   } = barcodeMod;
 
   if (!isScanSupported()) {
@@ -623,7 +624,8 @@ export async function openScanMoveModal({
    * kad je track.getCapabilities dostupan.
    */
   async function setupZoomUI() {
-    if (isAndroidWebCameraTorchZoomHidden()) return;
+    /* Zoom slider: Android Chrome (hardware zoom); ostali Android browseri — preskoči. */
+    if (isAndroidWebCameraTorchZoomHidden() && !isAndroidChromeBrowser()) return;
     if (!state.scanCtrl || typeof state.scanCtrl.getZoom !== 'function') return;
     const cap = await state.scanCtrl.getZoom();
     const wrap = $('#locScanZoom');
@@ -660,7 +662,7 @@ export async function openScanMoveModal({
    */
   function cameraBlockedUserHint() {
     const ua = navigator.userAgent || '';
-    const isAndroid = isAndroidWebCameraTorchZoomHidden();
+    const isAndroid = isAndroidWebPlatform();
     const isIOS =
       /iPad|iPhone|iPod/.test(ua) || (ua.includes('Mac') && 'ontouchend' in document);
     if (isAndroid) {

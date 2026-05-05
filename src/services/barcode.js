@@ -76,15 +76,11 @@ export function isScanSupported() {
 }
 
 /**
- * Android (Chrome, Samsung Internet, Firefox, WebView): torch i kontinuirani
- * zoom preko `applyConstraints` retko rade pouzdano na stražnjoj kameri — UI
- * ih ne prikazujemo da korisnik ne misli da je „pokvareno“.
- *
- * Pored `User-Agent` sa "Android", uključuje i **Desktop site** režim gde UA
- * često nema "Android", ali `navigator.userAgentData` i dalje javlja mobilni
- * Android (brands).
+ * Android u mobilnom browseru (Chrome, Samsung Internet, Firefox, WebView).
+ * Koristi UA + `navigator.userAgentData` (Desktop site na Androidu često nema
+ * reč "Android" u UA, ali `mobile` + Android brands ostaju).
  */
-export function isAndroidWebCameraTorchZoomHidden() {
+export function isAndroidWebPlatform() {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
   if (/Android/i.test(ua)) return true;
@@ -100,6 +96,27 @@ export function isAndroidWebCameraTorchZoomHidden() {
     /* ignore */
   }
   return false;
+}
+
+/**
+ * Isto što {@link isAndroidWebPlatform} — zadržano ime jer ga skener koristi
+ * za sakrivanje **torch** dugmeta na Androidu (nepouzdano na mnogim uređajima).
+ */
+export function isAndroidWebCameraTorchZoomHidden() {
+  return isAndroidWebPlatform();
+}
+
+/**
+ * Android **Google Chrome** (Chromium motor + `Chrome/` u UA), bez Firefox /
+ * Samsung Internet / Edge Android varijanti. Koristi se da **uključimo**
+ * hardware zoom UI samo tamo gde je ApplyConstraints zoom na stražnjoj kameri
+ * praktično koristio (Chrome); iOS i ostatak modula ostaju neizmenjeni.
+ */
+export function isAndroidChromeBrowser() {
+  if (!isAndroidWebPlatform()) return false;
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  if (/Firefox|SamsungBrowser|EdgA/i.test(ua)) return false;
+  return /Chrome\//.test(ua);
 }
 
 /** @zxing/browser podrazumevano 500 ms između NotFound pokušaja — previše spor „osećaj“. */
@@ -235,7 +252,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
       if (!track) return false;
       const caps = track.getCapabilities?.() || {};
       const supported = navigator.mediaDevices?.getSupportedConstraints?.() || {};
-      if (isAndroidWebCameraTorchZoomHidden()) return false;
+      if (isAndroidWebPlatform()) return false;
       const torchAdvertised = 'torch' in caps || supported.torch === true;
       if (!torchAdvertised) return false;
       const settings = track.getSettings?.() || {};
@@ -258,7 +275,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     getZoom: async () => {
       const track = getTrack();
       if (!track) return null;
-      if (isAndroidWebCameraTorchZoomHidden()) return null;
+      if (isAndroidWebPlatform() && !isAndroidChromeBrowser()) return null;
       const caps = track.getCapabilities?.() || {};
       const s = track.getSettings?.() || {};
       const zRaw = caps.zoom;
@@ -283,7 +300,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
      * @returns {Promise<boolean>} true ako je uspešno primenjeno.
      */
     setZoom: async value => {
-      if (isAndroidWebCameraTorchZoomHidden()) return false;
+      if (isAndroidWebPlatform() && !isAndroidChromeBrowser()) return false;
       const track = getTrack();
       if (!track) return false;
       return applyVideoConstraintCompat(track, { zoom: value });
