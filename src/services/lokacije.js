@@ -659,8 +659,9 @@ export async function searchBigtehnWorkOrdersForItem(itemId, opts = {}) {
     return Array.isArray(rows) ? rows : [];
   }
 
-  /* Pun spisak otvorenih RN — više stranica (Supabase max limit 1000 po upitu). */
-  const HARD_CAP = 8000;
+  /* Pun spisak otvorenih RN — više stranica (Supabase max limit 1000 po upitu).
+   * Predmet 9400 ima 800+ otvorenih RN-ova; cap mora biti iznad toga. */
+  const HARD_CAP = 50_000;
   const all = [];
   let offset = 0;
   while (offset < HARD_CAP) {

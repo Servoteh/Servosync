@@ -81,6 +81,9 @@ export async function renderLabelsPrintPage(host, { onRefresh } = {}) {
   if (!host) return;
   const refresh = typeof onRefresh === 'function' ? onRefresh : () => renderLabelsPrintPage(host, { onRefresh });
 
+  /* Uvek svež fetch TP liste (izbegni stari keš od pre deploy-a / starog limita). */
+  _state.tpsByItem.clear();
+
   /* Render shell odmah pa fetch — odziv je trenutan i operater vidi search
    * + queue od starta. */
   host.innerHTML = `
@@ -259,18 +262,18 @@ async function renderTpsBlock(host, refresh) {
     hostEl.innerHTML = `<p class="loc-warn" style="padding:14px">Predmet nije pronađen u trenutnoj listi pretrage.</p>`;
     return;
   }
-  /* Učitaj TP-ove ako nisu već u kešu */
-  if (!_state.tpsByItem.has(itemId)) {
-    hostEl.innerHTML = `<p class="loc-muted" style="padding:14px">Učitavam tehnološke postupke za <strong>${escHtml(item.broj_predmeta || '')}</strong>…</p>`;
-    try {
-      const tps = await searchBigtehnWorkOrdersForItem(itemId, { onlyOpen: true, limit: 500 });
-      _state.tpsByItem.set(itemId, Array.isArray(tps) ? tps : []);
-    } catch (err) {
-      hostEl.innerHTML = `<p class="loc-warn" style="padding:14px">Greška učitavanja TP: ${escHtml(err?.message || String(err))}</p>`;
-      return;
-    }
+  /* Uvek ponovo učitaj TP (predmet može imati 500+ otvorenih RN — keš od jednog
+   * limita je ranije secao kasnije ident_broj-eve npr. 9400/755). */
+  hostEl.innerHTML = `<p class="loc-muted" style="padding:14px">Učitavam tehnološke postupke za <strong>${escHtml(item.broj_predmeta || '')}</strong>…</p>`;
+  let tps = [];
+  try {
+    tps = await searchBigtehnWorkOrdersForItem(itemId, { onlyOpen: true, limit: 1000 });
+    _state.tpsByItem.set(itemId, Array.isArray(tps) ? tps : []);
+  } catch (err) {
+    hostEl.innerHTML = `<p class="loc-warn" style="padding:14px">Greška učitavanja TP: ${escHtml(err?.message || String(err))}</p>`;
+    return;
   }
-  const tps = _state.tpsByItem.get(itemId) || [];
+  tps = _state.tpsByItem.get(itemId) || [];
   if (!tps.length) {
     hostEl.innerHTML = `<p class="loc-muted" style="padding:14px;border:1px dashed var(--border2,#ccc);border-radius:6px">
       Predmet <strong>${escHtml(item.broj_predmeta || '')}</strong> nema otvorenih radnih naloga u BigTehn kešu (ili još nisu sinhronizovani).
@@ -283,6 +286,9 @@ async function renderTpsBlock(host, refresh) {
       <div style="flex:1;min-width:0">
         <div><strong>${escHtml(item.broj_predmeta || '')}</strong> · ${escHtml(item.naziv_predmeta || '')}</div>
         <div class="loc-muted" style="font-size:12px">Komitent: ${escHtml(item.customer_name || '—')}</div>
+        <div class="loc-muted" style="font-size:12px;margin-top:4px">
+          Veliki predmeti: lista može imati stotine TP-ova — koristi pretragu u pregledaču (Ctrl+F) ili skroluj tabelu ispod.
+        </div>
       </div>
       <button type="button" class="btn btn-xs" id="lpTpsSelectAll"
         title="Dodaj sve TP-ove ovog predmeta u red za štampu (kvantitet = 1 za svaki)">+ Sve TP u red</button>
