@@ -592,10 +592,16 @@ export function barcodeForPlacementRow(p) {
 
 function debounce(fn, ms) {
   let t = null;
-  return (...args) => {
+  const wrapped = (...args) => {
     clearTimeout(t);
     t = setTimeout(() => fn(...args), ms);
   };
+  wrapped.flush = () => {
+    clearTimeout(t);
+    t = null;
+    fn();
+  };
+  return wrapped;
 }
 
 function todayStrDDMMYY() {
@@ -644,8 +650,12 @@ export async function openTechProcessLabelPrintModal() {
 
           <div id="tpTpsPickBlock" style="display:none">
             <label class="loc-filter-field"><span>Tehnološki postupak (RN)</span>
-              <input type="search" id="tpTpQ" class="loc-search-input" placeholder="Lokalni filter; ako nema pogotka — traži na serveru (755, crtež…)…" autocomplete="off" />
+              <input type="search" id="tpTpQ" class="loc-search-input" placeholder="Filtriraj učitane; Enter ili „Pronađi u bazi” ako nema u listi…" autocomplete="off" />
             </label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center">
+              <button type="button" class="btn btn-xs" id="tpTpFindDb">Pronađi u bazi</button>
+              <span class="loc-muted" style="font-size:11px">Traži otvoreni RN po identu / crtežu / nazivu (Supabase).</span>
+            </div>
             <div id="tpTpList" class="loc-list" style="max-height:260px;overflow:auto;border:1px solid var(--border2,#eee);border-radius:6px;margin-top:6px"></div>
             <p class="loc-muted" style="font-size:12px;margin:6px 2px 0">TP mora biti izabran iz liste — bez slobodnog unosa. Skener kasnije čita samo barkode koji odgovaraju zapisima u BigTehn-u.</p>
           </div>
@@ -677,6 +687,7 @@ export async function openTechProcessLabelPrintModal() {
   const selectedPredmetEl = overlay.querySelector('#tpSelectedPredmet');
   const tpsPickBlock = overlay.querySelector('#tpTpsPickBlock');
   const tpQ = overlay.querySelector('#tpTpQ');
+  const btnTpFindDb = overlay.querySelector('#tpTpFindDb');
   const tpListEl = overlay.querySelector('#tpTpList');
   const tpSelectedEl = overlay.querySelector('#tpSelectedTp');
   const qtyBlock = overlay.querySelector('#tpQtyBlock');
@@ -768,7 +779,13 @@ export async function openTechProcessLabelPrintModal() {
     updatePreview();
   }
 
-  async function renderTpList(filter) {
+  function findWoInCache(tpId) {
+    const id = Number(tpId);
+    return tpsCache.find(x => Number(x.id) === id) || null;
+  }
+
+  async function renderTpList(filter, opts = {}) {
+    const forceServer = !!opts.forceServer;
     const rawF = String(filter || '').trim();
     const f = rawF.toLowerCase();
     let list = !f
@@ -779,22 +796,68 @@ export async function openTechProcessLabelPrintModal() {
             String(x.broj_crteza || '').toLowerCase().includes(f) ||
             String(x.naziv_dela || '').toLowerCase().includes(f),
         );
-    if (rawF && !list.length && selectedPredmet) {
-      tpListEl.innerHTML = '<p class="loc-muted" style="padding:10px">Tražim na serveru…</p>';
+    if (rawF && !list.length && selectedPredmet && !forceServer) {
+      tpListEl.innerHTML = '<p class="loc-muted" style="padding:10px">Nema u učitanoj listi — tražim u bazi…</p>';
       try {
         const serverRows = await searchBigtehnWorkOrdersForItem(selectedPredmet.id, {
           onlyOpen: true,
           limit: 200,
           search: rawF,
         });
-        list = Array.isArray(serverRows) ? serverRows : [];
+        const extra = Array.isArray(serverRows) ? serverRows : [];
+        const byId = new Map(tpsCache.map(r => [Number(r.id), r]));
+        for (const r of extra) {
+          if (r?.id != null) byId.set(Number(r.id), r);
+        }
+        tpsCache = Array.from(byId.values()).sort((a, b) =>
+          String(a.ident_broj || '').localeCompare(String(b.ident_broj || ''), undefined, { numeric: true }),
+        );
+        list = tpsCache.filter(
+          x =>
+            String(x.ident_broj || '').toLowerCase().includes(f) ||
+            String(x.broj_crteza || '').toLowerCase().includes(f) ||
+            String(x.naziv_dela || '').toLowerCase().includes(f),
+        );
       } catch (err) {
         console.error('[label/tps] server filter failed', err);
         list = [];
       }
     }
+    if (rawF && !list.length && selectedPredmet && forceServer) {
+      tpListEl.innerHTML = '<p class="loc-muted" style="padding:10px">Tražim u bazi…</p>';
+      try {
+        const serverRows = await searchBigtehnWorkOrdersForItem(selectedPredmet.id, {
+          onlyOpen: true,
+          limit: 500,
+          search: rawF,
+        });
+        const extra = Array.isArray(serverRows) ? serverRows : [];
+        const byId = new Map(tpsCache.map(r => [Number(r.id), r]));
+        for (const r of extra) {
+          if (r?.id != null) byId.set(Number(r.id), r);
+        }
+        tpsCache = Array.from(byId.values()).sort((a, b) =>
+          String(a.ident_broj || '').localeCompare(String(b.ident_broj || ''), undefined, { numeric: true }),
+        );
+        list = tpsCache.filter(
+          x =>
+            String(x.ident_broj || '').toLowerCase().includes(f) ||
+            String(x.broj_crteza || '').toLowerCase().includes(f) ||
+            String(x.naziv_dela || '').toLowerCase().includes(f),
+        );
+      } catch (err) {
+        console.error('[label/tps] server search failed', err);
+        list = [];
+      }
+    }
     if (!list.length) {
-      tpListEl.innerHTML = '<p class="loc-muted" style="padding:10px">Nema otvorenih tehnoloških postupaka za ovaj predmet u BigTehn kešu (ili filter).</p>';
+      const hint =
+        rawF && selectedPredmet
+          ? '<p class="loc-muted" style="padding:8px 10px 0;font-size:12px">Klikni <strong>Pronađi u bazi</strong> ili proveri broj / crtež.</p>'
+          : '';
+      tpListEl.innerHTML =
+        '<p class="loc-muted" style="padding:10px">Nema otvorenih tehnoloških postupaka za ovaj predmet u BigTehn kešu (ili filter).</p>' +
+        hint;
       return;
     }
     tpListEl.innerHTML = list
@@ -812,13 +875,29 @@ export async function openTechProcessLabelPrintModal() {
     tpListEl.querySelectorAll('[data-tp-id]').forEach(btn => {
       btn.addEventListener('click', () => {
         const tpId = Number(btn.getAttribute('data-tp-id'));
-        const wo = tpsCache.find(x => x.id === tpId);
+        const wo = findWoInCache(tpId);
         if (wo) selectTp(wo);
       });
     });
   }
 
-  tpQ.addEventListener('input', debounce(() => void renderTpList(tpQ.value), 200));
+  const debouncedTpFilter = debounce(() => void renderTpList(tpQ.value), 320);
+  tpQ.addEventListener('input', () => debouncedTpFilter());
+  tpQ.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      debouncedTpFilter.flush?.();
+      void renderTpList(tpQ.value, { forceServer: true });
+    }
+  });
+  btnTpFindDb?.addEventListener('click', () => {
+    const v = tpQ instanceof HTMLInputElement ? tpQ.value.trim() : '';
+    if (!v) {
+      showToast('⚠ Upiši TP, ident ili crtež pa klikni Pronađi u bazi');
+      return;
+    }
+    void renderTpList(v, { forceServer: true });
+  });
 
   function selectTp(wo) {
     selectedTp = wo;

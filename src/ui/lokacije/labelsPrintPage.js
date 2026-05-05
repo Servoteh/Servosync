@@ -14,8 +14,8 @@
  *   - `_state.itemsRows`            poslednji rezultat pretrage predmeta
  *   - `_state.focusedItemId`        koji je predmet trenutno otvoren u
  *                                   donjem panelu (TP lista)
- *   - `_state.tpsByItem`            cache: itemId → TP[] (poslednji fetch)
- *   - `_state.tpServerQByItem`      poslednji server filter za TP listu (itemId → string)
+ *   - `_state.tpsFullByItem`        pun skup otvorenih TP (paginacija) po predmetu
+ *   - `_state.tpLocalQByItem`       klijentski filter nad učitanim TP (itemId → string)
  *   - `_state.queue`                Map<itemId:tpId, queueEntry>
  *   - `_state.lastSearch`           tekst poslednje pretrage (sačuva se u
  *                                   tabu kad korisnik prebaci tab i vrati se)
@@ -50,8 +50,8 @@ import { printTechProcessLabelsBatch } from './labelsPrint.js';
 const _state = {
   /** @type {Array<object>} */ itemsRows: [],
   /** @type {number|null} */ focusedItemId: null,
-  /** @type {Map<number, Array<object>>} */ tpsByItem: new Map(),
-  /** @type {Map<number, string>} */ tpServerQByItem: new Map(),
+  /** @type {Map<number, Array<object>>} */ tpsFullByItem: new Map(),
+  /** @type {Map<number, string>} */ tpLocalQByItem: new Map(),
   /** @type {Map<string, QueueEntry>} */ queue: new Map(),
   /** @type {string} */ lastSearch: '',
   /** @type {boolean} */ loading: false,
@@ -59,10 +59,16 @@ const _state = {
 
 function debounce(fn, ms) {
   let t = null;
-  return (...args) => {
+  const wrapped = (...args) => {
     clearTimeout(t);
     t = setTimeout(() => fn(...args), ms);
   };
+  wrapped.flush = () => {
+    clearTimeout(t);
+    t = null;
+    fn();
+  };
+  return wrapped;
 }
 
 function todayStrDDMMYY() {
@@ -84,8 +90,8 @@ export async function renderLabelsPrintPage(host, { onRefresh } = {}) {
   const refresh = typeof onRefresh === 'function' ? onRefresh : () => renderLabelsPrintPage(host, { onRefresh });
 
   /* Uvek svež fetch TP liste (izbegni stari keš od pre deploy-a / starog limita). */
-  _state.tpsByItem.clear();
-  _state.tpServerQByItem.clear();
+  _state.tpsFullByItem.clear();
+  _state.tpLocalQByItem.clear();
 
   /* Render shell odmah pa fetch — odziv je trenutan i operater vidi search
    * + queue od starta. */
@@ -239,7 +245,9 @@ function attachItemRowHandlers(host, refresh) {
 }
 
 function focusItem(host, itemId, refresh) {
+  const prev = _state.focusedItemId;
   _state.focusedItemId = itemId;
+  if (prev !== itemId) _state.tpLocalQByItem.delete(itemId);
   /* Update vizuelni focus na items tabeli */
   host.querySelectorAll('[data-lp-item-id]').forEach(tr => {
     const on = Number(tr.getAttribute('data-lp-item-id')) === itemId;
@@ -250,18 +258,58 @@ function focusItem(host, itemId, refresh) {
 
 /* ── TPs block (donji panel za izabrani predmet) ──────────────────────── */
 
-async function loadTpsForLabelsItem(itemId, serverQ) {
-  const q = serverQ != null ? String(serverQ).trim() : '';
-  const tps = await searchBigtehnWorkOrdersForItem(itemId, {
-    onlyOpen: true,
-    limit: q ? 500 : 1000,
-    search: q || undefined,
-  });
-  _state.tpsByItem.set(itemId, Array.isArray(tps) ? tps : []);
-  _state.tpServerQByItem.set(itemId, q);
+function applyLocalTpFilter(rows, q) {
+  const f = String(q || '').trim().toLowerCase();
+  if (!f) return Array.isArray(rows) ? rows : [];
+  return (Array.isArray(rows) ? rows : []).filter(
+    x =>
+      String(x.ident_broj || '')
+        .toLowerCase()
+        .includes(f) ||
+      String(x.broj_crteza || '')
+        .toLowerCase()
+        .includes(f) ||
+      String(x.naziv_dela || '')
+        .toLowerCase()
+        .includes(f),
+  );
 }
 
-async function renderTpsBlock(host, refresh) {
+function mergeTpsById(itemId, extra) {
+  const cur = _state.tpsFullByItem.get(itemId) || [];
+  const byId = new Map(cur.map(r => [Number(r.id), r]));
+  for (const r of Array.isArray(extra) ? extra : []) {
+    if (r?.id == null) continue;
+    byId.set(Number(r.id), r);
+  }
+  const merged = Array.from(byId.values()).sort((a, b) =>
+    String(a.ident_broj || '').localeCompare(String(b.ident_broj || ''), undefined, { numeric: true }),
+  );
+  _state.tpsFullByItem.set(itemId, merged);
+}
+
+async function fetchFullTpsForLabelsItem(itemId) {
+  const rows = await searchBigtehnWorkOrdersForItem(itemId, { onlyOpen: true, limit: 1000 });
+  _state.tpsFullByItem.set(itemId, Array.isArray(rows) ? rows : []);
+}
+
+async function serverSearchTpsForLabelsItem(itemId, q) {
+  const s = String(q || '').trim();
+  if (!s) return [];
+  return searchBigtehnWorkOrdersForItem(itemId, {
+    onlyOpen: true,
+    limit: 500,
+    search: s,
+  });
+}
+
+/**
+ * @param {HTMLElement} host
+ * @param {() => void|Promise<void>} refresh
+ * @param {{ skipRefetch?: boolean }} [opts]
+ */
+async function renderTpsBlock(host, refresh, opts = {}) {
+  const skipRefetch = !!opts.skipRefetch;
   const hostEl = host.querySelector('#lpTpsHost');
   if (!hostEl) return;
   const itemId = _state.focusedItemId;
@@ -276,38 +324,80 @@ async function renderTpsBlock(host, refresh) {
     hostEl.innerHTML = `<p class="loc-warn" style="padding:14px">Predmet nije pronađen u trenutnoj listi pretrage.</p>`;
     return;
   }
-  const serverQ = _state.tpServerQByItem.get(itemId) ?? '';
+  const localQ = _state.tpLocalQByItem.get(itemId) ?? '';
 
-  hostEl.innerHTML = `<p class="loc-muted" style="padding:14px">Učitavam tehnološke postupke za <strong>${escHtml(item.broj_predmeta || '')}</strong>…</p>`;
-  try {
-    await loadTpsForLabelsItem(itemId, serverQ);
-  } catch (err) {
-    hostEl.innerHTML = `<p class="loc-warn" style="padding:14px">Greška učitavanja TP: ${escHtml(err?.message || String(err))}</p>`;
-    return;
+  if (!skipRefetch || !_state.tpsFullByItem.has(itemId)) {
+    hostEl.innerHTML = `<p class="loc-muted" style="padding:14px">Učitavam tehnološke postupke za <strong>${escHtml(item.broj_predmeta || '')}</strong>…</p>`;
+    try {
+      await fetchFullTpsForLabelsItem(itemId);
+    } catch (err) {
+      hostEl.innerHTML = `<p class="loc-warn" style="padding:14px">Greška učitavanja TP: ${escHtml(err?.message || String(err))}</p>`;
+      return;
+    }
   }
-  let tps = _state.tpsByItem.get(itemId) || [];
-  if (!tps.length) {
-    const hint = serverQ
-      ? ` Nema rezultata za filter „${escHtml(serverQ)}” — probaj deo identa (npr. <code>755</code>) ili broj crteža.`
-      : '';
+
+  const full = _state.tpsFullByItem.get(itemId) || [];
+  let display = applyLocalTpFilter(full, localQ);
+  let serverHint = '';
+
+  if (String(localQ).trim() && display.length === 0) {
+    try {
+      const serverRows = await serverSearchTpsForLabelsItem(itemId, localQ);
+      if (Array.isArray(serverRows) && serverRows.length) {
+        mergeTpsById(itemId, serverRows);
+        display = applyLocalTpFilter(_state.tpsFullByItem.get(itemId) || [], localQ);
+        serverHint =
+          display.length > 0
+            ? ` <span class="loc-muted">(dopunjeno iz baze: ${serverRows.length} RN)</span>`
+            : '';
+      } else {
+        serverHint = ` <span class="loc-muted">(u bazi nema otvorenog RN za „${escHtml(String(localQ).trim())}”)</span>`;
+      }
+    } catch {
+      serverHint = ' <span class="loc-warn">(pretraga u bazi nije uspela)</span>';
+    }
+  }
+
+  if (!display.length && !String(localQ).trim()) {
     hostEl.innerHTML = `<p class="loc-muted" style="padding:14px;border:1px dashed var(--border2,#ccc);border-radius:6px">
-      Predmet <strong>${escHtml(item.broj_predmeta || '')}</strong> nema otvorenih radnih naloga u BigTehn kešu (ili još nisu sinhronizovani).${hint}
+      Predmet <strong>${escHtml(item.broj_predmeta || '')}</strong> nema otvorenih radnih naloga u BigTehn kešu (ili još nisu sinhronizovani).
     </p>`;
     return;
   }
 
+  if (!display.length && String(localQ).trim()) {
+    hostEl.innerHTML = `
+      <div class="loc-filter-field" style="margin:0 0 10px;max-width:560px">
+        <span>Filter TP (ident / crtež / naziv)</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
+          <input type="search" id="lpTpsLocalQ" class="loc-search-input" style="flex:1;min-width:180px"
+            value="${escHtml(localQ)}"
+            placeholder="npr. 755, 1121195…"
+            autocomplete="off" />
+          <button type="button" class="btn btn-xs" id="lpTpsFindDb">Pronađi u bazi</button>
+          <button type="button" class="btn btn-xs" id="lpTpsShowAll">Prikaži sve TP</button>
+        </div>
+      </div>
+      <p class="loc-muted" style="padding:14px;border:1px dashed var(--border2,#ccc);border-radius:6px">
+        Nema pogotka u <strong>${full.length}</strong> učitanih TP za filter „${escHtml(String(localQ).trim())}”.${serverHint}
+        Klikni <strong>Pronađi u bazi</strong> ili proveri broj.
+      </p>`;
+    wireLpTpsFilterControls(host, hostEl, itemId, item, refresh, display);
+    return;
+  }
+
   const filterRow = `
-    <div class="loc-filter-field" style="margin:0 0 10px;max-width:520px">
-      <span>Brza pretraga TP na serveru (ident / crtež / naziv)</span>
+    <div class="loc-filter-field" style="margin:0 0 10px;max-width:560px">
+      <span>Filter TP — prvo po učitanoj listi; ako nema pogotka, automatski traži u bazi</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
-        <input type="search" id="lpTpsServerQ" class="loc-search-input" style="flex:1;min-width:180px"
-          value="${escHtml(serverQ)}"
+        <input type="search" id="lpTpsLocalQ" class="loc-search-input" style="flex:1;min-width:180px"
+          value="${escHtml(localQ)}"
           placeholder="npr. 755, 9400/755, 1121195…"
           autocomplete="off" />
-        <button type="button" class="btn btn-xs" id="lpTpsServerQGo">Pretraži</button>
-        <button type="button" class="btn btn-xs" id="lpTpsServerQClr">Prikaži sve</button>
+        <button type="button" class="btn btn-xs" id="lpTpsFindDb">Pronađi u bazi</button>
+        <button type="button" class="btn btn-xs" id="lpTpsShowAll">Prikaži sve TP</button>
       </div>
-      <span class="loc-muted" style="font-size:11px">Prazno + „Prikaži sve“ učitava sve otvorene RN (može potrajati). Sa tekstom traži direktno u bazi.</span>
+      <span class="loc-muted" style="font-size:11px">Učitano u memoriju: <strong>${full.length}</strong> otvorenih RN. „Prikaži sve“ ponovo vuče ceo spisak.</span>
     </div>`;
 
   const headerHtml = `
@@ -316,16 +406,16 @@ async function renderTpsBlock(host, refresh) {
         <div><strong>${escHtml(item.broj_predmeta || '')}</strong> · ${escHtml(item.naziv_predmeta || '')}</div>
         <div class="loc-muted" style="font-size:12px">Komitent: ${escHtml(item.customer_name || '—')}</div>
         <div class="loc-muted" style="font-size:12px;margin-top:4px">
-          Prikazano: <strong>${tps.length}</strong> TP${serverQ ? ` (filter: „${escHtml(serverQ)}”)` : ''}. Duga lista — skrol ili server filter iznad.
+          Prikazano: <strong>${display.length}</strong> od ${full.length} TP${localQ.trim() ? ` (filter)` : ''}.${serverHint}
         </div>
       </div>
       <button type="button" class="btn btn-xs" id="lpTpsSelectAll"
-        title="Dodaj sve TP-ove ovog predmeta u red za štampu (kvantitet = 1 za svaki)">+ Sve TP u red</button>
+        title="Dodaj prikazane TP-ove u red za štampu">+ Ubaci prikazane u red</button>
       <button type="button" class="btn btn-xs" id="lpTpsClearItem"
         title="Ukloni sve TP-ove ovog predmeta iz reda za štampu">Očisti red za ovaj predmet</button>
     </div>`;
 
-  const rowsHtml = tps.map(wo => renderTpRowHtml(itemId, wo)).join('');
+  const rowsHtml = display.map(wo => renderTpRowHtml(itemId, wo)).join('');
 
   hostEl.innerHTML = `
     ${filterRow}
@@ -346,26 +436,49 @@ async function renderTpsBlock(host, refresh) {
       </table>
     </div>`;
 
-  const runServerFilter = () => {
-    const inp = hostEl.querySelector('#lpTpsServerQ');
-    const v = inp instanceof HTMLInputElement ? inp.value.trim() : '';
-    _state.tpServerQByItem.set(itemId, v);
-    void renderTpsBlock(host, refresh);
-  };
+  wireLpTpsFilterControls(host, hostEl, itemId, item, refresh, display);
+}
 
-  hostEl.querySelector('#lpTpsServerQGo')?.addEventListener('click', runServerFilter);
-  hostEl.querySelector('#lpTpsServerQClr')?.addEventListener('click', () => {
-    _state.tpServerQByItem.set(itemId, '');
-    void renderTpsBlock(host, refresh);
-  });
-  hostEl.querySelector('#lpTpsServerQ')?.addEventListener('keydown', ev => {
+function wireLpTpsFilterControls(host, hostEl, itemId, item, refresh, tps) {
+  const debouncedLocal = debounce(() => {
+    const inp = hostEl.querySelector('#lpTpsLocalQ');
+    const v = inp instanceof HTMLInputElement ? inp.value : '';
+    _state.tpLocalQByItem.set(itemId, v);
+    void renderTpsBlock(host, refresh, { skipRefetch: true });
+  }, 380);
+
+  hostEl.querySelector('#lpTpsLocalQ')?.addEventListener('input', () => debouncedLocal());
+  hostEl.querySelector('#lpTpsLocalQ')?.addEventListener('keydown', ev => {
     if (ev.key === 'Enter') {
       ev.preventDefault();
-      runServerFilter();
+      debouncedLocal.flush?.();
     }
   });
 
-  /* Handler-i */
+  hostEl.querySelector('#lpTpsFindDb')?.addEventListener('click', async () => {
+    const inp = hostEl.querySelector('#lpTpsLocalQ');
+    const v = inp instanceof HTMLInputElement ? inp.value.trim() : '';
+    if (!v) {
+      showToast('⚠ Upiši broj TP, ident (npr. 9400/755) ili crtež pa klikni Pronađi u bazi');
+      return;
+    }
+    _state.tpLocalQByItem.set(itemId, v);
+    try {
+      const serverRows = await serverSearchTpsForLabelsItem(itemId, v);
+      mergeTpsById(itemId, serverRows);
+      showToast(serverRows?.length ? `✓ Baza: ${serverRows.length} RN` : '⚠ Nema pogotka u bazi');
+    } catch (e) {
+      showToast('⚠ Pretraga u bazi nije uspela');
+    }
+    void renderTpsBlock(host, refresh, { skipRefetch: true });
+  });
+
+  hostEl.querySelector('#lpTpsShowAll')?.addEventListener('click', () => {
+    _state.tpLocalQByItem.delete(itemId);
+    _state.tpsFullByItem.delete(itemId);
+    void renderTpsBlock(host, refresh, { skipRefetch: false });
+  });
+
   hostEl.querySelectorAll('[data-lp-tp-cb]').forEach(cb => {
     cb.addEventListener('change', () => {
       const tpId = Number(cb.getAttribute('data-lp-tp-cb'));
@@ -378,7 +491,6 @@ async function renderTpsBlock(host, refresh) {
         _state.queue.delete(k);
       }
       renderQueueBlock(host, refresh);
-      /* Update items tabela jer se promenio "imam u redu" indikator. */
       refreshItemRowAppearance(host, itemId);
     });
   });
@@ -389,7 +501,7 @@ async function renderTpsBlock(host, refresh) {
         _state.queue.set(k, { predmet: item, tp: wo, qty: 1 });
       }
     }
-    void renderTpsBlock(host, refresh);
+    void renderTpsBlock(host, refresh, { skipRefetch: true });
     renderQueueBlock(host, refresh);
     refreshItemRowAppearance(host, itemId);
   });
@@ -397,7 +509,7 @@ async function renderTpsBlock(host, refresh) {
     for (const k of Array.from(_state.queue.keys())) {
       if (k.startsWith(`${itemId}:`)) _state.queue.delete(k);
     }
-    void renderTpsBlock(host, refresh);
+    void renderTpsBlock(host, refresh, { skipRefetch: true });
     renderQueueBlock(host, refresh);
     refreshItemRowAppearance(host, itemId);
   });
@@ -606,8 +718,8 @@ async function runBatchPrint(host, refresh) {
 export function resetLabelsPrintPageState() {
   _state.itemsRows = [];
   _state.focusedItemId = null;
-  _state.tpsByItem.clear();
-  _state.tpServerQByItem.clear();
+  _state.tpsFullByItem.clear();
+  _state.tpLocalQByItem.clear();
   _state.queue.clear();
   _state.lastSearch = '';
   _state.loading = false;
