@@ -246,8 +246,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
   }
 
   function pbTabBtn(id, label, active) {
-    const icon = TAB_ICONS[id] || '';
-    return `<button type="button" role="tab" class="pb-tab-btn ${active ? 'active' : ''}" data-pb-tab="${escHtml(id)}" aria-selected="${active}">${icon}${escHtml(label)}</button>`;
+    return `<button type="button" role="tab" class="pb-tab-btn ${active ? 'active' : ''}" data-pb-tab="${escHtml(id)}" aria-selected="${active}">${escHtml(label)}</button>`;
   }
 
   function switchToPlanShowDone() {
