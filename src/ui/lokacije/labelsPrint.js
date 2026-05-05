@@ -610,7 +610,7 @@ function todayStrDDMMYY() {
  * Tok (refaktor 2026-04 — Task 3a):
  *
  *   1. Predmet picker — pretraga BigTehn `bigtehn_items_cache` (samo aktuelni).
- *   2. Po izboru Predmeta → učita se lista TP-ova (ručno aktivni RN-ovi).
+ *   2. Po izboru Predmeta → učita se lista TP-ova (otvoreni RN iz BigTehn keša).
  *   3. Po izboru TP-a iz liste → **lista se sklopi**, prikaže se „selected
  *      panel" sa Predmetom + TP brojem + nazivom dela. Operater jasno vidi
  *      šta će biti odštampano.
@@ -644,7 +644,7 @@ export async function openTechProcessLabelPrintModal() {
 
           <div id="tpTpsPickBlock" style="display:none">
             <label class="loc-filter-field"><span>Tehnološki postupak (RN)</span>
-              <input type="search" id="tpTpQ" class="loc-search-input" placeholder="Filter po ident_broju, crtežu ili nazivu dela…" autocomplete="off" />
+              <input type="search" id="tpTpQ" class="loc-search-input" placeholder="Lokalni filter; ako nema pogotka — traži na serveru (755, crtež…)…" autocomplete="off" />
             </label>
             <div id="tpTpList" class="loc-list" style="max-height:260px;overflow:auto;border:1px solid var(--border2,#eee);border-radius:6px;margin-top:6px"></div>
             <p class="loc-muted" style="font-size:12px;margin:6px 2px 0">TP mora biti izabran iz liste — bez slobodnog unosa. Skener kasnije čita samo barkode koji odgovaraju zapisima u BigTehn-u.</p>
@@ -759,7 +759,7 @@ export async function openTechProcessLabelPrintModal() {
     qtyBlock.style.display = 'none';
     tpListEl.innerHTML = '<p class="loc-muted" style="padding:10px">Učitavam tehnološke postupke…</p>';
     try {
-      tpsCache = await searchBigtehnWorkOrdersForItem(item.id, { onlyOpen: true, limit: 500 });
+      tpsCache = await searchBigtehnWorkOrdersForItem(item.id, { onlyOpen: true, limit: 1000 });
       renderTpList('');
     } catch (err) {
       console.error('[label/tps] load failed', err);
@@ -768,9 +768,10 @@ export async function openTechProcessLabelPrintModal() {
     updatePreview();
   }
 
-  function renderTpList(filter) {
-    const f = String(filter || '').trim().toLowerCase();
-    const list = !f
+  async function renderTpList(filter) {
+    const rawF = String(filter || '').trim();
+    const f = rawF.toLowerCase();
+    let list = !f
       ? tpsCache
       : tpsCache.filter(
           x =>
@@ -778,6 +779,20 @@ export async function openTechProcessLabelPrintModal() {
             String(x.broj_crteza || '').toLowerCase().includes(f) ||
             String(x.naziv_dela || '').toLowerCase().includes(f),
         );
+    if (rawF && !list.length && selectedPredmet) {
+      tpListEl.innerHTML = '<p class="loc-muted" style="padding:10px">Tražim na serveru…</p>';
+      try {
+        const serverRows = await searchBigtehnWorkOrdersForItem(selectedPredmet.id, {
+          onlyOpen: true,
+          limit: 200,
+          search: rawF,
+        });
+        list = Array.isArray(serverRows) ? serverRows : [];
+      } catch (err) {
+        console.error('[label/tps] server filter failed', err);
+        list = [];
+      }
+    }
     if (!list.length) {
       tpListEl.innerHTML = '<p class="loc-muted" style="padding:10px">Nema otvorenih tehnoloških postupaka za ovaj predmet u BigTehn kešu (ili filter).</p>';
       return;
@@ -803,7 +818,7 @@ export async function openTechProcessLabelPrintModal() {
     });
   }
 
-  tpQ.addEventListener('input', debounce(() => renderTpList(tpQ.value), 150));
+  tpQ.addEventListener('input', debounce(() => void renderTpList(tpQ.value), 200));
 
   function selectTp(wo) {
     selectedTp = wo;
