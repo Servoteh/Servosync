@@ -217,6 +217,36 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     return false;
   }
 
+  /** @param {MediaTrackCapabilities} caps */
+  function supportedFocusModes(caps) {
+    const fm = caps?.focusMode;
+    if (fm == null) return [];
+    if (Array.isArray(fm)) return fm.map(String);
+    return [String(fm)];
+  }
+
+  /**
+   * Android Chrome često ne uključi CAF dok eksplicitno ne tražiš `continuous`
+   * (Firefox na Androidu to radi agresivnije po defaultu). Best-effort.
+   * @param {MediaStreamTrack|null} track
+   */
+  async function primeAndroidChromeCameraAutofocus(track) {
+    if (!track || !isAndroidChromeBrowser()) return;
+    const caps = track.getCapabilities?.() || {};
+    const modes = supportedFocusModes(caps);
+    if (modes.includes('continuous')) {
+      const ok = await applyVideoConstraintCompat(track, { focusMode: 'continuous' });
+      if (ok) return;
+    }
+    /* Jednokratni fokus na centar — pomaže kad postoji samo single-shot + POI. */
+    if (modes.includes('single-shot') && 'pointsOfInterest' in caps) {
+      await applyVideoConstraintCompat(track, {
+        focusMode: 'single-shot',
+        pointsOfInterest: [{ x: 0.5, y: 0.5 }],
+      });
+    }
+  }
+
   /** Uzmi aktivni videoTrack ili `null`. */
   function getTrack() {
     const stream = /** @type {MediaStream|null} */ (videoEl.srcObject);
@@ -255,6 +285,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
       onError?.(/** @type {Error} */ (e));
       throw e;
     }
+    await primeAndroidChromeCameraAutofocus(getTrack());
 
     /** @type {InstanceType<typeof window.BarcodeDetector>|null} */
     let detector = null;
@@ -395,22 +426,25 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
           const track = getTrack();
           if (!track) return false;
           const caps = track.getCapabilities?.() || {};
-          try {
-            /** @type {any} */
-            const adv = {};
-            if (Array.isArray(caps.focusMode) && caps.focusMode.includes('single-shot')) {
-              adv.focusMode = 'single-shot';
-            }
-            if ('pointsOfInterest' in caps) {
-              adv.pointsOfInterest = [{ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }];
-            }
-            if (!Object.keys(adv).length) return false;
-            await track.applyConstraints({ advanced: [adv] });
-            return true;
-          } catch (e) {
-            console.warn('[barcode] tapFocus failed', e);
-            return false;
+          const modes = supportedFocusModes(caps);
+          /** @type {Record<string, unknown>} */
+          const adv = {};
+          if (modes.includes('single-shot')) {
+            adv.focusMode = 'single-shot';
           }
+          if ('pointsOfInterest' in caps) {
+            adv.pointsOfInterest = [{ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }];
+          }
+          if (!Object.keys(adv).length) return false;
+          const ok = await applyVideoConstraintCompat(track, adv);
+          if (ok) return true;
+          if (modes.includes('continuous') && 'pointsOfInterest' in caps) {
+            return applyVideoConstraintCompat(track, {
+              focusMode: 'continuous',
+              pointsOfInterest: [{ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }],
+            });
+          }
+          return false;
         },
       };
     }
@@ -437,6 +471,8 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
       }
     },
   );
+
+  await primeAndroidChromeCameraAutofocus(getTrack());
 
   return {
     stop: () => {
@@ -523,22 +559,26 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
       const track = getTrack();
       if (!track) return false;
       const caps = track.getCapabilities?.() || {};
-      try {
-        /** @type {any} */
-        const adv = {};
-        if (Array.isArray(caps.focusMode) && caps.focusMode.includes('single-shot')) {
-          adv.focusMode = 'single-shot';
-        }
-        if ('pointsOfInterest' in caps) {
-          adv.pointsOfInterest = [{ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }];
-        }
-        if (!Object.keys(adv).length) return false;
-        await track.applyConstraints({ advanced: [adv] });
-        return true;
-      } catch (e) {
-        console.warn('[barcode] tapFocus failed', e);
-        return false;
+      const modes = supportedFocusModes(caps);
+      /** @type {Record<string, unknown>} */
+      const adv = {};
+      if (modes.includes('single-shot')) {
+        adv.focusMode = 'single-shot';
       }
+      if ('pointsOfInterest' in caps) {
+        adv.pointsOfInterest = [{ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }];
+      }
+      if (!Object.keys(adv).length) return false;
+      const ok = await applyVideoConstraintCompat(track, adv);
+      if (ok) return true;
+      /* Chrome ponekad prihvata samo `continuous` + POI za refokus. */
+      if (modes.includes('continuous') && 'pointsOfInterest' in caps) {
+        return applyVideoConstraintCompat(track, {
+          focusMode: 'continuous',
+          pointsOfInterest: [{ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }],
+        });
+      }
+      return false;
     },
   };
 }
