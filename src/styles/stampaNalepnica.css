@@ -458,7 +458,20 @@ body.module-stampa-nalepnica {
   align-self: center;
 }
 
-/* Quantity */
+.sn-field-block {
+  margin-bottom: 4px;
+}
+
+.sn-field-lbl {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text2, #6b7280);
+  margin-bottom: 8px;
+}
+
 .sn-qty-row {
   display: flex;
   align-items: center;

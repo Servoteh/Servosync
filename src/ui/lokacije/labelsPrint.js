@@ -342,7 +342,7 @@ export async function openShelfLabelsPrintPicker() {
  *   - Red 2: Naziv predmeta (full width)
  *   - Red 3: Naziv dela (full width)
  *   - Red 4: Br. crteža (levo) | Materijal (desno)
- *   - Red 5: Količina (levo) | Datum (desno)
+ *   - Red 5: Komada (levo) | Datum (desno)
  *   - Barkod ispod (full width, ~20mm visine)
  *
  * @param {{ fields: object, barcodeValue: string }} spec
@@ -370,7 +370,7 @@ export function buildTechLabelHtmlBlock(spec, index = 0) {
         <span class="lbl-cell lbl-cell-right">${cell('', f.materijal, { bare: true })}</span>
       </div>
       <div class="lbl-row lbl-row-split">
-        <span class="lbl-cell">${cell('Kol', f.kolicina)}</span>
+        <span class="lbl-cell">${cell('Komada', f.kolicina)}</span>
         <span class="lbl-cell lbl-cell-right">${cell('', f.datum, { bare: true })}</span>
       </div>
     </div>
@@ -464,7 +464,7 @@ const TECH_LABEL_CSS = `
  *   - nazivPredmeta  → bigtehn_items_cache.naziv_predmeta
  *   - nazivDela      → wo.naziv_dela
  *   - brojCrteza     → wo.broj_crteza
- *   - kolicina       → „<print_qty>/<komada_rn>" (npr. „1/1")
+ *   - kolicina       → tekst komada na nalepnici (npr. „12/12" = prikaz / ukupno po RN-u), NIJE broj otisaka
  *   - materijal      → wo.materijal
  *   - datum          → DD-MM-YY (lokalno)
  * `barcodeValue` — RNZ string iz `formatBigTehnRnzBarcode(...)`.

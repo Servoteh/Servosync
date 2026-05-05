@@ -91,7 +91,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
           <div class="sn-icon-square" aria-hidden="true">${IC_TAG}</div>
           <div>
             <h1>Štampa nalepnice za tehnološki postupak</h1>
-            <p>Predmet → TP → količina · Barkod RNZ standard</p>
+            <p>Predmet → TP → komada na nalepnici · Barkod RNZ standard</p>
           </div>
         </div>
         <div class="sn-progress" id="snProgress" aria-hidden="true">
@@ -99,7 +99,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
           <span aria-hidden="true">→</span>
           <span class="sn-progress-step" data-step="2"><span class="sn-progress-dot"></span> TP</span>
           <span aria-hidden="true">→</span>
-          <span class="sn-progress-step" data-step="3"><span class="sn-progress-dot"></span> Količina</span>
+          <span class="sn-progress-step" data-step="3"><span class="sn-progress-dot"></span> Komada i štampa</span>
         </div>
         <button type="button" class="sn-back-outline" id="snBackLok">${IC_BACK} Nazad</button>
       </div>
@@ -131,16 +131,31 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
           </section>
 
           <section class="sn-step-card is-disabled" id="snCard3" style="display:none">
-            <h2 class="sn-step-label is-muted" id="snLab3">3. Količina nalepnica</h2>
+            <h2 class="sn-step-label is-muted" id="snLab3">3. Komada na nalepnici i broj otisaka</h2>
             <div id="snQtyBlock" style="display:none">
-              <div class="sn-qty-row">
-                <div class="sn-qty-ctrl">
-                  <button type="button" id="snQtyM" aria-label="Smanji">−</button>
-                  <input type="number" id="snQty" min="1" max="${MAX_QTY}" step="1" value="1" inputmode="numeric" />
-                  <button type="button" id="snQtyP" aria-label="Povećaj">+</button>
+              <div class="sn-field-block">
+                <label class="sn-field-lbl" for="snKomada">Komada na nalepnici (prikaz)</label>
+                <div class="sn-qty-row">
+                  <div class="sn-qty-ctrl">
+                    <button type="button" id="snKomadaM" aria-label="Smanji komadu">−</button>
+                    <input type="number" id="snKomada" min="1" max="${MAX_QTY}" step="1" value="1" inputmode="numeric" />
+                    <button type="button" id="snKomadaP" aria-label="Povećaj komadu">+</button>
+                  </div>
                 </div>
+                <span class="sn-hint" id="snKomadaHint"></span>
               </div>
-              <div class="sn-quick-chips" id="snQuick"></div>
+              <div class="sn-field-block" style="margin-top:18px">
+                <label class="sn-field-lbl" for="snCopy">Broj nalepnica za štampu</label>
+                <div class="sn-qty-row">
+                  <div class="sn-qty-ctrl">
+                    <button type="button" id="snCopyM" aria-label="Smanji broj nalepnica">−</button>
+                    <input type="number" id="snCopy" min="1" max="${MAX_QTY}" step="1" value="1" inputmode="numeric" />
+                    <button type="button" id="snCopyP" aria-label="Povećaj broj nalepnica">+</button>
+                  </div>
+                </div>
+                <div class="sn-quick-chips" id="snQuick"></div>
+                <span class="sn-hint">Koliko identičnih nalepnica odštampati (isti tekst i barkod).</span>
+              </div>
             </div>
           </section>
         </div>
@@ -183,7 +198,9 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   const tpFilter = wrap.querySelector('#snTpFilter');
   const tpListEl = wrap.querySelector('#snTpList');
   const qtyBlock = wrap.querySelector('#snQtyBlock');
-  const qtyEl = wrap.querySelector('#snQty');
+  const komadaEl = wrap.querySelector('#snKomada');
+  const komadaHint = wrap.querySelector('#snKomadaHint');
+  const copyEl = wrap.querySelector('#snCopy');
   const prevScale = wrap.querySelector('#snPrevScale');
   const prevHint = wrap.querySelector('#snPrevHint');
   const btnPrint = wrap.querySelector('#snPrint');
@@ -210,15 +227,38 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     closeDrop();
   };
 
-  function getPrintQty() {
-    const n = Math.floor(Number(qtyEl.value) || 1);
+  function getKomadaUkupno() {
+    return Math.max(1, Number(selectedTp?.komada) || 1);
+  }
+
+  function getKomadaPrikaz() {
+    const u = getKomadaUkupno();
+    return Math.max(1, Math.min(u, Math.floor(Number(komadaEl.value) || 1)));
+  }
+
+  function setKomadaPrikaz(n) {
+    const u = getKomadaUkupno();
+    const v = Math.max(1, Math.min(u, Math.floor(Number(n) || 1)));
+    komadaEl.value = String(v);
+    komadaEl.max = String(u);
+    refreshPreview();
+  }
+
+  function getPrintCopies() {
+    const n = Math.floor(Number(copyEl.value) || 1);
     return Math.max(1, Math.min(MAX_QTY, n));
   }
 
-  function setPrintQty(n) {
-    qtyEl.value = String(Math.max(1, Math.min(MAX_QTY, Math.floor(Number(n) || 1))));
-    paintQtyChips();
+  function setPrintCopies(n) {
+    copyEl.value = String(Math.max(1, Math.min(MAX_QTY, Math.floor(Number(n) || 1))));
+    paintCopyChips();
     refreshPreview();
+  }
+
+  function paintKomadaHint() {
+    if (!selectedTp) return;
+    const u = getKomadaUkupno();
+    komadaHint.textContent = `Ukupno po RN u BigTehnu: ${u} kom. Prvi broj u polju „Komada" na nalepnici (možete ga smanjiti za parcijalnu serializaciju).`;
   }
 
   function printLabelWord(n) {
@@ -246,8 +286,8 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     });
   }
 
-  function paintQtyChips() {
-    const v = getPrintQty();
+  function paintCopyChips() {
+    const v = getPrintCopies();
     const vals = [1, 5, 10, 25, 50];
     quickHost.innerHTML = vals
       .map(
@@ -256,7 +296,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
       )
       .join('');
     quickHost.querySelectorAll('[data-q]').forEach(btn => {
-      btn.addEventListener('click', () => setPrintQty(btn.getAttribute('data-q')));
+      btn.addEventListener('click', () => setPrintCopies(btn.getAttribute('data-q')));
     });
   }
 
@@ -430,7 +470,8 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     inputWrap.style.display = '';
     tpListEl.innerHTML = '';
     tpFilter.value = '';
-    setPrintQty(1);
+    setPrintCopies(1);
+    if (komadaEl) komadaEl.value = '1';
     syncStepCards();
     paintProgress();
     refreshPreview();
@@ -526,7 +567,9 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   function selectTp(wo) {
     selectedTp = wo;
     card3.classList.add('sn-step-animate-in');
-    setPrintQty(1);
+    setPrintCopies(1);
+    setKomadaPrikaz(Math.max(1, Number(wo.komada) || 1));
+    paintKomadaHint();
     renderTpList(tpFilter.value);
     syncStepCards();
     paintProgress();
@@ -542,9 +585,9 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   }
 
   async function refreshPreview() {
-    const qty = getPrintQty();
-    prevHint.innerHTML = `Štampa će kreirati <strong>${qty}</strong> kopij${qty === 1 ? 'u' : qty < 5 ? 'e' : 'a'}`;
-    btnPrint.textContent = `🖨 Štampaj ${qty} ${printLabelWord(qty)}`;
+    const copies = getPrintCopies();
+    prevHint.innerHTML = `Štampa će kreirati <strong>${copies}</strong> identičn${copies === 1 ? 'nu nalepnicu' : copies < 5 ? 'ne nalepnice' : 'nih nalepnica'} (polje „Komada" na svakoj: <strong>${selectedTp ? `${getKomadaPrikaz()}/${getKomadaUkupno()}` : '—'}</strong>)`;
+    btnPrint.textContent = `🖨 Štampaj ${copies} ${printLabelWord(copies)}`;
 
     if (!selectedPredmet || !selectedTp) {
       prevScale.innerHTML = '<p class="sn-placeholder-muted" style="padding:12px">Izaberi predmet i TP</p>';
@@ -556,7 +599,8 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     const orderPart = slash >= 0 ? idb.slice(0, slash) : idb;
     const tpPart = slash >= 0 ? idb.slice(slash + 1) : '';
     const bc = formatBigTehnRnzBarcode({ orderNo: orderPart, tpNo: tpPart });
-    const totalQty = Number(selectedTp.komada) || qty;
+    const kp = getKomadaPrikaz();
+    const ku = getKomadaUkupno();
     if (!bc) {
       prevScale.innerHTML = '<p class="sn-hint" style="color:#b91c1c">Nije moguće generisati RNZ barkod</p>';
       btnPrint.disabled = true;
@@ -568,7 +612,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
       nazivPredmeta: selectedPredmet.naziv_predmeta || '',
       nazivDela: selectedTp.naziv_dela || '',
       brojCrteza: selectedTp.broj_crteza || '',
-      kolicina: `${qty}/${totalQty}`,
+      kolicina: `${kp}/${ku}`,
       materijal: selectedTp.materijal || '',
       datum: todayStrDDMMYY(),
     };
@@ -596,7 +640,9 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
 
   async function doPrint() {
     if (!selectedPredmet || !selectedTp) return;
-    const qty = getPrintQty();
+    const copies = getPrintCopies();
+    const kp = getKomadaPrikaz();
+    const ku = getKomadaUkupno();
     const idb = String(selectedTp.ident_broj || '');
     const slash = idb.indexOf('/');
     const orderPart = slash >= 0 ? idb.slice(0, slash) : idb;
@@ -606,24 +652,23 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
       showToast('⚠ Nije moguće generisati barkod');
       return;
     }
-    const totalQty = Number(selectedTp.komada) || qty;
     await printTechProcessLabelsBatch([
       {
         barcodeValue: bc,
-        copies: qty,
+        copies,
         fields: {
           brojPredmeta: idb,
           komitent: selectedPredmet.customer_name || '',
           nazivPredmeta: selectedPredmet.naziv_predmeta || '',
           nazivDela: selectedTp.naziv_dela || '',
           brojCrteza: selectedTp.broj_crteza || '',
-          kolicina: `${qty}/${totalQty}`,
+          kolicina: `${kp}/${ku}`,
           materijal: selectedTp.materijal || '',
           datum: todayStrDDMMYY(),
         },
       },
     ]);
-    showToast(`✓ Štampano ${qty} nalepnica`);
+    showToast(`✓ Štampano ${copies} nalepnica`);
   }
 
   /* Events */
@@ -690,12 +735,18 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   const debTp = debounce(() => void renderTpList(tpFilter.value), 280);
   tpFilter.addEventListener('input', () => debTp());
 
-  wrap.querySelector('#snQtyM')?.addEventListener('click', () => setPrintQty(getPrintQty() - 1));
-  wrap.querySelector('#snQtyP')?.addEventListener('click', () => setPrintQty(getPrintQty() + 1));
-  qtyEl.addEventListener('input', () => {
-    setPrintQty(qtyEl.value);
+  wrap.querySelector('#snKomadaM')?.addEventListener('click', () => setKomadaPrikaz(getKomadaPrikaz() - 1));
+  wrap.querySelector('#snKomadaP')?.addEventListener('click', () => setKomadaPrikaz(getKomadaPrikaz() + 1));
+  komadaEl.addEventListener('input', () => {
+    setKomadaPrikaz(komadaEl.value);
   });
-  qtyEl.addEventListener('keydown', ev => {
+
+  wrap.querySelector('#snCopyM')?.addEventListener('click', () => setPrintCopies(getPrintCopies() - 1));
+  wrap.querySelector('#snCopyP')?.addEventListener('click', () => setPrintCopies(getPrintCopies() + 1));
+  copyEl.addEventListener('input', () => {
+    setPrintCopies(copyEl.value);
+  });
+  copyEl.addEventListener('keydown', ev => {
     if (ev.key === 'Enter' && !btnPrint.disabled) {
       ev.preventDefault();
       void doPrint();
@@ -703,7 +754,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   });
 
   document.addEventListener('mousedown', docClick);
-  paintQtyChips();
+  paintCopyChips();
   syncStepCards();
   paintProgress();
   void refreshPreview();
