@@ -5,6 +5,7 @@ import './styles/planProizvodnje.css';
 import './styles/sastanci.css';
 import './styles/maintenance.css';
 import './styles/pb.css';
+import './styles/stampaNalepnica.css';
 import './styles/reversi.css';
 import './styles/mobile.css';
 

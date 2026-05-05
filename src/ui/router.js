@@ -41,6 +41,10 @@ import {
   teardownLokacijeModule,
 } from './lokacije/index.js';
 import {
+  renderStampaNalepnicaModule,
+  teardownStampaNalepnicaModule,
+} from './stampaNalepnica/index.js';
+import {
   renderReversiModule,
   teardownReversiModule,
 } from './reversi/index.js';
@@ -76,6 +80,7 @@ import { renderMaintenanceShell, teardownMaintenanceShell } from './odrzavanjeMa
 const MODULES = [
   'plan-montaze',
   'lokacije-delova',
+  'stampa-nalepnica',
   'reversi',
   'plan-proizvodnje',
   'pracenje-proizvodnje',
@@ -110,6 +115,9 @@ function clearMount(leavingScreen) {
   }
   if (ls === 'sastanci') {
     try { teardownSastanciModule(); } catch (e) { /* ignore */ }
+  }
+  if (ls === 'stampa-nalepnica') {
+    try { teardownStampaNalepnicaModule(); } catch (e) { /* ignore */ }
   }
   if (ls === 'lokacije-delova') {
     try { teardownLokacijeModule(); } catch (e) { /* ignore */ }
@@ -321,6 +329,9 @@ function showModulePlaceholder(moduleId, options = {}) {
   if (moduleId === 'lokacije-delova') {
     document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-lokacije');
   }
+  if (moduleId === 'stampa-nalepnica') {
+    document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-stampa-nalepnica');
+  }
   if (moduleId === 'reversi') {
     document.body.classList.add('kadrovska-active', 'module-reversi');
   }
@@ -524,6 +535,34 @@ function showModulePlaceholder(moduleId, options = {}) {
       `;
       const back = mountEl.querySelector('#locErrBackBtn');
       back?.addEventListener('click', () => showHub());
+    }
+    return;
+  }
+
+  if (moduleId === 'stampa-nalepnica') {
+    try {
+      renderStampaNalepnicaModule(mountEl, {
+        onBackToHub: () => showHub(),
+        onLogout: () => {
+          resetKadrovskaState();
+          showLogin();
+        },
+      });
+    } catch (e) {
+      console.error('[router] Štampa nalepnica render failed', e);
+      mountEl.innerHTML = `
+        <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px">
+          <div class="auth-box" style="max-width:640px">
+            <div class="auth-brand">
+              <div class="auth-title">Greška na stranici Štampa nalepnica</div>
+              <div class="auth-subtitle">${(e && e.message) || String(e)}</div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn" id="snErrBackBtn">← Nazad na hub</button>
+            </div>
+          </div>
+        </div>`;
+      mountEl.querySelector('#snErrBackBtn')?.addEventListener('click', () => showHub());
     }
     return;
   }
@@ -774,6 +813,10 @@ function assertModuleAllowed(moduleId) {
   }
   if (moduleId === 'lokacije-delova' && !canAccessLokacije()) {
     showToast('🔒 Lokacije delova zahtevaju prijavu');
+    return false;
+  }
+  if (moduleId === 'stampa-nalepnica' && !canAccessLokacije()) {
+    showToast('🔒 Štampa nalepnica zahteva pristup modulu Lokacije');
     return false;
   }
   if (moduleId === 'reversi' && !canAccessReversi()) {

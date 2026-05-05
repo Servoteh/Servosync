@@ -1,7 +1,7 @@
 /**
  * Lokacije — tab „Štampa nalepnica" (Task 3b).
  *
- * Pun-ekran zamena za popup `openTechProcessLabelPrintModal`. Razlika:
+ * Pun-ekran batch štampa; pojedinačna TP štampa ide na `/stampa-nalepnica`.
  *
  *   - **Multi-select** preko vise predmeta i njihovih TP-ova istovremeno.
  *   - **Print queue** (red za štampu) na dnu — svaka stavka može imati

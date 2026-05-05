@@ -70,6 +70,9 @@ export function pathnameToRoute(pathname) {
   if (p === '/lokacije-delova') {
     return { kind: 'module', moduleId: 'lokacije-delova' };
   }
+  if (p === '/stampa-nalepnica') {
+    return { kind: 'module', moduleId: 'stampa-nalepnica' };
+  }
   if (p === '/reversi') {
     return { kind: 'module', moduleId: 'reversi' };
   }
@@ -191,6 +194,7 @@ export function pathForModule(moduleId) {
   const map = {
     'plan-montaze': '/plan-montaze',
     'lokacije-delova': '/lokacije-delova',
+    'stampa-nalepnica': '/stampa-nalepnica',
     reversi: '/reversi',
     'plan-proizvodnje': '/plan-proizvodnje',
     'pracenje-proizvodnje': '/pracenje-proizvodnje',
