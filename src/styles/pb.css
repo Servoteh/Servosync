@@ -347,6 +347,13 @@ body.module-projektni-biro {
   padding-top: 16px;
 }
 
+@media (min-width: 768px) {
+  body.desktop-erp-module:not(.hub-active):not(.m-body) .pb-tab-body {
+    overflow-y: auto;
+    min-height: 0;
+  }
+}
+
 /* == STAT CARDS (kompaktne mini kartice) == */
 
 .pb-stats-grid {
