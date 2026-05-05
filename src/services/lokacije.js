@@ -621,29 +621,59 @@ export async function searchBigtehnItems(q, limit = 50, { onlyActive = true } = 
  * @param {number|string} itemId  bigtehn_items_cache.id
  * @param {{ onlyOpen?: boolean, search?: string, limit?: number }} [opts]
  *   - `onlyOpen` (default `true`) — `status_rn = false` (RN još otvoren u kešu)
+ *   - `search` — ako je setovan, jedan upit sa `limit` (filter na serveru).
+ *   - Bez `search`: stranica po stranica do **svih** otvorenih RN za predmet
+ *     (lex sort `ident_broj` stavlja `9400-1/…` ispred `9400/755` — jedan
+ *     limit od 500 je ranije skrivao kasnije TP-ove kao 755).
  * @returns {Promise<object[]>}
  */
 export async function searchBigtehnWorkOrdersForItem(itemId, opts = {}) {
   const idNum = Number(itemId);
   if (!Number.isFinite(idNum) || idNum <= 0) return [];
-  const lim = Math.max(1, Math.min(Number(opts.limit) || 200, 1000));
+  const searchTrim = opts.search && String(opts.search).trim() ? String(opts.search).trim() : '';
+  const pageSize = Math.max(1, Math.min(Number(opts.limit) || 200, 1000));
   const sel =
     'id,ident_broj,broj_crteza,naziv_dela,materijal,dimenzija_materijala,jedinica_mere,komada,tezina_obr,status_rn,revizija,rok_izrade,is_mes_active';
-  const parts = [
-    `select=${sel}`,
-    `item_id=eq.${idNum}`,
-    `order=ident_broj.asc`,
-    `limit=${lim}`,
-  ];
-  if (opts.onlyOpen !== false) parts.push('status_rn=is.false');
-  if (opts.search && String(opts.search).trim()) {
-    const enc = encodeURIComponent(`*${String(opts.search).trim()}*`);
-    parts.push(
-      `or=(ident_broj.ilike.${enc},broj_crteza.ilike.${enc},naziv_dela.ilike.${enc})`,
-    );
+
+  const baseParts = () => {
+    const parts = [
+      `select=${sel}`,
+      `item_id=eq.${idNum}`,
+      /* Stabilan redosled za offset paginaciju */
+      `order=ident_broj.asc,id.asc`,
+    ];
+    if (opts.onlyOpen !== false) parts.push('status_rn=is.false');
+    if (searchTrim) {
+      const enc = encodeURIComponent(`*${searchTrim}*`);
+      parts.push(
+        `or=(ident_broj.ilike.${enc},broj_crteza.ilike.${enc},naziv_dela.ilike.${enc})`,
+      );
+    }
+    return parts;
+  };
+
+  if (searchTrim) {
+    const parts = baseParts();
+    parts.push(`limit=${pageSize}`);
+    const rows = await sbReq(`v_bigtehn_work_orders_with_mes_active?${parts.join('&')}`);
+    return Array.isArray(rows) ? rows : [];
   }
-  const rows = await sbReq(`v_bigtehn_work_orders_with_mes_active?${parts.join('&')}`);
-  return Array.isArray(rows) ? rows : [];
+
+  /* Pun spisak otvorenih RN — više stranica (Supabase max limit 1000 po upitu). */
+  const HARD_CAP = 8000;
+  const all = [];
+  let offset = 0;
+  while (offset < HARD_CAP) {
+    const parts = baseParts();
+    parts.push(`limit=${pageSize}`);
+    parts.push(`offset=${offset}`);
+    const chunk = await sbReq(`v_bigtehn_work_orders_with_mes_active?${parts.join('&')}`);
+    if (!Array.isArray(chunk) || chunk.length === 0) break;
+    all.push(...chunk);
+    if (chunk.length < pageSize) break;
+    offset += pageSize;
+  }
+  return all;
 }
 
 /**
