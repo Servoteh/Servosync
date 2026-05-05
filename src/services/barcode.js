@@ -1,10 +1,10 @@
 /**
  * Barcode skeniranje preko kamere (Android Chrome + iOS Safari + desktop).
  *
- * Koristi `@zxing/browser` jer je to jedini pristup koji uniformno radi u
- * iOS Safariju (gde nema native `BarcodeDetector` API). Android Chrome i
- * desktop takođe prolaze kroz istu biblioteku — jednostavnije nego da
- * održavamo dva koda.
+ * Koristi `@zxing/browser` na iOS Safari-ju i desktopu (nema pouzdanog
+ * `BarcodeDetector`). Na **Android Chrome-u** preferira se ugrađeni
+ * `BarcodeDetector` (ML Kit u Chromium-u) — često pouzdaniji od ZXing-a na
+ * Code128 kadru sa kamere. Ostali Android pregledači i dalje idu kroz ZXing.
  *
  * Usage:
  *   const ctrl = await startScan(videoEl, {
@@ -37,6 +37,18 @@ LIVE_SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
   BarcodeFormat.CODE_39,
 ]);
 LIVE_SCAN_HINTS.set(DecodeHintType.TRY_HARDER, false);
+
+/**
+ * ZXing live hints za Android pregledače koji **nemaju** pouzdan
+ * `BarcodeDetector` (Firefox, Samsung Internet). Chrome na Androidu koristi
+ * nativni put — ovde ostaje samo ZXing rezerva.
+ */
+const LIVE_SCAN_HINTS_ANDROID_FALLBACK = new Map();
+LIVE_SCAN_HINTS_ANDROID_FALLBACK.set(DecodeHintType.POSSIBLE_FORMATS, [
+  BarcodeFormat.CODE_128,
+  BarcodeFormat.CODE_39,
+]);
+LIVE_SCAN_HINTS_ANDROID_FALLBACK.set(DecodeHintType.TRY_HARDER, true);
 
 /** Jednokratni decode iz fajla — jedan frejm, TRY_HARDER pomaže bez „lag“ osećaja. */
 const STILL_IMAGE_SCAN_HINTS = new Map();
@@ -151,9 +163,6 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     throw e;
   }
 
-  /* Uži format + bez TRY_HARDER na live = bliže brzini namenskog 1D skenera. */
-  const reader = new BrowserMultiFormatReader(LIVE_SCAN_HINTS, ZXING_READER_OPTIONS);
-
   const isAndroid = isAndroidWebCameraTorchZoomHidden();
 
   /* Constraint izbor:
@@ -174,8 +183,6 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     ? { video: { ...videoBase, deviceId: { exact: forceDeviceId } } }
     : { video: { ...videoBase, facingMode: { ideal: 'environment' } } };
 
-  /* ZXing baca `NotFoundException` za svaki frame u kom nema barkoda —
-   * to NIJE greška, ignorišemo je. Svi ostali error-i idu u onError. */
   /**
    * Primeni torch/zoom na video track.
    * - Android (Chrome/Samsung/FF): često **samo** `advanced: [{ … }]` radi;
@@ -210,6 +217,210 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     return false;
   }
 
+  /** Uzmi aktivni videoTrack ili `null`. */
+  function getTrack() {
+    const stream = /** @type {MediaStream|null} */ (videoEl.srcObject);
+    if (!(stream instanceof MediaStream)) return null;
+    return stream.getVideoTracks()[0] || null;
+  }
+
+  const useNativeAndroidChrome =
+    isAndroidChromeBrowser() &&
+    typeof window !== 'undefined' &&
+    typeof window.BarcodeDetector === 'function';
+
+  if (useNativeAndroidChrome) {
+    /** @type {MediaStream|null} */
+    let nativeStream = null;
+    let rafId = 0;
+    let stopped = false;
+    try {
+      nativeStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e) {
+      onError?.(/** @type {Error} */ (e));
+      throw e;
+    }
+    videoEl.srcObject = nativeStream;
+    try {
+      await videoEl.play();
+    } catch (e) {
+      for (const t of nativeStream.getTracks()) {
+        try {
+          t.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+      videoEl.srcObject = null;
+      onError?.(/** @type {Error} */ (e));
+      throw e;
+    }
+
+    /** @type {InstanceType<typeof window.BarcodeDetector>|null} */
+    let detector = null;
+    try {
+      detector = new window.BarcodeDetector({
+        formats: ['code_128', 'code_39'],
+      });
+    } catch (e) {
+      console.warn('[barcode] BarcodeDetector init failed, falling back to ZXing', e);
+      for (const t of nativeStream.getTracks()) {
+        try {
+          t.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+      videoEl.srcObject = null;
+      nativeStream = null;
+    }
+
+    if (detector) {
+      const tick = async () => {
+        if (stopped) return;
+        if (videoEl.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+          rafId = requestAnimationFrame(() => void tick());
+          return;
+        }
+        try {
+          const codes = await detector.detect(videoEl);
+          if (stopped) return;
+          if (codes && codes.length > 0) {
+            const b = codes[0];
+            const text = b.rawValue != null ? String(b.rawValue) : '';
+            const fmt = b.format != null ? String(b.format) : undefined;
+            if (text) onResult(text, fmt);
+          }
+        } catch (e) {
+          if (!stopped) onError?.(/** @type {Error} */ (e));
+        }
+        if (!stopped) rafId = requestAnimationFrame(() => void tick());
+      };
+      rafId = requestAnimationFrame(() => void tick());
+
+      return {
+        stop: () => {
+          stopped = true;
+          cancelAnimationFrame(rafId);
+          if (nativeStream) {
+            for (const t of nativeStream.getTracks()) {
+              try {
+                t.stop();
+              } catch {
+                /* ignore */
+              }
+            }
+          }
+          try {
+            videoEl.srcObject = null;
+            videoEl.load();
+          } catch {
+            /* ignore */
+          }
+        },
+        /**
+         * Pokušaj da uključiš/isključiš flash (torch). Mnogi desktop browseri i
+         * stariji iOS ne podržavaju — vraćamo false u tom slučaju.
+         * @returns {Promise<boolean>} novo stanje torcha; false ako torch nije dostupan.
+         */
+        toggleTorch: async () => {
+          const track = getTrack();
+          if (!track) return false;
+          const caps = track.getCapabilities?.() || {};
+          const supported = navigator.mediaDevices?.getSupportedConstraints?.() || {};
+          if (isAndroidWebPlatform()) return false;
+          const torchAdvertised = 'torch' in caps || supported.torch === true;
+          if (!torchAdvertised) return false;
+          const settings = track.getSettings?.() || {};
+          const next = !settings.torch;
+          const ok = await applyVideoConstraintCompat(track, { torch: next });
+          return ok ? next : false;
+        },
+
+        /**
+         * Dohvati trenutne zoom capabilities kamere. `null` ako kamera ili
+         * browser ne podržavaju zoom API (većina desktop webcam-a, iOS < 17.2).
+         *
+         * iOS Safari 17.2+ podržava ovo na iPhone 11+ i svim iPad-ovima sa
+         * dual/triple kamerom. U CapabilitiesRecord-u `zoom` daje opseg
+         * {min, max, step} — na iPhone-u je tipično 1.0-5.0 (ili do 15.0
+         * ako ima telephoto lens).
+         *
+         * @returns {Promise<ZoomCapability|null>}
+         */
+        getZoom: async () => {
+          const track = getTrack();
+          if (!track) return null;
+          if (isAndroidWebPlatform() && !isAndroidChromeBrowser()) return null;
+          const caps = track.getCapabilities?.() || {};
+          const s = track.getSettings?.() || {};
+          const zRaw = caps.zoom;
+          if (zRaw != null && typeof zRaw === 'object' && !Array.isArray(zRaw)) {
+            const z = /** @type {any} */ (zRaw);
+            return {
+              min: Number(z.min ?? 1),
+              max: Number(z.max ?? 1),
+              step: Number(z.step ?? 0.1),
+              current: Number(s.zoom ?? z.min ?? 1),
+            };
+          }
+          return null;
+        },
+
+        /**
+         * Postavi zoom level. Value mora biti između min i max iz getZoom.
+         * Na iOS Safari-ju se vrednost primenjuje glatko (hardware zoom); na
+         * Android Chrome-u često sa latencijom 200-400ms.
+         *
+         * @param {number} value
+         * @returns {Promise<boolean>} true ako je uspešno primenjeno.
+         */
+        setZoom: async value => {
+          if (isAndroidWebPlatform() && !isAndroidChromeBrowser()) return false;
+          const track = getTrack();
+          if (!track) return false;
+          return applyVideoConstraintCompat(track, { zoom: value });
+        },
+
+        /**
+         * Tap-to-focus preko `pointsOfInterest` + `focusMode: single-shot`.
+         * Safari od 17.2 podržava; Android Chrome većim delom od 2023.
+         * `x`, `y` su normalizovani [0, 1] unutar video elementa.
+         *
+         * @param {number} x
+         * @param {number} y
+         * @returns {Promise<boolean>}
+         */
+        tapFocus: async (x, y) => {
+          const track = getTrack();
+          if (!track) return false;
+          const caps = track.getCapabilities?.() || {};
+          try {
+            /** @type {any} */
+            const adv = {};
+            if (Array.isArray(caps.focusMode) && caps.focusMode.includes('single-shot')) {
+              adv.focusMode = 'single-shot';
+            }
+            if ('pointsOfInterest' in caps) {
+              adv.pointsOfInterest = [{ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }];
+            }
+            if (!Object.keys(adv).length) return false;
+            await track.applyConstraints({ advanced: [adv] });
+            return true;
+          } catch (e) {
+            console.warn('[barcode] tapFocus failed', e);
+            return false;
+          }
+        },
+      };
+    }
+  }
+
+  const zxingHints = isAndroid ? LIVE_SCAN_HINTS_ANDROID_FALLBACK : LIVE_SCAN_HINTS;
+  const reader = new BrowserMultiFormatReader(zxingHints, ZXING_READER_OPTIONS);
+
+  /* ZXing baca `NotFoundException` za svaki frame u kom nema barkoda —
+   * to NIJE greška, ignorišemo je. Svi ostali error-i idu u onError. */
   const controls = await reader.decodeFromConstraints(
     constraints,
     videoEl,
@@ -226,13 +437,6 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
       }
     },
   );
-
-  /** Uzmi aktivni videoTrack ili `null`. */
-  function getTrack() {
-    const stream = /** @type {MediaStream|null} */ (videoEl.srcObject);
-    if (!(stream instanceof MediaStream)) return null;
-    return stream.getVideoTracks()[0] || null;
-  }
 
   return {
     stop: () => {
