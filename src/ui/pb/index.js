@@ -1,6 +1,5 @@
 /**
  * Projektni biro — root shell (tabs + Plan + Kanban + Gantt + Izveštaji + Analiza).
- * // TODO(PB5 opciono): dodatno razdvajanje Gantt header vs row render ako treba perf — docs/pb_review_report.md §4
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
@@ -34,6 +33,20 @@ let teardownResize = null;
 function mqMobile() {
   return window.matchMedia('(max-width: 767px)');
 }
+
+/* ── Inline SVG ikone (Lucide-compatible paths) ─── */
+const IC_BACK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+const IC_PLUS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+const IC_MODULE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
+
+const TAB_ICONS = {
+  plan:        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
+  kanban:      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="18"/></svg>',
+  gantt:       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>',
+  izvestaji:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
+  analiza:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+  podesavanja: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+};
 
 /**
  * @param {HTMLElement} root
@@ -95,18 +108,12 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       const [p, e, t, l] = await Promise.all([
         getPbProjects(),
         getPbEngineers(),
-        getPbTasks({
-          ...projFilter,
-          ...engFilter,
-        }),
+        getPbTasks({ ...projFilter, ...engFilter }),
         getPbLoadStats(20),
       ]);
       projects = p;
       engineers = e;
-      if (
-        state.activeEngineer !== 'all'
-        && !engineers.some(en => en.id === state.activeEngineer)
-      ) {
+      if (state.activeEngineer !== 'all' && !engineers.some(en => en.id === state.activeEngineer)) {
         state.activeEngineer = 'all';
         savePbState(state);
       }
@@ -134,34 +141,44 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     if (!hub) return;
     const auth = getAuth();
     hub.innerHTML = `
-      <header class="kadrovska-header pb-header">
-        <div class="kadrovska-header-left">
-          <button type="button" class="btn-hub-back" id="pbBackBtn" aria-label="Nazad na module"><span>←</span> Moduli</button>
-          <div class="kadrovska-title"><span class="ktitle-mark" aria-hidden="true">📐</span> Projektovanje <span class="kadrovska-title-sub">Projektni biro</span></div>
+      <header class="pb-header">
+        <div class="pb-header-left">
+          <button type="button" class="pb-back-btn" id="pbBackBtn" aria-label="Nazad na module">
+            ${IC_BACK} Moduli
+          </button>
+          <div class="pb-header-brand">
+            <div class="pb-module-icon" aria-hidden="true">${IC_MODULE}</div>
+            <div>
+              <div class="pb-header-title">Projektovanje</div>
+              <div class="pb-header-sub">Projektni biro</div>
+            </div>
+          </div>
         </div>
-        <div class="kadrovska-header-right">
-          <button type="button" class="theme-toggle" id="pbThemeBtn" aria-label="Tema">🌙</button>
-          <span class="role-indicator">${escHtml((auth.role || '').toUpperCase())}</span>
-          ${canEditProjektniBiro() ? `<button type="button" class="btn btn-primary pb-new-desktop" id="pbNewDesk">+ Novi zadatak</button>` : ''}
-          <button type="button" class="hub-logout" id="pbLogoutBtn">Odjavi se</button>
+        <div class="pb-header-right">
+          <button type="button" class="pb-theme-btn" id="pbThemeBtn" aria-label="Tema">🌙</button>
+          ${auth.role ? `<span class="pb-role-badge">${escHtml(auth.role.toUpperCase())}</span>` : ''}
+          ${canEditProjektniBiro() ? `<button type="button" class="pb-primary-btn pb-new-desktop" id="pbNewDesk">${IC_PLUS} Novi zadatak</button>` : ''}
+          <button type="button" class="pb-logout-btn" id="pbLogoutBtn">Odjavi se</button>
         </div>
       </header>
-      <div class="pb-toolbar">
-        <label class="pb-field-inline"><span>Projekat</span>
-          <select id="pbProjectSel">
+      <div class="pb-context-card">
+        <div class="pb-context-row">
+          <span class="pb-context-label">Projekat</span>
+          <select id="pbProjectSel" class="pb-context-select">
             <option value="all">Svi projekti</option>
             ${projects.map(p => `<option value="${escHtml(p.id)}" ${state.activeProject === p.id ? 'selected' : ''}>${escHtml(p.project_code)} — ${escHtml(p.project_name)}</option>`).join('')}
           </select>
-        </label>
+        </div>
+        <div class="pb-context-divider"></div>
+        <div class="pb-context-row pb-context-row--eng" id="pbChipHost"></div>
       </div>
-      <div class="pb-chip-scroll" id="pbChipHost"></div>
       <nav class="pb-tabs" role="tablist" aria-label="Projektni biro tabovi">
         ${pbTabBtn('plan', 'Plan', state.activeTab === 'plan')}
         ${pbTabBtn('kanban', 'Kanban', state.activeTab === 'kanban')}
         ${pbTabBtn('gantt', 'Gantt', state.activeTab === 'gantt')}
         ${pbTabBtn('izvestaji', 'Izveštaji', state.activeTab === 'izvestaji')}
         ${pbTabBtn('analiza', 'Analiza', state.activeTab === 'analiza')}
-        ${isAdmin() ? pbTabBtn('podesavanja', '⚙ Podešavanja', state.activeTab === 'podesavanja') : ''}
+        ${isAdmin() ? pbTabBtn('podesavanja', 'Podešavanja', state.activeTab === 'podesavanja') : ''}
       </nav>`;
 
     root.querySelector('#pbBackBtn')?.addEventListener('click', () => onBackToHub?.());
@@ -170,13 +187,11 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       await logout();
       onLogout?.();
     });
-
     root.querySelector('#pbProjectSel')?.addEventListener('change', e => {
       state.activeProject = e.target.value;
       savePbState(state);
       loadAll();
     });
-
     root.querySelector('#pbNewDesk')?.addEventListener('click', () => {
       openTaskEditorModal({
         task: null,
@@ -186,7 +201,6 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         onSaved: () => loadAll(),
       });
     });
-
     root.querySelectorAll('.pb-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         state.activeTab = btn.dataset.pbTab || 'plan';
@@ -207,14 +221,13 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       : engineers;
 
     host.innerHTML = `
+      <span class="pb-context-label">Inženjer</span>
       <div class="pb-eng-search-wrap">
-        <input type="search" class="pb-eng-search" placeholder="Inženjer..." id="pbEngSearch" value="${escHtml(searchVal)}" />
+        <input type="search" class="pb-eng-search" placeholder="Filter..." id="pbEngSearch" value="${escHtml(searchVal)}" />
       </div>
       <div class="pb-chip-list">
-        <button type="button" class="pb-chip ${st.activeEngineer === 'all' ? 'active' : ''}" data-eng="all" title="Svi mašinski projektanti">Svi</button>
-        ${filtered.map(en => `
-          <button type="button" class="pb-chip ${st.activeEngineer === en.id ? 'active' : ''}" data-eng="${escHtml(en.id)}">${escHtml(en.full_name)}</button>
-        `).join('')}
+        <button type="button" class="pb-chip ${st.activeEngineer === 'all' ? 'active' : ''}" data-eng="all">Svi</button>
+        ${filtered.map(en => `<button type="button" class="pb-chip ${st.activeEngineer === en.id ? 'active' : ''}" data-eng="${escHtml(en.id)}">${escHtml(en.full_name)}</button>`).join('')}
       </div>
     `;
 
@@ -222,7 +235,6 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       host._engSearch = e.target.value;
       renderEngineerChips(host, st);
     });
-
     host.querySelectorAll('[data-eng]').forEach(btn => {
       btn.addEventListener('click', () => {
         st.activeEngineer = btn.getAttribute('data-eng') || 'all';
@@ -234,7 +246,8 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
   }
 
   function pbTabBtn(id, label, active) {
-    return `<button type="button" role="tab" class="pb-tab-btn ${active ? 'active' : ''}" data-pb-tab="${escHtml(id)}" aria-selected="${active}">${escHtml(label)}</button>`;
+    const icon = TAB_ICONS[id] || '';
+    return `<button type="button" role="tab" class="pb-tab-btn ${active ? 'active' : ''}" data-pb-tab="${escHtml(id)}" aria-selected="${active}">${icon}${escHtml(label)}</button>`;
   }
 
   function switchToPlanShowDone() {
@@ -268,9 +281,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       return;
     }
     if (tab === 'gantt') {
-      let viewMonth = state.ganttStartDate
-        ? new Date(state.ganttStartDate)
-        : new Date();
+      let viewMonth = state.ganttStartDate ? new Date(state.ganttStartDate) : new Date();
       if (Number.isNaN(viewMonth.getTime())) viewMonth = new Date();
       viewMonth.setDate(1);
       renderGanttTab(body, {
@@ -345,13 +356,11 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         <div class="pb-skel-line"></div><div class="pb-skel-line"></div>
       </div>
     </main>
-    ${canEditProjektniBiro() ? `<button type="button" class="pb-fab" id="pbFab" aria-label="Novi zadatak">+</button>` : ''}
+    ${canEditProjektniBiro() ? '<button type="button" class="pb-fab" id="pbFab" aria-label="Novi zadatak">+</button>' : ''}
   `;
 
   const mm = mqMobile();
-  const applyMq = () => {
-    root.classList.toggle('pb-module--mobile', mm.matches);
-  };
+  const applyMq = () => root.classList.toggle('pb-module--mobile', mm.matches);
   applyMq();
   mm.addEventListener('change', applyMq);
   teardownResize = () => mm.removeEventListener('change', applyMq);
