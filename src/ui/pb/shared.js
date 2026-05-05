@@ -152,8 +152,8 @@ export function openTaskEditorModal(opts) {
         <div class="pb-dates-grid">
           <label><span>Plan početak</span><input type="date" id="pbTfDp" value="${escHtml((t.datum_pocetka_plan || '').slice(0, 10))}" ${canEdit ? '' : 'disabled'} /></label>
           <label><span>Plan rok</span><input type="date" id="pbTfDr" value="${escHtml((t.datum_zavrsetka_plan || '').slice(0, 10))}" ${canEdit ? '' : 'disabled'} /></label>
-          <label><span>Realni poč.</span><input type="date" id="pbTfRp" value="${escHtml((t.datum_pocetka_real || '').slice(0, 10))}" ${canEdit ? '' : 'disabled'} /></label>
-          <label><span>Realni završetak</span><input type="date" id="pbTfRz" value="${escHtml((t.datum_zavrsetka_real || '').slice(0, 10))}" ${canEdit ? '' : 'disabled'} /></label>
+          <label><span>Ostvaren poč.</span><input type="date" id="pbTfRp" value="${escHtml((t.datum_pocetka_real || '').slice(0, 10))}" ${canEdit ? '' : 'disabled'} /></label>
+          <label><span>Ostvaren završetak</span><input type="date" id="pbTfRz" value="${escHtml((t.datum_zavrsetka_real || '').slice(0, 10))}" ${canEdit ? '' : 'disabled'} /></label>
         </div>
         <label class="pb-field"><span>Norma (h/dan)</span>
           <div class="pb-norm-row">
