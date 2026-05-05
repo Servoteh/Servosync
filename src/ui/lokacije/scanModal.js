@@ -20,6 +20,14 @@ import { fetchBigtehnOpSnapshotByRnAndTp } from '../../services/planProizvodnje.
 import { enqueueMovement } from '../../services/offlineQueue.js';
 import { getIsOnline } from '../../state/auth.js';
 
+function debounce(fn, ms) {
+  let t = null;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
 /* `__APP_VERSION__` je string koji Vite inject-uje u build time (git SHA ili
  * CF_PAGES_COMMIT_SHA). Koristimo ga u dijagnostičkom badge-u pored polja
  * crtež da magacioner može odmah da vidi koja verzija app-a se izvršava
@@ -190,6 +198,9 @@ export async function openScanMoveModal({
     decodeBarcodeFromFile,
     isAndroidWebCameraTorchZoomHidden,
     isAndroidChromeBrowser,
+    isAndroidWebPlatform,
+    getScanDecodeMode,
+    setScanDecodeMode,
   } = barcodeMod;
 
   if (!isScanSupported()) {
@@ -221,6 +232,15 @@ export async function openScanMoveModal({
         <span class="loc-scan-manual" data-act="pickImage">📂 iz slike</span> ·
         <span class="loc-scan-manual" data-act="ocrScan">OCR skeniraj</span> ·
         <span class="loc-scan-manual" data-act="manual">unesi ručno</span>
+      </div>
+      <div id="locScanDecodeRow" class="loc-muted" style="font-size:11px;margin-top:6px;line-height:1.4;display:none">
+        Dekoder (Android debug):
+        <select id="locScanDecodeMode" style="max-width:200px;font-size:11px">
+          <option value="AUTO">Auto (BarcodeDetector + ZXing)</option>
+          <option value="ZXING_ONLY">Samo ZXing</option>
+          <option value="BARCODE_DETECTOR_ONLY">Samo BarcodeDetector</option>
+        </select>
+        — posle izmene zatvorite modal i ponovo „Skeniraj”.
       </div>
       <!-- Skriveni file input za upload slike — klik na "iz slike" u hint-u
            ga okida preko label/for ili programmatic .click(). Prihvatamo
@@ -314,6 +334,20 @@ export async function openScanMoveModal({
   if (isAndroidWebCameraTorchZoomHidden()) {
     overlay.querySelector('.loc-scan-topbar [data-act="torch"]')?.setAttribute('hidden', '');
   }
+  const decodeRow = overlay.querySelector('#locScanDecodeRow');
+  const decodeSel = /** @type {HTMLSelectElement|null} */ (overlay.querySelector('#locScanDecodeMode'));
+  if (decodeRow && decodeSel && isAndroidWebPlatform()) {
+    decodeRow.style.display = 'block';
+    try {
+      decodeSel.value = getScanDecodeMode();
+    } catch {
+      decodeSel.value = 'AUTO';
+    }
+    decodeSel.addEventListener('change', () => {
+      setScanDecodeMode(/** @type {'AUTO'|'ZXING_ONLY'|'BARCODE_DETECTOR_ONLY'} */ (decodeSel.value));
+      showToast('Režim dekodera sačuvan. Zatvorite skener i otvorite ponovo da primeni.');
+    });
+  }
 
   const state = {
     scanCtrl: null,
@@ -326,6 +360,8 @@ export async function openScanMoveModal({
     item_ref_table: 'bigtehn_rn',
     /** @type {object|null} red iz v_production_operations (BigTehn cache) */
     erpSnapshot: null,
+    /** @type {ReturnType<typeof setTimeout>|null} */
+    androidChromeHintTimer: null,
   };
 
   const $ = sel => overlay.querySelector(sel);
@@ -384,8 +420,16 @@ export async function openScanMoveModal({
     }
   }
 
+  function clearAndroidChromeHintTimer() {
+    if (state.androidChromeHintTimer != null) {
+      clearTimeout(state.androidChromeHintTimer);
+      state.androidChromeHintTimer = null;
+    }
+  }
+
   function cleanupScan() {
     leaveScanPresentation();
+    clearAndroidChromeHintTimer();
     if (state.scanCtrl) {
       try {
         state.scanCtrl.stop();
@@ -411,6 +455,7 @@ export async function openScanMoveModal({
     }
     lastBarcodeClean = clean;
     lastBarcodeAt = now;
+    clearAndroidChromeHintTimer();
     cleanupScan();
     if (navigator.vibrate) navigator.vibrate(80);
     const parsed = parseBigTehnBarcode(clean);
@@ -481,6 +526,17 @@ export async function openScanMoveModal({
 
       setTimeout(() => reportCameraDiag(videoEl), 600);
       setTimeout(() => setupZoomUI(), 800);
+      if (isAndroidChromeBrowser()) {
+        clearAndroidChromeHintTimer();
+        state.androidChromeHintTimer = setTimeout(() => {
+          state.androidChromeHintTimer = null;
+          if (!state.scanCtrl || stageScan.hidden) return;
+          setScanStatus(
+            '💡 Slika mutna? Tapnite na nalepnicu da kamera izoštri. Podesite zoom na 1.5×–2×. Ako ne uspe, koristite „iz slike”.',
+            'info',
+          );
+        }, 8000);
+      }
     } catch (err) {
       leaveScanPresentation();
       const msg = formatCameraError(err);
@@ -648,13 +704,16 @@ export async function openScanMoveModal({
     if (state.scanCtrl?.setZoom) await state.scanCtrl.setZoom(autoZoom);
     /* Live update — iOS Safari može da primeni zoom sinhronizovano (hardware),
      * Android često ima 200-300ms latenciju. Radi i jedno i drugo. */
-    range.addEventListener('input', async () => {
-      const v = Number(range.value);
-      label.textContent = `${v.toFixed(1)}×`;
-      if (state.scanCtrl?.setZoom) {
-        await state.scanCtrl.setZoom(v);
-      }
-    });
+    range.addEventListener(
+      'input',
+      debounce(async () => {
+        const v = Number(range.value);
+        label.textContent = `${v.toFixed(1)}×`;
+        if (state.scanCtrl?.setZoom) {
+          await state.scanCtrl.setZoom(v);
+        }
+      }, 220),
+    );
   }
 
   /**
@@ -1352,7 +1411,7 @@ export async function openScanMoveModal({
     const rect = videoEl.getBoundingClientRect();
     const x = (ev.clientX - rect.left) / rect.width;
     const y = (ev.clientY - rect.top) / rect.height;
-    const ok = await state.scanCtrl.tapFocus(x, y);
+    const ok = await state.scanCtrl.tapFocus(ev.clientX, ev.clientY, videoEl);
     if (ok) {
       /* Kratak vizuelni feedback — prikaži focus ring na mestu tapa.
        * Koristimo dinamički kreiran div umesto CSS ::after da znamo tačnu

@@ -1,17 +1,15 @@
 /**
  * Barcode skeniranje preko kamere (Android Chrome + iOS Safari + desktop).
  *
- * Koristi `@zxing/browser` jer je to jedini pristup koji uniformno radi u
- * iOS Safariju (gde nema native `BarcodeDetector` API). Android Chrome i
- * desktop takođe prolaze kroz istu biblioteku — jednostavnije nego da
- * održavamo dva koda.
+ * - iOS / desktop: ZXing (`@zxing/browser`).
+ * - Android Chrome + mode AUTO: `BarcodeDetector` kada postoji, inače ZXing.
+ * - Debug: `sessionStorage.loc_scan_decode_mode` = `AUTO` | `ZXING_ONLY` | `BARCODE_DETECTOR_ONLY`
  *
  * Usage:
  *   const ctrl = await startScan(videoEl, {
  *     onResult: (text) => { ... },
  *     onError: (err) => { ... }
  *   });
- *   // kasnije:
  *   ctrl.stop();
  */
 
@@ -20,17 +18,6 @@ import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 
 export { normalizeBarcodeText, parseBigTehnBarcode } from '../lib/barcodeParse.js';
 
-/**
- * ZXing hints za **live kameru** (kontinuirani decode po frejmu).
- *
- * BigTehn RNZ nalepnice su Code128 (ponekad Code39). QR/EAN u listi znače da
- * ZXing za svaki frame prođe kroz više dekodera — osećaj „sporo“ na velikom
- * A4 gde je linija tanka u odnosu na ceo kadar. Zato ovde samo 1D formati.
- *
- * TRY_HARDER na live feed-u značajno podiže CPU po frejmu (rotacije, više
- * binarizacija). Namenski 1D skener to radi u hardveru; ovde biramo brži
- * put — pouzdanost na mutnom kodu i dalje preko više px (1080p) i „iz slike“.
- */
 const LIVE_SCAN_HINTS = new Map();
 LIVE_SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
   BarcodeFormat.CODE_128,
@@ -38,7 +25,13 @@ LIVE_SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
 ]);
 LIVE_SCAN_HINTS.set(DecodeHintType.TRY_HARDER, false);
 
-/** Jednokratni decode iz fajla — jedan frejm, TRY_HARDER pomaže bez „lag“ osećaja. */
+const LIVE_SCAN_HINTS_TRY_HARDER = new Map(LIVE_SCAN_HINTS);
+LIVE_SCAN_HINTS_TRY_HARDER.set(DecodeHintType.TRY_HARDER, true);
+
+/** Android (ne-Chrome): ZXing live sa TRY_HARDER. */
+const LIVE_SCAN_HINTS_ANDROID_FALLBACK = new Map(LIVE_SCAN_HINTS);
+LIVE_SCAN_HINTS_ANDROID_FALLBACK.set(DecodeHintType.TRY_HARDER, true);
+
 const STILL_IMAGE_SCAN_HINTS = new Map();
 STILL_IMAGE_SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
   BarcodeFormat.CODE_128,
@@ -46,13 +39,83 @@ STILL_IMAGE_SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
 ]);
 STILL_IMAGE_SCAN_HINTS.set(DecodeHintType.TRY_HARDER, true);
 
+const ZXING_READER_OPTIONS = {
+  delayBetweenScanAttempts: 50,
+  delayBetweenScanSuccess: 200,
+  tryPlayVideoTimeout: 5000,
+};
+
+const SESSION_DECODE_MODE_KEY = 'loc_scan_decode_mode';
+
+/** @returns {'AUTO'|'ZXING_ONLY'|'BARCODE_DETECTOR_ONLY'} */
+export function getScanDecodeMode() {
+  try {
+    const v = sessionStorage.getItem(SESSION_DECODE_MODE_KEY);
+    if (v === 'ZXING_ONLY' || v === 'BARCODE_DETECTOR_ONLY' || v === 'AUTO') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'AUTO';
+}
+
+/**
+ * @param {'AUTO'|'ZXING_ONLY'|'BARCODE_DETECTOR_ONLY'} mode
+ */
+export function setScanDecodeMode(mode) {
+  if (mode !== 'ZXING_ONLY' && mode !== 'BARCODE_DETECTOR_ONLY' && mode !== 'AUTO') return;
+  try {
+    sessionStorage.setItem(SESSION_DECODE_MODE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Mapira tačku (client koordinate) u normalizovane [0,1] koordinate **video kadra**
+ * kada je `<video>` sa `object-fit: cover` (izrezane ivice kadra).
+ *
+ * @param {HTMLVideoElement} videoEl
+ * @param {number} clientX
+ * @param {number} clientY
+ * @returns {{ x: number, y: number } | null}
+ */
+export function mapPointerToVideoNormalizedPlane(videoEl, clientX, clientY) {
+  if (!videoEl?.getBoundingClientRect) return null;
+  const rect = videoEl.getBoundingClientRect();
+  const vw = videoEl.videoWidth || 0;
+  const vh = videoEl.videoHeight || 0;
+  const px = clientX - rect.left;
+  const py = clientY - rect.top;
+  if (!rect.width || !rect.height) return null;
+  if (!vw || !vh) {
+    return {
+      x: Math.min(1, Math.max(0, px / rect.width)),
+      y: Math.min(1, Math.max(0, py / rect.height)),
+    };
+  }
+  const scale = Math.max(rect.width / vw, rect.height / vh);
+  const dispW = vw * scale;
+  const dispH = vh * scale;
+  const offX = (rect.width - dispW) / 2;
+  const offY = (rect.height - dispH) / 2;
+  const rx = (px - offX) / dispW;
+  const ry = (py - offY) / dispH;
+  return {
+    x: Math.min(1, Math.max(0, rx)),
+    y: Math.min(1, Math.max(0, ry)),
+  };
+}
+
 /**
  * @typedef {object} ScanController
  * @property {() => void} stop
  * @property {() => Promise<boolean>} toggleTorch
  * @property {() => Promise<ZoomCapability|null>} getZoom
  * @property {(value: number) => Promise<boolean>} setZoom
- * @property {(x:number,y:number) => Promise<boolean>} tapFocus
+ * @property {(x:number,y:number,videoEl?:HTMLVideoElement|null) => Promise<boolean>} tapFocus
+ *   Ako je `videoEl` prosleđen, `x`/`y` su **client** koordinate (npr. pointer.clientX/Y) za mapiranje object-fit:cover.
+ *   Ako `videoEl` nije prosleđen, `x`/`y` su već normalizovani [0,1] u ravni video kadra.
+ * @property {() => Promise<void>} refocusAfterZoom
  */
 
 /**
@@ -63,10 +126,6 @@ STILL_IMAGE_SCAN_HINTS.set(DecodeHintType.TRY_HARDER, true);
  * @property {number} current
  */
 
-/**
- * Proveri da li je trenutni browser sposoban za skeniranje.
- * @returns {boolean}
- */
 export function isScanSupported() {
   return (
     typeof navigator !== 'undefined' &&
@@ -75,11 +134,6 @@ export function isScanSupported() {
   );
 }
 
-/**
- * Android u mobilnom browseru (Chrome, Samsung Internet, Firefox, WebView).
- * Koristi UA + `navigator.userAgentData` (Desktop site na Androidu često nema
- * reč "Android" u UA, ali `mobile` + Android brands ostaju).
- */
 export function isAndroidWebPlatform() {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
@@ -98,20 +152,10 @@ export function isAndroidWebPlatform() {
   return false;
 }
 
-/**
- * Isto što {@link isAndroidWebPlatform} — zadržano ime jer ga skener koristi
- * za sakrivanje **torch** dugmeta na Androidu (nepouzdano na mnogim uređajima).
- */
 export function isAndroidWebCameraTorchZoomHidden() {
   return isAndroidWebPlatform();
 }
 
-/**
- * Android **Google Chrome** (Chromium motor + `Chrome/` u UA), bez Firefox /
- * Samsung Internet / Edge Android varijanti. Koristi se da **uključimo**
- * hardware zoom UI samo tamo gde je ApplyConstraints zoom na stražnjoj kameri
- * praktično koristio (Chrome); iOS i ostatak modula ostaju neizmenjeni.
- */
 export function isAndroidChromeBrowser() {
   if (!isAndroidWebPlatform()) return false;
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
@@ -119,27 +163,186 @@ export function isAndroidChromeBrowser() {
   return /Chrome\//.test(ua);
 }
 
-/** @zxing/browser podrazumevano 500 ms između NotFound pokušaja — previše spor „osećaj“. */
-const ZXING_READER_OPTIONS = {
-  delayBetweenScanAttempts: 50,
-  delayBetweenScanSuccess: 200,
-  tryPlayVideoTimeout: 5000,
-};
+/** @param {HTMLVideoElement} videoEl */
+function waitVideoReady(videoEl) {
+  return new Promise(resolve => {
+    if (!videoEl) {
+      resolve();
+      return;
+    }
+    if (videoEl.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      resolve();
+      return;
+    }
+    const done = () => {
+      videoEl.removeEventListener('loadedmetadata', done);
+      videoEl.removeEventListener('canplay', done);
+      resolve();
+    };
+    videoEl.addEventListener('loadedmetadata', done, { once: true });
+    videoEl.addEventListener('canplay', done, { once: true });
+  });
+}
 
 /**
- * Pokreni kontinualno skeniranje. Callback `onResult` se poziva sa SVAKIM
- * validnim dekodiranjem; obično ga zaustavljaš (ctrl.stop()) čim dobiješ
- * prvi hit, ali ostavljamo klijentu da odluči (npr. double-read).
- *
+ * @param {MediaStreamTrack} track
+ * @param {MediaTrackConstraints} constraints
+ * @param {string} label
+ * @returns {Promise<boolean>}
+ */
+export async function safeApplyConstraints(track, constraints, label) {
+  if (!track?.applyConstraints) return false;
+  try {
+    await track.applyConstraints(constraints);
+    console.info('[barcode][scan]', label, 'OK', {
+      requested: constraints,
+      settingsAfter: track.getSettings?.() ?? null,
+    });
+    return true;
+  } catch (err) {
+    console.warn('[barcode][scan]', label, 'FAIL', {
+      name: err?.name,
+      message: err?.message,
+      constraint: err?.constraint,
+      requested: constraints,
+      settingsAfter: track.getSettings?.() ?? null,
+    });
+    return false;
+  }
+}
+
+/**
+ * @param {MediaStreamTrack} track
+ * @param {Record<string, unknown>} flat
+ * @param {string} label
+ * @param {boolean} isAndroid
+ */
+async function safeApplyFlatCompat(track, flat, label, isAndroid) {
+  if (!track?.applyConstraints) return false;
+  const attempts = isAndroid
+    ? [
+        () => track.applyConstraints({ advanced: [flat] }),
+        () => track.applyConstraints(flat),
+      ]
+    : [
+        () => track.applyConstraints(flat),
+        () => track.applyConstraints({ advanced: [flat] }),
+      ];
+  for (const run of attempts) {
+    try {
+      await run();
+      console.info('[barcode][scan]', label, 'OK', { flat, settingsAfter: track.getSettings?.() ?? null });
+      return true;
+    } catch (err) {
+      console.warn('[barcode][scan]', label, 'attempt fail', err?.name, err?.message, { flat });
+    }
+  }
+  console.warn('[barcode][scan]', label, 'all attempts failed', { flat });
+  return false;
+}
+
+/** @param {MediaStreamTrack|null} track */
+async function logScanDiagnosticsOnce(track) {
+  if (!track) return;
+  try {
+    const devices = navigator.mediaDevices?.enumerateDevices
+      ? await navigator.mediaDevices.enumerateDevices()
+      : [];
+    const vids = devices.filter(d => d.kind === 'videoinput').map(d => ({ deviceId: d.deviceId, label: d.label }));
+    console.info('[barcode][scan] diagnostics (once)', {
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      getSupportedConstraints: navigator.mediaDevices?.getSupportedConstraints?.() ?? null,
+      capabilities: track.getCapabilities?.() ?? null,
+      settings: track.getSettings?.() ?? null,
+      constraints: track.getConstraints?.() ?? null,
+      videoInputs: vids,
+    });
+  } catch (e) {
+    console.warn('[barcode][scan] diagnostics failed', e);
+  }
+}
+
+/**
+ * @param {MediaStreamTrack} track
+ * @param {boolean} isAndroid
+ */
+async function refocusRound(track, isAndroid, nx, ny) {
+  const caps = track.getCapabilities?.() || {};
+  const modes = Array.isArray(caps.focusMode) ? caps.focusMode.map(String) : [];
+  const hasPoi = 'pointsOfInterest' in caps;
+  const x = Math.min(1, Math.max(0, nx));
+  const y = Math.min(1, Math.max(0, ny));
+  if (modes.includes('single-shot') && hasPoi) {
+    await safeApplyFlatCompat(
+      track,
+      /** @type {any} */ ({ focusMode: 'single-shot', pointsOfInterest: [{ x, y }] }),
+      'refocus: single-shot',
+      isAndroid,
+    );
+    await new Promise(r => setTimeout(r, 280));
+  }
+  if (modes.includes('continuous')) {
+    await safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'refocus: continuous', isAndroid);
+  }
+}
+
+/**
+ * @param {MediaStreamTrack} track
+ * @param {boolean} isAndroid
+ * @param {{ skipInitialHardwareZoom?: boolean }} [opts]
+ */
+async function primeCameraPipeline(track, isAndroid, opts = {}) {
+  if (!track || !isAndroidChromeBrowser()) return;
+  const caps = track.getCapabilities?.() || {};
+  const modes = Array.isArray(caps.focusMode) ? caps.focusMode.map(String) : [];
+
+  if (modes.includes('continuous')) {
+    await safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'prime: continuous', isAndroid);
+  } else if (modes.includes('single-shot') && 'pointsOfInterest' in caps) {
+    await safeApplyFlatCompat(
+      track,
+      /** @type {any} */ ({ focusMode: 'single-shot', pointsOfInterest: [{ x: 0.5, y: 0.5 }] }),
+      'prime: single-shot center',
+      isAndroid,
+    );
+  }
+
+  const zRaw = caps.zoom;
+  if (!opts.skipInitialHardwareZoom && zRaw != null && typeof zRaw === 'object' && !Array.isArray(zRaw)) {
+    const z = /** @type {any} */ (zRaw);
+    const zmin = Number(z.min ?? 1);
+    const zmax = Number(z.max ?? 1);
+    const step = Number(z.step ?? 0.1) || 0.1;
+    const target = Math.min(zmax, Math.max(zmin, 1.75));
+    const snapped = Math.min(zmax, Math.max(zmin, Math.round(target / step) * step));
+    await safeApplyFlatCompat(track, { zoom: snapped }, 'prime: initial zoom ~1.75×', isAndroid);
+    await refocusRound(track, isAndroid, 0.5, 0.5);
+    if (modes.includes('continuous')) {
+      await safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'prime: continuous after zoom', isAndroid);
+    }
+  }
+}
+
+/**
  * @param {HTMLVideoElement} videoEl
+ * @param {() => MediaStreamTrack|null} getTrack
+ * @param {boolean} isAndroid
+ */
+function schedulePrimeAfterVideoReady(videoEl, getTrack, isAndroid) {
+  void waitVideoReady(videoEl).then(async () => {
+    const tr = getTrack();
+    if (!tr) return;
+    await logScanDiagnosticsOnce(tr);
+    await primeCameraPipeline(tr, isAndroid, { skipInitialHardwareZoom: true });
+  });
+}
+
+/**
  * @param {{
  *   onResult: (text: string, format?: string) => void,
  *   onError?: (err: Error) => void,
  *   forceDeviceId?: string,
  * }} handlers
- *   - `forceDeviceId` — zaobilazi facingMode logiku i bira tačno zadatu
- *     kameru. Koristi se kao iOS Safari fallback kada `ideal: environment`
- *     vrati front kameru (poznat WebKit bug).
  * @returns {Promise<ScanController>}
  */
 export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
@@ -151,20 +354,14 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     throw e;
   }
 
-  /* Uži format + bez TRY_HARDER na live = bliže brzini namenskog 1D skenera. */
-  const reader = new BrowserMultiFormatReader(LIVE_SCAN_HINTS, ZXING_READER_OPTIONS);
-
   const isAndroid = isAndroidWebCameraTorchZoomHidden();
+  const mode = getScanDecodeMode();
+  const useBarcodeDetectorPath =
+    isAndroidChromeBrowser() &&
+    typeof window !== 'undefined' &&
+    typeof window.BarcodeDetector === 'function' &&
+    (mode === 'AUTO' || mode === 'BARCODE_DETECTOR_ONLY');
 
-  /* Constraint izbor:
-   *   - `forceDeviceId` → eksplicitni deviceId (iOS fallback path).
-   *   - Inače → `facingMode: ideal`; scanModal.js detektuje front output i
-   *     restart-uje sa `forceDeviceId`.
-   *
-   * Rezolucija: uvek 1080p ideal i na mobilnom — na A4 nalepnici barkod je
-   * često mali deo kadra; 720p je ubrzao start kamere ali smanjio je uspeh
-   * brzine dekodiranja (manje px/mm po modulu).
-   */
   const videoBase = {
     width: { ideal: 1920 },
     height: { ideal: 1080 },
@@ -174,41 +371,131 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     ? { video: { ...videoBase, deviceId: { exact: forceDeviceId } } }
     : { video: { ...videoBase, facingMode: { ideal: 'environment' } } };
 
-  /* ZXing baca `NotFoundException` za svaki frame u kom nema barkoda —
-   * to NIJE greška, ignorišemo je. Svi ostali error-i idu u onError. */
-  /**
-   * Primeni torch/zoom na video track.
-   * - Android (Chrome/Samsung/FF): često **samo** `advanced: [{ … }]` radi;
-   *   probamo advanced prvo, pa ravan objekat.
-   * - iOS/desktop: prvo ravan constraint (Firefox desktop), pa advanced.
-   * @param {MediaStreamTrack} track
-   * @param {Record<string, unknown>} flat npr. `{ torch: true }` ili `{ zoom: 2 }`
-   * @returns {Promise<boolean>}
-   */
-  async function applyVideoConstraintCompat(track, flat) {
-    if (!track?.applyConstraints) return false;
-    const attempts = isAndroid
-      ? [
-          () => track.applyConstraints({ advanced: [flat] }),
-          () => track.applyConstraints(flat),
-        ]
-      : [
-          () => track.applyConstraints(flat),
-          () => track.applyConstraints({ advanced: [flat] }),
-        ];
-    /** @type {unknown} */
-    let lastErr;
-    for (const run of attempts) {
-      try {
-        await run();
-        return true;
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-    console.warn('[barcode] applyVideoConstraintCompat failed', flat, lastErr);
-    return false;
+  function getTrack() {
+    const stream = /** @type {MediaStream|null} */ (videoEl.srcObject);
+    if (!(stream instanceof MediaStream)) return null;
+    return stream.getVideoTracks()[0] || null;
   }
+
+  let zoomDebounceTimer = 0;
+
+  const runRefocusAfterZoom = async () => {
+    const track = getTrack();
+    if (!track) return;
+    await refocusRound(track, isAndroid, 0.5, 0.5);
+    const caps = track.getCapabilities?.() || {};
+    const modes = Array.isArray(caps.focusMode) ? caps.focusMode.map(String) : [];
+    if (modes.includes('continuous')) {
+      await safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'post-zoom: continuous', isAndroid);
+    }
+  };
+
+  if (useBarcodeDetectorPath && mode !== 'ZXING_ONLY') {
+    /** @type {MediaStream|null} */
+    let nativeStream = null;
+    let rafId = 0;
+    let stopped = false;
+    try {
+      nativeStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e) {
+      onError?.(/** @type {Error} */ (e));
+      throw e;
+    }
+    videoEl.srcObject = nativeStream;
+    try {
+      await videoEl.play();
+    } catch (e) {
+      for (const t of nativeStream.getTracks()) {
+        try {
+          t.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+      videoEl.srcObject = null;
+      onError?.(/** @type {Error} */ (e));
+      throw e;
+    }
+
+    schedulePrimeAfterVideoReady(videoEl, getTrack, isAndroid);
+
+    /** @type {InstanceType<typeof window.BarcodeDetector>|null} */
+    let detector = null;
+    try {
+      detector = new window.BarcodeDetector({
+        formats: ['code_128', 'code_39'],
+      });
+    } catch (e) {
+      console.warn('[barcode] BarcodeDetector init failed, falling back to ZXing', e);
+      for (const t of nativeStream.getTracks()) {
+        try {
+          t.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+      videoEl.srcObject = null;
+      /* fall through to ZXing below */
+    }
+
+    if (detector) {
+      const tick = async () => {
+        if (stopped) return;
+        if (videoEl.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+          rafId = requestAnimationFrame(() => void tick());
+          return;
+        }
+        try {
+          const codes = await detector.detect(videoEl);
+          if (stopped) return;
+          if (codes && codes.length > 0) {
+            const b = codes[0];
+            const text = b.rawValue != null ? String(b.rawValue) : '';
+            const fmt = b.format != null ? String(b.format) : undefined;
+            if (text) onResult(text, fmt);
+          }
+        } catch (e) {
+          if (!stopped) onError?.(/** @type {Error} */ (e));
+        }
+        if (!stopped) rafId = requestAnimationFrame(() => void tick());
+      };
+      rafId = requestAnimationFrame(() => void tick());
+
+      return buildController({
+        stop: () => {
+          stopped = true;
+          cancelAnimationFrame(rafId);
+          if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer);
+          if (nativeStream) {
+            for (const t of nativeStream.getTracks()) {
+              try {
+                t.stop();
+              } catch {
+                /* ignore */
+              }
+            }
+          }
+          try {
+            videoEl.srcObject = null;
+            videoEl.load();
+          } catch {
+            /* ignore */
+          }
+        },
+        getTrack,
+        isAndroid,
+        runRefocusAfterZoom,
+      });
+    }
+  }
+
+  const hints =
+    mode === 'ZXING_ONLY' && isAndroidChromeBrowser()
+      ? LIVE_SCAN_HINTS_TRY_HARDER
+      : isAndroid && !isAndroidChromeBrowser()
+        ? LIVE_SCAN_HINTS_ANDROID_FALLBACK
+        : LIVE_SCAN_HINTS;
+  const reader = new BrowserMultiFormatReader(hints, ZXING_READER_OPTIONS);
 
   const controls = await reader.decodeFromConstraints(
     constraints,
@@ -221,32 +508,39 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
           onError?.(e);
         }
       } else if (err && err.name && err.name !== 'NotFoundException') {
-        /* Ne logujemo "not found" — to je normalno ponašanje izmedju frame-ova. */
         onError?.(err);
       }
     },
   );
 
-  /** Uzmi aktivni videoTrack ili `null`. */
-  function getTrack() {
-    const stream = /** @type {MediaStream|null} */ (videoEl.srcObject);
-    if (!(stream instanceof MediaStream)) return null;
-    return stream.getVideoTracks()[0] || null;
-  }
+  schedulePrimeAfterVideoReady(videoEl, getTrack, isAndroid);
 
-  return {
+  return buildController({
     stop: () => {
       try {
         controls.stop();
       } catch (e) {
         console.warn('[barcode] stop failed', e);
       }
+      if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer);
     },
-    /**
-     * Pokušaj da uključiš/isključiš flash (torch). Mnogi desktop browseri i
-     * stariji iOS ne podržavaju — vraćamo false u tom slučaju.
-     * @returns {Promise<boolean>} novo stanje torcha; false ako torch nije dostupan.
-     */
+    getTrack,
+    isAndroid,
+    runRefocusAfterZoom,
+  });
+}
+
+/**
+ * @param {object} parts
+ */
+function buildController({ stop, getTrack, isAndroid, runRefocusAfterZoom }) {
+  let zoomDebounceTimer = 0;
+
+  return {
+    stop: () => {
+      if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer);
+      stop();
+    },
     toggleTorch: async () => {
       const track = getTrack();
       if (!track) return false;
@@ -257,21 +551,10 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
       if (!torchAdvertised) return false;
       const settings = track.getSettings?.() || {};
       const next = !settings.torch;
-      const ok = await applyVideoConstraintCompat(track, { torch: next });
+      const ok = await safeApplyFlatCompat(track, { torch: next }, 'torch', isAndroid);
       return ok ? next : false;
     },
 
-    /**
-     * Dohvati trenutne zoom capabilities kamere. `null` ako kamera ili
-     * browser ne podržavaju zoom API (većina desktop webcam-a, iOS < 17.2).
-     *
-     * iOS Safari 17.2+ podržava ovo na iPhone 11+ i svim iPad-ovima sa
-     * dual/triple kamerom. U CapabilitiesRecord-u `zoom` daje opseg
-     * {min, max, step} — na iPhone-u je tipično 1.0-5.0 (ili do 15.0
-     * ako ima telephoto lens).
-     *
-     * @returns {Promise<ZoomCapability|null>}
-     */
     getZoom: async () => {
       const track = getTrack();
       if (!track) return null;
@@ -291,79 +574,68 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
       return null;
     },
 
-    /**
-     * Postavi zoom level. Value mora biti između min i max iz getZoom.
-     * Na iOS Safari-ju se vrednost primenjuje glatko (hardware zoom); na
-     * Android Chrome-u često sa latencijom 200-400ms.
-     *
-     * @param {number} value
-     * @returns {Promise<boolean>} true ako je uspešno primenjeno.
-     */
     setZoom: async value => {
       if (isAndroidWebPlatform() && !isAndroidChromeBrowser()) return false;
-      const track = getTrack();
-      if (!track) return false;
-      return applyVideoConstraintCompat(track, { zoom: value });
+      return new Promise(resolve => {
+        if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer);
+        zoomDebounceTimer = window.setTimeout(async () => {
+          zoomDebounceTimer = 0;
+          const tr = getTrack();
+          if (!tr) {
+            resolve(false);
+            return;
+          }
+          const ok = await safeApplyFlatCompat(tr, { zoom: value }, 'setZoom(debounced)', isAndroid);
+          if (ok && isAndroidChromeBrowser()) await runRefocusAfterZoom();
+          resolve(ok);
+        }, 220);
+      });
     },
 
-    /**
-     * Tap-to-focus preko `pointsOfInterest` + `focusMode: single-shot`.
-     * Safari od 17.2 podržava; Android Chrome većim delom od 2023.
-     * `x`, `y` su normalizovani [0, 1] unutar video elementa.
-     *
-     * @param {number} x
-     * @param {number} y
-     * @returns {Promise<boolean>}
-     */
-    tapFocus: async (x, y) => {
+    refocusAfterZoom: runRefocusAfterZoom,
+
+    tapFocus: async (x, y, videoElForMap) => {
       const track = getTrack();
       if (!track) return false;
-      const caps = track.getCapabilities?.() || {};
-      try {
-        /** @type {any} */
-        const adv = {};
-        if (Array.isArray(caps.focusMode) && caps.focusMode.includes('single-shot')) {
-          adv.focusMode = 'single-shot';
-        }
-        if ('pointsOfInterest' in caps) {
-          adv.pointsOfInterest = [{ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) }];
-        }
-        if (!Object.keys(adv).length) return false;
-        await track.applyConstraints({ advanced: [adv] });
-        return true;
-      } catch (e) {
-        console.warn('[barcode] tapFocus failed', e);
-        return false;
+      let nx = x;
+      let ny = y;
+      if (videoElForMap instanceof HTMLVideoElement) {
+        const m = mapPointerToVideoNormalizedPlane(videoElForMap, x, y);
+        if (!m) return false;
+        nx = m.x;
+        ny = m.y;
       }
+      const caps = track.getCapabilities?.() || {};
+      const modes = Array.isArray(caps.focusMode) ? caps.focusMode.map(String) : [];
+      if (modes.includes('single-shot') && 'pointsOfInterest' in caps) {
+        const ok = await safeApplyFlatCompat(
+          track,
+          /** @type {any} */ ({
+            focusMode: 'single-shot',
+            pointsOfInterest: [{ x: Math.min(1, Math.max(0, nx)), y: Math.min(1, Math.max(0, ny)) }],
+          }),
+          'tapFocus: single-shot',
+          isAndroid,
+        );
+        if (!ok) return false;
+        await new Promise(r => setTimeout(r, 320));
+        if (modes.includes('continuous')) {
+          await safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'tapFocus: continuous', isAndroid);
+        }
+        return true;
+      }
+      if (modes.includes('continuous')) {
+        return safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'tapFocus: continuous only', isAndroid);
+      }
+      return false;
     },
   };
 }
 
-/* `normalizeBarcodeText` i `parseBigTehnBarcode` su izvojeni u
- * `src/lib/barcodeParse.js` da bi bili testabilni bez ZXing runtime-a. */
-
-/**
- * Dekoduj barkod iz unapred izabrane slike (iz Photos / Files / Viber).
- * Korisno kada:
- *   - radnik ima fotografiju nalepnice na telefonu (nije ispred nje);
- *   - live kamera pati od moire-a / refleksije / fokusa;
- *   - prošle nalepnice sa oštećenog komada su dokumentovane slikom.
- *
- * ZXing `decodeFromImageElement` radi nad nativnim `HTMLImageElement`-om —
- * ne treba WebRTC kamera, radi čak i na uređajima koji odbijaju
- * getUserMedia. Takođe značajno pouzdanije od live feed-a jer slika
- * ne trepeće — ZXing radi TRY_HARDER na punoj rezoluciji koliko god
- * je dugo potrebno.
- *
- * @param {File|Blob} file Slika iz `<input type="file">`, drag-drop, ili clipboard.
- * @returns {Promise<{ text: string, format?: string } | { error: 'not_image' | 'no_barcode' | 'decode_failed', cause?: any }>}
- */
 export async function decodeBarcodeFromFile(file) {
   if (!file || !(file instanceof Blob)) return { error: 'not_image' };
   if (!/^image\//.test(file.type || '')) return { error: 'not_image' };
 
-  /* Kreiraj <img> iz File blob-a preko ObjectURL — 10× efikasnije od
-   * FileReader.readAsDataURL (koji base64 encode-uje u memoriji). */
   const url = URL.createObjectURL(file);
   try {
     const img = await loadImage(url);
@@ -372,8 +644,6 @@ export async function decodeBarcodeFromFile(file) {
       const result = await reader.decodeFromImageElement(img);
       return { text: result.getText(), format: result.getBarcodeFormat?.().toString() };
     } catch (e) {
-      /* ZXing baca `NotFoundException` kada ne vidi barkod — tretira se
-       * kao "nije pronađen" a ne kao error. */
       if (e?.name === 'NotFoundException') return { error: 'no_barcode' };
       return { error: 'decode_failed', cause: e };
     }
