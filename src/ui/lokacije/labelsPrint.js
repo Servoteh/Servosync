@@ -779,7 +779,7 @@ export async function openTechProcessLabelPrintModal() {
             String(x.naziv_dela || '').toLowerCase().includes(f),
         );
     if (!list.length) {
-      tpListEl.innerHTML = '<p class="loc-muted" style="padding:10px">Nema aktivnih tehnoloških postupaka za ovaj predmet (ili filter).</p>';
+      tpListEl.innerHTML = '<p class="loc-muted" style="padding:10px">Nema otvorenih tehnoloških postupaka za ovaj predmet u BigTehn kešu (ili filter).</p>';
       return;
     }
     tpListEl.innerHTML = list

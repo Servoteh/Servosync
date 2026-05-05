@@ -25,7 +25,8 @@
  *     `docs/labels/02-visual-spec.md` § 7), nego koristimo isti data
  *     source i zadržavamo tabularni render specifičan za ovu stranicu
  *     (potrebne su nam checkbox kolone + interakcija sa donjim panelom).
- *   - `searchBigtehnWorkOrdersForItem` — isti fetcher koji koristi popup.
+ *   - `searchBigtehnWorkOrdersForItem` — TP lista iz BigTehn keša (otvoreni RN),
+ *     ne samo ručno MES-aktivni (vidi `lokacije.js`).
  *   - `printTechProcessLabelsBatch` — naš novi batch printer iz `labelsPrint.js`.
  */
 
@@ -272,7 +273,7 @@ async function renderTpsBlock(host, refresh) {
   const tps = _state.tpsByItem.get(itemId) || [];
   if (!tps.length) {
     hostEl.innerHTML = `<p class="loc-muted" style="padding:14px;border:1px dashed var(--border2,#ccc);border-radius:6px">
-      Predmet <strong>${escHtml(item.broj_predmeta || '')}</strong> nema aktivnih radnih naloga u MES listi.
+      Predmet <strong>${escHtml(item.broj_predmeta || '')}</strong> nema otvorenih radnih naloga u BigTehn kešu (ili još nisu sinhronizovani).
     </p>`;
     return;
   }

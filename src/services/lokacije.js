@@ -610,13 +610,17 @@ export async function searchBigtehnItems(q, limit = 50, { onlyActive = true } = 
 }
 
 /**
- * Lista DISTINCT TP-ova (radnih naloga) za jedan Predmet, direktno iz
- * `v_active_bigtehn_work_orders` — bez placement-a, namenjen pickerima
- * (npr. modal za štampu nalepnica). Uvek prikazuje samo ručno aktivne
- * RN-ove; `onlyOpen` je zadržan samo radi backward-compat poziva.
+ * Lista TP-ova (radnih naloga) za jedan Predmet — bez placement-a, namenjena
+ * pickerima za **štampu nalepnica** i slične izbore gde treba ceo BigTehn
+ * spisak otvorenih RN-ova za predmet, ne samo ručno MES-aktivni.
+ *
+ * Čita `v_bigtehn_work_orders_with_mes_active` (sve iz `bigtehn_work_orders_cache`
+ * + kolona `is_mes_active`). Za operativne ekrane koji smeju da vide samo
+ * MES listu koristi se `searchBigtehnWorkOrders` / `v_active_bigtehn_work_orders`.
  *
  * @param {number|string} itemId  bigtehn_items_cache.id
  * @param {{ onlyOpen?: boolean, search?: string, limit?: number }} [opts]
+ *   - `onlyOpen` (default `true`) — `status_rn = false` (RN još otvoren u kešu)
  * @returns {Promise<object[]>}
  */
 export async function searchBigtehnWorkOrdersForItem(itemId, opts = {}) {
@@ -631,13 +635,14 @@ export async function searchBigtehnWorkOrdersForItem(itemId, opts = {}) {
     `order=ident_broj.asc`,
     `limit=${lim}`,
   ];
+  if (opts.onlyOpen !== false) parts.push('status_rn=is.false');
   if (opts.search && String(opts.search).trim()) {
     const enc = encodeURIComponent(`*${String(opts.search).trim()}*`);
     parts.push(
       `or=(ident_broj.ilike.${enc},broj_crteza.ilike.${enc},naziv_dela.ilike.${enc})`,
     );
   }
-  const rows = await sbReq(`v_active_bigtehn_work_orders?${parts.join('&')}`);
+  const rows = await sbReq(`v_bigtehn_work_orders_with_mes_active?${parts.join('&')}`);
   return Array.isArray(rows) ? rows : [];
 }
 
