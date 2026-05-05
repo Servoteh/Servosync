@@ -367,37 +367,38 @@ async function renderTpsBlock(host, refresh, opts = {}) {
 
   if (!display.length && String(localQ).trim()) {
     hostEl.innerHTML = `
-      <div class="loc-filter-field" style="margin:0 0 10px;max-width:560px">
-        <span>Filter TP (ident / crtež / naziv)</span>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
-          <input type="search" id="lpTpsLocalQ" class="loc-search-input" style="flex:1;min-width:180px"
+      <div class="lp-tps-filter-bar loc-filter-field" style="margin:0 0 10px;max-width:720px;padding:10px 12px;border:1px solid var(--border2,#ddd);border-radius:8px;background:var(--surface,#fff)">
+        <span style="font-weight:600">Filter TP (ident / crtež / naziv)</span>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px">
+          <input type="search" id="lpTpsLocalQ" class="loc-search-input" style="flex:1;min-width:200px"
             value="${escHtml(localQ)}"
             placeholder="npr. 755, 1121195…"
             autocomplete="off" />
-          <button type="button" class="btn btn-xs" id="lpTpsFindDb">Pronađi u bazi</button>
-          <button type="button" class="btn btn-xs" id="lpTpsShowAll">Prikaži sve TP</button>
+          <button type="button" class="btn" id="lpTpsFindDb">Pronađi u bazi</button>
+          <button type="button" class="btn" id="lpTpsShowAll">Prikaži sve TP</button>
         </div>
       </div>
       <p class="loc-muted" style="padding:14px;border:1px dashed var(--border2,#ccc);border-radius:6px">
         Nema pogotka u <strong>${full.length}</strong> učitanih TP za filter „${escHtml(String(localQ).trim())}”.${serverHint}
-        Klikni <strong>Pronađi u bazi</strong> ili proveri broj.
+        Klikni dugme <strong>Pronađi u bazi</strong> iznad ili proveri broj.
       </p>`;
     wireLpTpsFilterControls(host, hostEl, itemId, item, refresh, display);
     return;
   }
 
   const filterRow = `
-    <div class="loc-filter-field" style="margin:0 0 10px;max-width:560px">
-      <span>Filter TP — prvo po učitanoj listi; ako nema pogotka, automatski traži u bazi</span>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
-        <input type="search" id="lpTpsLocalQ" class="loc-search-input" style="flex:1;min-width:180px"
+    <div class="lp-tps-filter-bar loc-filter-field" style="position:sticky;top:0;z-index:3;margin:0 0 10px;max-width:720px;padding:10px 12px;border:1px solid var(--border2,#ddd);border-radius:8px;background:var(--surface,#fff);box-shadow:0 2px 8px rgba(0,0,0,.06)">
+      <span style="font-weight:600">Filter TP</span>
+      <span class="loc-muted" style="font-size:12px;display:block;margin-top:2px">Prvo filtrira učitane RN; ako nema pogotka — automatski traži u Supabase-u.</span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px">
+        <input type="search" id="lpTpsLocalQ" class="loc-search-input" style="flex:1;min-width:200px"
           value="${escHtml(localQ)}"
           placeholder="npr. 755, 9400/755, 1121195…"
           autocomplete="off" />
-        <button type="button" class="btn btn-xs" id="lpTpsFindDb">Pronađi u bazi</button>
-        <button type="button" class="btn btn-xs" id="lpTpsShowAll">Prikaži sve TP</button>
+        <button type="button" class="btn" id="lpTpsFindDb">Pronađi u bazi</button>
+        <button type="button" class="btn" id="lpTpsShowAll">Prikaži sve TP</button>
       </div>
-      <span class="loc-muted" style="font-size:11px">Učitano u memoriju: <strong>${full.length}</strong> otvorenih RN. „Prikaži sve“ ponovo vuče ceo spisak.</span>
+      <span class="loc-muted" style="font-size:11px;display:block;margin-top:6px">U memoriji: <strong>${full.length}</strong> otvorenih RN.</span>
     </div>`;
 
   const headerHtml = `

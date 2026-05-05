@@ -652,11 +652,14 @@ export async function openTechProcessLabelPrintModal() {
             <label class="loc-filter-field"><span>Tehnološki postupak (RN)</span>
               <input type="search" id="tpTpQ" class="loc-search-input" placeholder="Filtriraj učitane; Enter ili „Pronađi u bazi” ako nema u listi…" autocomplete="off" />
             </label>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center">
-              <button type="button" class="btn btn-xs" id="tpTpFindDb">Pronađi u bazi</button>
-              <span class="loc-muted" style="font-size:11px">Traži otvoreni RN po identu / crtežu / nazivu (Supabase).</span>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center">
+              <button type="button" class="btn" id="tpTpFindDb">Pronađi u bazi</button>
+              <span class="loc-muted" style="font-size:11px">Ako TP nije u prvoj listi — upiši broj i klikni (ili Enter u polju iznad).</span>
             </div>
             <div id="tpTpList" class="loc-list" style="max-height:260px;overflow:auto;border:1px solid var(--border2,#eee);border-radius:6px;margin-top:6px"></div>
+            <div style="margin-top:8px">
+              <button type="button" class="btn" id="tpTpFindDb2">Pronađi u bazi (ponovo)</button>
+            </div>
             <p class="loc-muted" style="font-size:12px;margin:6px 2px 0">TP mora biti izabran iz liste — bez slobodnog unosa. Skener kasnije čita samo barkode koji odgovaraju zapisima u BigTehn-u.</p>
           </div>
 
@@ -688,6 +691,7 @@ export async function openTechProcessLabelPrintModal() {
   const tpsPickBlock = overlay.querySelector('#tpTpsPickBlock');
   const tpQ = overlay.querySelector('#tpTpQ');
   const btnTpFindDb = overlay.querySelector('#tpTpFindDb');
+  const btnTpFindDb2 = overlay.querySelector('#tpTpFindDb2');
   const tpListEl = overlay.querySelector('#tpTpList');
   const tpSelectedEl = overlay.querySelector('#tpSelectedTp');
   const qtyBlock = overlay.querySelector('#tpQtyBlock');
@@ -891,6 +895,14 @@ export async function openTechProcessLabelPrintModal() {
     }
   });
   btnTpFindDb?.addEventListener('click', () => {
+    const v = tpQ instanceof HTMLInputElement ? tpQ.value.trim() : '';
+    if (!v) {
+      showToast('⚠ Upiši TP, ident ili crtež pa klikni Pronađi u bazi');
+      return;
+    }
+    void renderTpList(v, { forceServer: true });
+  });
+  btnTpFindDb2?.addEventListener('click', () => {
     const v = tpQ instanceof HTMLInputElement ? tpQ.value.trim() : '';
     if (!v) {
       showToast('⚠ Upiši TP, ident ili crtež pa klikni Pronađi u bazi');
