@@ -7,6 +7,7 @@
  *   - Godišnji odmor — saldo tekuće godine
  *   - Moji zahtevi za GO — tabela sa statusom
  *   - Moja odsustva — tabela
+ *   - Revers — trenutna zaduženja alata / opreme (view `v_rev_my_issued_tools`)
  *
  * "Podnesi zahtev" — modal sa 3 polja (od / do / napomena).
  * Admin/HR/menadžment/leadpm/pm imaju picker zaposlenog u modalu
@@ -39,6 +40,7 @@ import {
   loadVacationRequestsForEmployeeFromDb,
   loadMyVacationRequestsFromDb,
 } from '../../services/vacationRequests.js';
+import { fetchMyIssuedTools } from '../../services/reversiService.js';
 import { compareEmployeesByLastFirst, employeeDisplayName } from '../../lib/employeeNames.js';
 
 /* ── Helperi ────────────────────────────────────────────────────── */
@@ -60,6 +62,16 @@ const ABS_TYPE_LABELS = {
   slobodan: 'Slobodan dan', ostalo: 'Ostalo',
 };
 
+const REV_DOC_TYPE_LABEL = {
+  TOOL: 'Alat',
+  COOPERATION_GOODS: 'Kooperacija',
+};
+
+const REV_DOC_STATUS_LABEL = {
+  OPEN: 'Otvoren',
+  PARTIALLY_RETURNED: 'Delimično vraćen',
+};
+
 /* ── Lokalni state ─────────────────────────────────────────────── */
 
 let rootEl = null;
@@ -71,6 +83,8 @@ let myBalance  = null;       // vacation_balance za tekuću godinu
 let myAbsences = [];         // sopstvena odsustva
 let myRequests = [];         // vacation_requests za mene
 let allEmployees = [];       // za picker (samo za upravljačke role)
+let myReversalIssued = [];  // v_rev_my_issued_tools (Revers)
+let myReversalLoadErr = null;
 
 /* ── Root render ────────────────────────────────────────────────── */
 
@@ -146,7 +160,7 @@ async function _loadAndRender() {
     }
 
     /* Parallelni fetch: sopstveni employee, saldo, odsustva, zahtevi */
-    const [empData, balData, absData, reqData, allEmpData] = await Promise.all([
+    const [empData, balData, absData, reqData, allEmpData, revIssuedRes] = await Promise.all([
       sbReq(`v_employees_safe?email=eq.${encodeURIComponent(email)}&select=*&limit=1`),
       sbReq(`v_vacation_balance?year=eq.${year}&select=*`),
       sbReq(`absences?select=*&order=date_from.desc`),
@@ -154,7 +168,12 @@ async function _loadAndRender() {
       canSubmitForOthers
         ? sbReq('v_employees_safe?select=id,full_name,first_name,last_name,department,is_active&is_active=eq.true&order=full_name')
         : Promise.resolve(null),
+      fetchMyIssuedTools(),
     ]);
+
+    myReversalLoadErr = revIssuedRes?.ok ? null : (revIssuedRes?.error || 'Učitavanje reversa nije uspelo');
+    myReversalIssued =
+      revIssuedRes?.ok && Array.isArray(revIssuedRes.data) ? revIssuedRes.data : [];
 
     myEmployee = empData && empData.length > 0 ? mapDbEmployee(empData[0]) : null;
 
@@ -230,6 +249,8 @@ function _renderContent(host) {
       ${_profileCardHtml()}
       ${_balanceCardHtml(year)}
 
+      ${_reversiIssuedSectionHtml()}
+
       <div class="mp-section-header" style="display:flex;align-items:center;justify-content:space-between;margin:24px 0 8px;">
         <h3 style="margin:0;font-size:1rem;font-weight:600;color:var(--text)">Zahtevi za godišnji odmor</h3>
         <button class="btn btn-primary" id="mpNewRequestBtn" style="gap:6px;">
@@ -246,6 +267,12 @@ function _renderContent(host) {
     </div>`;
 
   host.querySelector('#mpNewRequestBtn').addEventListener('click', () => _openRequestModal());
+  host.querySelectorAll('a.mp-reversi-link').forEach((a) => {
+    a.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      import('../router.js').then(({ navigateToAppPath }) => navigateToAppPath('/reversi'));
+    });
+  });
 }
 
 /* ── Profil kartica ─────────────────────────────────────────────── */
@@ -389,6 +416,88 @@ function _absencesTableHtml() {
     ${myAbsences.length > thisYear.length
       ? `<div style="font-size:.8rem;color:var(--text2);margin-top:6px;">Prikazano ${thisYear.length} od ${myAbsences.length} ukupnih odsustava (samo tekuća godina).</div>`
       : ''}`;
+}
+
+/** Jedan red za prikaz zaduženja iz reversa (alat ili stavka kooperacije). */
+function _reversalItemDescription(row) {
+  const lt = row.line_type;
+  if (lt === 'PRODUCTION_PART') {
+    const pn = row.part_name || '—';
+    const dr = row.drawing_no ? ` · crt. ${escHtml(row.drawing_no)}` : '';
+    return `${escHtml(pn)}${dr}`;
+  }
+  const oz = row.oznaka ? String(row.oznaka) : '';
+  const nz = row.naziv ? String(row.naziv) : '';
+  let s = oz && nz ? `${escHtml(oz)} — ${escHtml(nz)}` : escHtml(oz || nz || '—');
+  if (row.serijski_broj) s += ` · SB ${escHtml(String(row.serijski_broj))}`;
+  return s;
+}
+
+function _reversiIssuedSectionHtml() {
+  if (myReversalLoadErr) {
+    return `
+      <div class="mp-section-header" style="margin:24px 0 8px;">
+        <h3 style="margin:0;font-size:1rem;font-weight:600;color:var(--text)">Revers — zaduženja</h3>
+      </div>
+      <div style="color:var(--warn,#dc2626);font-size:.9rem;padding:8px 0;">
+        ${escHtml(myReversalLoadErr)}
+      </div>`;
+  }
+  if (!myReversalIssued.length) {
+    return `
+      <div class="mp-section-header" style="margin:24px 0 8px;">
+        <h3 style="margin:0;font-size:1rem;font-weight:600;color:var(--text)">Revers — zaduženja</h3>
+      </div>
+      <div style="color:var(--text2);font-size:.9rem;padding:8px 0;">
+        Nemate trenutnih zaduženja na reversu (alat / oprema). Za detalje i rad sa dokumentima koristite modul <a href="/reversi" class="mp-reversi-link">Reversi</a>.
+      </div>`;
+  }
+
+  const rows = myReversalIssued.map((row) => {
+    const dt = row.doc_type ? REV_DOC_TYPE_LABEL[row.doc_type] || row.doc_type : '—';
+    const st = row.document_status
+      ? REV_DOC_STATUS_LABEL[row.document_status] || row.document_status
+      : '—';
+    const qty = row.quantity != null ? String(row.quantity) : '—';
+    const unit = row.unit ? escHtml(String(row.unit)) : '';
+    const qDisplay = unit ? `${escHtml(qty)} ${unit}` : escHtml(qty);
+    return `<tr>
+      <td><span class="kadr-type-badge t-sluzbeno">${escHtml(dt)}</span></td>
+      <td style="font-family:var(--mono);font-size:.85rem;">${escHtml(row.doc_number || '—')}</td>
+      <td>${row.issued_at ? escHtml(formatDate(row.issued_at)) : '—'}</td>
+      <td>${row.expected_return_date ? escHtml(formatDate(row.expected_return_date)) : '—'}</td>
+      <td>${_reversalItemDescription(row)}</td>
+      <td style="font-family:var(--mono);">${qDisplay}</td>
+      <td class="col-hide-sm">${row.pribor ? escHtml(String(row.pribor)) : '—'}</td>
+      <td class="col-hide-sm" style="font-size:.85rem;">${escHtml(st)}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="mp-section-header" style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:24px 0 8px;">
+      <h3 style="margin:0;font-size:1rem;font-weight:600;color:var(--text)">Revers — trenutna zaduženja</h3>
+      <a href="/reversi" class="mp-reversi-link" style="font-size:.85rem;">Otvori modul Reversi →</a>
+    </div>
+    <p style="margin:0 0 10px;font-size:.82rem;color:var(--text2);">
+      Stavke koje su na Vaše ime i još uvek nisu vraćene (otvoren ili delimično vraćen dokument).
+    </p>
+    <div style="overflow-x:auto;">
+      <table class="kadrovska-table" style="width:100%;">
+        <thead>
+          <tr>
+            <th>Tip</th>
+            <th>Br. dokumenta</th>
+            <th>Izdato</th>
+            <th>Rok povr.</th>
+            <th>Predmet</th>
+            <th>Kol.</th>
+            <th class="col-hide-sm">Pribor / nap. stavke</th>
+            <th class="col-hide-sm">Status dok.</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 /* ── Modal: Podnesi zahtev ──────────────────────────────────────── */

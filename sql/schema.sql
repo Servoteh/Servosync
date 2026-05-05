@@ -750,6 +750,8 @@ CREATE POLICY rev_rl_insert ON public.rev_recipient_locations FOR INSERT TO auth
 CREATE OR REPLACE VIEW public.v_rev_my_issued_tools
 WITH (security_invoker = true) AS
 SELECT
+  d.doc_type,
+  l.line_type,
   d.id AS document_id,
   d.doc_number,
   d.issued_at,
@@ -758,6 +760,8 @@ SELECT
   t.oznaka,
   t.naziv,
   t.serijski_broj,
+  l.part_name,
+  l.drawing_no,
   l.quantity,
   l.unit,
   l.napomena AS pribor,
@@ -766,8 +770,9 @@ SELECT
 FROM public.rev_document_lines l
 JOIN public.rev_documents d ON d.id = l.document_id
 LEFT JOIN public.rev_tools t ON t.id = l.tool_id
-WHERE l.line_type = 'TOOL'
-  AND l.line_status = 'ISSUED'
+WHERE l.line_status = 'ISSUED'
+  AND ((l.line_type = 'TOOL')
+    OR (l.line_type = 'PRODUCTION_PART' AND d.doc_type = 'COOPERATION_GOODS'))
   AND d.status IN ('OPEN', 'PARTIALLY_RETURNED')
   AND d.recipient_employee_id IN (
     SELECT id FROM public.employees

@@ -33,7 +33,16 @@ function wrap(fn) {
 }
 
 /**
- * @param {{ status?: string, recipient_search?: string, doc_type?: string, limit?: number, offset?: number }} params
+ * @param {{
+ *   status?: string,
+ *   statuses?: string[],
+ *   overdue?: boolean,
+ *   search?: string,
+ *   recipient_search?: string,
+ *   doc_type?: string,
+ *   limit?: number,
+ *   offset?: number,
+ * }} params
  */
 export async function fetchDocuments(params = {}) {
   return wrap(async () => {
@@ -47,20 +56,33 @@ export async function fetchDocuments(params = {}) {
       `offset=${offset}`,
     ];
 
-    const st = params.status && String(params.status).trim();
-    if (st && st !== 'ALL') {
-      parts.push(`status=eq.${encodeURIComponent(st)}`);
+    if (params.overdue === true) {
+      const today = new Date().toISOString().slice(0, 10);
+      parts.push(
+        `and=(or(status.eq.OPEN,status.eq.PARTIALLY_RETURNED),expected_return_date.lt.${today})`,
+      );
+    } else {
+      const multi = Array.isArray(params.statuses) ? params.statuses.filter(Boolean) : [];
+      if (multi.length > 0) {
+        parts.push(`status=in.(${multi.map((s) => encodeURIComponent(String(s).trim())).join(',')})`);
+      } else {
+        const st = params.status && String(params.status).trim();
+        if (st && st !== 'ALL') {
+          parts.push(`status=eq.${encodeURIComponent(st)}`);
+        }
+      }
     }
 
     const dt = params.doc_type && String(params.doc_type).trim();
     if (dt === 'TOOL') parts.push('doc_type=eq.TOOL');
     else if (dt === 'COOPERATION_GOODS') parts.push('doc_type=eq.COOPERATION_GOODS');
 
-    const rs = params.recipient_search && String(params.recipient_search).trim();
+    const rawQ = params.search ?? params.recipient_search;
+    const rs = rawQ && String(rawQ).trim();
     if (rs) {
       const enc = encodeURIComponent(`*${rs}*`);
       parts.push(
-        `or=(recipient_employee_name.ilike.${enc},recipient_department.ilike.${enc},recipient_company_name.ilike.${enc})`,
+        `or=(doc_number.ilike.${enc},recipient_employee_name.ilike.${enc},recipient_department.ilike.${enc},recipient_company_name.ilike.${enc})`,
       );
     }
 
