@@ -162,15 +162,15 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         </div>
       </header>
       <div class="pb-context-card">
-        <div class="pb-context-row">
+        <div class="pb-context-single">
           <span class="pb-context-label">Projekat</span>
           <select id="pbProjectSel" class="pb-context-select">
             <option value="all">Svi projekti</option>
             ${projects.map(p => `<option value="${escHtml(p.id)}" ${state.activeProject === p.id ? 'selected' : ''}>${escHtml(p.project_code)} — ${escHtml(p.project_name)}</option>`).join('')}
           </select>
+          <div class="pb-context-vsep"></div>
+          <div id="pbChipHost" class="pb-chip-host"></div>
         </div>
-        <div class="pb-context-divider"></div>
-        <div class="pb-context-row pb-context-row--eng" id="pbChipHost"></div>
       </div>
       <nav class="pb-tabs" role="tablist" aria-label="Projektni biro tabovi">
         ${pbTabBtn('plan', 'Plan', state.activeTab === 'plan')}

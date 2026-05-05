@@ -33,7 +33,7 @@ body.module-projektni-biro {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 0 12px;
+  padding: 8px 0 8px;
   gap: 8px;
   flex-wrap: wrap;
 }
@@ -165,33 +165,37 @@ body.module-projektni-biro {
   background: var(--surface3, #f3f4f6);
 }
 
-/* == CONTEXT CARD (Projekat + Inženjer) == */
+/* == CONTEXT CARD (Projekat + Inženjer — jedan red) == */
 
 .pb-context-card {
   background: var(--surface, #fff);
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 10px;
   margin-bottom: 0;
-  overflow: hidden;
 }
 
-.pb-context-row {
+.pb-context-single {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  flex-wrap: wrap;
-}
-
-.pb-context-row--eng {
-  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 6px 12px;
   overflow: hidden;
 }
 
-.pb-context-divider {
-  height: 1px;
+.pb-context-vsep {
+  width: 1px;
+  height: 22px;
   background: var(--border, #e5e7eb);
-  margin: 0;
+  flex-shrink: 0;
+}
+
+.pb-chip-host {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .pb-context-label {
@@ -201,19 +205,18 @@ body.module-projektni-biro {
   letter-spacing: 0.6px;
   color: var(--text3, #9ca3af);
   flex-shrink: 0;
-  min-width: 64px;
+  min-width: 52px;
 }
 
 .pb-context-select {
-  flex: 1;
-  min-width: 160px;
-  max-width: 420px;
-  padding: 6px 10px;
+  min-width: 140px;
+  max-width: 280px;
+  padding: 5px 8px;
   border-radius: 8px;
   border: 1px solid var(--border, #e5e7eb);
   background: var(--surface, #fff);
   color: var(--text, #111);
-  font-size: 0.88rem;
+  font-size: 0.85rem;
 }
 
 /* == ENGINEER CHIPS == */
@@ -287,7 +290,7 @@ body.module-projektni-biro {
 .pb-tabs {
   display: flex;
   gap: 0;
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   border-bottom: 1px solid var(--border, #e5e7eb);
   position: sticky;
   top: 0;
@@ -304,8 +307,8 @@ body.module-projektni-biro {
 .pb-tab-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
+  gap: 5px;
+  padding: 8px 14px;
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
