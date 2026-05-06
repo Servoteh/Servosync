@@ -33,7 +33,8 @@ export function normalizeBarcodeText(raw) {
  * @property {string} drawingNo Broj crteža ako je u barkodu (short format);
  *   u RNZ formatu je prazno jer barkod ne sadrži crtež — čita se sa teksta
  *   nalepnice ili se auto-popunjava iz prethodnih placement-a.
- * @property {'rnz'|'short'|'ocr'} format Koji je format prepoznat (`ocr` = tekst sa nalepnice).
+ * @property {'rnz'|'short'|'ocr'|'compact'} format Koji je format prepoznat (`ocr` = tekst sa nalepnice;
+ *   `compact` = nalepnica bez RNZ prefiksa, npr. `9833:9400/7-5:0`).
  * @property {string} raw Originalni očišćeni tekst.
  * @property {string} [idrn] RNZ: prvi broj (ID dokumenta).
  * @property {string} [varijanta] RNZ: segment posle TP (ERP kolona `varijanta`).
@@ -41,7 +42,7 @@ export function normalizeBarcodeText(raw) {
  */
 
 /**
- * Parsiraj BigTehn barkod iz jednog od dva potvrđena formata.
+ * Parsiraj BigTehn barkod iz RNZ, short ili kompaktne nalepnice.
  *
  * **Format A — RNZ (trenutno u produkciji):**
  *   `RNZ:8693:7351/1088:0:39757`, `RNZ:9833:9400/7-5-S1:1:44963` ili `RNZ:10348:9400/1/300:0:44706`
@@ -56,10 +57,9 @@ export function normalizeBarcodeText(raw) {
  *   prethodnih placement-a za isti (order_no, item_ref_id) par, ili ga
  *   radnik prepisuje ručno sa teksta.
  *
- * **Format B — short (legacy, manje nalepnica):**
- *   `9000/1091063` → nalog `9000`, crtež `1091063`
- *
- * Oba formata vraćaju istu strukturu; polje `format` kaže koji je bio.
+ * **Format C — kompaktna nalepnica (bez `RNZ:` prefiksa):**
+ *   `9833:9400/7-5:0` → `idrn` / `orderNo` / `itemRefId` (projekat TP) / `varijanta`
+ *   (fallback samo ako RNZ i short format ne odgovaraju).
  *
  * @param {string} raw
  * @returns {ParsedBarcode | null}
@@ -100,6 +100,22 @@ export function parseBigTehnBarcode(raw) {
       drawingNo,
       format: 'short',
       raw: clean,
+    };
+  }
+
+  /* Kompaktna nalepnica (drugačiji štampač od RNZ na nalogu): `interni:nalog/tp:var` */
+  const compact = clean.match(/^(\d{1,10}):(\d{1,8})\/([A-Za-z0-9-]+):(\d+)$/);
+  if (compact) {
+    const [, idrn, orderNo, itemRefId, varijanta] = compact;
+    return {
+      orderNo,
+      itemRefId,
+      drawingNo: '',
+      format: /** @type {'compact'} */ ('compact'),
+      raw: clean,
+      idrn,
+      varijanta,
+      field4: '',
     };
   }
 

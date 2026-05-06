@@ -1269,6 +1269,8 @@ export async function openScanMoveModal({
     const fmtBadge =
       format === 'rnz'
         ? 'RNZ'
+        : format === 'compact'
+          ? 'NALEPNICA'
         : format === 'short'
           ? 'legacy'
           : format === 'ocr'
@@ -1315,7 +1317,7 @@ export async function openScanMoveModal({
     }
 
     let diagHtml = '';
-    if (format === 'rnz' || format === 'ocr' || format === 'short' || (orderNo && itemRefId)) {
+    if (format === 'rnz' || format === 'ocr' || format === 'short' || format === 'compact' || (orderNo && itemRefId)) {
       const statusTxt =
         erpLookupStatus === 'ok'
           ? '✔ nađen u BigTehn cache-u'
@@ -1395,7 +1397,7 @@ export async function openScanMoveModal({
       } else {
         try {
           const erpOpts =
-            format === 'rnz' &&
+            (format === 'rnz' || format === 'compact') &&
             payload &&
             typeof payload === 'object' &&
             payload.varijanta != null &&

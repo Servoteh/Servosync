@@ -165,6 +165,38 @@ describe('parsePredmetTpFromLabelText — OCR sa nalepnice', () => {
   });
 });
 
+describe('parseBigTehnBarcode — compact label (fallback bez RNZ:)', () => {
+  it('parsira nalepnicu 9833:9400/7-5:0', () => {
+    expect(parseBigTehnBarcode('9833:9400/7-5:0')).toEqual({
+      idrn: '9833',
+      orderNo: '9400',
+      itemRefId: '7-5',
+      drawingNo: '',
+      format: 'compact',
+      raw: '9833:9400/7-5:0',
+      varijanta: '0',
+      field4: '',
+    });
+  });
+
+  it('RNZ i dalje ima prioritet (isti brojevi, drugačiji oblik)', () => {
+    expect(parseBigTehnBarcode('RNZ:9833:9400/7-5:0:44963')).toMatchObject({
+      format: 'rnz',
+      orderNo: '9400',
+      itemRefId: '7-5',
+    });
+  });
+
+  it('short format ima prioritet pre compact (samo nalog/crtež)', () => {
+    expect(parseBigTehnBarcode('9000/1091063')?.format).toBe('short');
+  });
+
+  it('vraća null ako fali varijanta ili TP ima nedozvoljen znak', () => {
+    expect(parseBigTehnBarcode('9833:9400/7-5')).toBeNull();
+    expect(parseBigTehnBarcode('9833:9400/7_5:0')).toBeNull();
+  });
+});
+
 describe('parseBigTehnBarcode — invalid input', () => {
   it('vraća null za plain broj crteža (samo drawing no)', () => {
     expect(parseBigTehnBarcode('1091063')).toBeNull();
