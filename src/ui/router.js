@@ -333,7 +333,7 @@ function showModulePlaceholder(moduleId, options = {}) {
     document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-stampa-nalepnica');
   }
   if (moduleId === 'reversi') {
-    document.body.classList.add('kadrovska-active', 'module-reversi');
+    document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-reversi');
   }
   if (moduleId === 'odrzavanje-masina') {
     document.body.classList.add('kadrovska-active', 'desktop-erp-module', 'module-odrzavanje-masina');

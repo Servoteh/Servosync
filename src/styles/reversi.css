@@ -1,6 +1,8 @@
-/* Reversi modul — redizajn (cilj: jasna hijerarhija, primarna akcent #E25B45) */
+/* Reversi — redizajn; font samo u modulu (jasno drugačije od IBM Plex ERP-a) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 .module-reversi {
+  --rev-font: 'Inter', var(--font), system-ui, -apple-system, sans-serif;
   --rev-primary: #e25b45;
   --rev-primary-hover: #c94d39;
   --rev-primary-light: color-mix(in srgb, var(--rev-primary) 14%, transparent);
@@ -11,6 +13,35 @@
   --rev-text2: var(--text2, #9ca3af);
   --rev-radius: 10px;
   --rev-radius-sm: 8px;
+  font-family: var(--rev-font);
+}
+
+/* Odvojena paleta po temi — bez kopiranja generičkog ERP --surface */
+html[data-theme='light'] .module-reversi {
+  --rev-surface: #ffffff;
+  --rev-surface2: #f3f4f6;
+  --rev-border: #e5e7eb;
+  --rev-text: #111827;
+  --rev-text2: #6b7280;
+}
+
+html[data-theme='dark'] .module-reversi {
+  --rev-surface: #1a222d;
+  --rev-surface2: #141920;
+  --rev-border: #2a3441;
+  --rev-text: #f1f5f9;
+  --rev-text2: #94a3b8;
+}
+
+html[data-theme='light'] body.module-reversi:not(.m-body),
+html[data-theme='light'] body.module-reversi:not(.m-body) #app {
+  background: #f8f9fa;
+  color: #1f2937;
+}
+
+html[data-theme='dark'] body.module-reversi:not(.m-body),
+html[data-theme='dark'] body.module-reversi:not(.m-body) #app {
+  background: #0f1419;
 }
 
 .module-reversi #app,
@@ -31,6 +62,16 @@ body.module-reversi {
   z-index: 20;
   background: var(--rev-surface);
   border-bottom: 1px solid var(--rev-border);
+}
+
+html[data-theme='dark'] .rev-top-header {
+  border-bottom-width: 3px;
+  border-bottom-color: var(--rev-primary);
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme='light'] .rev-top-header {
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
 .rev-top-header-inner {
