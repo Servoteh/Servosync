@@ -568,7 +568,6 @@ function closeEmployeeModal() {
 }
 
 async function openEmployeeModal(id) {
-  console.error('[D3] openEmployeeModal id:', id, 'canEdit:', canEditKadrovska(), 'total:', kadrovskaState.employees.length);
   if (!canEditKadrovska()) {
     showToast('⚠ Nemate prava za izmenu');
     return;
@@ -685,7 +684,7 @@ async function addChildFromForm(modal, employeeId) {
   if (!name) { showToast('⚠ Unesi ime deteta'); return; }
   const res = await saveChildToDb({ employeeId, firstName: name, birthDate: birth });
   if (!res || !res.length) {
-    showToast('⚠ Dodavanje nije uspelo. Da li je migracija add_kadr_employee_extended.sql primenjena?');
+    showToast('⚠ Dodavanje nije uspelo. Proveri konzolu (SB err) za detalj.');
     return;
   }
   const saved = mapDbChild(res[0]);
@@ -796,12 +795,12 @@ async function submitEmployeeForm() {
       } else {
         res = await saveEmployeeToDb(basePayload);
       }
-      if (!res || !res.length) {
-        errEl.textContent = 'Supabase nije uspeo da sačuva. Proveri da li je migracija add_kadr_employee_extended.sql primenjena.';
+      if (!res.ok || !res.rows?.length) {
+        errEl.textContent = res.error || 'Čuvanje nije uspelo.';
         errEl.classList.add('visible');
         return;
       }
-      saved = mapDbEmployee(res[0]);
+      saved = mapDbEmployee(res.rows[0]);
     } else {
       /* Offline: ručna UUID + ubaci/zameni u state. */
       if (!basePayload.id) {
