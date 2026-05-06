@@ -286,6 +286,7 @@ export async function openScanMoveModal({
            ga okida preko label/for ili programmatic .click(). Prihvatamo
            samo slike (iOS Safari daje Photo Library + Take Photo opcije). -->
       <input type="file" id="locScanFile" accept="image/*" hidden>
+      <input type="file" id="locScanLocFile" accept="image/*" hidden>
 
       <!-- Zoom slider — pojavi se samo ako track.getCapabilities().zoom
            postoji (iOS 17.2+, Android Chrome). Na iPhone 11+ native hardware
@@ -352,6 +353,16 @@ export async function openScanMoveModal({
                 <span class="loc-muted" id="locScanToHint" style="font-weight:400;font-size:12px"></span>
               </label>
               <select id="locScanTo" required></select>
+              <div class="loc-scan-to-tools" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                <input type="text" id="locScanToCode" autocomplete="off" maxlength="80"
+                  placeholder="Šifra lokacije (npr. HALA3-D6) ili sken"
+                  style="flex:1;min-width:140px;font-size:16px;padding:9px 10px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
+                <button type="button" class="btn" data-act="applyLocCode">Primeni šifru</button>
+                <button type="button" class="btn" data-act="pickLocImage">📷 Skeniraj lokaciju</button>
+              </div>
+              <div class="loc-muted" style="font-size:11px;margin-top:4px;line-height:1.35">
+                Barkod na polici = obično <strong>location_code</strong> iz mastera lokacija.
+              </div>
             </div>
             <div class="emp-field col-full">
               <label for="locScanNote">Napomena</label>
@@ -965,11 +976,50 @@ export async function openScanMoveModal({
   }
 
   /**
+   * Pronađi lokaciju po UUID-u ili `location_code` (case-insensitive).
+   *
+   * @param {string} raw
+   * @returns {object|null}
+   */
+  function resolveLocationToken(raw) {
+    const t = normalizeBarcodeText(String(raw || '')).trim();
+    if (!t) return null;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(t)) {
+      return state.locs.find(l => l.id === t && l.is_active !== false) || null;
+    }
+    const lower = t.toLowerCase();
+    return (
+      state.locs.find(
+        l =>
+          l.is_active !== false &&
+          String(l.location_code || '')
+            .trim()
+            .toLowerCase() === lower,
+      ) || null
+    );
+  }
+
+  function tryApplyLocScanToCode() {
+    const inp = /** @type {HTMLInputElement|null} */ ($('#locScanToCode'));
+    const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
+    if (!inp || !sel) return;
+    const hit = resolveLocationToken(inp.value);
+    if (!hit) {
+      showToast('⚠ Nema lokacije za ovu šifru (proveri master).');
+      return;
+    }
+    sel.value = hit.id;
+    inp.value = '';
+    const code = hit.location_code != null ? String(hit.location_code) : hit.id;
+    showToast(`✓ Odredište: ${code}`);
+  }
+
+  /**
    * Popuni "Na lokaciju" select grupisano po kategorijama da user brže nađe
    * odredište. Kategorije (po `location_type`):
-   *   📍 POLICE  — SHELF / RACK / BIN (konkretan fizički spot; dugačka lista)
-   *   🏭 HALE     — WAREHOUSE / PRODUCTION / ASSEMBLY / FIELD / TEMP (veći prostor)
-   *   📦 OSTALE   — SCRAPPED / OFFICE / TRANSIT / SERVICE / PROJECT / OTHER
+   *   📍 POLICE  — SHELF / RACK / BIN, **podgrupe po roditeljskoj hali** (`parent_id`)
+   *   🏭 HALE     — WAREHOUSE / PRODUCTION / ASSEMBLY / FIELD / TEMP
+   *   📦 OSTALE   — SCRAPPED / OFFICE / …
    *
    * Ako je `preferLocationCategory` prosleđeno (iz mobilne POLICA/HALA prečice),
    * preferirana grupa ide PRVA u listi (user prvo vidi ono što mu treba), ali
@@ -987,7 +1037,53 @@ export async function openScanMoveModal({
       else if (kind === 'hall') halls.push(l);
       else others.push(l);
     }
-    const renderGroup = (label, items) => {
+    const pathCmp = (a, b) => String(a.path_cached || '').localeCompare(String(b.path_cached || ''), 'sr');
+
+    halls.sort(pathCmp);
+    others.sort(pathCmp);
+
+    /** @type {Map<string|null, object[]>} */
+    const shelfByParent = new Map();
+    for (const s of shelves) {
+      const pid = s.parent_id ? String(s.parent_id) : null;
+      if (!shelfByParent.has(pid)) shelfByParent.set(pid, []);
+      shelfByParent.get(pid).push(s);
+    }
+    for (const arr of shelfByParent.values()) {
+      arr.sort(pathCmp);
+    }
+
+    const shelfLabelForParent = pid => {
+      if (pid == null) return '📍 POLICE (bez povezane hale)';
+      const p = state.locById.get(pid);
+      if (p && p.is_active !== false) return `📍 Police · ${p.location_code} — ${p.name}`;
+      return '📍 POLICE (roditelj nije u listi)';
+    };
+
+    const renderShelfGroups = () => {
+      const pids = Array.from(shelfByParent.keys()).sort((a, b) => {
+        if (a == null) return 1;
+        if (b == null) return -1;
+        const pa = state.locById.get(a);
+        const pb = state.locById.get(b);
+        return pathCmp(pa || {}, pb || {});
+      });
+      return pids
+        .map(pid => {
+          const items = shelfByParent.get(pid);
+          if (!items?.length) return '';
+          const opts = items
+            .map(
+              l =>
+                `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
+            )
+            .join('');
+          return `<optgroup label="${escHtml(shelfLabelForParent(pid))}">${opts}</optgroup>`;
+        })
+        .join('');
+    };
+
+    const renderFlatGroup = (label, items) => {
       if (!items.length) return '';
       const opts = items
         .map(
@@ -997,9 +1093,10 @@ export async function openScanMoveModal({
         .join('');
       return `<optgroup label="${escHtml(label)}">${opts}</optgroup>`;
     };
-    const shelfGroup = renderGroup('📍 POLICE', shelves);
-    const hallGroup = renderGroup('🏭 HALE', halls);
-    const otherGroup = renderGroup('📦 OSTALE', others);
+
+    const shelfGroup = renderShelfGroups();
+    const hallGroup = renderFlatGroup('🏭 HALE', halls);
+    const otherGroup = renderFlatGroup('📦 OSTALE', others);
 
     let grouped;
     if (preferLocationCategory === 'shelf') {
@@ -1018,11 +1115,11 @@ export async function openScanMoveModal({
     const hintEl = $('#locScanToHint');
     if (hintEl) {
       if (preferLocationCategory === 'shelf') {
-        hintEl.textContent = '— prečica sa home: POLICE su prve u listi';
+        hintEl.textContent = '— prečica sa home: POLICE su prve; police su po halama';
       } else if (preferLocationCategory === 'warehouse') {
         hintEl.textContent = '— prečica sa home: HALE su prve u listi';
       } else {
-        hintEl.textContent = '';
+        hintEl.textContent = '— police su grupisane po hali (parent_id)';
       }
     }
   }
@@ -1432,6 +1529,12 @@ export async function openScanMoveModal({
          * ne radi zbog moire/kompresije. */
         $('#locScanFile')?.click();
         break;
+      case 'pickLocImage':
+        $('#locScanLocFile')?.click();
+        break;
+      case 'applyLocCode':
+        void tryApplyLocScanToCode();
+        break;
       case 'ocrScan':
         await applyOcrFromVideo();
         break;
@@ -1497,6 +1600,41 @@ export async function openScanMoveModal({
     } catch (e) {
       console.error('[scan] decodeFromImage failed', e);
       setScanStatus('⚠ Greška: ' + (e?.message || e), 'error');
+    }
+  });
+
+  /* Barkod sa nalepnice police / hale → postavi „Na lokaciju” (location_code ili UUID). */
+  $('#locScanLocFile')?.addEventListener('change', async ev => {
+    const file = ev.target.files?.[0];
+    ev.target.value = '';
+    if (!file) return;
+    try {
+      const res = await decodeBarcodeFromFile(file);
+      if ('text' in res) {
+        const hit = resolveLocationToken(res.text);
+        if (hit) {
+          const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
+          if (sel) sel.value = hit.id;
+          const ci = /** @type {HTMLInputElement|null} */ ($('#locScanToCode'));
+          if (ci) ci.value = '';
+          const code = hit.location_code != null ? String(hit.location_code) : hit.id;
+          showToast(`✓ Lokacija: ${code}`);
+        } else {
+          showToast('⚠ Nema lokacije za pročitan barkod (šifra mora postojati u masteru).');
+        }
+      } else {
+        showToast('⚠ Barkod nije prepoznat na slici.');
+      }
+    } catch (e) {
+      console.warn('[scan] loc image decode', e);
+      showToast('⚠ Greška pri čitanju slike.');
+    }
+  });
+
+  $('#locScanToCode')?.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      tryApplyLocScanToCode();
     }
   });
 
