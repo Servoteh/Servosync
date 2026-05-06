@@ -3,9 +3,9 @@
  *
  * - iOS / desktop: ZXing (`@zxing/browser`).
  * - Android Chrome + mode AUTO: `BarcodeDetector` kada postoji, inače ZXing.
- * - Mobilni live: `TRY_HARDER` + ideal 2560×1440 radi gustog Code128 na nalepnici.
- * - Folija / odsjaj: best-effort tamniji kadar (`exposureCompensation` ako uređaj
- *   dozvoljava) + „Iz slike” probava više kontrastnih varijanti pre ZXing-a.
+ * - Mobilni live: `TRY_HARDER` + ideal 2880×1620 radi gustog Code128 na nalepnici.
+ * - Folija / odsjaj: best-effort tamniji kadar (`exposureCompensation`) + kontrast pri „iz slike”.
+ * - Gusti Code128 (npr. kratki `9000/365`): „iz slike” — Code128-only hintovi + više upscale pokušaja.
  * - Debug: `sessionStorage.loc_scan_decode_mode` = `AUTO` | `ZXING_ONLY` | `BARCODE_DETECTOR_ONLY`
  *
  * Usage:
@@ -47,8 +47,8 @@ function buildMobileCameraVideoConstraints() {
     };
   }
   return {
-    width: { ideal: 2560 },
-    height: { ideal: 1440 },
+    width: { ideal: 2880 },
+    height: { ideal: 1620 },
     frameRate: { ideal: 30, max: 30 },
   };
 }
@@ -61,6 +61,10 @@ STILL_IMAGE_SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
 ]);
 STILL_IMAGE_SCAN_HINTS.set(DecodeHintType.TRY_HARDER, true);
 
+const STILL_IMAGE_CODE128_ONLY_HINTS = new Map();
+STILL_IMAGE_CODE128_ONLY_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]);
+STILL_IMAGE_CODE128_ONLY_HINTS.set(DecodeHintType.TRY_HARDER, true);
+
 const ZXING_READER_OPTIONS_DESKTOP = {
   delayBetweenScanAttempts: 50,
   delayBetweenScanSuccess: 200,
@@ -68,7 +72,7 @@ const ZXING_READER_OPTIONS_DESKTOP = {
 };
 
 const ZXING_READER_OPTIONS_MOBILE = {
-  delayBetweenScanAttempts: 40,
+  delayBetweenScanAttempts: 28,
   delayBetweenScanSuccess: 150,
   tryPlayVideoTimeout: 5000,
 };
@@ -673,7 +677,7 @@ function buildController({ stop, getTrack, isAndroid, runRefocusAfterZoom }) {
  * @returns {HTMLCanvasElement|null}
  */
 function buildGrayscaleContrastCanvas(img, contrast, opts = {}) {
-  const maxSide = typeof opts.maxSide === 'number' ? opts.maxSide : 2400;
+  const maxSide = typeof opts.maxSide === 'number' ? opts.maxSide : 3200;
   let w = img.naturalWidth || img.width;
   let h = img.naturalHeight || img.height;
   if (!w || !h) return null;
@@ -713,15 +717,27 @@ function buildGrayscaleContrastCanvas(img, contrast, opts = {}) {
  * @param {HTMLImageElement} img
  * @param {number} scale npr. 1.5
  * @param {number} contrast
+ * @param {number} [maxDim=4000]
+ * @param {number} [maxPixels=6_500_000]
  * @returns {HTMLCanvasElement|null}
  */
-function buildUpscaledGrayscaleContrastCanvas(img, scale, contrast) {
+function buildUpscaledGrayscaleContrastCanvas(img, scale, contrast, maxDim = 4000, maxPixels = 6_500_000) {
   let w = img.naturalWidth || img.width;
   let h = img.naturalHeight || img.height;
   if (!w || !h || scale <= 1) return null;
-  const tw = Math.min(3200, Math.floor(w * scale));
-  const th = Math.min(3200, Math.floor(h * scale));
-  if (tw * th > 5_500_000) return null;
+  let tw = Math.floor(w * scale);
+  let th = Math.floor(h * scale);
+  const cap = Math.max(tw, th);
+  if (cap > maxDim) {
+    const r = maxDim / cap;
+    tw = Math.max(1, Math.floor(tw * r));
+    th = Math.max(1, Math.floor(th * r));
+  }
+  if (tw * th > maxPixels) {
+    const r = Math.sqrt(maxPixels / (tw * th));
+    tw = Math.max(280, Math.floor(tw * r));
+    th = Math.max(280, Math.floor(th * r));
+  }
   const c = document.createElement('canvas');
   c.width = tw;
   c.height = th;
@@ -756,36 +772,55 @@ export async function decodeBarcodeFromFile(file) {
   const url = URL.createObjectURL(file);
   try {
     const img = await loadImage(url);
-    const reader = new BrowserMultiFormatReader(STILL_IMAGE_SCAN_HINTS);
+    const readerAll = new BrowserMultiFormatReader(STILL_IMAGE_SCAN_HINTS);
+    const reader128 = new BrowserMultiFormatReader(STILL_IMAGE_CODE128_ONLY_HINTS);
 
-    const attempts = [
-      () => reader.decodeFromImageElement(img),
-      () => {
-        const c = buildGrayscaleContrastCanvas(img, 1.42);
-        if (!c) throw new Error('no_canvas');
-        return reader.decodeFromCanvasElement(c);
-      },
-      () => {
-        const c = buildGrayscaleContrastCanvas(img, 1.95);
-        if (!c) throw new Error('no_canvas');
-        return reader.decodeFromCanvasElement(c);
-      },
-      () => {
-        const c = buildGrayscaleContrastCanvas(img, 2.35);
-        if (!c) throw new Error('no_canvas');
-        return reader.decodeFromCanvasElement(c);
-      },
-      () => {
-        const c = buildUpscaledGrayscaleContrastCanvas(img, 1.55, 1.68);
-        if (!c) throw new Error('no_canvas');
-        return reader.decodeFromCanvasElement(c);
-      },
-      () => {
-        const c = buildUpscaledGrayscaleContrastCanvas(img, 1.85, 1.55);
-        if (!c) throw new Error('no_canvas');
-        return reader.decodeFromCanvasElement(c);
-      },
+    const decodeFrom = async (reader, src) => {
+      if (src instanceof HTMLCanvasElement) {
+        return reader.decodeFromCanvasElement(src);
+      }
+      return reader.decodeFromImageElement(/** @type {HTMLImageElement} */ (src));
+    };
+
+    const attempts = [];
+
+    attempts.push(() => reader128.decodeFromImageElement(img));
+    attempts.push(() => readerAll.decodeFromImageElement(img));
+
+    const canvasFactories = [
+      () => buildGrayscaleContrastCanvas(img, 1.28, { maxSide: 4400 }),
+      () => buildGrayscaleContrastCanvas(img, 1.48, { maxSide: 4400 }),
+      () => buildGrayscaleContrastCanvas(img, 1.72, { maxSide: 4000 }),
+      () => buildGrayscaleContrastCanvas(img, 1.98, { maxSide: 3800 }),
+      () => buildGrayscaleContrastCanvas(img, 2.28, { maxSide: 3400 }),
+      () => buildGrayscaleContrastCanvas(img, 2.55, { maxSide: 3000 }),
+      () => buildUpscaledGrayscaleContrastCanvas(img, 2.05, 1.5),
+      () => buildUpscaledGrayscaleContrastCanvas(img, 2.4, 1.44),
+      () => buildUpscaledGrayscaleContrastCanvas(img, 2.85, 1.38),
+      () => buildUpscaledGrayscaleContrastCanvas(img, 3.25, 1.34),
+      () => buildUpscaledGrayscaleContrastCanvas(img, 3.65, 1.3),
     ];
+
+    for (const make of canvasFactories) {
+      attempts.push(async () => {
+        const c = make();
+        if (!c) throw new Error('no_canvas');
+        try {
+          return await decodeFrom(reader128, c);
+        } catch (e1) {
+          try {
+            return await decodeFrom(readerAll, c);
+          } catch (e2) {
+            const n1 = e1?.name;
+            const n2 = e2?.name;
+            if (n1 === 'NotFoundException' && n2 === 'NotFoundException') {
+              throw e1;
+            }
+            throw e2;
+          }
+        }
+      });
+    }
 
     let lastErr = /** @type {unknown} */ (null);
     for (const run of attempts) {

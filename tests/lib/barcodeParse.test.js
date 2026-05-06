@@ -100,6 +100,16 @@ describe('parseBigTehnBarcode — RNZ format (current production)', () => {
 });
 
 describe('parseBigTehnBarcode — legacy short format', () => {
+  it('parsira kratki format sa troznamenkastim crtežom (gust Code128 na štampi)', () => {
+    expect(parseBigTehnBarcode('9000/365')).toEqual({
+      orderNo: '9000',
+      itemRefId: '365',
+      drawingNo: '365',
+      format: 'short',
+      raw: '9000/365',
+    });
+  });
+
   it('parsira stari NALOG/CRTEŽ', () => {
     expect(parseBigTehnBarcode('9000/1091063')).toEqual({
       orderNo: '9000',
