@@ -28,6 +28,14 @@ function debounce(fn, ms) {
   };
 }
 
+/** Safari na iPhone/iPad (uključ. iPadOS koji lažira Mac u UA — `ontouchend`). */
+function isIOSWebPlatform() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/i.test(ua)) return true;
+  return ua.includes('Mac') && typeof document !== 'undefined' && 'ontouchend' in document;
+}
+
 /* `__APP_VERSION__` je string koji Vite inject-uje u build time (git SHA ili
  * CF_PAGES_COMMIT_SHA). Koristimo ga u dijagnostičkom badge-u pored polja
  * crtež da magacioner može odmah da vidi koja verzija app-a se izvršava
@@ -400,6 +408,13 @@ export async function openScanMoveModal({
   function releaseVideoStream(videoEl) {
     if (!videoEl) return;
     try {
+      if (isIOSWebPlatform()) {
+        try {
+          videoEl.pause();
+        } catch {
+          /* ignore */
+        }
+      }
       const ms = videoEl.srcObject;
       if (ms instanceof MediaStream) {
         for (const t of ms.getTracks()) {
@@ -447,23 +462,36 @@ export async function openScanMoveModal({
   let lastBarcodeClean = '';
   let lastBarcodeAt = 0;
   const BARCODE_DEDUP_MS = 1200;
+  /** Sprečava paralelne iOS callback-e dok traje prelazak na formu. */
+  let decodeBusy = false;
 
   async function handleDecodedBarcode(clean) {
     if (!clean) return;
+    if (decodeBusy) return;
     const now = Date.now();
     if (clean === lastBarcodeClean && now - lastBarcodeAt < BARCODE_DEDUP_MS) {
       return;
     }
-    lastBarcodeClean = clean;
-    lastBarcodeAt = now;
-    clearAndroidChromeHintTimer();
-    cleanupScan();
-    if (navigator.vibrate) navigator.vibrate(80);
-    const parsed = parseBigTehnBarcode(clean);
+    decodeBusy = true;
     try {
-      await showForm(parsed || clean);
-    } catch (e) {
-      console.error('[scan] showForm failed', e);
+      lastBarcodeClean = clean;
+      lastBarcodeAt = now;
+      clearAndroidChromeHintTimer();
+      cleanupScan();
+      /* iOS WebKit: kratka pauza posle stop stream-a pre nego što DOM pređe na formu
+       * smanjuje „zaglavljenu” kameru / dupli onResult pri sledećem startu. */
+      if (isIOSWebPlatform()) {
+        await new Promise(r => setTimeout(r, 70));
+      }
+      if (navigator.vibrate) navigator.vibrate(80);
+      const parsed = parseBigTehnBarcode(clean);
+      try {
+        await showForm(parsed || clean);
+      } catch (e) {
+        console.error('[scan] showForm failed', e);
+      }
+    } finally {
+      decodeBusy = false;
     }
   }
 
@@ -494,6 +522,9 @@ export async function openScanMoveModal({
 
   /** ZXing live scan stage — koristi se u browseru i nakon native barkoda kao OCR fallback. */
   async function startWebScanner() {
+    /* Novi ciklus skeniranja: dozvoli isti barkod ponovo posle „Skeniraj ponovo“ / ←. */
+    lastBarcodeClean = '';
+    lastBarcodeAt = 0;
     stageForm.hidden = true;
     stageScan.hidden = false;
     enterScanPresentation();
@@ -501,6 +532,10 @@ export async function openScanMoveModal({
     /* Obavezno „čist” video pre novog ZXing stream-a (npr. posle ← sa forme). */
     releaseVideoStream(videoEl);
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    /* iOS: WebKit često mora da „legne“ posle stop() pre novog getUserMedia. */
+    if (isIOSWebPlatform()) {
+      await new Promise(r => setTimeout(r, 180));
+    }
 
     setScanStatus('📷 Tražim kameru…', 'info');
 
@@ -517,6 +552,7 @@ export async function openScanMoveModal({
     try {
       state.scanCtrl = await startScan(videoEl, {
         onResult: async text => {
+          if (stageScan.hidden) return;
           const clean = normalizeBarcodeText(text);
           await handleDecodedBarcode(clean);
         },
@@ -600,6 +636,9 @@ export async function openScanMoveModal({
         return;
       }
       cleanupScan();
+      if (isIOSWebPlatform()) {
+        await new Promise(r => setTimeout(r, 70));
+      }
       if (navigator.vibrate) navigator.vibrate(80);
       await showForm(parsed);
     } catch (e) {
@@ -660,11 +699,15 @@ export async function openScanMoveModal({
       /* Restart ZXing sa konkretnim deviceId-em. */
       cleanupScan();
       enterScanPresentation();
+      if (isIOSWebPlatform()) {
+        await new Promise(r => setTimeout(r, 120));
+      }
       state.scanCtrl = await startScan(videoEl, {
         /* deviceId idemo pre nego facingMode, pa u startScan ovo mora i da bude
          * podržano. Dodajemo treći argument — vidi barcode.js promene. */
         forceDeviceId: back.deviceId,
         onResult: async text => {
+          if (stageScan.hidden) return;
           const clean = normalizeBarcodeText(text);
           await handleDecodedBarcode(clean);
         },
@@ -1375,6 +1418,9 @@ export async function openScanMoveModal({
       if ('text' in res) {
         /* Hit — isti tok kao live camera decode. */
         cleanupScan();
+        if (isIOSWebPlatform()) {
+          await new Promise(r => setTimeout(r, 70));
+        }
         if (navigator.vibrate) navigator.vibrate(80);
         const clean = normalizeBarcodeText(res.text);
         const parsed = parseBigTehnBarcode(clean);
