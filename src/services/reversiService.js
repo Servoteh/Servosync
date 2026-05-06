@@ -40,6 +40,8 @@ function wrap(fn) {
  *   search?: string,
  *   recipient_search?: string,
  *   doc_type?: string,
+ *   issued_from?: string,
+ *   issued_to?: string,
  *   limit?: number,
  *   offset?: number,
  * }} params
@@ -55,6 +57,15 @@ export async function fetchDocuments(params = {}) {
       `limit=${limit}`,
       `offset=${offset}`,
     ];
+
+    const from = params.issued_from && String(params.issued_from).trim();
+    const to = params.issued_to && String(params.issued_to).trim();
+    if (from) {
+      parts.push(`issued_at=gte.${encodeURIComponent(from)}`);
+    }
+    if (to) {
+      parts.push(`issued_at=lte.${encodeURIComponent(to)}`);
+    }
 
     if (params.overdue === true) {
       const today = new Date().toISOString().slice(0, 10);
@@ -98,6 +109,55 @@ export async function fetchDocuments(params = {}) {
       return { ...doc, line_count: cnt };
     });
     return { rows: mapped, total: res?.total ?? null };
+  })();
+}
+
+/**
+ * Broj različitih primalaca na aktivnim dokumentima (gruba procena ako ima više od cap redova).
+ * @param {{ cap?: number, issued_from?: string, issued_to?: string, doc_type?: string, search?: string }} [opts]
+ */
+export async function fetchOpenRecipientCardinality(opts = {}) {
+  return wrap(async () => {
+    const cap = Math.max(50, Math.min(Number(opts.cap) || 2500, 5000));
+    const parts = [
+      'select=recipient_type,recipient_employee_id,recipient_department,recipient_company_name',
+      'status=in.(OPEN,PARTIALLY_RETURNED)',
+      `limit=${cap}`,
+    ];
+    const from = opts.issued_from && String(opts.issued_from).trim();
+    const to = opts.issued_to && String(opts.issued_to).trim();
+    if (from) parts.push(`issued_at=gte.${encodeURIComponent(from)}`);
+    if (to) parts.push(`issued_at=lte.${encodeURIComponent(to)}`);
+    const dt = opts.doc_type && String(opts.doc_type).trim();
+    if (dt === 'TOOL') parts.push('doc_type=eq.TOOL');
+    else if (dt === 'COOPERATION_GOODS') parts.push('doc_type=eq.COOPERATION_GOODS');
+    const rawQ = opts.search;
+    const rs = rawQ && String(rawQ).trim();
+    if (rs) {
+      const enc = encodeURIComponent(`*${rs}*`);
+      parts.push(
+        `or=(doc_number.ilike.${enc},recipient_employee_name.ilike.${enc},recipient_department.ilike.${enc},recipient_company_name.ilike.${enc})`,
+      );
+    }
+    const q = `rev_documents?${parts.join('&')}`;
+    const rows = await sbReq(q);
+    const list = Array.isArray(rows) ? rows : [];
+    const keys = new Set();
+    for (const r of list) {
+      const rt = r.recipient_type;
+      if (rt === 'EMPLOYEE' && r.recipient_employee_id) {
+        keys.add(`e:${r.recipient_employee_id}`);
+      } else if (rt === 'DEPARTMENT' && r.recipient_department) {
+        keys.add(`d:${String(r.recipient_department).trim()}`);
+      } else if (r.recipient_company_name) {
+        keys.add(`c:${String(r.recipient_company_name).trim()}`);
+      } else if (r.recipient_department) {
+        keys.add(`d:${String(r.recipient_department).trim()}`);
+      } else {
+        keys.add(`u:${JSON.stringify(r)}`);
+      }
+    }
+    return { count: keys.size, truncated: list.length >= cap };
   })();
 }
 

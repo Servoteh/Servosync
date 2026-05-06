@@ -590,8 +590,9 @@ export function openConfirmReturnModal(opts) {
 export function openAddToolModal({ onSuccess } = {}) {
   const id = `revAddTool_${Date.now()}`;
   const overlay = modalShell(
-    'Dodaj alat',
+    'Nova jedinica u inventaru',
     `<div class="rev-form-grid">
+      <p class="rev-muted" style="grid-column:1/-1;font-size:12px;line-height:1.4;margin:0 0 4px">Jedan zapis = jedan fizički komad. Više komada iste oznake unesite kao odvojene stavke.</p>
       <label>Oznaka * <input type="text" id="revAddOz" class="input" required/></label>
       <label>Naziv * <input type="text" id="revAddNz" class="input" required/></label>
       <label>Serijski broj <input type="text" id="revAddSn" class="input"/></label>

@@ -54,3 +54,73 @@ export function rowsToCsv(headers, rows) {
  * UTF-8 BOM prefix — Excel na Windows-u bez ovoga tretira ć/č/š/đ/ž kao mojibake.
  */
 export const CSV_BOM = '\uFEFF';
+
+/**
+ * Jednostavan CSV parser (RFC 4180 — navodnici i duplirani `"`).
+ * @param {string} text
+ * @returns {{ headers: string[], rows: string[][] }}
+ */
+export function parseCsv(text) {
+  const raw = String(text || '').replace(/^\uFEFF/, '');
+  const out = [];
+  let row = [];
+  let field = '';
+  let i = 0;
+  let inQuotes = false;
+  while (i < raw.length) {
+    const c = raw[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (raw[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i += 1;
+        continue;
+      }
+      field += c;
+      i += 1;
+      continue;
+    }
+    if (c === '"') {
+      inQuotes = true;
+      i += 1;
+      continue;
+    }
+    if (c === ',') {
+      row.push(field);
+      field = '';
+      i += 1;
+      continue;
+    }
+    if (c === '\r') {
+      i += 1;
+      continue;
+    }
+    if (c === '\n') {
+      row.push(field);
+      field = '';
+      out.push(row);
+      row = [];
+      i += 1;
+      continue;
+    }
+    field += c;
+    i += 1;
+  }
+  row.push(field);
+  if (row.length > 1 || row[0] !== '') {
+    out.push(row);
+  }
+  if (out.length === 0) {
+    return { headers: [], rows: [] };
+  }
+  const headers = out[0].map((h) => String(h).trim());
+  const rows = out
+    .slice(1)
+    .filter((r) => r.some((cell) => String(cell).trim() !== ''))
+    .map((r) => r.map((c) => String(c).trim()));
+  return { headers, rows };
+}

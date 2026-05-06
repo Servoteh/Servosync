@@ -260,6 +260,15 @@ html[data-theme='light'] .rev-top-header {
   border-bottom-color: var(--rev-primary);
 }
 
+.rev-tab-icon {
+  flex-shrink: 0;
+  opacity: 0.92;
+}
+
+.rev-strip-tab.is-active .rev-tab-icon {
+  opacity: 1;
+}
+
 .rev-strip-label {
   white-space: nowrap;
 }
@@ -300,6 +309,30 @@ html[data-theme='light'] .rev-top-header {
   .rev-stat-grid {
     grid-template-columns: repeat(4, 1fr);
   }
+}
+
+.rev-stat-grid--kpi-zad {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 900px) {
+  .rev-stat-grid--kpi-zad {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1200px) {
+  .rev-stat-grid--kpi-zad {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.rev-stat-card--teal .rev-stat-value {
+  color: #2dd4bf;
+}
+
+html[data-theme='light'] .rev-stat-card--teal .rev-stat-value {
+  color: #0d9488;
 }
 
 .rev-stat-card {
@@ -354,6 +387,93 @@ html[data-theme='light'] .rev-top-header {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 14px;
+}
+
+.rev-toolbar-actions--wide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.rev-field--month {
+  min-width: 200px;
+}
+
+.rev-month-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rev-month-row .rev-input[type='month'] {
+  flex: 1;
+  min-width: 0;
+}
+
+.rev-split {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.rev-split-main {
+  display: flex;
+  align-items: stretch;
+}
+
+.rev-split-primary.rev-btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: 1px solid color-mix(in srgb, #000 12%, transparent);
+}
+
+.rev-split-caret.rev-btn {
+  min-width: 2.25rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.rev-split-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 220px;
+  padding: 6px;
+  background: var(--rev-surface);
+  border: 1px solid var(--rev-border);
+  border-radius: var(--rev-radius-sm);
+  box-shadow: 0 10px 28px color-mix(in srgb, #000 28%, transparent);
+  z-index: 30;
+}
+
+.rev-split--open .rev-split-dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rev-split-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--rev-text);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--rev-font);
+}
+
+.rev-split-item:hover {
+  background: var(--rev-surface2);
 }
 
 .rev-panel {
@@ -667,6 +787,47 @@ html[data-theme='light'] .rev-top-header {
   font-weight: 700;
 }
 
+.rev-module-hint {
+  margin: 0 0 4px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--rev-text2);
+  background: color-mix(in srgb, var(--rev-primary) 8%, var(--rev-surface2));
+  border: 1px solid color-mix(in srgb, var(--rev-primary) 22%, var(--rev-border));
+  border-radius: var(--rev-radius-sm);
+}
+
+.rev-module-hint strong {
+  color: var(--rev-text);
+}
+
+.rev-iss-line {
+  line-height: 1.3;
+}
+
+.rev-iss-free {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #34d399;
+}
+
+.rev-iss-busy {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+[data-theme='light'] .rev-iss-free {
+  color: #047857;
+}
+
+[data-theme='light'] .rev-iss-busy {
+  color: #b45309;
+}
+
 .rev-loc-hint {
   margin-top: 4px;
   font-size: 11px;
@@ -839,6 +1000,21 @@ html[data-theme='light'] .rev-top-header {
   max-width: 720px;
 }
 
+@media (max-width: 719px) {
+  body.module-reversi .kadr-modal-overlay.rev-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  body.module-reversi .kadr-modal-overlay.rev-modal-overlay .kadr-modal {
+    margin: 0;
+    max-width: 100%;
+    width: 100%;
+    border-radius: 12px 12px 0 0;
+    max-height: min(92vh, 900px);
+  }
+}
+
 .rev-modal-body {
   max-height: 70vh;
   overflow-y: auto;
@@ -902,7 +1078,8 @@ html[data-theme='light'] .rev-top-header {
   body.module-reversi .rev-btn,
   body.module-reversi .rev-act-btn,
   body.module-reversi .rev-my-panel,
-  body.module-reversi .rev-pager {
+  body.module-reversi .rev-pager,
+  body.module-reversi .rev-module-hint {
     display: none !important;
   }
 

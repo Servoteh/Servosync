@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { toCsvField, rowsToCsv, CSV_BOM } from '../../src/lib/csv.js';
+import { toCsvField, rowsToCsv, CSV_BOM, parseCsv } from '../../src/lib/csv.js';
 
 describe('toCsvField', () => {
   it('vraća prazan string za null i undefined', () => {
@@ -97,5 +97,32 @@ describe('CSV_BOM', () => {
   it('prefix + CSV daje validan Excel-friendly dokument', () => {
     const csv = CSV_BOM + rowsToCsv(['Kod', 'Naziv'], [['A-1', 'Čamac žute boje']]);
     expect(csv).toBe('\uFEFFKod,Naziv\r\nA-1,Čamac žute boje');
+  });
+});
+
+describe('parseCsv', () => {
+  it('razbija header i redove', () => {
+    const { headers, rows } = parseCsv('a,b\r\n1,2\r\n3,4');
+    expect(headers).toEqual(['a', 'b']);
+    expect(rows).toEqual([
+      ['1', '2'],
+      ['3', '4'],
+    ]);
+  });
+
+  it('podržava navodnike i zarez u polju', () => {
+    const { headers, rows } = parseCsv('"a,b","c"\r\n"""x""",y');
+    expect(headers).toEqual(['a,b', 'c']);
+    expect(rows).toEqual([['"x"', 'y']]);
+  });
+
+  it('uklanja UTF-8 BOM', () => {
+    const { headers } = parseCsv('\uFEFFh1\nv1');
+    expect(headers).toEqual(['h1']);
+  });
+
+  it('preskače prazne redove na kraju', () => {
+    const { rows } = parseCsv('A\n1\n\n');
+    expect(rows).toEqual([['1']]);
   });
 });

@@ -31,6 +31,8 @@ export const STORAGE_KEYS = Object.freeze({
   LOC_TAB: 'plan_montaze_loc_active_tab_v1',
   LOC_PREDMET: 'plan_montaze_loc_predmet_state_v1',
   REVERSI_TAB: 'plan_montaze_reversi_active_tab_v1',
+  /** Reversi — filter meseca izdavanja (YYYY-MM), sessionStorage */
+  REVERSI_ISSUED_MONTH: 'plan_montaze_reversi_issued_month_v1',
   /* Podešavanja */
   USERS_CACHE: 'plan_montaze_users_v1',
   /* Theme */

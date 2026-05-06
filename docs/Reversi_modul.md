@@ -48,9 +48,18 @@ Za svakog primaoca kreira se virtuelna `loc_locations` lokacija (lazy, pri prvom
 
 Skripta: `scripts/seed-reversi-tools.mjs`. Kopiraj `Akumulatorske_brusilice.xlsx` i `Akumulatorske_s_rafilice_hilti.xlsx` u `scripts/data/` (vidi `scripts/data/README.txt`). Env: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SEED_ISSUED_BY_USER_ID`, plus `SUPABASE_ANON_KEY` i `SEED_USER_JWT` (JWT korisnika koji sme da poziva `loc_create_movement`, jer koristi `auth.uid()`). Preporuka: `DRY_RUN=true node scripts/seed-reversi-tools.mjs`, zatim pravo pokretanje.
 
+## Inventar u UI (C1)
+
+- Jedan **zapis u `rev_tools` = jedna evidencijska jedinica** (jedan fizički komad). Ista **oznaka** može se pojaviti u više redova (više primeraka).
+- **Zaduženje i lokacija** u tabeli odražavaju da li je jedinica slobodna u magacinu ili vezana za aktivni revers dokument.
+- **Filter meseca izdavanja** (tab Zaduženja) ograničava datum polja `rev_documents.issued_at` na izabrani kalendarski mesec. Vrednost se pamti u session storage (`REVERSI_ISSUED_MONTH`). KPI kartice (uključujući broj aktivnih dokumenata i procenu broja primalaca na otvorenim reversima) koriste isti kontekst kao lista dokumenata (mesec, tip dokumenta, tekst pretrage), ali **ne** segment statusa u toolbaru (Sve / U toku / …), da pregled ostane smislen pri sužavanju tabele.
+- **Export CSV** (dokumenti): kolone kao u tabeli pregleda (broj, datum izdavanja, primalac, stavki, rok, status). UTF-8 sa BOM radi Excela.
+- **Export CSV** (inventar): oznaka, naziv, status jedinice, zaduženje / lokacija (tekstualno).
+- **Uvoz CSV** (inventar, uloge sa pravom upravljanja): prvi red = zaglavlje. Obavezne kolone: **oznaka**, **naziv** (prepoznaju se i tipični sinonimi u zaglavlju). Opciono: serijski broj, datum kupovine, napomena. Za svaki red poziva se isti tok kao „Nova jedinica“: `insert_tool` + početni smeštaj u `ALAT-MAG-01` ako je magacin dostupan.
+
 ## Ručni unos alata
 
-Novi alat se unosi u dva koraka iz Supabase SQL Editora (ili iz budućeg UI-a):
+Novi alat se unosi u dva koraka iz Supabase SQL Editora (ili iz korisničkog interfejsa — vidi gore):
 
 ### Korak 1 — Dodaj alat u rev_tools
 
