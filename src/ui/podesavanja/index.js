@@ -1,16 +1,16 @@
 /**
  * Podešavanja — root modula (F5b).
  *
- * Tabovi:
- *   - Korisnici  (admin only — full CRUD osim INSERT)
- *   - Matični podaci (placeholder)
- *   - Sistem (placeholder)
+ * Navigacija: levi sidebar sa grupama (umesto horizontalnih tabova).
  *
- * Bezbednosna provera — ulaz u modul je već gated u router.js
- * (canAccessPodesavanja()), ali ovde duplo proveravamo i pokazujemo lock screen
- * ako neko ipak dođe direktno (npr. preko sessionStorage state-a).
+ * Grupe:
+ *   GENERALNO      — Organizacija
+ *   KORISNICI      — Korisnici (admin), Održ. profili
+ *   PODACI         — Podeš. predmeta, Matični podaci
+ *   SISTEM         — Sistem (admin)
  *
- * Aktivni tab se persistuje u sessionStorage (SETTINGS_TAB), kao u legacy.
+ * Pristup: admin vidi sve; menadžment samo maint-profiles i predmet-aktivacija.
+ * Aktivni tab se persistuje u sessionStorage (SETTINGS_TAB).
  */
 
 import { escHtml } from '../../lib/dom.js';
@@ -44,48 +44,75 @@ let _onBackToHubCb = null;
 let _authUnsubscribe = null;
 let _activeTab = 'users';
 
-const TABS = [
-  { id: 'users', label: 'Korisnici' },
-  { id: 'organizacija', label: 'Organizacija' },
-  { id: 'maint-profiles', label: 'Održ. profili' },
-  { id: 'predmet-aktivacija', label: 'Podeš. predmeta' },
-  { id: 'masters', label: 'Matični podaci' },
-  { id: 'system', label: 'Sistem' },
+/* ── Sidebar struktura ───────────────────────────────────────────────── */
+
+const SIDEBAR_GROUPS = [
+  {
+    label: 'Generalno',
+    items: [
+      { id: 'organizacija', icon: '🏢', label: 'Organizacija', adminOnly: true },
+    ],
+  },
+  {
+    label: 'Korisnici i pristup',
+    items: [
+      { id: 'users', icon: '👥', label: 'Korisnici', adminOnly: true, badge: true },
+      { id: 'maint-profiles', icon: '🔧', label: 'Održ. profili', adminOnly: false },
+    ],
+  },
+  {
+    label: 'Podaci',
+    items: [
+      { id: 'predmet-aktivacija', icon: '📋', label: 'Podeš. predmeta', adminOnly: false },
+      { id: 'masters', icon: '🗄', label: 'Matični podaci', adminOnly: true },
+    ],
+  },
+  {
+    label: 'Sistem',
+    items: [
+      { id: 'system', icon: '⚙', label: 'Sistem', adminOnly: true },
+    ],
+  },
 ];
 
-/** Menadžment vidi „Održ. profili” + Podeš. predmeta; admin sve tabove. */
-function _visibleTabs() {
-  if (canManageUsers()) return TABS;
-  return TABS.filter(t => t.id === 'maint-profiles' || t.id === 'predmet-aktivacija');
+function _visibleGroups() {
+  const isAdmin = canManageUsers();
+  return SIDEBAR_GROUPS.map(g => ({
+    ...g,
+    items: g.items.filter(it => isAdmin || !it.adminOnly),
+  })).filter(g => g.items.length > 0);
 }
+
+function _visibleTabs() {
+  return _visibleGroups().flatMap(g => g.items);
+}
+
+/* ── PUBLIC ──────────────────────────────────────────────────────────── */
 
 export async function renderPodesavanjaModule(mountEl, options = {}) {
   _mountEl = mountEl;
   _onLogoutCb = options.onLogout || null;
   _onBackToHubCb = options.onBackToHub || null;
   _activeTab = ssGet(SESSION_KEYS.SETTINGS_TAB, 'users') || 'users';
-  if (!_visibleTabs().some(t => t.id === _activeTab)) _activeTab = _visibleTabs()[0]?.id || 'maint-profiles';
+
+  const visible = _visibleTabs();
+  if (!visible.some(t => t.id === _activeTab)) {
+    _activeTab = visible[0]?.id || 'maint-profiles';
+  }
 
   _renderShell();
 
-  /* Async DB load za Korisnici tab — kada svežih podaci stignu, rerenderuj. */
   if (_activeTab === 'users') {
     refreshUsers().then(() => _renderShell()).catch(e => console.warn('[podesavanja] users load failed', e));
   }
   if (_activeTab === 'maint-profiles') {
-    refreshMaintProfiles()
-      .then(() => _renderShell())
-      .catch(e => console.warn('[podesavanja] maint profiles load failed', e));
+    refreshMaintProfiles().then(() => _renderShell()).catch(e => console.warn('[podesavanja] maint profiles load failed', e));
   }
   if (_activeTab === 'predmet-aktivacija') {
-    refreshPredmetAktivacija()
-      .then(() => _renderShell())
-      .catch(e => console.warn('[podesavanja] predmet aktivacija load failed', e));
+    refreshPredmetAktivacija().then(() => _renderShell()).catch(e => console.warn('[podesavanja] predmet aktivacija load failed', e));
   }
   if (_activeTab === 'organizacija') {
-    refreshOrgStructure()
-      .then(() => _renderShell())
-      .catch(e => console.warn('[podesavanja] org structure load failed', e));
+    refreshOrgStructure().then(() => _renderShell()).catch(e => console.warn('[podesavanja] org structure load failed', e));
   }
 
   if (_authUnsubscribe) _authUnsubscribe();
@@ -110,24 +137,43 @@ function _renderShell() {
 
   _mountEl.innerHTML = `
     ${_headerHtml()}
-    <div class="kadrovska-tabs" role="tablist" aria-label="Podešavanja - sekcije">
-      ${_visibleTabs().map(t => `
-        <button class="kadrovska-tab ${t.id === _activeTab ? 'active' : ''}"
-                role="tab"
-                aria-selected="${t.id === _activeTab}"
-                data-set-tab="${t.id}">
-          ${escHtml(t.label)}
-          ${t.id === 'users' ? `<span class="kadr-tab-badge" id="setTabCountUsers">${usersState.items.length}</span>` : ''}
-        </button>
-      `).join('')}
-    </div>
-    <div class="kadr-panel active" id="setPanel-${_activeTab}" role="tabpanel">
-      ${_panelHtml(_activeTab)}
+    <div class="set-layout">
+      <nav class="set-sidebar" role="navigation" aria-label="Podešavanja navigacija">
+        ${_sidebarHtml()}
+      </nav>
+      <div class="set-content">
+        ${_panelHtml(_activeTab)}
+      </div>
     </div>
   `;
+
   _wireHeader();
-  _wireTabs();
+  _wireSidebar();
   _wireTabBody();
+}
+
+function _sidebarHtml() {
+  const groups = _visibleGroups();
+  return groups.map(g => `
+    <div class="set-sidebar-group">
+      <div class="set-sidebar-group-label">${escHtml(g.label)}</div>
+      ${g.items.map(it => {
+        const isActive = it.id === _activeTab;
+        const badgeHtml = it.badge
+          ? `<span class="set-sidebar-badge" id="setSidebarBadge-${it.id}">${usersState.items.length}</span>`
+          : '';
+        return `
+          <button class="set-sidebar-item ${isActive ? 'active' : ''}"
+                  data-set-tab="${escHtml(it.id)}"
+                  role="menuitem"
+                  aria-current="${isActive ? 'page' : 'false'}">
+            <span aria-hidden="true">${it.icon}</span>
+            ${escHtml(it.label)}
+            ${badgeHtml}
+          </button>`;
+      }).join('')}
+    </div>
+  `).join('');
 }
 
 function _headerHtml() {
@@ -157,7 +203,7 @@ function _headerHtml() {
 }
 
 function _panelHtml(tab) {
-  if (tab === 'users') return renderUsersTab({ onChange: () => _renderShell() });
+  if (tab === 'users') return renderUsersTab();
   if (tab === 'organizacija') return renderOrgStructureTab();
   if (tab === 'maint-profiles') return renderMaintProfilesTab();
   if (tab === 'predmet-aktivacija') return renderPodesavanjePredmetaPanel();
@@ -203,7 +249,7 @@ function _wireHeader() {
   _mountEl.querySelector('#podThemeToggle')?.addEventListener('click', () => toggleTheme());
 }
 
-function _wireTabs() {
+function _wireSidebar() {
   _mountEl.querySelectorAll('[data-set-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
       const t = btn.dataset.setTab;
@@ -215,19 +261,13 @@ function _wireTabs() {
         refreshUsers().then(() => _renderShell()).catch(e => console.warn('[podesavanja] users refresh failed', e));
       }
       if (t === 'maint-profiles') {
-        refreshMaintProfiles()
-          .then(() => _renderShell())
-          .catch(e => console.warn('[podesavanja] maint profiles refresh failed', e));
+        refreshMaintProfiles().then(() => _renderShell()).catch(e => console.warn('[podesavanja] maint profiles refresh failed', e));
       }
       if (t === 'predmet-aktivacija') {
-        refreshPredmetAktivacija()
-          .then(() => _renderShell())
-          .catch(e => console.warn('[podesavanja] predmet aktivacija refresh failed', e));
+        refreshPredmetAktivacija().then(() => _renderShell()).catch(e => console.warn('[podesavanja] predmet aktivacija refresh failed', e));
       }
       if (t === 'organizacija') {
-        refreshOrgStructure()
-          .then(() => _renderShell())
-          .catch(e => console.warn('[podesavanja] org structure refresh failed', e));
+        refreshOrgStructure().then(() => _renderShell()).catch(e => console.warn('[podesavanja] org structure refresh failed', e));
       }
     });
   });

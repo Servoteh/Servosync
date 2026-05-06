@@ -1836,6 +1836,112 @@ body.module-kadrovska > #module-settings { display:none !important; }
 .kadr-panel { display:none; }
 .kadr-panel.active { display:block; }
 
+/* ── SETTINGS SIDEBAR LAYOUT ──────────────────────────────────────────── */
+.set-layout {
+  display:flex;
+  min-height:0;
+  flex:1 1 0;
+  overflow:hidden;
+}
+/* Header ne sme da raste — samo sidebar + content panel */
+body.module-settings .kadrovska-header {
+  flex:0 0 auto;
+}
+/* set-layout treba da popuni ostatak visine */
+body.module-settings .set-layout {
+  flex:1 1 0;
+  min-height:0;
+}
+.set-sidebar {
+  width:240px;
+  min-width:200px;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  overflow-y:auto;
+  padding:8px 0 24px;
+  flex-shrink:0;
+}
+.set-sidebar-group { margin-bottom:2px; }
+.set-sidebar-group-label {
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color:var(--text3);
+  padding:12px 16px 4px;
+}
+.set-sidebar-item {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:100%;
+  padding:8px 16px;
+  font-size:13px;
+  font-weight:400;
+  color:var(--text2);
+  background:none;
+  border:none;
+  border-left:2px solid transparent;
+  cursor:pointer;
+  text-align:left;
+  transition:background 0.12s, color 0.12s;
+}
+.set-sidebar-item:hover { background:var(--surface2); color:var(--text); }
+.set-sidebar-item.active {
+  background:var(--accent-dim);
+  color:var(--accent);
+  border-left-color:var(--accent);
+  font-weight:600;
+}
+.set-sidebar-badge {
+  margin-left:auto;
+  font-size:10px;
+  font-weight:600;
+  font-family:var(--mono);
+  padding:1px 7px;
+  border-radius:999px;
+  background:var(--surface3);
+  color:var(--text3);
+  border:1px solid var(--border2);
+}
+.set-sidebar-item.active .set-sidebar-badge {
+  background:var(--accent-dim);
+  color:var(--accent);
+  border-color:color-mix(in srgb, var(--accent) 30%, var(--border2));
+}
+.set-content {
+  flex:1;
+  min-width:0;
+  overflow-y:auto;
+  padding:20px 24px;
+}
+/* Predmet prioritet badge (pin) u tabeli */
+.pred-prio-btn {
+  background:none;
+  border:none;
+  cursor:pointer;
+  padding:0 4px;
+  font-size:14px;
+  color:var(--text3);
+  line-height:1;
+  transition:color 0.1s;
+}
+.pred-prio-btn.is-prio { color:#F2C94C; }
+.pred-prio-btn:hover { color:var(--text); }
+.pred-prio-num {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  height:20px;
+  border-radius:999px;
+  background:var(--accent-dim);
+  color:var(--accent);
+  font-size:10px;
+  font-weight:700;
+  font-family:var(--mono);
+}
+
 /* Shared modal styles (reuses the look of emp-modal) */
 .kadr-modal-overlay {
   position:fixed; inset:0; z-index:2500;

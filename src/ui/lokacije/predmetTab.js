@@ -15,6 +15,7 @@ import {
   searchBigtehnItems,
   fetchTpsForPredmet,
 } from '../../services/lokacije.js';
+import { getPrioritetIds, isPrioritet } from '../podesavanja/podesavanjePredmeta/prioritetService.js';
 import { openDrawingPdf } from '../../services/drawings.js';
 import {
   getLokacijeUiState,
@@ -150,8 +151,20 @@ async function renderPickerView(host, refresh) {
       countEl.textContent = '0 rezultata';
       return;
     }
+    /* Prioritetni predmeti uvek prvi u listi */
+    const prioIds = getPrioritetIds();
+    if (prioIds.length) {
+      rows.sort((a, b) => {
+        const ia = prioIds.indexOf(Number(a.id));
+        const ib = prioIds.indexOf(Number(b.id));
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        if (ia !== -1) return -1;
+        if (ib !== -1) return 1;
+        return 0;
+      });
+    }
     countEl.textContent = `${rows.length} rezultata`;
-    listEl.innerHTML = rows.map(renderPickerItemHtml).join('');
+    listEl.innerHTML = rows.map(r => renderPickerItemHtml(r, prioIds)).join('');
     listEl.querySelectorAll('[data-pick-id]').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = Number(btn.getAttribute('data-pick-id'));
@@ -188,7 +201,7 @@ async function renderPickerView(host, refresh) {
   await refreshList('');
 }
 
-function renderPickerItemHtml(item) {
+function renderPickerItemHtml(item, prioIds = []) {
   const code = escHtml(item.broj_predmeta || '');
   const naz = escHtml(item.naziv_predmeta || '');
   const cust = item.customer_name ? escHtml(item.customer_name) : '';
@@ -199,10 +212,12 @@ function renderPickerItemHtml(item) {
   const narHtml = nar
     ? `<span class="lp-picker-sub-item lp-mono">${ICO.file} NAR ${nar}</span>`
     : '';
+  const inPrio = prioIds.includes(Number(item.id));
+  const prioHtml = inPrio ? `<span title="Prioritetni predmet" style="color:#F2C94C;font-size:13px">⭐</span>` : '';
   return `<button type="button" class="lp-picker-item" data-pick-id="${escHtml(String(item.id))}">
     <span class="lp-picker-icon">${ICO.hash}</span>
     <span class="lp-picker-main">
-      <span class="lp-picker-title">${code} <span style="font-weight:400;color:var(--lp-text2)">· ${naz}</span></span>
+      <span class="lp-picker-title">${prioHtml}${code} <span style="font-weight:400;color:var(--lp-text2)">· ${naz}</span></span>
       <span class="lp-picker-sub">${custHtml}${narHtml}</span>
     </span>
     <span class="lp-picker-right">

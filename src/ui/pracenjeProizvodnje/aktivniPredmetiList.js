@@ -8,6 +8,7 @@ import {
   selectPredmet,
   shiftPrioritet,
 } from '../../state/pracenjeProizvodnjeState.js';
+import { getPrioritetIds } from '../podesavanja/podesavanjePredmeta/prioritetService.js';
 
 function formatRokZaZavrsetak(v) {
   if (v == null || v === '') return '—';
@@ -72,28 +73,32 @@ export function aktivniPredmetiListHtml(state) {
             </tr>
           </thead>
           <tbody id="ppAktPredmetiTbody">
-            ${rows.map((r) => {
-              const id = Number(r.item_id);
-              const bp = escHtml(String(r.broj_predmeta || '—'));
-              const naz = escHtml(String(r.naziv_predmeta || '—'));
-              const kom = escHtml(String(r.customer_name || '—'));
-              const rok = formatRokZaZavrsetak(r.rok_zavrsetka);
-              const rokEsc = escHtml(rok);
-              const adminBtns = ap.isAdmin ? `
-                <td class="pp-cell-num">
-                  <button type="button" class="pp-refresh-btn pp-prio-btn" data-pp-prio="${id}" data-dir="up" title="Gore">↑</button>
-                  <button type="button" class="pp-refresh-btn pp-prio-btn" data-pp-prio="${id}" data-dir="down" title="Dole">↓</button>
-                </td>` : '';
-              return `
-              <tr class="pp-pickable-predmet" data-predmet-id="${id}" style="cursor:pointer" title="Otvori podsklopove">
-                <td class="pp-cell-num">${escHtml(String(r.redni_broj ?? ''))}</td>
-                <td><code>${bp}</code></td>
-                <td>${naz}</td>
-                <td>${kom}</td>
-                <td class="pp-cell-nowrap" style="white-space:nowrap;font-size:13px">${rokEsc}</td>
-                ${adminBtns}
-              </tr>`;
-            }).join('')}
+            ${(() => {
+              const prioIds = getPrioritetIds();
+              return rows.map((r) => {
+                const id = Number(r.item_id);
+                const bp = escHtml(String(r.broj_predmeta || '—'));
+                const naz = escHtml(String(r.naziv_predmeta || '—'));
+                const kom = escHtml(String(r.customer_name || '—'));
+                const rok = formatRokZaZavrsetak(r.rok_zavrsetka);
+                const rokEsc = escHtml(rok);
+                const starHtml = prioIds.includes(id) ? `<span title="Prioritetni predmet" style="color:#F2C94C;font-size:12px;margin-right:4px">⭐</span>` : '';
+                const adminBtns = ap.isAdmin ? `
+                  <td class="pp-cell-num">
+                    <button type="button" class="pp-refresh-btn pp-prio-btn" data-pp-prio="${id}" data-dir="up" title="Gore">↑</button>
+                    <button type="button" class="pp-refresh-btn pp-prio-btn" data-pp-prio="${id}" data-dir="down" title="Dole">↓</button>
+                  </td>` : '';
+                return `
+                <tr class="pp-pickable-predmet" data-predmet-id="${id}" style="cursor:pointer" title="Otvori podsklopove">
+                  <td class="pp-cell-num">${escHtml(String(r.redni_broj ?? ''))}</td>
+                  <td><code>${starHtml}${bp}</code></td>
+                  <td>${naz}</td>
+                  <td>${kom}</td>
+                  <td class="pp-cell-nowrap" style="white-space:nowrap;font-size:13px">${rokEsc}</td>
+                  ${adminBtns}
+                </tr>`;
+              }).join('');
+            })()}
           </tbody>
         </table>
       </div>

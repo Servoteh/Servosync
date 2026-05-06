@@ -243,7 +243,7 @@ function _summaryHtml() {
 }
 
 function _rerenderTableAndSummary(root) {
-  const main = root.querySelector('.kadr-panel.active main.kadrovska-main');
+  const main = root.querySelector('main.kadrovska-main');
   if (main) main.innerHTML = _tableHtml();
   const sum = root.querySelector('#usersSummary');
   if (sum) sum.innerHTML = _summaryHtml();
@@ -252,7 +252,8 @@ function _rerenderTableAndSummary(root) {
     const n = _filtered().length;
     cnt.textContent = n + ' ' + (n === 1 ? 'korisnik' : 'korisnika');
   }
-  const badge = root.querySelector('#setTabCountUsers');
+  /* Sidebar badge (u novom layout-u) ili stari tab badge (legacy) */
+  const badge = root.querySelector('#setSidebarBadge-users') || root.querySelector('#setTabCountUsers');
   if (badge) badge.textContent = String(usersState.items.length);
   _wireTbody(root);
 }
