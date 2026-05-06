@@ -36,6 +36,37 @@ function isIOSWebPlatform() {
   return ua.includes('Mac') && typeof document !== 'undefined' && 'ontouchend' in document;
 }
 
+/**
+ * iOS Safari: `position:fixed; inset:0` prati *layout* viewport, a kamera
+ * prati *visual* viewport — retikla i laser „pobegnu“ od stvarnog kadra.
+ *
+ * @param {HTMLElement} overlayEl
+ * @returns {() => void}
+ */
+function bindIOSVisualViewportFix(overlayEl) {
+  const vv = window.visualViewport;
+  if (!vv || !overlayEl) return () => {};
+  const apply = () => {
+    overlayEl.style.position = 'fixed';
+    overlayEl.style.top = `${vv.offsetTop}px`;
+    overlayEl.style.left = `${vv.offsetLeft}px`;
+    overlayEl.style.width = `${vv.width}px`;
+    overlayEl.style.height = `${vv.height}px`;
+    overlayEl.style.right = 'auto';
+    overlayEl.style.bottom = 'auto';
+  };
+  apply();
+  vv.addEventListener('resize', apply);
+  vv.addEventListener('scroll', apply);
+  return () => {
+    vv.removeEventListener('resize', apply);
+    vv.removeEventListener('scroll', apply);
+    for (const k of ['top', 'left', 'width', 'height', 'right', 'bottom']) {
+      overlayEl.style.removeProperty(k);
+    }
+  };
+}
+
 /* `__APP_VERSION__` je string koji Vite inject-uje u build time (git SHA ili
  * CF_PAGES_COMMIT_SHA). Koristimo ga u dijagnostičkom badge-u pored polja
  * crtež da magacioner može odmah da vidi koja verzija app-a se izvršava
@@ -371,11 +402,30 @@ export async function openScanMoveModal({
     erpSnapshot: null,
     /** @type {ReturnType<typeof setTimeout>|null} */
     androidChromeHintTimer: null,
+    /** @type {(() => void) | null} */
+    iosVvUnbind: null,
   };
 
   const $ = sel => overlay.querySelector(sel);
   const stageScan = overlay.querySelector('[data-stage="scan"]');
   const stageForm = overlay.querySelector('[data-stage="form"]');
+
+  function teardownIOSVisualViewport() {
+    if (state.iosVvUnbind) {
+      try {
+        state.iosVvUnbind();
+      } catch {
+        /* ignore */
+      }
+      state.iosVvUnbind = null;
+    }
+  }
+
+  function attachIOSVisualViewportForScan() {
+    if (!isIOSWebPlatform() || typeof window.visualViewport === 'undefined') return;
+    teardownIOSVisualViewport();
+    state.iosVvUnbind = bindIOSVisualViewportFix(overlay);
+  }
 
   /**
    * Širi okvir + laser (`loc-scan-presentation`).
@@ -444,6 +494,7 @@ export async function openScanMoveModal({
   }
 
   function cleanupScan() {
+    teardownIOSVisualViewport();
     leaveScanPresentation();
     clearAndroidChromeHintTimer();
     if (state.scanCtrl) {
@@ -550,6 +601,7 @@ export async function openScanMoveModal({
     }
 
     try {
+      attachIOSVisualViewportForScan();
       state.scanCtrl = await startScan(videoEl, {
         onResult: async text => {
           if (stageScan.hidden) return;
@@ -575,6 +627,7 @@ export async function openScanMoveModal({
         }, 8000);
       }
     } catch (err) {
+      teardownIOSVisualViewport();
       leaveScanPresentation();
       const msg = formatCameraError(err);
       setScanStatus(msg, 'error');
@@ -702,6 +755,7 @@ export async function openScanMoveModal({
       if (isIOSWebPlatform()) {
         await new Promise(r => setTimeout(r, 120));
       }
+      attachIOSVisualViewportForScan();
       state.scanCtrl = await startScan(videoEl, {
         /* deviceId idemo pre nego facingMode, pa u startScan ovo mora i da bude
          * podržano. Dodajemo treći argument — vidi barcode.js promene. */
