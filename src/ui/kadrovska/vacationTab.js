@@ -1,21 +1,9 @@
 /**
- * Kadrovska — TAB Godišnji odmor (Faza K2).
+ * Kadrovska — TAB Godišnji odmor (Faza K2 + Gantt redesign).
  *
- * Prikazuje po izabranoj godini:
- *   - Entitlement po zaposlenom (dana_total default 20, dana_preneto)
- *   - Iskorišćeno: iz v_vacation_balance (view spaja absences + work_hours go)
- *     i dodatno iz work_hours za dane sa absence_code=go kao izvor u UI.
- *   - Preostalo
- *
- * Dozvoljene akcije:
- *   - Inline izmena „Dana pravo“ i „Preneto iz prošle godine“
- *   - Dugme „Generiši rešenje o GO“ — otvara print HTML template sa brojem dana
- *     na osnovu segmenata GO u mesečnom gridu (work_hours) za tog zaposlenog.
- *
- * Izveštajni izvoz: Excel preko `loadXlsx` (lazy).
- *
- * Napomena o šemi: koristi `vacation_entitlements` + view `v_vacation_balance`
- * iz migracije `add_kadr_employee_extended.sql`.
+ * Prikazi: tabela (default) i Gantt po odeljenjima.
+ * Filteri: godina, pretraga, odeljenje (multi-select), status (aktivni/svi).
+ * Stat kartice: Ukupno / Iskorišćeno / Preostalo / Prekoračilo.
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
@@ -34,35 +22,99 @@ import {
   ensureVacationLoaded,
   employeeNameById,
 } from '../../services/kadrovska.js';
-import { countGoDaysByEmployeeForYear, latestGoSegmentForEmployeeYear } from '../../services/workHoursAbsenceReporting.js';
-import { renderSummaryChips } from './shared.js';
+import {
+  mapDbEntitlement,
+  loadBalancesFromDb,
+  saveEntitlementToDb,
+} from '../../services/vacation.js';
+import {
+  countGoDaysByEmployeeForYear,
+  latestGoSegmentForEmployeeYear,
+  allGoSegmentsForYear,
+} from '../../services/workHoursAbsenceReporting.js';
 import { loadXlsx } from '../../lib/xlsx.js';
 
+/* ── state ─────────────────────────────────────────────────────────── */
+
 let panelRoot = null;
-/** GO dani iz work_hours za godinu u vacYear (osvežava refreshVacationTab). */
 const vacGoCache = { year: null, byEmp: new Map() };
+let _ganttSegments = new Map();
+let _viewMode = 'table';
+let _collapsedDepts = new Set();
+let _deptDropOpen = false;
+let _selectedDepts = new Set(); // empty = sve
+
+/* ── dept color palette ─────────────────────────────────────────────── */
+
+const DEPT_COLORS = [
+  '#4F86C6', '#6BBF5A', '#E8A838', '#9B59B6',
+  '#38B2C4', '#E06898', '#5AAA7A', '#C48038',
+  '#688CC4', '#BF5A5A',
+];
+
+function deptColor(name) {
+  if (!name) return '#888';
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return DEPT_COLORS[h % DEPT_COLORS.length];
+}
+
+/* ── year helpers ───────────────────────────────────────────────────── */
+
+function daysInYear(year) {
+  return (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) ? 366 : 365;
+}
+
+function dayOfYearZero(ymd, year) {
+  const d = new Date(ymd + 'T00:00:00');
+  const s = new Date(year + '-01-01T00:00:00');
+  return Math.max(0, Math.round((d - s) / 86400000));
+}
+
+function clampYmd(ymd, year) {
+  const from = `${year}-01-01`;
+  const to = `${year}-12-31`;
+  if (ymd < from) return from;
+  if (ymd > to) return to;
+  return ymd;
+}
 
 /* ── HTML ─────────────────────────────────────────────────────────── */
 
 export function renderVacationTab() {
   const curYear = new Date().getFullYear();
   return `
-    <div class="kadr-summary-strip" id="vacSummary"></div>
-    <div class="kadrovska-toolbar">
+    <div class="vac-stat-cards" id="vacStatCards"></div>
+    <div class="kadrovska-toolbar vac-toolbar">
       <label class="kadrovska-filter" style="display:flex;gap:6px;align-items:center;">
         <span>Godina</span>
         <input type="number" id="vacYear" min="2000" max="2100" step="1" value="${curYear}" style="max-width:90px">
       </label>
       <input type="text" class="kadrovska-search" id="vacSearch" placeholder="Pretraga po imenu…">
+      <div class="vac-dept-wrap" id="vacDeptWrap">
+        <button class="btn btn-ghost vac-dept-btn" id="vacDeptBtn" type="button">Odeljenja ▾</button>
+        <div class="vac-dept-panel" id="vacDeptPanel" style="display:none;">
+          <div class="vac-dept-actions">
+            <button class="btn btn-ghost" id="vacDeptAll" style="font-size:11px;padding:3px 8px;">Odaberi sve</button>
+            <button class="btn btn-ghost" id="vacDeptNone" style="font-size:11px;padding:3px 8px;">Poništi</button>
+          </div>
+          <div id="vacDeptList" class="vac-dept-list"></div>
+        </div>
+      </div>
       <select class="kadrovska-filter" id="vacStatusFilter">
         <option value="active" selected>Samo aktivni</option>
         <option value="all">Svi</option>
       </select>
       <div class="kadrovska-toolbar-spacer"></div>
+      <div class="vac-view-toggle">
+        <button class="btn vac-view-btn active" id="vacViewTable" title="Tabela">☰ Tabela</button>
+        <button class="btn vac-view-btn" id="vacViewGantt" title="Gantt">▦ Gantt</button>
+      </div>
       <button class="btn btn-ghost" id="vacExport">📊 Excel</button>
+      <button class="btn btn-ghost" id="vacPrintGantt" style="display:none;">🖨 Štampa Gantt-a</button>
       <span class="kadrovska-count" id="vacCount">0 zaposlenih</span>
     </div>
-    <main class="kadrovska-main">
+    <main class="kadrovska-main" id="vacMain">
       <table class="kadrovska-table" id="vacTable">
         <thead>
           <tr>
@@ -77,33 +129,136 @@ export function renderVacationTab() {
         </thead>
         <tbody id="vacTbody"></tbody>
       </table>
+      <div class="vac-gantt" id="vacGantt" style="display:none;"></div>
       <div class="kadrovska-empty" id="vacEmpty" style="display:none;margin-top:16px;">
         <div class="kadrovska-empty-title">Nema zaposlenih</div>
         <div>Dodaj zaposlene u tabu <strong>Zaposleni</strong>.</div>
       </div>
-    </main>`;
+    </main>
+    <div class="vac-tooltip" id="vacTooltip" style="display:none;"></div>`;
 }
 
 export async function wireVacationTab(panelEl) {
   panelRoot = panelEl;
-  const yearEl = panelEl.querySelector('#vacYear');
-  yearEl.addEventListener('change', refreshVacationTab);
-  panelEl.querySelector('#vacSearch').addEventListener('input', renderRows);
-  panelEl.querySelector('#vacStatusFilter').addEventListener('change', renderRows);
+  panelEl.querySelector('#vacYear').addEventListener('change', refreshVacationTab);
+  panelEl.querySelector('#vacSearch').addEventListener('input', _applyFiltersAndRender);
+  panelEl.querySelector('#vacStatusFilter').addEventListener('change', _applyFiltersAndRender);
   panelEl.querySelector('#vacExport').addEventListener('click', exportToExcel);
+  panelEl.querySelector('#vacPrintGantt').addEventListener('click', _printGantt);
+
+  panelEl.querySelector('#vacViewTable').addEventListener('click', () => _toggleView('table'));
+  panelEl.querySelector('#vacViewGantt').addEventListener('click', () => _toggleView('gantt'));
+
+  panelEl.querySelector('#vacDeptBtn').addEventListener('click', _toggleDeptDropdown);
+  panelEl.querySelector('#vacDeptAll').addEventListener('click', () => { _selectedDepts.clear(); _closeDeptDropdown(); _applyFiltersAndRender(); });
+  panelEl.querySelector('#vacDeptNone').addEventListener('click', () => {
+    const depts = _allDepts();
+    _selectedDepts = new Set(depts);
+    _closeDeptDropdown();
+    _applyFiltersAndRender();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!panelEl.querySelector('#vacDeptWrap')?.contains(e.target)) {
+      _closeDeptDropdown();
+    }
+  });
 
   await ensureEmployeesLoaded();
   await refreshVacationTab();
 }
 
-async function refreshVacationTab() {
+export async function refreshVacationTab() {
   if (!panelRoot) return;
   const year = Number(panelRoot.querySelector('#vacYear').value || new Date().getFullYear());
   await ensureVacationLoaded(year, true);
   vacGoCache.year = year;
   vacGoCache.byEmp = await countGoDaysByEmployeeForYear(year);
-  renderRows();
+  _ganttSegments = await allGoSegmentsForYear(year);
+  _rebuildDeptList();
+  _applyFiltersAndRender();
 }
+
+/* ── dept dropdown ──────────────────────────────────────────────────── */
+
+function _allDepts() {
+  const set = new Set();
+  for (const e of kadrovskaState.employees) {
+    if (e.department) set.add(e.department);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, 'sr'));
+}
+
+function _rebuildDeptList() {
+  if (!panelRoot) return;
+  const list = panelRoot.querySelector('#vacDeptList');
+  if (!list) return;
+  const depts = _allDepts();
+  list.innerHTML = depts.map(d => {
+    const checked = !_selectedDepts.has(d);
+    const col = deptColor(d);
+    return `<label class="vac-dept-item">
+      <input type="checkbox" data-dept="${escHtml(d)}" ${checked ? 'checked' : ''}>
+      <span class="vac-dept-dot" style="background:${col};"></span>
+      <span>${escHtml(d)}</span>
+    </label>`;
+  }).join('');
+  list.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const dept = cb.dataset.dept;
+      if (cb.checked) _selectedDepts.delete(dept);
+      else _selectedDepts.add(dept);
+      _updateDeptBtnLabel();
+      _applyFiltersAndRender();
+    });
+  });
+  _updateDeptBtnLabel();
+}
+
+function _updateDeptBtnLabel() {
+  if (!panelRoot) return;
+  const btn = panelRoot.querySelector('#vacDeptBtn');
+  if (!btn) return;
+  const total = _allDepts().length;
+  const hidden = _selectedDepts.size;
+  if (hidden === 0 || hidden === total) {
+    btn.textContent = 'Odeljenja ▾';
+  } else {
+    btn.textContent = `Odeljenja (${total - hidden}/${total}) ▾`;
+  }
+}
+
+function _toggleDeptDropdown() {
+  _deptDropOpen = !_deptDropOpen;
+  if (panelRoot) {
+    const panel = panelRoot.querySelector('#vacDeptPanel');
+    if (panel) panel.style.display = _deptDropOpen ? 'block' : 'none';
+  }
+}
+
+function _closeDeptDropdown() {
+  _deptDropOpen = false;
+  if (panelRoot) {
+    const panel = panelRoot.querySelector('#vacDeptPanel');
+    if (panel) panel.style.display = 'none';
+  }
+}
+
+/* ── view toggle ────────────────────────────────────────────────────── */
+
+function _toggleView(mode) {
+  _viewMode = mode;
+  if (!panelRoot) return;
+  panelRoot.querySelector('#vacViewTable').classList.toggle('active', mode === 'table');
+  panelRoot.querySelector('#vacViewGantt').classList.toggle('active', mode === 'gantt');
+  panelRoot.querySelector('#vacTable').style.display = mode === 'table' ? '' : 'none';
+  panelRoot.querySelector('#vacGantt').style.display = mode === 'gantt' ? '' : 'none';
+  panelRoot.querySelector('#vacExport').style.display = mode === 'table' ? '' : 'none';
+  panelRoot.querySelector('#vacPrintGantt').style.display = mode === 'gantt' ? '' : 'none';
+  if (mode === 'gantt') renderGantt();
+}
+
+/* ── core data ──────────────────────────────────────────────────────── */
 
 function computeRows() {
   const year = Number(panelRoot.querySelector('#vacYear').value || new Date().getFullYear());
@@ -114,8 +269,6 @@ function computeRows() {
   for (const e of kadrVacationState.entitlements) {
     if (e.year === year) entByEmp.set(e.employeeId, e);
   }
-
-  /* Saldo iz view-a već sadrži used_days; ako nedostaje, fallback na ručni obračun. */
   const balByEmp = new Map();
   for (const b of kadrVacationState.balances) {
     if (b.year === year) balByEmp.set(b.employeeId, b);
@@ -123,6 +276,7 @@ function computeRows() {
 
   const emps = kadrovskaState.employees.filter(e => {
     if (statusF === 'active' && !e.isActive) return false;
+    if (_selectedDepts.has(e.department || '')) return false;
     if (q) {
       const hay = [employeeDisplayName(e), e.firstName, e.lastName, e.department, e.team].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
@@ -135,47 +289,65 @@ function computeRows() {
     const bal = balByEmp.get(emp.id);
     const daysTotal = ent ? ent.daysTotal : 20;
     const daysCarried = ent ? ent.daysCarriedOver : 0;
-
-    /* Kad nema reda u balance view — isključivo GO dani iz mesečnog grida. */
     let daysUsed = bal ? bal.daysUsed : 0;
     if (!bal) {
       daysUsed = vacGoCache.year === year ? (vacGoCache.byEmp.get(emp.id) ?? 0) : 0;
     }
-
-    const remaining = daysTotal + daysCarried - daysUsed;
-    return {
-      emp,
-      ent,
-      year,
-      daysTotal,
-      daysCarried,
-      daysUsed,
-      daysRemaining: remaining,
-    };
+    const daysRemaining = daysTotal + daysCarried - daysUsed;
+    return { emp, ent, year, daysTotal, daysCarried, daysUsed, daysRemaining };
   });
 }
 
-function renderRows() {
-  if (!panelRoot) return;
-  const rows = computeRows();
-  const tbody = panelRoot.querySelector('#vacTbody');
-  const empty = panelRoot.querySelector('#vacEmpty');
-  const countEl = panelRoot.querySelector('#vacCount');
+/* ── render stat cards ──────────────────────────────────────────────── */
 
-  const badge = document.getElementById('kadrTabCountVacation');
-  if (badge) badge.textContent = String(rows.length);
-  if (countEl) countEl.textContent = `${rows.length} ${rows.length === 1 ? 'zaposleni' : 'zaposlenih'}`;
-
+function renderStatCards(rows) {
+  const host = panelRoot.querySelector('#vacStatCards');
+  if (!host) return;
   const totalTotal = rows.reduce((s, r) => s + r.daysTotal + r.daysCarried, 0);
   const totalUsed = rows.reduce((s, r) => s + r.daysUsed, 0);
-  const totalRemaining = rows.reduce((s, r) => s + r.daysRemaining, 0);
-  const overLimit = rows.filter(r => r.daysRemaining < 0).length;
-  renderSummaryChips('vacSummary', [
-    { label: 'Ukupno dana', value: totalTotal, tone: 'accent' },
-    { label: 'Iskorišćeno', value: totalUsed, tone: 'warn' },
-    { label: 'Preostalo', value: totalRemaining, tone: totalRemaining > 0 ? 'ok' : 'muted' },
-    { label: 'Prekoračilo', value: overLimit, tone: overLimit > 0 ? 'warn' : 'muted' },
-  ]);
+  const totalRemaining = rows.reduce((s, r) => s + Math.max(0, r.daysRemaining), 0);
+  const overCount = rows.filter(r => r.daysRemaining < 0).length;
+
+  const cards = [
+    { label: 'Ukupno dana', value: totalTotal, icon: '📅', color: 'var(--blue-bar, #4F86C6)' },
+    { label: 'Iskorišćeno', value: totalUsed, icon: '✅', color: 'var(--accent)' },
+    { label: 'Preostalo', value: totalRemaining, icon: '⏳', color: 'var(--green-light, #6BBF5A)' },
+    { label: 'Prekoračilo', value: overCount, icon: '⚠', color: overCount > 0 ? 'var(--accent)' : 'var(--text3)' },
+  ];
+
+  host.innerHTML = cards.map(c => `
+    <div class="vac-stat-card">
+      <div class="vac-stat-icon">${c.icon}</div>
+      <div class="vac-stat-body">
+        <div class="vac-stat-value" style="color:${c.color};">${c.value}</div>
+        <div class="vac-stat-label">${escHtml(c.label)}</div>
+      </div>
+    </div>`).join('');
+}
+
+/* ── table render ───────────────────────────────────────────────────── */
+
+function _applyFiltersAndRender() {
+  if (!panelRoot) return;
+  const rows = computeRows();
+  renderStatCards(rows);
+  _updateCountBadge(rows.length);
+  if (_viewMode === 'table') renderRows(rows);
+  else renderGantt();
+}
+
+function _updateCountBadge(n) {
+  const countEl = panelRoot.querySelector('#vacCount');
+  if (countEl) countEl.textContent = `${n} ${n === 1 ? 'zaposleni' : 'zaposlenih'}`;
+  const badge = document.getElementById('kadrTabCountVacation');
+  if (badge) badge.textContent = String(n);
+}
+
+function renderRows(rows) {
+  if (!panelRoot) return;
+  rows = rows || computeRows();
+  const tbody = panelRoot.querySelector('#vacTbody');
+  const empty = panelRoot.querySelector('#vacEmpty');
 
   if (!rows.length) {
     tbody.innerHTML = '';
@@ -188,9 +360,13 @@ function renderRows() {
   tbody.innerHTML = rows.map(r => {
     const remCls = r.daysRemaining < 0 ? 'warn' : (r.daysRemaining < 3 ? 'accent' : 'ok');
     const entId = r.ent?.id || '';
+    const col = deptColor(r.emp.department || '');
+    const deptBadge = r.emp.department
+      ? `<span class="vac-dept-badge" style="background:${col}22;color:${col};border-color:${col}44;">${escHtml(r.emp.department)}</span>`
+      : '—';
     return `<tr data-emp-id="${escHtml(r.emp.id)}" data-ent-id="${escHtml(entId)}">
       <td><div class="emp-name">${escHtml(employeeDisplayName(r.emp) || '—')}</div></td>
-      <td class="col-hide-sm">${escHtml(r.emp.department || '—')}</td>
+      <td class="col-hide-sm">${deptBadge}</td>
       <td>
         <input type="number" class="vac-inp vac-total" min="0" max="365" step="1" value="${r.daysTotal}" ${edit ? '' : 'disabled'}>
       </td>
@@ -205,7 +381,6 @@ function renderRows() {
     </tr>`;
   }).join('');
 
-  /* Wire inline saves — debounce 500ms per row. */
   tbody.querySelectorAll('tr').forEach(tr => {
     const empId = tr.dataset.empId;
     const totalEl = tr.querySelector('.vac-total');
@@ -228,6 +403,153 @@ function renderRows() {
   });
 }
 
+/* ── Gantt render ───────────────────────────────────────────────────── */
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'];
+
+function renderGantt() {
+  if (!panelRoot) return;
+  const rows = computeRows();
+  const ganttEl = panelRoot.querySelector('#vacGantt');
+  const empty = panelRoot.querySelector('#vacEmpty');
+  if (!ganttEl) return;
+
+  if (!rows.length) {
+    ganttEl.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  const year = rows[0]?.year || new Date().getFullYear();
+  const totalDays = daysInYear(year);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayDoy = dayOfYearZero(today, year);
+  const todayPct = (todayDoy / totalDays) * 100;
+  const isCurrentYear = today.startsWith(String(year));
+
+  /* Group by dept */
+  const deptMap = new Map();
+  for (const r of rows) {
+    const dept = r.emp.department || '(bez odeljenja)';
+    if (!deptMap.has(dept)) deptMap.set(dept, []);
+    deptMap.get(dept).push(r);
+  }
+  const depts = [...deptMap.keys()].sort((a, b) => a.localeCompare(b, 'sr'));
+
+  /* Month header */
+  const monthCols = MONTH_NAMES.map((name, i) => {
+    const start = new Date(year, i, 1);
+    const end = new Date(year, i + 1, 0);
+    const startDoy = dayOfYearZero(start.toISOString().slice(0, 10), year);
+    const endDoy = dayOfYearZero(end.toISOString().slice(0, 10), year);
+    const left = (startDoy / totalDays) * 100;
+    const width = ((endDoy - startDoy + 1) / totalDays) * 100;
+    return `<div class="vac-gantt-month" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;">${name}</div>`;
+  }).join('');
+
+  /* Dept groups */
+  const groupsHtml = depts.map(dept => {
+    const dRows = deptMap.get(dept);
+    const isCollapsed = _collapsedDepts.has(dept);
+    const col = deptColor(dept === '(bez odeljenja)' ? '' : dept);
+
+    const empRowsHtml = dRows.map(r => {
+      const segs = _ganttSegments.get(r.emp.id) || [];
+      const barsHtml = segs.map(seg => {
+        const cFrom = clampYmd(seg.dateFrom, year);
+        const cTo = clampYmd(seg.dateTo, year);
+        const startDoy = dayOfYearZero(cFrom, year);
+        const endDoy = dayOfYearZero(cTo, year);
+        const left = (startDoy / totalDays) * 100;
+        const width = Math.max(0.2, ((endDoy - startDoy + 1) / totalDays) * 100);
+        const isOver = r.daysRemaining < 0;
+        const barCls = isOver ? 'vac-bar-over' : 'vac-bar-used';
+        const tip = `${employeeDisplayName(r.emp)}: ${seg.dateFrom} → ${seg.dateTo} (${seg.daysCount} dana)`;
+        return `<div class="vac-gantt-bar ${barCls}" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;" data-tip="${escHtml(tip)}"></div>`;
+      }).join('');
+
+      const remCls = r.daysRemaining < 0 ? 'vac-bal-over' : (r.daysRemaining < 3 ? 'vac-bal-warn' : 'vac-bal-ok');
+      return `<div class="vac-gantt-emp-row">
+        <div class="vac-gantt-emp-name">
+          <span class="vac-gantt-name-txt">${escHtml(employeeDisplayName(r.emp) || '—')}</span>
+          <span class="vac-gantt-bal ${remCls}">${r.daysRemaining}d</span>
+        </div>
+        <div class="vac-gantt-timeline">
+          ${barsHtml}
+          ${isCurrentYear ? `<div class="vac-gantt-today" style="left:${todayPct.toFixed(3)}%;"></div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="vac-gantt-dept" data-dept="${escHtml(dept)}">
+      <div class="vac-gantt-dept-hdr" data-collapse="${escHtml(dept)}">
+        <span class="vac-gantt-dept-arrow">${isCollapsed ? '▶' : '▼'}</span>
+        <span class="vac-gantt-dept-dot" style="background:${col};"></span>
+        <span class="vac-gantt-dept-name">${escHtml(dept)}</span>
+        <span class="vac-gantt-dept-count">${dRows.length} zap.</span>
+      </div>
+      <div class="vac-gantt-dept-body" ${isCollapsed ? 'style="display:none;"' : ''}>
+        <div class="vac-gantt-emp-row vac-gantt-header-row">
+          <div class="vac-gantt-emp-name"></div>
+          <div class="vac-gantt-timeline vac-gantt-months">
+            ${monthCols}
+            ${isCurrentYear ? `<div class="vac-gantt-today vac-gantt-today-hdr" style="left:${todayPct.toFixed(3)}%;"></div>` : ''}
+          </div>
+        </div>
+        ${empRowsHtml}
+      </div>
+    </div>`;
+  }).join('');
+
+  ganttEl.innerHTML = `
+    <div class="vac-gantt-legend">
+      <span class="vac-leg-item"><span class="vac-leg-swatch vac-bar-used"></span>Iskorišćeno GO</span>
+      <span class="vac-leg-item"><span class="vac-leg-swatch vac-bar-over"></span>Prekoračenje</span>
+      ${isCurrentYear ? '<span class="vac-leg-item"><span class="vac-leg-swatch" style="background:var(--accent);width:2px;height:14px;display:inline-block;"></span>Danas</span>' : ''}
+    </div>
+    <div class="vac-gantt-groups" id="vacGanttGroups">
+      ${groupsHtml}
+    </div>`;
+
+  /* Wire collapse toggles */
+  ganttEl.querySelectorAll('[data-collapse]').forEach(hdr => {
+    hdr.addEventListener('click', () => {
+      const dept = hdr.dataset.collapse;
+      if (_collapsedDepts.has(dept)) _collapsedDepts.delete(dept);
+      else _collapsedDepts.add(dept);
+      renderGantt();
+    });
+  });
+
+  /* Tooltip via mousemove */
+  const tooltip = panelRoot.querySelector('#vacTooltip') || document.getElementById('vacTooltip');
+  if (tooltip) {
+    ganttEl.querySelectorAll('[data-tip]').forEach(bar => {
+      bar.addEventListener('mouseenter', (e) => {
+        tooltip.textContent = bar.dataset.tip;
+        tooltip.style.display = 'block';
+      });
+      bar.addEventListener('mousemove', (e) => {
+        const rect = panelRoot.getBoundingClientRect();
+        tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+        tooltip.style.top = (e.clientY - rect.top + 12) + 'px';
+      });
+      bar.addEventListener('mouseleave', () => {
+        tooltip.style.display = 'none';
+      });
+    });
+  }
+}
+
+/* ── print Gantt ────────────────────────────────────────────────────── */
+
+function _printGantt() {
+  window.print();
+}
+
+/* ── persist entitlement ────────────────────────────────────────────── */
+
 async function persistEntitlement(employeeId, year, patch, tr) {
   if (!canEditKadrovska()) return;
   const entId = tr?.dataset.entId || null;
@@ -244,21 +566,19 @@ async function persistEntitlement(employeeId, year, patch, tr) {
     return;
   }
   const saved = mapDbEntitlement(res[0]);
-  /* Update state.entitlements */
   const list = kadrVacationState.entitlements.filter(e => !(e.employeeId === employeeId && e.year === year));
   list.push(saved);
   kadrVacationState.entitlements = list;
 
-  /* Osveži saldo iz view-a — najjeftinije je reload za tekuću godinu. */
   const bal = await loadBalancesFromDb(year);
   if (bal) kadrVacationState.balances = bal;
 
   if (tr) tr.dataset.entId = saved.id;
-  renderRows();
+  _applyFiltersAndRender();
   showToast('✅ Sačuvano');
 }
 
-/* ── REŠENJE O GO — print HTML ──────────────────────────────────── */
+/* ── rešenje o GO ───────────────────────────────────────────────────── */
 
 function openResenjePrint(employeeId) {
   void openResenjePrintAsync(employeeId);
@@ -281,7 +601,7 @@ async function openResenjePrintAsync(employeeId) {
     const inTo = prompt('Unesi datum kraja GO (YYYY-MM-DD):', '');
     if (!inTo) return;
     dateFrom = inFrom; dateTo = inTo;
-    days = Math.round((new Date(inTo) - new Date(inFrom)) / (24 * 3600 * 1000)) + 1;
+    days = Math.round((new Date(inTo) - new Date(inFrom)) / 86400000) + 1;
   }
 
   const nowDay = new Date();
@@ -337,7 +657,7 @@ async function openResenjePrintAsync(employeeId) {
   </div>
 
   <p>
-    Na osnovu člana 68–73. Zakona o radu („Sl. glasnik RS“, br. 24/2005 i dr.)
+    Na osnovu člana 68–73. Zakona o radu („Sl. glasnik RS", br. 24/2005 i dr.)
     i odluke poslodavca, imenovanom se odobrava korišćenje godišnjeg odmora za
     <strong>${escHtml(String(year))}. godinu</strong> u trajanju od
     <strong>${escHtml(String(days || ''))} ${days === 1 ? 'dan' : 'dana'}</strong>,
@@ -381,7 +701,7 @@ async function openResenjePrintAsync(employeeId) {
   w.document.close();
 }
 
-/* ── Excel export ───────────────────────────────────────────────── */
+/* ── Excel export ───────────────────────────────────────────────────── */
 
 async function exportToExcel() {
   const rows = computeRows();

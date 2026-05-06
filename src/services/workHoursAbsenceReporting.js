@@ -129,3 +129,28 @@ export async function latestGoSegmentForEmployeeYear(empId, year) {
   segs.sort((a, b) => String(b.dateFrom).localeCompare(String(a.dateFrom)));
   return segs[0];
 }
+
+/**
+ * Svi GO segmenti za celu godinu, grupisani po employee.
+ * Jednim SQL upitom. Vraća Map<employeeId, Segment[]>.
+ */
+export async function allGoSegmentsForYear(year) {
+  const map = new Map();
+  if (!year || !hasSupabaseConfig()) return map;
+  const from = `${year}-01-01`;
+  const to = `${year}-12-31`;
+  const data = await sbReq(
+    `work_hours?work_date=gte.${encodeURIComponent(from)}`
+    + `&work_date=lte.${encodeURIComponent(to)}`
+    + '&absence_code=eq.go'
+    + '&select=*',
+  );
+  const rows = Array.isArray(data) ? data.map(mapDbWorkHour) : [];
+  const segments = mergeConsecutiveWorkHourDays(rows, () => '');
+  for (const seg of segments) {
+    const id = seg.employeeId;
+    if (!map.has(id)) map.set(id, []);
+    map.get(id).push(seg);
+  }
+  return map;
+}
