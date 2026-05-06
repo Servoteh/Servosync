@@ -20,7 +20,25 @@ export function normalizeBarcodeText(raw) {
   if (t.startsWith('*') && t.endsWith('*') && t.length >= 3) {
     t = t.slice(1, -1);
   }
+  /* Nevidljivi znakovi koji ponekad uđu iz dekodera / clipboard-a */
+  t = t.replace(/[\u200B-\u200D\uFEFF]/g, '');
   return t;
+}
+
+/**
+ * Zamena tipičnih „šumova” samo za formate bez `RNZ` prefiksa (ne dirati `RNZ|…`).
+ *
+ * @param {string} s
+ * @returns {string}
+ */
+function normalizeNonRnzSeparators(s) {
+  if (!s || /^RNZ/i.test(s)) return s;
+  return s
+    .replace(/\uFF1A/g, ':')
+    .replace(/\uFF0F/g, '/')
+    .replace(/\|/g, ':')
+    .replace(/;/g, ':')
+    .trim();
 }
 
 /**
@@ -103,20 +121,27 @@ export function parseBigTehnBarcode(raw) {
     };
   }
 
-  /* Kompaktna nalepnica (drugačiji štampač od RNZ na nalogu): `interni:nalog/tp:var` */
-  const compact = clean.match(/^(\d{1,10}):(\d{1,8})\/([A-Za-z0-9-]+):(\d+)$/);
-  if (compact) {
-    const [, idrn, orderNo, itemRefId, varijanta] = compact;
-    return {
-      orderNo,
-      itemRefId,
-      drawingNo: '',
-      format: /** @type {'compact'} */ ('compact'),
-      raw: clean,
-      idrn,
-      varijanta,
-      field4: '',
-    };
+  /* Kompaktna nalepnica: `interni:nalog/tp:var` (čitač često šalje `|` umesto `:`). */
+  const compactRe =
+    /^(\d{1,10})\s*[:;]\s*(\d{1,8})\s*[/\\]\s*([A-Za-z0-9._-]+)\s*[:;]\s*(\d+)\s*$/i;
+  const seen = new Set();
+  for (const cand of [clean, normalizeNonRnzSeparators(clean)]) {
+    if (!cand || seen.has(cand)) continue;
+    seen.add(cand);
+    const compact = cand.match(compactRe);
+    if (compact) {
+      const [, idrn, orderNo, itemRefId, varijanta] = compact;
+      return {
+        orderNo,
+        itemRefId,
+        drawingNo: '',
+        format: /** @type {'compact'} */ ('compact'),
+        raw: clean,
+        idrn,
+        varijanta,
+        field4: '',
+      };
+    }
   }
 
   return null;

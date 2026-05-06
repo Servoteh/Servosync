@@ -23,6 +23,10 @@ describe('normalizeBarcodeText', () => {
     expect(normalizeBarcodeText('**')).toBe('**');
   });
 
+  it('skida zero-width znakove', () => {
+    expect(normalizeBarcodeText('9833\u200B:9400/7-5:0')).toBe('9833:9400/7-5:0');
+  });
+
   it('vraća "" za non-string input', () => {
     expect(normalizeBarcodeText(null)).toBe('');
     expect(normalizeBarcodeText(undefined)).toBe('');
@@ -176,6 +180,16 @@ describe('parseBigTehnBarcode — compact label (fallback bez RNZ:)', () => {
       raw: '9833:9400/7-5:0',
       varijanta: '0',
       field4: '',
+    });
+  });
+
+  it('toleriše | i ; umesto : (čitač)', () => {
+    expect(parseBigTehnBarcode('9833|9400/7-5|0')).toMatchObject({
+      format: 'compact',
+      idrn: '9833',
+      orderNo: '9400',
+      itemRefId: '7-5',
+      varijanta: '0',
     });
   });
 
