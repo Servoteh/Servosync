@@ -1,21 +1,14 @@
 /**
- * Podešavanja — root modula (F5b).
+ * Podešavanja — root modula.
  *
- * Navigacija: levi sidebar sa grupama (umesto horizontalnih tabova).
- *
- * Grupe:
- *   GENERALNO      — Organizacija
- *   KORISNICI      — Korisnici (admin), Održ. profili
- *   PODACI         — Podeš. predmeta, Matični podaci
- *   SISTEM         — Sistem (admin)
- *
+ * Navigacija: levi sidebar sa headerom i grupama.
  * Pristup: admin vidi sve; menadžment samo maint-profiles i predmet-aktivacija.
  * Aktivni tab se persistuje u sessionStorage (SETTINGS_TAB).
  */
 
 import { escHtml } from '../../lib/dom.js';
 import { ssGet, ssSet } from '../../lib/storage.js';
-import { SESSION_KEYS } from '../../lib/constants.js';
+import { SESSION_KEYS, ROLE_LABELS } from '../../lib/constants.js';
 import { toggleTheme } from '../../lib/theme.js';
 import { onAuthChange, getAuth, canManageUsers, canAccessPodesavanja } from '../../state/auth.js';
 import { usersState } from '../../state/users.js';
@@ -48,29 +41,34 @@ let _activeTab = 'users';
 
 const SIDEBAR_GROUPS = [
   {
-    label: 'Generalno',
+    label: 'Korisnici i pristup',
     items: [
-      { id: 'organizacija', icon: '🏢', label: 'Organizacija', adminOnly: true },
+      { id: 'users',           icon: '👤', label: 'Korisnici',       adminOnly: true,  badgeKey: 'users' },
+      { id: 'uloge',           icon: '🛡', label: 'Uloge i dozvole', adminOnly: true,  badgeKey: 'uloge',   placeholder: true },
+      { id: 'timovi',          icon: '👥', label: 'Timovi',          adminOnly: true,  placeholder: true },
     ],
   },
   {
-    label: 'Korisnici i pristup',
+    label: 'Organizacija',
     items: [
-      { id: 'users', icon: '👥', label: 'Korisnici', adminOnly: true, badge: true },
-      { id: 'maint-profiles', icon: '🔧', label: 'Održ. profili', adminOnly: false },
+      { id: 'organizacija',    icon: '🏢', label: 'Organizacija',    adminOnly: true },
+      { id: 'odeljenja',       icon: '🏗', label: 'Odeljenja',       adminOnly: true,  placeholder: true },
     ],
   },
   {
     label: 'Podaci',
     items: [
+      { id: 'masters',         icon: '🗄', label: 'Matični podaci',  adminOnly: true },
+      { id: 'maint-profiles',  icon: '🔧', label: 'Održ. profili',   adminOnly: false },
       { id: 'predmet-aktivacija', icon: '📋', label: 'Podeš. predmeta', adminOnly: false },
-      { id: 'masters', icon: '🗄', label: 'Matični podaci', adminOnly: true },
     ],
   },
   {
     label: 'Sistem',
     items: [
-      { id: 'system', icon: '⚙', label: 'Sistem', adminOnly: true },
+      { id: 'integracije',     icon: '🔗', label: 'Integracije',     adminOnly: true,  badgeNew: true, placeholder: true },
+      { id: 'notifikacije',    icon: '🔔', label: 'Notifikacije',    adminOnly: true,  placeholder: true },
+      { id: 'audit-log',       icon: '📜', label: 'Audit log',       adminOnly: true,  placeholder: true },
     ],
   },
 ];
@@ -86,6 +84,27 @@ function _visibleGroups() {
 function _visibleTabs() {
   return _visibleGroups().flatMap(g => g.items);
 }
+
+function _badgeValue(key) {
+  if (key === 'users') return usersState.items.length || '';
+  if (key === 'uloge') return Object.keys(ROLE_LABELS).length;
+  return '';
+}
+
+/* Mapiranje tab → subtitle prikazan u TopNav-u */
+const TAB_SUBTITLES = {
+  users: 'Sistem i korisnici',
+  uloge: 'Sistem i korisnici',
+  timovi: 'Sistem i korisnici',
+  organizacija: 'Organizacija',
+  odeljenja: 'Organizacija',
+  masters: 'Podaci',
+  'maint-profiles': 'Podaci',
+  'predmet-aktivacija': 'Podaci',
+  integracije: 'Sistem',
+  notifikacije: 'Sistem',
+  'audit-log': 'Sistem',
+};
 
 /* ── PUBLIC ──────────────────────────────────────────────────────────── */
 
@@ -135,11 +154,20 @@ function _renderShell() {
     return;
   }
 
+  const subtitle = TAB_SUBTITLES[_activeTab] || 'Podešavanja';
+
   _mountEl.innerHTML = `
-    ${_headerHtml()}
+    ${_headerHtml(subtitle)}
     <div class="set-layout">
       <nav class="set-sidebar" role="navigation" aria-label="Podešavanja navigacija">
-        ${_sidebarHtml()}
+        <div class="set-sidebar-header">
+          <div class="set-sidebar-header-label">Podešavanja</div>
+          <div class="set-sidebar-header-title">${escHtml(subtitle)}</div>
+        </div>
+        <div class="set-sidebar-items">
+          ${_sidebarGroupsHtml()}
+        </div>
+        <div class="set-sidebar-footer">v 1.0 · build 2026.05</div>
       </nav>
       <div class="set-content">
         ${_panelHtml(_activeTab)}
@@ -152,18 +180,23 @@ function _renderShell() {
   _wireTabBody();
 }
 
-function _sidebarHtml() {
-  const groups = _visibleGroups();
-  return groups.map(g => `
+function _sidebarGroupsHtml() {
+  return _visibleGroups().map(g => `
     <div class="set-sidebar-group">
       <div class="set-sidebar-group-label">${escHtml(g.label)}</div>
       ${g.items.map(it => {
         const isActive = it.id === _activeTab;
-        const badgeHtml = it.badge
-          ? `<span class="set-sidebar-badge" id="setSidebarBadge-${it.id}">${usersState.items.length}</span>`
-          : '';
+        let badgeHtml = '';
+        if (it.badgeNew) {
+          badgeHtml = `<span class="set-sidebar-badge set-sidebar-badge--new">NEW</span>`;
+        } else if (it.badgeKey) {
+          const val = _badgeValue(it.badgeKey);
+          if (val !== '') {
+            badgeHtml = `<span class="set-sidebar-badge" id="setSidebarBadge-${escHtml(it.id)}">${val}</span>`;
+          }
+        }
         return `
-          <button class="set-sidebar-item ${isActive ? 'active' : ''}"
+          <button class="set-sidebar-item${isActive ? ' active' : ''}"
                   data-set-tab="${escHtml(it.id)}"
                   role="menuitem"
                   aria-current="${isActive ? 'page' : 'false'}">
@@ -176,7 +209,7 @@ function _sidebarHtml() {
   `).join('');
 }
 
-function _headerHtml() {
+function _headerHtml(subtitle) {
   const auth = getAuth();
   return `
     <header class="kadrovska-header">
@@ -188,6 +221,7 @@ function _headerHtml() {
         <div class="kadrovska-title">
           <span class="ktitle-mark" aria-hidden="true">⚙</span>
           <span>Podešavanja</span>
+          <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:4px">${escHtml(subtitle)}</span>
         </div>
       </div>
       <div class="kadrovska-header-right">
@@ -203,6 +237,8 @@ function _headerHtml() {
 }
 
 function _panelHtml(tab) {
+  const item = _visibleTabs().find(t => t.id === tab);
+  if (item?.placeholder) return _placeholderPanelHtml(item);
   if (tab === 'users') return renderUsersTab();
   if (tab === 'organizacija') return renderOrgStructureTab();
   if (tab === 'maint-profiles') return renderMaintProfilesTab();
@@ -210,6 +246,22 @@ function _panelHtml(tab) {
   if (tab === 'masters') return renderMastersTab();
   if (tab === 'system') return renderSystemTab();
   return '';
+}
+
+function _placeholderPanelHtml(item) {
+  return `
+    <div class="set-page-header">
+      <div class="set-page-header-icon">${item.icon}</div>
+      <div>
+        <h2 class="set-page-header-title">${escHtml(item.label)}</h2>
+        <p class="set-page-header-sub">Ova sekcija je u pripremi</p>
+      </div>
+    </div>
+    <div class="kadrovska-empty" style="margin-top:20px">
+      <div class="kadrovska-empty-title">${escHtml(item.label)} — u izradi</div>
+      <div style="margin-top:6px">Biće dostupno u sledećoj fazi razvoja.</div>
+    </div>
+  `;
 }
 
 function _lockedScreenHtml() {
@@ -235,9 +287,9 @@ function _lockedScreenHtml() {
       <div class="auth-box" style="max-width:none;text-align:left">
         <div class="auth-brand">
           <div class="auth-title">🔒 Pristup zabranjen</div>
-          <div class="auth-subtitle">Podešavanja su dostupna samo korisnicima sa <strong>admin</strong> ili <strong>menadžment</strong> rolom u ERP-u.</div>
+          <div class="auth-subtitle">Podešavanja su dostupna samo korisnicima sa <strong>admin</strong> ili <strong>menadžment</strong> rolom.</div>
         </div>
-        <p class="form-hint" style="margin-top:14px">Ako misliš da bi trebalo da imaš pristup, javi se nekom od admina ili HR-u da ti dodeli odgovarajuću rolu kroz Supabase SQL Editor.</p>
+        <p class="form-hint" style="margin-top:14px">Javi se adminu ili HR-u da ti dodeli odgovarajuću rolu kroz Supabase SQL Editor.</p>
       </div>
     </main>
   `;
