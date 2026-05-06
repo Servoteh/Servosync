@@ -1837,6 +1837,16 @@ body.module-kadrovska > #module-settings { display:none !important; }
 .kadr-panel.active { display:block; }
 
 /* ── SETTINGS SIDEBAR LAYOUT ──────────────────────────────────────────── */
+/* .set-shell je direktno dete #app — dobija flex:1/col od #app>* pravila.
+   Kao wrapper sprečava da #app>* {flex-direction:column} override-uje
+   flex-direction:row na .set-layout unutar njega. */
+.set-shell {
+  display:flex;
+  flex-direction:column;
+  flex:1 1 0;
+  min-height:0;
+  height:100%;
+}
 .set-layout {
   display:flex;
   min-height:0;

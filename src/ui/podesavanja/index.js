@@ -157,20 +157,22 @@ function _renderShell() {
   const subtitle = TAB_SUBTITLES[_activeTab] || 'Podešavanja';
 
   _mountEl.innerHTML = `
-    ${_headerHtml(subtitle)}
-    <div class="set-layout">
-      <nav class="set-sidebar" role="navigation" aria-label="Podešavanja navigacija">
-        <div class="set-sidebar-header">
-          <div class="set-sidebar-header-label">Podešavanja</div>
-          <div class="set-sidebar-header-title">${escHtml(subtitle)}</div>
+    <div class="set-shell">
+      ${_headerHtml(subtitle)}
+      <div class="set-layout">
+        <nav class="set-sidebar" role="navigation" aria-label="Podešavanja navigacija">
+          <div class="set-sidebar-header">
+            <div class="set-sidebar-header-label">Podešavanja</div>
+            <div class="set-sidebar-header-title">${escHtml(subtitle)}</div>
+          </div>
+          <div class="set-sidebar-items">
+            ${_sidebarGroupsHtml()}
+          </div>
+          <div class="set-sidebar-footer">v 1.0 · build 2026.05</div>
+        </nav>
+        <div class="set-content">
+          ${_panelHtml(_activeTab)}
         </div>
-        <div class="set-sidebar-items">
-          ${_sidebarGroupsHtml()}
-        </div>
-        <div class="set-sidebar-footer">v 1.0 · build 2026.05</div>
-      </nav>
-      <div class="set-content">
-        ${_panelHtml(_activeTab)}
       </div>
     </div>
   `;
