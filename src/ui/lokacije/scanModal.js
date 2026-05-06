@@ -228,6 +228,7 @@ export async function openScanMoveModal({
 
       <div class="loc-scan-hint">
         📏 Drži telefon 10-15 cm od nalepnice · usmeri gornji desni ugao (broj predmeta/TP) kad koristiš OCR<br>
+        <strong>Folija / sjaj:</strong> nagni papir da odsjaj ne prekrije crtice; probaj „iz slike” (fotografija često bolja od live preview-a)<br>
         Tap-ni na ekran za fokus ·
         <span class="loc-scan-manual" data-act="pickImage">📂 iz slike</span> ·
         <span class="loc-scan-manual" data-act="ocrScan">OCR skeniraj</span> ·
@@ -532,7 +533,7 @@ export async function openScanMoveModal({
           state.androidChromeHintTimer = null;
           if (!state.scanCtrl || stageScan.hidden) return;
           setScanStatus(
-            '💡 Slika mutna? Tapnite na nalepnicu da kamera izoštri. Podesite zoom na 1.5×–2×. Ako ne uspe, koristite „iz slike”.',
+            '💡 Slika mutna ili folija? Tapnite na nalepnicu da kamera izoštri; nagnite papir da nestane odsjaj. Zoom 1.5×–2×. Probajte „iz slike”.',
             'info',
           );
         }, 8000);

@@ -4,6 +4,8 @@
  * - iOS / desktop: ZXing (`@zxing/browser`).
  * - Android Chrome + mode AUTO: `BarcodeDetector` kada postoji, inače ZXing.
  * - Mobilni live: `TRY_HARDER` + ideal 2560×1440 radi gustog Code128 na nalepnici.
+ * - Folija / odsjaj: best-effort tamniji kadar (`exposureCompensation` ako uređaj
+ *   dozvoljava) + „Iz slike” probava više kontrastnih varijanti pre ZXing-a.
  * - Debug: `sessionStorage.loc_scan_decode_mode` = `AUTO` | `ZXING_ONLY` | `BARCODE_DETECTOR_ONLY`
  *
  * Usage:
@@ -336,6 +338,30 @@ async function primeCameraPipeline(track, isAndroid, opts = {}) {
 }
 
 /**
+ * Smanji preosvetljenje (specular na providnoj foliji) ako kamera izlaže EV opseg.
+ *
+ * @param {MediaStreamTrack} track
+ * @param {boolean} isAndroid
+ */
+async function applyAntiGlareExposureBestEffort(track, isAndroid) {
+  if (!track?.getCapabilities) return;
+  const caps = track.getCapabilities();
+  const ec = caps.exposureCompensation;
+  if (!ec || typeof ec !== 'object') return;
+  const min = Number(ec.min);
+  const max = Number(ec.max);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return;
+  if (min >= -0.05) return;
+  const target = Math.max(min, Math.min(max, -0.45));
+  await safeApplyFlatCompat(
+    track,
+    /** @type {any} */ ({ exposureCompensation: target }),
+    'antiGlare: exposureCompensation',
+    isAndroid,
+  );
+}
+
+/**
  * @param {HTMLVideoElement} videoEl
  * @param {() => MediaStreamTrack|null} getTrack
  * @param {boolean} isAndroid
@@ -345,6 +371,7 @@ function schedulePrimeAfterVideoReady(videoEl, getTrack, isAndroid) {
     const tr = getTrack();
     if (!tr) return;
     await logScanDiagnosticsOnce(tr);
+    await applyAntiGlareExposureBestEffort(tr, isAndroid);
     await primeCameraPipeline(tr, isAndroid, { skipInitialHardwareZoom: true });
   });
 }
@@ -636,6 +663,92 @@ function buildController({ stop, getTrack, isAndroid, runRefocusAfterZoom }) {
   };
 }
 
+/**
+ * Grayscale + linearni kontrast oko srednje sive — pomaže kod odsjaja kroz foliju
+ * kad „goli” ZXing ne vidi crne linije.
+ *
+ * @param {HTMLImageElement} img
+ * @param {number} contrast tipično 1.25–2.6
+ * @param {{ maxSide?: number }} [opts]
+ * @returns {HTMLCanvasElement|null}
+ */
+function buildGrayscaleContrastCanvas(img, contrast, opts = {}) {
+  const maxSide = typeof opts.maxSide === 'number' ? opts.maxSide : 2400;
+  let w = img.naturalWidth || img.width;
+  let h = img.naturalHeight || img.height;
+  if (!w || !h) return null;
+  const ratio = maxSide / Math.max(w, h);
+  if (ratio < 1) {
+    w = Math.max(1, Math.floor(w * ratio));
+    h = Math.max(1, Math.floor(h * ratio));
+  }
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = ratio < 1;
+  ctx.drawImage(img, 0, 0, w, h);
+  const id = ctx.getImageData(0, 0, w, h);
+  const d = id.data;
+  const f = contrast;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i];
+    const g = d[i + 1];
+    const b = d[i + 2];
+    let y = 0.299 * r + 0.587 * g + 0.114 * b;
+    y = (y - 128) * f + 128;
+    if (y < 0) y = 0;
+    else if (y > 255) y = 255;
+    const o = y | 0;
+    d[i] = o;
+    d[i + 1] = o;
+    d[i + 2] = o;
+  }
+  ctx.putImageData(id, 0, 0);
+  return c;
+}
+
+/**
+ * @param {HTMLImageElement} img
+ * @param {number} scale npr. 1.5
+ * @param {number} contrast
+ * @returns {HTMLCanvasElement|null}
+ */
+function buildUpscaledGrayscaleContrastCanvas(img, scale, contrast) {
+  let w = img.naturalWidth || img.width;
+  let h = img.naturalHeight || img.height;
+  if (!w || !h || scale <= 1) return null;
+  const tw = Math.min(3200, Math.floor(w * scale));
+  const th = Math.min(3200, Math.floor(h * scale));
+  if (tw * th > 5_500_000) return null;
+  const c = document.createElement('canvas');
+  c.width = tw;
+  c.height = th;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, 0, 0, tw, th);
+  const id = ctx.getImageData(0, 0, tw, th);
+  const d = id.data;
+  const f = contrast;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i];
+    const g = d[i + 1];
+    const b = d[i + 2];
+    let y = 0.299 * r + 0.587 * g + 0.114 * b;
+    y = (y - 128) * f + 128;
+    if (y < 0) y = 0;
+    else if (y > 255) y = 255;
+    const o = y | 0;
+    d[i] = o;
+    d[i + 1] = o;
+    d[i + 2] = o;
+  }
+  ctx.putImageData(id, 0, 0);
+  return c;
+}
+
 export async function decodeBarcodeFromFile(file) {
   if (!file || !(file instanceof Blob)) return { error: 'not_image' };
   if (!/^image\//.test(file.type || '')) return { error: 'not_image' };
@@ -644,13 +757,54 @@ export async function decodeBarcodeFromFile(file) {
   try {
     const img = await loadImage(url);
     const reader = new BrowserMultiFormatReader(STILL_IMAGE_SCAN_HINTS);
-    try {
-      const result = await reader.decodeFromImageElement(img);
-      return { text: result.getText(), format: result.getBarcodeFormat?.().toString() };
-    } catch (e) {
-      if (e?.name === 'NotFoundException') return { error: 'no_barcode' };
-      return { error: 'decode_failed', cause: e };
+
+    const attempts = [
+      () => reader.decodeFromImageElement(img),
+      () => {
+        const c = buildGrayscaleContrastCanvas(img, 1.42);
+        if (!c) throw new Error('no_canvas');
+        return reader.decodeFromCanvasElement(c);
+      },
+      () => {
+        const c = buildGrayscaleContrastCanvas(img, 1.95);
+        if (!c) throw new Error('no_canvas');
+        return reader.decodeFromCanvasElement(c);
+      },
+      () => {
+        const c = buildGrayscaleContrastCanvas(img, 2.35);
+        if (!c) throw new Error('no_canvas');
+        return reader.decodeFromCanvasElement(c);
+      },
+      () => {
+        const c = buildUpscaledGrayscaleContrastCanvas(img, 1.55, 1.68);
+        if (!c) throw new Error('no_canvas');
+        return reader.decodeFromCanvasElement(c);
+      },
+      () => {
+        const c = buildUpscaledGrayscaleContrastCanvas(img, 1.85, 1.55);
+        if (!c) throw new Error('no_canvas');
+        return reader.decodeFromCanvasElement(c);
+      },
+    ];
+
+    let lastErr = /** @type {unknown} */ (null);
+    for (const run of attempts) {
+      try {
+        const result = await run();
+        return { text: result.getText(), format: result.getBarcodeFormat?.().toString() };
+      } catch (e) {
+        lastErr = e;
+        const name = e?.name;
+        const tryNext =
+          name === 'NotFoundException' ||
+          name === 'FormatException' ||
+          name === 'ChecksumException' ||
+          e?.message === 'no_canvas';
+        if (!tryNext) return { error: 'decode_failed', cause: e };
+      }
     }
+    if (lastErr?.name === 'NotFoundException') return { error: 'no_barcode' };
+    return { error: 'no_barcode' };
   } finally {
     URL.revokeObjectURL(url);
   }
