@@ -261,7 +261,7 @@ export async function openScanMoveModal({
 
       <div class="loc-scan-topbar">
         <button type="button" class="loc-scan-btn" data-act="close" aria-label="Zatvori">✕</button>
-        <div class="loc-scan-title">Skeniraj barkod</div>
+        <div class="loc-scan-title" id="locScanTitleScan">Skeniraj barkod</div>
         <button type="button" class="loc-scan-btn" data-act="torch" aria-label="Baterijska lampa">💡</button>
       </div>
 
@@ -352,6 +352,10 @@ export async function openScanMoveModal({
                 Na lokaciju *
                 <span class="loc-muted" id="locScanToHint" style="font-weight:400;font-size:12px"></span>
               </label>
+              <select id="locScanHallFilter" aria-label="Filtriraj police po hali"
+                style="width:100%;max-width:100%;font-size:15px;padding:9px 10px;margin-bottom:8px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
+                <option value="">— sve hale (sve police) —</option>
+              </select>
               <select id="locScanTo" required></select>
               <div class="loc-scan-to-tools" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
                 <input type="text" id="locScanToCode" autocomplete="off" maxlength="80"
@@ -359,6 +363,7 @@ export async function openScanMoveModal({
                   style="flex:1;min-width:140px;font-size:16px;padding:9px 10px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
                 <button type="button" class="btn" data-act="applyLocCode">Primeni šifru</button>
                 <button type="button" class="btn" data-act="pickLocImage">📷 Skeniraj lokaciju</button>
+                <button type="button" class="btn" data-act="pickLocCamera">📹 Kamera</button>
               </div>
               <div class="loc-muted" style="font-size:11px;margin-top:4px;line-height:1.35">
                 Barkod na polici = obično <strong>location_code</strong> iz mastera lokacija.
@@ -413,9 +418,8 @@ export async function openScanMoveModal({
     erpSnapshot: null,
     /** @type {ReturnType<typeof setTimeout>|null} */
     androidChromeHintTimer: null,
-    /** @type {(() => void) | null} */
-    iosVvUnbind: null,
-  };
+    /** Kada je true, sledeći barkod sa kamere tretira se kao lokacija (ne RNZ forma). */
+    pickLocationMode: false,
 
   const $ = sel => overlay.querySelector(sel);
   const stageScan = overlay.querySelector('[data-stage="scan"]');
@@ -528,6 +532,7 @@ export async function openScanMoveModal({
   let decodeBusy = false;
 
   async function handleDecodedBarcode(clean) {
+    if (state.pickLocationMode) return;
     if (!clean) return;
     if (decodeBusy) return;
     const now = Date.now();
@@ -557,8 +562,56 @@ export async function openScanMoveModal({
     }
   }
 
+  function cancelLocationPick() {
+    state.pickLocationMode = false;
+    lastBarcodeClean = '';
+    lastBarcodeAt = 0;
+    cleanupScan();
+    leaveScanPresentation();
+    stageScan.hidden = true;
+    stageForm.hidden = false;
+    const tit = document.getElementById('locScanTitleScan');
+    if (tit) tit.textContent = 'Skeniraj barkod';
+    setScanStatus('', 'info');
+  }
+
+  /** ZXing `onResult` — item sken ili režim „samo lokacija” kamerom iz forme. */
+  async function onLiveScanResult(text) {
+    if (stageScan.hidden) return;
+    const clean = normalizeBarcodeText(text);
+    if (state.pickLocationMode) {
+      if (decodeBusy) return;
+      const loc = resolveLocationToken(clean);
+      if (loc) {
+        decodeBusy = true;
+        try {
+          state.pickLocationMode = false;
+          const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
+          if (sel) sel.value = loc.id;
+          cleanupScan();
+          leaveScanPresentation();
+          stageScan.hidden = true;
+          stageForm.hidden = false;
+          const tit = document.getElementById('locScanTitleScan');
+          if (tit) tit.textContent = 'Skeniraj barkod';
+          setScanStatus('', 'info');
+          const code = loc.location_code != null ? String(loc.location_code) : loc.id;
+          showToast(`✓ Lokacija: ${code}`);
+          if (navigator.vibrate) navigator.vibrate(60);
+        } finally {
+          decodeBusy = false;
+        }
+        return;
+      }
+      showToast('⚠ Nije prepoznata lokacija — probaj drugi barkod, „Primeni šifru” ili sliku.');
+      return;
+    }
+    await handleDecodedBarcode(clean);
+  }
+
   /** @param {{ bySuccess?: boolean }} [opts] */
   function close(opts = {}) {
+    state.pickLocationMode = false;
     cleanupScan();
     import('../../services/labelOcr.js')
       .then(m => m.terminateLabelOcrWorker())
@@ -577,13 +630,21 @@ export async function openScanMoveModal({
   function onEsc(ev) {
     if (ev.key === 'Escape') {
       ev.preventDefault();
+      if (state.pickLocationMode) {
+        cancelLocationPick();
+        return;
+      }
       close();
     }
   }
   document.addEventListener('keydown', onEsc);
 
-  /** ZXing live scan stage — koristi se u browseru i nakon native barkoda kao OCR fallback. */
-  async function startWebScanner() {
+  /** @param {{ purpose?: 'item' | 'location' }} [opts] */
+  async function startWebScanner(opts = {}) {
+    const purpose = opts.purpose === 'location' ? 'location' : 'item';
+    if (purpose === 'item') state.pickLocationMode = false;
+    else state.pickLocationMode = true;
+
     /* Novi ciklus skeniranja: dozvoli isti barkod ponovo posle „Skeniraj ponovo“ / ←. */
     lastBarcodeClean = '';
     lastBarcodeAt = 0;
@@ -599,12 +660,23 @@ export async function openScanMoveModal({
       await new Promise(r => setTimeout(r, 180));
     }
 
-    setScanStatus('📷 Tražim kameru…', 'info');
+    if (purpose === 'location') {
+      const tit = document.getElementById('locScanTitleScan');
+      if (tit) tit.textContent = 'Skeniraj lokaciju';
+      setScanStatus('📐 Usmeri kameru na barkod police ili hale (location_code)', 'info');
+    } else {
+      setScanStatus('📷 Tražim kameru…', 'info');
+    }
 
     const diag = detectIOSCameraPitfalls();
     if (diag.blocker) {
+      state.pickLocationMode = false;
       leaveScanPresentation();
       setScanStatus(diag.blocker, 'error');
+      const tit = document.getElementById('locScanTitleScan');
+      if (tit) tit.textContent = 'Skeniraj barkod';
+      stageScan.hidden = true;
+      stageForm.hidden = false;
       return;
     }
     if (diag.warning) {
@@ -614,11 +686,7 @@ export async function openScanMoveModal({
     try {
       attachIOSVisualViewportForScan();
       state.scanCtrl = await startScan(videoEl, {
-        onResult: async text => {
-          if (stageScan.hidden) return;
-          const clean = normalizeBarcodeText(text);
-          await handleDecodedBarcode(clean);
-        },
+        onResult: onLiveScanResult,
         onError: err => {
           console.error('[scan] decode error', err);
         },
@@ -638,15 +706,25 @@ export async function openScanMoveModal({
         }, 8000);
       }
     } catch (err) {
+      state.pickLocationMode = false;
       teardownIOSVisualViewport();
       leaveScanPresentation();
       const msg = formatCameraError(err);
       setScanStatus(msg, 'error');
       console.error('[scan] camera start failed', err);
+      stageScan.hidden = true;
+      stageForm.hidden = false;
+      const tit = document.getElementById('locScanTitleScan');
+      if (tit) tit.textContent = 'Skeniraj barkod';
     }
   }
 
-  async function startScanner() {
+  async function startScanner(opts = {}) {
+    const locationPick = opts && /** @type {{ locationPick?: boolean }} */ (opts).locationPick === true;
+    if (locationPick) {
+      await startWebScanner({ purpose: 'location' });
+      return;
+    }
     /* NATIVE path (Capacitor): ML Kit barkod; ako otkaže — otvara web kameru za barkod + OCR. */
     const { isNativeCapacitor, scanNativeOnce } = await import('../../services/nativeBarcode.js');
     if (isNativeCapacitor()) {
@@ -664,11 +742,11 @@ export async function openScanMoveModal({
           return;
         }
       }
-      await startWebScanner();
+      await startWebScanner({ purpose: 'item' });
       return;
     }
 
-    await startWebScanner();
+    await startWebScanner({ purpose: 'item' });
   }
 
   /** Snimi gornji desni ugao kadra, OCR, ponudi nalog/TP ako regex nađe par. */
@@ -771,11 +849,7 @@ export async function openScanMoveModal({
         /* deviceId idemo pre nego facingMode, pa u startScan ovo mora i da bude
          * podržano. Dodajemo treći argument — vidi barcode.js promene. */
         forceDeviceId: back.deviceId,
-        onResult: async text => {
-          if (stageScan.hidden) return;
-          const clean = normalizeBarcodeText(text);
-          await handleDecodedBarcode(clean);
-        },
+        onResult: onLiveScanResult,
         onError: err => console.error('[scan] decode error (back)', err),
       });
       setTimeout(() => reportCameraDiag(videoEl), 600);
@@ -1053,6 +1127,35 @@ export async function openScanMoveModal({
       arr.sort(pathCmp);
     }
 
+    const hallFilterEl = /** @type {HTMLSelectElement|null} */ ($('#locScanHallFilter'));
+    const savedHallFilter = hallFilterEl?.value || '';
+    if (hallFilterEl) {
+      const parentIds = Array.from(shelfByParent.keys()).filter(p => p != null);
+      parentIds.sort((a, b) => {
+        const pa = state.locById.get(a);
+        const pb = state.locById.get(b);
+        return pathCmp(pa || {}, pb || {});
+      });
+      hallFilterEl.innerHTML =
+        '<option value="">— sve hale (sve police) —</option>' +
+        parentIds
+          .map(pid => {
+            const p = state.locById.get(pid);
+            if (!p) return '';
+            return `<option value="${escHtml(pid)}">${escHtml(p.location_code)} — ${escHtml(p.name)}</option>`;
+          })
+          .join('');
+      if (savedHallFilter && [...hallFilterEl.options].some(o => o.value === savedHallFilter)) {
+        hallFilterEl.value = savedHallFilter;
+      } else {
+        hallFilterEl.value = '';
+      }
+    }
+    const filterHallId =
+      hallFilterEl?.value?.trim() && shelfByParent.has(hallFilterEl.value.trim())
+        ? hallFilterEl.value.trim()
+        : null;
+
     const shelfLabelForParent = pid => {
       if (pid == null) return '📍 POLICE (bez povezane hale)';
       const p = state.locById.get(pid);
@@ -1061,13 +1164,14 @@ export async function openScanMoveModal({
     };
 
     const renderShelfGroups = () => {
-      const pids = Array.from(shelfByParent.keys()).sort((a, b) => {
+      const allPids = Array.from(shelfByParent.keys()).sort((a, b) => {
         if (a == null) return 1;
         if (b == null) return -1;
         const pa = state.locById.get(a);
         const pb = state.locById.get(b);
         return pathCmp(pa || {}, pb || {});
       });
+      const pids = filterHallId != null ? [filterHallId] : allPids;
       return pids
         .map(pid => {
           const items = shelfByParent.get(pid);
@@ -1114,12 +1218,13 @@ export async function openScanMoveModal({
      * neka grupa prva (npr. kliknuo je "POLICA" prečicu sa home-a). */
     const hintEl = $('#locScanToHint');
     if (hintEl) {
+      const filt = filterHallId ? ' · filter: jedna hala' : ' · filter po hali iznad';
       if (preferLocationCategory === 'shelf') {
-        hintEl.textContent = '— prečica sa home: POLICE su prve; police su po halama';
+        hintEl.textContent = '— prečica sa home: POLICE su prve; police su po halama' + filt;
       } else if (preferLocationCategory === 'warehouse') {
-        hintEl.textContent = '— prečica sa home: HALE su prve u listi';
+        hintEl.textContent = '— prečica sa home: HALE su prve u listi' + filt;
       } else {
-        hintEl.textContent = '— police su grupisane po hali (parent_id)';
+        hintEl.textContent = '— police su grupisane po hali (parent_id)' + filt;
       }
     }
   }
@@ -1508,6 +1613,12 @@ export async function openScanMoveModal({
     if (!act) return;
     switch (act) {
       case 'close':
+        if (state.pickLocationMode) {
+          cancelLocationPick();
+        } else {
+          close();
+        }
+        break;
       case 'close2':
         close();
         break;
@@ -1534,6 +1645,9 @@ export async function openScanMoveModal({
         break;
       case 'applyLocCode':
         void tryApplyLocScanToCode();
+        break;
+      case 'pickLocCamera':
+        void startScanner({ locationPick: true });
         break;
       case 'ocrScan':
         await applyOcrFromVideo();
@@ -1637,6 +1751,8 @@ export async function openScanMoveModal({
       tryApplyLocScanToCode();
     }
   });
+
+  $('#locScanHallFilter')?.addEventListener('change', () => populateToSelect());
 
   /* Tap-to-focus na video element: šalje pointsOfInterest + single-shot
    * focusMode. Ignoriše klikove po dugmadima i slider-u (oni već imaju
