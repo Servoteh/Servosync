@@ -114,7 +114,7 @@ function tryParseCompactLabelLoose(clean) {
  *
  * **Format C — kompaktna nalepnica (bez `RNZ:` prefiksa):**
  *   `9833:9400/7-5:0` → `idrn` / `orderNo` / `itemRefId` (projekat TP) / `varijanta`
- *   (strogi regex, zatim **labavi** split fallback sa `]C1` Code128 prefiksom / GS —
+ *   (strogi regex, zatim **labavi** split fallback sa `]C`+cifra Code128 prefiksom / GS —
  *   samo ako RNZ i short ne odgovaraju).
  *
  * @param {string} raw
