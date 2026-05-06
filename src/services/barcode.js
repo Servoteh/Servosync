@@ -47,17 +47,6 @@ const ZXING_READER_OPTIONS = {
 
 const SESSION_DECODE_MODE_KEY = 'loc_scan_decode_mode';
 
-/** @returns {'AUTO'|'ZXING_ONLY'|'BARCODE_DETECTOR_ONLY'} */
-export function getScanDecodeMode() {
-  try {
-    const v = sessionStorage.getItem(SESSION_DECODE_MODE_KEY);
-    if (v === 'ZXING_ONLY' || v === 'BARCODE_DETECTOR_ONLY' || v === 'AUTO') return v;
-  } catch {
-    /* ignore */
-  }
-  return 'AUTO';
-}
-
 /**
  * @param {'AUTO'|'ZXING_ONLY'|'BARCODE_DETECTOR_ONLY'} mode
  */
@@ -161,6 +150,24 @@ export function isAndroidChromeBrowser() {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
   if (/Firefox|SamsungBrowser|EdgA/i.test(ua)) return false;
   return /Chrome\//.test(ua);
+}
+
+/**
+ * Podrazumevano na Android Chrome-u: **ZXING_ONLY** (isti put kao Firefox —
+ * ZXing + TRY_HARDER). BarcodeDetector + forsiran continuous AF često daju
+ * mutniji preview. Ručno: `sessionStorage.loc_scan_decode_mode`.
+ *
+ * @returns {'AUTO'|'ZXING_ONLY'|'BARCODE_DETECTOR_ONLY'}
+ */
+export function getScanDecodeMode() {
+  try {
+    const v = sessionStorage.getItem(SESSION_DECODE_MODE_KEY);
+    if (v === 'ZXING_ONLY' || v === 'BARCODE_DETECTOR_ONLY' || v === 'AUTO') return v;
+  } catch {
+    /* ignore */
+  }
+  if (isAndroidChromeBrowser()) return 'ZXING_ONLY';
+  return 'AUTO';
 }
 
 /** @param {HTMLVideoElement} videoEl */
@@ -281,7 +288,9 @@ async function refocusRound(track, isAndroid, nx, ny) {
     );
     await new Promise(r => setTimeout(r, 280));
   }
-  if (modes.includes('continuous')) {
+  /* Na Android Chrome-u `continuous` posle single-shot često „zaključa“ mutan AF
+   * za blisku nalepnicu; Firefox ovde ionako ne ide kroz istu granu. */
+  if (modes.includes('continuous') && !isAndroidChromeBrowser()) {
     await safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'refocus: continuous', isAndroid);
   }
 }
@@ -293,34 +302,11 @@ async function refocusRound(track, isAndroid, nx, ny) {
  */
 async function primeCameraPipeline(track, isAndroid, opts = {}) {
   if (!track || !isAndroidChromeBrowser()) return;
-  const caps = track.getCapabilities?.() || {};
-  const modes = Array.isArray(caps.focusMode) ? caps.focusMode.map(String) : [];
-
-  if (modes.includes('continuous')) {
-    await safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'prime: continuous', isAndroid);
-  } else if (modes.includes('single-shot') && 'pointsOfInterest' in caps) {
-    await safeApplyFlatCompat(
-      track,
-      /** @type {any} */ ({ focusMode: 'single-shot', pointsOfInterest: [{ x: 0.5, y: 0.5 }] }),
-      'prime: single-shot center',
-      isAndroid,
-    );
-  }
-
-  const zRaw = caps.zoom;
-  if (!opts.skipInitialHardwareZoom && zRaw != null && typeof zRaw === 'object' && !Array.isArray(zRaw)) {
-    const z = /** @type {any} */ (zRaw);
-    const zmin = Number(z.min ?? 1);
-    const zmax = Number(z.max ?? 1);
-    const step = Number(z.step ?? 0.1) || 0.1;
-    const target = Math.min(zmax, Math.max(zmin, 1.75));
-    const snapped = Math.min(zmax, Math.max(zmin, Math.round(target / step) * step));
-    await safeApplyFlatCompat(track, { zoom: snapped }, 'prime: initial zoom ~1.75×', isAndroid);
-    await refocusRound(track, isAndroid, 0.5, 0.5);
-    if (modes.includes('continuous')) {
-      await safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'prime: continuous after zoom', isAndroid);
-    }
-  }
+  void isAndroid;
+  void opts;
+  /* Namerno prazan: ranije forsiran continuous + zoom na startu često je
+   * pogoršavao oštrinu u Chrome-u; Firefox Android taj pipeline nije imao.
+   * Dijagnostika ostaje u schedulePrimeAfterVideoReady; fokus = tap ili slider. */
 }
 
 /**
@@ -385,7 +371,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     await refocusRound(track, isAndroid, 0.5, 0.5);
     const caps = track.getCapabilities?.() || {};
     const modes = Array.isArray(caps.focusMode) ? caps.focusMode.map(String) : [];
-    if (modes.includes('continuous')) {
+    if (modes.includes('continuous') && !isAndroidChromeBrowser()) {
       await safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'post-zoom: continuous', isAndroid);
     }
   };
@@ -619,12 +605,12 @@ function buildController({ stop, getTrack, isAndroid, runRefocusAfterZoom }) {
         );
         if (!ok) return false;
         await new Promise(r => setTimeout(r, 320));
-        if (modes.includes('continuous')) {
+        if (modes.includes('continuous') && !isAndroidChromeBrowser()) {
           await safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'tapFocus: continuous', isAndroid);
         }
         return true;
       }
-      if (modes.includes('continuous')) {
+      if (modes.includes('continuous') && !isAndroidChromeBrowser()) {
         return safeApplyFlatCompat(track, /** @type {any} */ ({ focusMode: 'continuous' }), 'tapFocus: continuous only', isAndroid);
       }
       return false;
