@@ -209,7 +209,7 @@ function _sidebarGroupsHtml() {
   `).join('');
 }
 
-function _headerHtml(subtitle) {
+function _headerHtml(_subtitle) {
   const auth = getAuth();
   return `
     <header class="kadrovska-header">
@@ -221,7 +221,6 @@ function _headerHtml(subtitle) {
         <div class="kadrovska-title">
           <span class="ktitle-mark" aria-hidden="true">⚙</span>
           <span>Podešavanja</span>
-          <span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:4px">${escHtml(subtitle)}</span>
         </div>
       </div>
       <div class="kadrovska-header-right">
