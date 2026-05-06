@@ -1230,6 +1230,123 @@ export async function openScanMoveModal({
   }
 
   /**
+   * Pink banner „Skenirano / ručno“ + ERP dijagnostika (isti HTML kao u showForm).
+   *
+   * @param {{
+   *   rawHint: string,
+   *   orderNo: string,
+   *   itemRefId: string,
+   *   format: string,
+   *   erpSnap: object|null,
+   *   erpLookupStatus: string,
+   *   erpLookupErr: string,
+   *   finalDrawing: string,
+   *   erpDrawing: string,
+   *   cachedDrawing: string,
+   * }} p
+   */
+  function updateLocScanParsedHint(p) {
+    const {
+      rawHint,
+      orderNo,
+      itemRefId,
+      format,
+      erpSnap,
+      erpLookupStatus,
+      erpLookupErr,
+      finalDrawing,
+      erpDrawing,
+      cachedDrawing,
+    } = p;
+    const hint = $('#locScanParsed');
+    if (!hint) return;
+    if (!rawHint && !(orderNo && itemRefId)) {
+      hint.hidden = true;
+      hint.innerHTML = '';
+      return;
+    }
+    hint.hidden = false;
+    const fmtBadge =
+      format === 'rnz'
+        ? 'RNZ'
+        : format === 'short'
+          ? 'legacy'
+          : format === 'ocr'
+            ? 'OCR'
+            : rawHint
+              ? ''
+              : 'ručno';
+    const badgeHtml = fmtBadge
+      ? `<span class="loc-scan-parsed-badge">${escHtml(fmtBadge)}</span> `
+      : '';
+    let drawingPart = '';
+    if (finalDrawing) {
+      const revS =
+        erpSnap?.revizija && erpDrawing && finalDrawing === erpDrawing
+          ? ` <span class="loc-muted">(rev. ${escHtml(String(erpSnap.revizija).trim())})</span>`
+          : '';
+      if (erpDrawing && finalDrawing === erpDrawing) {
+        drawingPart = `, crtež <strong>${escHtml(erpDrawing)}</strong>${revS} <em class="loc-muted">(iz plana / BigTehn)</em>`;
+      } else if (cachedDrawing && finalDrawing === cachedDrawing) {
+        drawingPart = `, crtež <strong>${escHtml(cachedDrawing)}</strong> <em class="loc-muted">(iz keša)</em>`;
+      } else {
+        drawingPart = `, crtež <strong>${escHtml(finalDrawing)}</strong>`;
+      }
+    } else {
+      drawingPart = ' <em class="loc-muted">(upiši broj crteža sa teksta nalepnice)</em>';
+    }
+
+    let erpExtra = '';
+    if (erpSnap) {
+      const nd = erpSnap.naziv_dela ? escHtml(String(erpSnap.naziv_dela)) : '';
+      const kt = erpSnap.komada_total != null ? escHtml(String(erpSnap.komada_total)) : '';
+      const kd = erpSnap.komada_done != null ? escHtml(String(erpSnap.komada_done)) : '';
+      const mat = erpSnap.materijal ? escHtml(String(erpSnap.materijal)) : '';
+      const cust = erpSnap.customer_short || erpSnap.customer_name;
+      const custH = cust ? escHtml(String(cust)) : '';
+      const parts = [];
+      if (nd) parts.push(`deo: ${nd}`);
+      if (kt) parts.push(`kom. ukupno: ${kt}${kd !== '' ? ` (urađeno ${kd})` : ''}`);
+      if (mat) parts.push(`mat.: ${mat}`);
+      if (custH) parts.push(`kupac: ${custH}`);
+      if (parts.length) {
+        erpExtra = `<div class="loc-muted" style="margin-top:6px;font-size:12px;line-height:1.35">${parts.join(' · ')}</div>`;
+      }
+    }
+
+    let diagHtml = '';
+    if (format === 'rnz' || format === 'ocr' || format === 'short' || (orderNo && itemRefId)) {
+      const statusTxt =
+        erpLookupStatus === 'ok'
+          ? '✔ nađen u BigTehn cache-u'
+          : erpLookupStatus === 'not_found'
+            ? '✖ nema u BigTehn cache-u'
+            : erpLookupStatus === 'offline'
+              ? '⚠ offline — ne mogu da proverim'
+              : erpLookupStatus === 'error'
+                ? `⚠ greška: ${escHtml(erpLookupErr || 'nepoznata')}`
+                : '—';
+      const needsReload = erpLookupStatus === 'not_found' || erpLookupStatus === 'error';
+      const btnHtml = needsReload
+        ? ` <button type="button" class="loc-scan-btn-reload" data-act="reloadApp">🔄 Osveži app</button>`
+        : '';
+      diagHtml =
+        `<div class="loc-scan-diag loc-muted" style="margin-top:6px;font-size:11px;line-height:1.4">` +
+        `<span>app v${escHtml(APP_VERSION)}</span> · ` +
+        `<span>ERP cache: ${statusTxt}</span>` +
+        btnHtml +
+        `</div>`;
+    }
+
+    const scanLine = rawHint
+      ? `Skenirano: <strong>${escHtml(rawHint)}</strong>`
+      : `Ručno: <strong>${escHtml(orderNo)}</strong> / <strong>${escHtml(itemRefId)}</strong>`;
+    hint.innerHTML =
+      `${badgeHtml}<span class="loc-scan-parsed-raw">${scanLine}</span> ` +
+      `<span class="loc-muted">→ nalog <strong>${escHtml(orderNo)}</strong>, TP <strong>${escHtml(itemRefId)}</strong>${drawingPart}</span>${erpExtra}${diagHtml}`;
+  }
+
+  /**
    * @param {string | {orderNo:string, drawingNo:string, raw:string}} payload
    *   - string: plain barcode (user input ili neprepoznati format)
    *   - object: BigTehn parsed `{ orderNo, drawingNo, raw }`
@@ -1271,16 +1388,18 @@ export async function openScanMoveModal({
      * šta se desilo sa ERP lookup-om: 'ok' | 'not_found' | 'offline' | 'error' | 'skip'. */
     let erpLookupStatus = 'skip';
     let erpLookupErr = '';
-    /* BigTehn cache: RNZ/OCR + i „short“ (nalog/druga-grupa) — iOS često pročita
-     * samo `7351/1088` bez `RNZ:` pa parser mapira na short sa drawingNo=TP;
-     * fetch po (nalog, drugi broj) kao TP i dalje nalazi red i broj_crteza. */
-    if ((format === 'rnz' || format === 'ocr' || format === 'short') && orderNo && itemRefId) {
+    /* BigTehn cache: RNZ/OCR/short ili ručni par (nalog + TP) — isti lookup kao posle skena. */
+    if (orderNo && itemRefId) {
       if (!getIsOnline()) {
         erpLookupStatus = 'offline';
       } else {
         try {
           const erpOpts =
-            format === 'rnz' && payload.varijanta != null && String(payload.varijanta).trim() !== ''
+            format === 'rnz' &&
+            payload &&
+            typeof payload === 'object' &&
+            payload.varijanta != null &&
+            String(payload.varijanta).trim() !== ''
               ? { varijanta: payload.varijanta }
               : {};
           erpSnap = await fetchBigtehnOpSnapshotByRnAndTp(orderNo, itemRefId, erpOpts);
@@ -1313,93 +1432,105 @@ export async function openScanMoveModal({
       }
     }
 
-    const hint = $('#locScanParsed');
-    if (rawHint && (orderNo || itemRefId)) {
-      hint.hidden = false;
-      const fmtBadge =
-        format === 'rnz' ? 'RNZ' : format === 'short' ? 'legacy' : format === 'ocr' ? 'OCR' : '';
-      const badgeHtml = fmtBadge
-        ? `<span class="loc-scan-parsed-badge">${escHtml(fmtBadge)}</span> `
-        : '';
-      let drawingPart = '';
-      if (finalDrawing) {
-        const revS =
-          erpSnap?.revizija && erpDrawing && finalDrawing === erpDrawing
-            ? ` <span class="loc-muted">(rev. ${escHtml(String(erpSnap.revizija).trim())})</span>`
-            : '';
-        if (erpDrawing && finalDrawing === erpDrawing) {
-          drawingPart = `, crtež <strong>${escHtml(erpDrawing)}</strong>${revS} <em class="loc-muted">(iz plana / BigTehn)</em>`;
-        } else if (cachedDrawing && finalDrawing === cachedDrawing) {
-          drawingPart = `, crtež <strong>${escHtml(cachedDrawing)}</strong> <em class="loc-muted">(iz keša)</em>`;
-        } else {
-          drawingPart = `, crtež <strong>${escHtml(finalDrawing)}</strong>`;
-        }
-      } else {
-        drawingPart = ' <em class="loc-muted">(upiši broj crteža sa teksta nalepnice)</em>';
-      }
-
-      let erpExtra = '';
-      if (erpSnap) {
-        const nd = erpSnap.naziv_dela ? escHtml(String(erpSnap.naziv_dela)) : '';
-        const kt = erpSnap.komada_total != null ? escHtml(String(erpSnap.komada_total)) : '';
-        const kd = erpSnap.komada_done != null ? escHtml(String(erpSnap.komada_done)) : '';
-        const mat = erpSnap.materijal ? escHtml(String(erpSnap.materijal)) : '';
-        const cust = erpSnap.customer_short || erpSnap.customer_name;
-        const custH = cust ? escHtml(String(cust)) : '';
-        const parts = [];
-        if (nd) parts.push(`deo: ${nd}`);
-        if (kt) parts.push(`kom. ukupno: ${kt}${kd !== '' ? ` (urađeno ${kd})` : ''}`);
-        if (mat) parts.push(`mat.: ${mat}`);
-        if (custH) parts.push(`kupac: ${custH}`);
-        if (parts.length) {
-          erpExtra = `<div class="loc-muted" style="margin-top:6px;font-size:12px;line-height:1.35">${parts.join(' · ')}</div>`;
-        }
-      }
-
-      /* Dijagnostička linija — UVEK vidljiva za RNZ skeniranja. Pokazuje:
-       *   - verziju aplikacije (`__APP_VERSION__` iz Vite build-a) → user vidi
-       *     odmah da li je PWA skinuo novi JS ili i dalje vrti stari cache;
-       *   - status ERP lookup-a (cache nađen / nije / offline / greška);
-       *   - dugme "Osveži app" ako je status NOT_FOUND ili ERROR — jedan klik
-       *     deregistruje service worker + briše caches + reload. Neophodno kad
-       *     magacioner vidi stari autofill flow. */
-      let diagHtml = '';
-      if (format === 'rnz' || format === 'ocr' || format === 'short') {
-        const statusTxt =
-          erpLookupStatus === 'ok'
-            ? '✔ nađen u BigTehn cache-u'
-            : erpLookupStatus === 'not_found'
-              ? '✖ nema u BigTehn cache-u'
-              : erpLookupStatus === 'offline'
-                ? '⚠ offline — ne mogu da proverim'
-                : erpLookupStatus === 'error'
-                  ? `⚠ greška: ${escHtml(erpLookupErr || 'nepoznata')}`
-                  : '—';
-        const needsReload = erpLookupStatus === 'not_found' || erpLookupStatus === 'error';
-        const btnHtml = needsReload
-          ? ` <button type="button" class="loc-scan-btn-reload" data-act="reloadApp">🔄 Osveži app</button>`
-          : '';
-        diagHtml =
-          `<div class="loc-scan-diag loc-muted" style="margin-top:6px;font-size:11px;line-height:1.4">` +
-          `<span>app v${escHtml(APP_VERSION)}</span> · ` +
-          `<span>ERP cache: ${statusTxt}</span>` +
-          btnHtml +
-          `</div>`;
-      }
-
-      hint.innerHTML =
-        `${badgeHtml}<span class="loc-scan-parsed-raw">Skenirano: <strong>${escHtml(rawHint)}</strong></span> ` +
-        `<span class="loc-muted">→ nalog <strong>${escHtml(orderNo)}</strong>, TP <strong>${escHtml(itemRefId)}</strong>${drawingPart}</span>${erpExtra}${diagHtml}`;
-    } else {
-      hint.hidden = true;
-      hint.innerHTML = '';
-    }
+    updateLocScanParsedHint({
+      rawHint,
+      orderNo,
+      itemRefId,
+      format,
+      erpSnap,
+      erpLookupStatus,
+      erpLookupErr,
+      finalDrawing,
+      erpDrawing,
+      cachedDrawing,
+    });
 
     /* Čekaj fetch lokacija pre „Na lokaciju“ — na iOS sporijoj mreži inače
      * populateToSelect vidi prazan state.locs i ostane samo placeholder. */
     await locsReady;
     populateToSelect();
     await refreshPlacements();
+  }
+
+  /**
+   * Kad radnik ručno menja nalog ili TP — isti ERP lookup i autofill crteža kao posle skena.
+   */
+  async function refreshErpFromOrderTpFields() {
+    const orderNo = $('#locScanOrder').value.trim();
+    const itemRefId = $('#locScanItemId').value.trim();
+    const drawingCur = $('#locScanDrawing')?.value.trim() || '';
+
+    if (!orderNo || !itemRefId) {
+      state.erpSnapshot = null;
+      updateLocScanParsedHint({
+        rawHint: '',
+        orderNo,
+        itemRefId,
+        format: '',
+        erpSnap: null,
+        erpLookupStatus: 'skip',
+        erpLookupErr: '',
+        finalDrawing: drawingCur,
+        erpDrawing: '',
+        cachedDrawing: '',
+      });
+      if (!orderNo && !itemRefId) {
+        const revHint = $('#locScanRevHint');
+        if (revHint) {
+          revHint.hidden = true;
+          revHint.textContent = '';
+        }
+      }
+      return;
+    }
+
+    let erpSnap = null;
+    let erpLookupStatus = 'skip';
+    let erpLookupErr = '';
+    if (!getIsOnline()) {
+      erpLookupStatus = 'offline';
+    } else {
+      try {
+        erpSnap = await fetchBigtehnOpSnapshotByRnAndTp(orderNo, itemRefId, {});
+        erpLookupStatus = erpSnap ? 'ok' : 'not_found';
+      } catch (e) {
+        console.warn('[scan] ERP snapshot (manual field) failed', e);
+        erpLookupStatus = 'error';
+        erpLookupErr = e?.message || String(e);
+      }
+    }
+    state.erpSnapshot = erpSnap;
+
+    const cachedDrawing = getDrawingCache(orderNo, itemRefId);
+    const erpDrawing = erpSnap?.broj_crteza ? String(erpSnap.broj_crteza).trim() : '';
+    const finalDrawing = (erpDrawing || cachedDrawing || '').trim();
+    const drawingEl = /** @type {HTMLInputElement|null} */ ($('#locScanDrawing'));
+    if (drawingEl) drawingEl.value = finalDrawing;
+
+    const revHint = $('#locScanRevHint');
+    if (revHint) {
+      const r = erpSnap?.revizija ? String(erpSnap.revizija).trim() : '';
+      if (r && erpDrawing && finalDrawing === erpDrawing) {
+        revHint.hidden = false;
+        revHint.textContent = `Revizija crteža (BigTehn): ${r}`;
+      } else {
+        revHint.hidden = true;
+        revHint.textContent = '';
+      }
+    }
+
+    updateLocScanParsedHint({
+      rawHint: '',
+      orderNo,
+      itemRefId,
+      format: '',
+      erpSnap,
+      erpLookupStatus,
+      erpLookupErr,
+      finalDrawing,
+      erpDrawing,
+      cachedDrawing,
+    });
   }
 
   async function refreshPlacements() {
@@ -1780,12 +1911,15 @@ export async function openScanMoveModal({
     }
   });
 
-  /* Debounce refresh kada korisnik menja crtež ili nalog ručno. */
+  /* Debounce: ERP + placement-i kad ručno menja nalog / TP (isto kao posle skena). */
   let debT = null;
   overlay.addEventListener('input', ev => {
     if (ev.target.id === 'locScanItemId' || ev.target.id === 'locScanOrder') {
       clearTimeout(debT);
-      debT = setTimeout(refreshPlacements, 300);
+      debT = setTimeout(async () => {
+        await refreshErpFromOrderTpFields();
+        await refreshPlacements();
+      }, 350);
     }
   });
 
