@@ -42,6 +42,43 @@ function normalizeNonRnzSeparators(s) {
 }
 
 /**
+ * Poslednji fallback za kompakt nalepnicu (split) ako strogi regex ne prođe.
+ * Uklanja Code128 prefiks `]C` + jedna cifra / GS; ne menja RNZ/short (poziva se posle njih).
+ *
+ * @param {string} clean
+ * @returns {ParsedBarcode | null}
+ */
+function tryParseCompactLabelLoose(clean) {
+  if (!clean || /^RNZ/i.test(clean)) return null;
+  let s = clean
+    .replace(/^[\x1D\x1E\x1F]+/, '')
+    .replace(/^\]C\d/i, '')
+    .trim();
+  s = normalizeNonRnzSeparators(s);
+  if (!/^\d/.test(s) || !s.includes(':') || !s.includes('/')) return null;
+  const parts = s.split(':').map(p => p.trim()).filter(Boolean);
+  if (parts.length !== 3) return null;
+  const [idrn, mid, varijanta] = parts;
+  if (!/^\d{1,10}$/.test(idrn) || !/^\d+$/.test(varijanta)) return null;
+  const si = mid.indexOf('/');
+  if (si < 1 || si >= mid.length - 1) return null;
+  const orderNo = mid.slice(0, si).trim();
+  const itemRefId = mid.slice(si + 1).trim();
+  if (!/^\d{1,8}$/.test(orderNo)) return null;
+  if (!itemRefId || !/^[A-Za-z0-9._-]+$/.test(itemRefId)) return null;
+  return {
+    orderNo,
+    itemRefId,
+    drawingNo: '',
+    format: /** @type {'compact'} */ ('compact'),
+    raw: clean,
+    idrn,
+    varijanta,
+    field4: '',
+  };
+}
+
+/**
  * @typedef {object} ParsedBarcode
  * @property {string} orderNo Broj radnog naloga (npr. "7351").
  * @property {string} itemRefId Kompozitni ili prost identifikator stavke
@@ -77,7 +114,8 @@ function normalizeNonRnzSeparators(s) {
  *
  * **Format C — kompaktna nalepnica (bez `RNZ:` prefiksa):**
  *   `9833:9400/7-5:0` → `idrn` / `orderNo` / `itemRefId` (projekat TP) / `varijanta`
- *   (fallback samo ako RNZ i short format ne odgovaraju).
+ *   (strogi regex, zatim **labavi** split fallback sa `]C1` Code128 prefiksom / GS —
+ *   samo ako RNZ i short ne odgovaraju).
  *
  * @param {string} raw
  * @returns {ParsedBarcode | null}
@@ -143,6 +181,9 @@ export function parseBigTehnBarcode(raw) {
       };
     }
   }
+
+  const looseCompact = tryParseCompactLabelLoose(clean);
+  if (looseCompact) return looseCompact;
 
   return null;
 }

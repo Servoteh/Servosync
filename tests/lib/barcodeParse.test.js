@@ -193,6 +193,15 @@ describe('parseBigTehnBarcode — compact label (fallback bez RNZ:)', () => {
     });
   });
 
+  it('labavi fallback: Code128 prefiks ]C1', () => {
+    expect(parseBigTehnBarcode(']C19833:9400/7-5:0')).toMatchObject({
+      format: 'compact',
+      orderNo: '9400',
+      itemRefId: '7-5',
+      varijanta: '0',
+    });
+  });
+
   it('RNZ i dalje ima prioritet (isti brojevi, drugačiji oblik)', () => {
     expect(parseBigTehnBarcode('RNZ:9833:9400/7-5:0:44963')).toMatchObject({
       format: 'rnz',
