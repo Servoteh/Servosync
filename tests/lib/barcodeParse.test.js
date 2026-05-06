@@ -57,6 +57,19 @@ describe('parseBigTehnBarcode — RNZ format (current production)', () => {
     });
   });
 
+  it('parsira TP sa kosom crtom u ref-u (RNZ)', () => {
+    expect(parseBigTehnBarcode('RNZ:10348:9400/1/300:0:44706')).toEqual({
+      idrn: '10348',
+      orderNo: '9400',
+      itemRefId: '1/300',
+      drawingNo: '',
+      format: 'rnz',
+      raw: 'RNZ:10348:9400/1/300:0:44706',
+      varijanta: '0',
+      field4: '44706',
+    });
+  });
+
   it('izdvaja idrn, varijantu i field4', () => {
     const a = parseBigTehnBarcode('RNZ:1:5000/100:0:99999');
     expect(a?.orderNo).toBe('5000');
@@ -178,6 +191,18 @@ describe('formatBigTehnRnzBarcode / formatBigTehnShortBarcode', () => {
       itemRefId: '1088',
       format: 'rnz',
     });
+  });
+
+  it('RNZ generator čuva kosu crtu u tpNo (round-trip)', () => {
+    const raw = formatBigTehnRnzBarcode({
+      internalId: '10348',
+      orderNo: '9400',
+      tpNo: '1/300',
+      segment3: '0',
+      segment4: '44706',
+    });
+    expect(raw).toBe('RNZ:10348:9400/1/300:0:44706');
+    expect(parseBigTehnBarcode(raw)?.itemRefId).toBe('1/300');
   });
 
   it('short format round-trip', () => {

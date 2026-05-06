@@ -44,10 +44,10 @@ export function normalizeBarcodeText(raw) {
  * Parsiraj BigTehn barkod iz jednog od dva potvrđena formata.
  *
  * **Format A — RNZ (trenutno u produkciji):**
- *   `RNZ:8693:7351/1088:0:39757` ili `RNZ:9833:9400/7-5-S1:1:44963`
+ *   `RNZ:8693:7351/1088:0:39757`, `RNZ:9833:9400/7-5-S1:1:44963` ili `RNZ:10348:9400/1/300:0:44706`
  *     - `RNZ`          prefix (konstantan)
  *     - `9833`         `idrn` (interni ID dokumenta)
- *     - `9400/7-5-S1`  **broj naloga / TP ref** (`itemRefId` može biti alfanumerički + `.-_`)
+ *     - `9400/7-5-S1`  **broj naloga / TP ref** (`itemRefId` može biti alfanumerički + `.-_`, uključujući `/` npr. `1/300`)
  *     - `1`            `varijanta` (ERP; lookup po `varijanta` kad je u barkodu)
  *     - `44963`        `field4` (npr. timer — ne mapira se na crtež u parseru)
  *
@@ -69,9 +69,10 @@ export function parseBigTehnBarcode(raw) {
   const clean = normalizeBarcodeText(raw);
   if (!clean) return null;
 
-  /* RNZ — PRE regex je zahtevao TP kao \d{1,8} (npr. 1088), pa "7-5-S1" nije prolazio. */
+  /* RNZ — PRE regex je zahtevao TP kao \d{1,8} (npr. 1088), pa "7-5-S1" nije prolazio.
+   * U `itemRefId` dozvoljen je i `/` (npr. `9400/1/300` → nalog 9400, TP `1/300`). */
   const rnz = clean.match(
-    /^RNZ\s*[:|]\s*(\d{1,10})\s*[:|]\s*(\d{1,8})\s*[/\\\-_ ]\s*([A-Za-z0-9._-]{1,64})\s*[:|]\s*(\d+)\s*[:|]\s*(\d+)\s*$/i,
+    /^RNZ\s*[:|]\s*(\d{1,10})\s*[:|]\s*(\d{1,8})\s*[/\\\-_ ]\s*([A-Za-z0-9._/\-]{1,64})\s*[:|]\s*(\d+)\s*[:|]\s*(\d+)\s*$/i,
   );
   if (rnz) {
     const [, idrn, orderNo, itemRefId, varijanta, field4] = rnz;
@@ -182,7 +183,9 @@ export function formatBigTehnRnzBarcode({
   if (orderNo == null || tpNo == null) return null;
   const a = String(internalId).replace(/\D/g, '').slice(0, 10) || '0';
   const o = String(orderNo).replace(/\D/g, '').slice(0, 8);
-  const t = String(tpNo).replace(/\D/g, '').slice(0, 8);
+  const t = String(tpNo)
+    .replace(/[^A-Za-z0-9._/\-]/g, '')
+    .slice(0, 64);
   const s3 = String(segment3).replace(/\D/g, '').slice(0, 12) || '0';
   const s4 = String(segment4).replace(/\D/g, '').slice(0, 12) || '0';
   if (!o || !t) return null;
