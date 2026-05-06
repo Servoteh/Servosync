@@ -3,6 +3,7 @@
  *
  * - iOS / desktop: ZXing (`@zxing/browser`).
  * - Android Chrome + mode AUTO: `BarcodeDetector` kada postoji, inače ZXing.
+ * - Mobilni live: `TRY_HARDER` + ideal 2560×1440 radi gustog Code128 na nalepnici.
  * - Debug: `sessionStorage.loc_scan_decode_mode` = `AUTO` | `ZXING_ONLY` | `BARCODE_DETECTOR_ONLY`
  *
  * Usage:
@@ -18,30 +19,55 @@ import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 
 export { normalizeBarcodeText, parseBigTehnBarcode } from '../lib/barcodeParse.js';
 
-const LIVE_SCAN_HINTS = new Map();
-LIVE_SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
-  BarcodeFormat.CODE_128,
-  BarcodeFormat.CODE_39,
-]);
-LIVE_SCAN_HINTS.set(DecodeHintType.TRY_HARDER, false);
+/** iPhone / iPad / Android — gusti Code128 na nalepnici zahtevaju TRY_HARDER + više px. */
+function isLiveScanMobile() {
+  if (typeof navigator === 'undefined') return false;
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+}
 
-const LIVE_SCAN_HINTS_TRY_HARDER = new Map(LIVE_SCAN_HINTS);
-LIVE_SCAN_HINTS_TRY_HARDER.set(DecodeHintType.TRY_HARDER, true);
+/**
+ * @param {{ tryHarder?: boolean }} [opts]
+ */
+function buildLiveScanHints(opts = {}) {
+  const m = new Map();
+  m.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128, BarcodeFormat.CODE_39]);
+  const tryHarder = typeof opts.tryHarder === 'boolean' ? opts.tryHarder : isLiveScanMobile();
+  m.set(DecodeHintType.TRY_HARDER, tryHarder);
+  return m;
+}
 
-/** Android (ne-Chrome): ZXing live sa TRY_HARDER. */
-const LIVE_SCAN_HINTS_ANDROID_FALLBACK = new Map(LIVE_SCAN_HINTS);
-LIVE_SCAN_HINTS_ANDROID_FALLBACK.set(DecodeHintType.TRY_HARDER, true);
+function buildMobileCameraVideoConstraints() {
+  if (!isLiveScanMobile()) {
+    return {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30 },
+    };
+  }
+  return {
+    width: { ideal: 2560 },
+    height: { ideal: 1440 },
+    frameRate: { ideal: 30, max: 30 },
+  };
+}
 
 const STILL_IMAGE_SCAN_HINTS = new Map();
 STILL_IMAGE_SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
   BarcodeFormat.CODE_128,
   BarcodeFormat.CODE_39,
+  BarcodeFormat.ITF,
 ]);
 STILL_IMAGE_SCAN_HINTS.set(DecodeHintType.TRY_HARDER, true);
 
-const ZXING_READER_OPTIONS = {
+const ZXING_READER_OPTIONS_DESKTOP = {
   delayBetweenScanAttempts: 50,
   delayBetweenScanSuccess: 200,
+  tryPlayVideoTimeout: 5000,
+};
+
+const ZXING_READER_OPTIONS_MOBILE = {
+  delayBetweenScanAttempts: 40,
+  delayBetweenScanSuccess: 150,
   tryPlayVideoTimeout: 5000,
 };
 
@@ -348,11 +374,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     typeof window.BarcodeDetector === 'function' &&
     (mode === 'AUTO' || mode === 'BARCODE_DETECTOR_ONLY');
 
-  const videoBase = {
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-    frameRate: { ideal: 30 },
-  };
+  const videoBase = buildMobileCameraVideoConstraints();
   const constraints = forceDeviceId
     ? { video: { ...videoBase, deviceId: { exact: forceDeviceId } } }
     : { video: { ...videoBase, facingMode: { ideal: 'environment' } } };
@@ -409,7 +431,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     let detector = null;
     try {
       detector = new window.BarcodeDetector({
-        formats: ['code_128', 'code_39'],
+        formats: ['code_128', 'code_39', 'itf'],
       });
     } catch (e) {
       console.warn('[barcode] BarcodeDetector init failed, falling back to ZXing', e);
@@ -475,13 +497,9 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     }
   }
 
-  const hints =
-    mode === 'ZXING_ONLY' && isAndroidChromeBrowser()
-      ? LIVE_SCAN_HINTS_TRY_HARDER
-      : isAndroid && !isAndroidChromeBrowser()
-        ? LIVE_SCAN_HINTS_ANDROID_FALLBACK
-        : LIVE_SCAN_HINTS;
-  const reader = new BrowserMultiFormatReader(hints, ZXING_READER_OPTIONS);
+  const hints = buildLiveScanHints({});
+  const readerOpts = isLiveScanMobile() ? ZXING_READER_OPTIONS_MOBILE : ZXING_READER_OPTIONS_DESKTOP;
+  const reader = new BrowserMultiFormatReader(hints, readerOpts);
 
   const controls = await reader.decodeFromConstraints(
     constraints,
