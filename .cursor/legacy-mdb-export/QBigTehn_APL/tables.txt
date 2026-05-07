@@ -1,0 +1,1976 @@
+﻿TABLE: _AppRev
+  - ID	 type=4	 size=4	 req=False
+  - APP	 type=10	 size=20	 req=True
+  - Ver	 type=10	 size=50	 req=True
+  - VerDatum	 type=8	 size=8	 req=True
+  - Tema	 type=10	 size=100	 req=True
+  - Opis	 type=12	 size=0	 req=True
+  - Uradjeno	 type=1	 size=1	 req=False
+  - Firma	 type=10	 size=30	 req=True
+  - DIVUnos	 type=8	 size=8	 req=True
+  IDX PrimaryKey [primary=True unique=True]: ID
+
+TABLE: _T_Rev
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTeh_Negovan(BIGBIT\Vasa);DATABASE=QBigTehn  -> dbo._Rev)
+  - ID	 type=4	 size=4	 req=True
+  - APP	 type=10	 size=20	 req=True
+  - Ver	 type=10	 size=50	 req=True
+  - VerDatum	 type=8	 size=8	 req=True
+  - Tema	 type=10	 size=100	 req=True
+  - Opis	 type=12	 size=0	 req=False
+  - Uradjeno	 type=1	 size=1	 req=True
+  - Firma	 type=10	 size=30	 req=False
+  - DIVUnos	 type=8	 size=8	 req=True
+  - SubRev	 type=4	 size=4	 req=True
+  IDX aaaaa_AppRev_PK [primary=True unique=True]: ID
+
+TABLE: APL_CFG_TabStop
+  - ID	 type=4	 size=4	 req=False
+  - FormName	 type=10	 size=64	 req=True
+  - ControlName	 type=10	 size=64	 req=True
+  - TabStop	 type=1	 size=1	 req=False
+  - TabOrder	 type=3	 size=2	 req=True
+  IDX Jedinstven [primary=False unique=True]: FormName, ControlName
+  IDX PrimaryKey [primary=True unique=True]: ID
+
+TABLE: Baze_CnnString
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_FIT.mdb  -> Baze_CnnString)
+
+TABLE: Baze_Firme
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_FIT.mdb  -> Firme)
+
+TABLE: Baze_Tipovi
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_FIT.mdb  -> Baze_Tipovi)
+
+TABLE: Baze_Tipovi_APL
+  - IDBaze	 type=4	 size=4	 req=False
+  - TipBaze	 type=10	 size=10	 req=True
+  IDX PrimaryKey [primary=True unique=True]: IDBaze
+  IDX TipBaze [primary=False unique=True]: TipBaze
+
+TABLE: BazeIFirme
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_FIT.mdb  -> BazeIFirme)
+
+TABLE: BazeITabele
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_FIT.mdb  -> BazeITabele)
+
+TABLE: BazeITabele_APL
+  - ID	 type=4	 size=4	 req=False
+  - IDBaze	 type=4	 size=4	 req=True
+  - SysFitLevel	 type=3	 size=2	 req=True
+  - Name	 type=10	 size=255	 req=True
+  - SourceTableName	 type=10	 size=255	 req=True
+  - SourceType	 type=10	 size=10	 req=False
+  - CheckLink	 type=1	 size=1	 req=False
+  - CurrentSourceDataBase	 type=10	 size=255	 req=False
+  - RedBrojZaBrisanje	 type=4	 size=4	 req=True
+  - CheckModDel	 type=1	 size=1	 req=False
+  - WhereUslov	 type=10	 size=255	 req=False
+  - DIVUnos	 type=8	 size=8	 req=False
+  IDX Baza [primary=False unique=False]: IDBaze
+  IDX Name [primary=False unique=True]: Name
+  IDX PrimaryKey [primary=True unique=True]: ID
+
+TABLE: BB_TMP_Status
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_TMP.mdb  -> BB_TMP_Status)
+
+TABLE: BB_UsersQuery
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_TMP.mdb  -> BB_UsersQuery)
+
+TABLE: BBDefUser
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.BBDefUser)
+  - UserName	 type=10	 size=20	 req=True
+  - DefaultGodina	 type=4	 size=4	 req=False
+  - DefaultOJ	 type=4	 size=4	 req=False
+  - DefaultOD	 type=4	 size=4	 req=False
+  - UnlockGodina	 type=1	 size=1	 req=False
+  - UnlockOJ	 type=1	 size=1	 req=False
+  - UnlockOD	 type=1	 size=1	 req=False
+  - Level	 type=3	 size=2	 req=False
+  - MaxLevel	 type=3	 size=2	 req=False
+  IDX aaaaaBBDefUser_PK [primary=True unique=True]: UserName
+
+TABLE: BBOdeljenja
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.BBOdeljenja)
+  - OD	 type=4	 size=4	 req=True
+  - OznakaOD	 type=10	 size=10	 req=True
+  - OpisOD	 type=10	 size=50	 req=True
+  IDX aaaaaBBOdeljenja_PK [primary=True unique=True]: OD
+
+TABLE: BBOrgJedinice
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.BBOrgJedinice)
+  - OJ	 type=4	 size=4	 req=True
+  - OznakaOJ	 type=10	 size=10	 req=True
+  - OpisOJ	 type=10	 size=50	 req=True
+  IDX aaaaaBBOrgJedinice_PK [primary=True unique=True]: OJ
+
+TABLE: BBPravaPristupa
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.BBPravaPristupa)
+  - ID	 type=4	 size=4	 req=True
+  - ImeUsera	 type=10	 size=20	 req=True
+  - ImeForme	 type=10	 size=50	 req=True
+  - ImeKontrole	 type=10	 size=50	 req=True
+  - Visible	 type=1	 size=1	 req=True
+  - Locked	 type=1	 size=1	 req=True
+  - Enabled	 type=1	 size=1	 req=True
+  - Vrednost	 type=10	 size=250	 req=False
+  - RecordSource	 type=12	 size=0	 req=False
+  - Filter	 type=10	 size=250	 req=False
+  IDX aaaaaBBPravaPristupa_PK [primary=True unique=True]: ID
+  IDX Forma [primary=False unique=False]: ImeForme
+  IDX ID [primary=False unique=False]: ID
+  IDX Jedinstven [primary=False unique=True]: ImeUsera, ImeForme, ImeKontrole
+  IDX PrimaryKey [primary=False unique=True]: ID
+  IDX UserName [primary=False unique=False]: ImeUsera
+
+TABLE: BBQueryDef
+  - QueryName	 type=10	 size=64	 req=True
+  - PassTrough	 type=1	 size=1	 req=False
+  - ProcName	 type=10	 size=64	 req=False
+  - ProcType	 type=10	 size=3	 req=False
+  - SQLText	 type=12	 size=0	 req=False
+  - AccQueryName	 type=10	 size=64	 req=False
+  - AccRSFormName	 type=10	 size=64	 req=False
+  - AccParFormName	 type=10	 size=64	 req=False
+  - AccSQLText	 type=12	 size=0	 req=False
+  - UseAccQuery	 type=1	 size=1	 req=False
+  - SetAsRST	 type=1	 size=1	 req=False
+  - RecalcSum	 type=1	 size=1	 req=False
+  - NoSet	 type=1	 size=1	 req=False
+  - UniqueTable	 type=10	 size=255	 req=False
+  - LockType	 type=3	 size=2	 req=True
+  - CursorLocation	 type=3	 size=2	 req=True
+  - CursorType	 type=3	 size=2	 req=True
+  - CommandTimeout	 type=3	 size=2	 req=True
+  - DisconectedRST	 type=1	 size=1	 req=False
+  - PrviUnos	 type=8	 size=8	 req=False
+  - PoslednjaIzmena	 type=8	 size=8	 req=False
+  - Napomena	 type=12	 size=0	 req=False
+  - SortRST	 type=10	 size=255	 req=False
+  IDX AccRSFormName [primary=False unique=True]: AccRSFormName
+  IDX PrimaryKey [primary=True unique=True]: QueryName
+  IDX ProcName [primary=False unique=False]: ProcName
+
+TABLE: BBQueryParDef
+  - QueryName	 type=10	 size=64	 req=True
+  - Name	 type=10	 size=64	 req=True
+  - Type	 type=3	 size=2	 req=True
+  - Size	 type=4	 size=4	 req=False
+  - Precision	 type=3	 size=2	 req=False
+  - Direction	 type=3	 size=2	 req=False
+  - AccMapValue	 type=10	 size=255	 req=False
+  - Value	 type=10	 size=255	 req=False
+  - Rbr	 type=4	 size=4	 req=True
+  - PrviUnos	 type=8	 size=8	 req=False
+  - PoslednjaIzmena	 type=8	 size=8	 req=False
+  IDX {846F79D2-94D5-4115-B42A-EFB9BC0C6527} [primary=False unique=False]: QueryName
+  IDX Name [primary=False unique=False]: Name
+  IDX PrimaryKey [primary=True unique=True]: QueryName, Name
+  IDX QueryName [primary=False unique=False]: QueryName
+  IDX Type [primary=False unique=False]: Type
+
+TABLE: Cenovnik
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.Cenovnik)
+  - ID	 type=4	 size=4	 req=True
+  - Sifra artikla	 type=4	 size=4	 req=True
+  - Vrsta dokumenta	 type=10	 size=5	 req=True
+  - Cena	 type=7	 size=8	 req=False
+  - Tarifa	 type=10	 size=5	 req=True
+  - CenaBezPDV	 type=5	 size=8	 req=False
+  - Taksa	 type=7	 size=8	 req=False
+  - Prn	 type=1	 size=1	 req=False
+  - CenaSaPDV	 type=5	 size=8	 req=False
+  - CheckCenaSaPDV	 type=1	 size=1	 req=False
+  - ZakCen	 type=1	 size=1	 req=False
+  IDX Jedinstvenost [primary=False unique=True]: Sifra artikla, Vrsta dokumenta
+  IDX PK_Cenovnik [primary=True unique=True]: ID
+  IDX Sifra artikla [primary=False unique=False]: Sifra artikla
+  IDX Vrsta dokumenta [primary=False unique=False]: Vrsta dokumenta
+
+TABLE: CFG_APL_KatParPrip
+  - KatPar	 type=10	 size=20	 req=True
+  - Parametar	 type=10	 size=120	 req=True
+  IDX {9D4630FA-6930-4403-B78C-8B83D8D39366} [primary=False unique=False]: Parametar
+  IDX KatPar [primary=False unique=False]: KatPar
+  IDX Parametar [primary=False unique=False]: Parametar
+  IDX PrimaryKey [primary=True unique=True]: KatPar, Parametar
+
+TABLE: CFG_Apl_Parametri_DEF
+  - Parametar	 type=10	 size=120	 req=True
+  - Vrednost	 type=12	 size=0	 req=False
+  - DoEval	 type=1	 size=1	 req=False
+  - Tip	 type=10	 size=20	 req=False
+  - SamoDozvoljeneVrednosti	 type=1	 size=1	 req=False
+  - Opis	 type=12	 size=0	 req=False
+  - GlobalPar	 type=1	 size=1	 req=False
+  - LokalPar	 type=1	 size=1	 req=False
+  - DIVUnos	 type=8	 size=8	 req=False
+  IDX Parametar [primary=False unique=False]: Parametar
+  IDX PrimaryKey [primary=True unique=True]: Parametar
+
+TABLE: CFG_Apl_Parametri_DozvoljeneVrednosti
+  - ID	 type=4	 size=4	 req=False
+  - Parametar	 type=10	 size=120	 req=True
+  - Vrednost	 type=12	 size=0	 req=True
+  - OpisVrednosti	 type=10	 size=100	 req=False
+  - DIVUnos	 type=8	 size=8	 req=False
+  IDX {9A956AE2-B90E-4C1C-ACC2-6AB000290840} [primary=False unique=False]: Parametar
+  IDX ID [primary=False unique=False]: ID
+  IDX Parametar [primary=False unique=False]: Parametar
+  IDX PrimaryKey [primary=True unique=True]: ID
+
+TABLE: CFG_Global
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.CFG_Global)
+  - IDFirma	 type=4	 size=4	 req=True
+  - Parametar	 type=10	 size=120	 req=True
+  - Vrednost	 type=12	 size=0	 req=False
+  - Tip	 type=10	 size=20	 req=False
+  - Opis	 type=10	 size=100	 req=False
+  IDX CFG_Global_PK [primary=True unique=True]: IDFirma, Parametar
+
+TABLE: CFG_Lokal
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_CFG_Lokal.mdb  -> CFG_Lokal)
+
+TABLE: CFG_Sys
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.CFG_Sys)
+  - Parametar	 type=10	 size=120	 req=True
+  - Vrednost	 type=10	 size=50	 req=False
+  - Tip	 type=10	 size=20	 req=False
+  - Opis	 type=10	 size=255	 req=False
+  - DIVUnos	 type=8	 size=8	 req=False
+  IDX PK_CFG_Sys [primary=True unique=True]: Parametar
+
+TABLE: CFG_Sys_APL
+  - Parametar	 type=10	 size=120	 req=True
+  - Vrednost	 type=10	 size=50	 req=False
+  - Tip	 type=10	 size=20	 req=False
+  - Opis	 type=10	 size=255	 req=False
+  - DIVUnos	 type=8	 size=8	 req=False
+  IDX PK_CFG_Sys [primary=True unique=True]: Parametar
+
+TABLE: CFG_TabStop
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_CFG_Lokal.mdb  -> CFG_TabStop)
+
+TABLE: Digitron
+  (LINKED: ;DATABASE=C:\SHARES\Servoteh\QBigTehn\EXTENDED\Digitron.mdb  -> Digitron)
+
+TABLE: ExcelRNZaBrisanje
+  (LINKED: Excel 12.0 Xml;HDR=YES;IMEX=2;ACCDB=YES;DATABASE=C:\SHARES\Servoteh\QBigTehn\stari ID za brisanje.xlsx  -> Sheet1$)
+
+TABLE: EXT_Cenovnik
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> Cenovnik)
+
+TABLE: EXT_DobavljaciZaArtikal
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> DobavljaciZaArtikal)
+
+TABLE: EXT_KNG_Artikli
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> KNG_Artikli)
+
+TABLE: EXT_Komitenti
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> Komitenti)
+
+TABLE: EXT_Kontni plan
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> Kontni plan)
+
+TABLE: EXT_Magacini
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> Magacini)
+
+TABLE: EXT_MestaIsporuke
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> MestaIsporuke)
+
+TABLE: EXT_Predmeti
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> Predmeti)
+
+TABLE: EXT_Prodavci
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> Prodavci)
+
+TABLE: EXT_R_Artikli
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> R_Artikli)
+
+TABLE: EXT_R_Grupa
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> R_Grupa)
+
+TABLE: EXT_R_Podgrupa
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> R_Podgrupa)
+
+TABLE: EXT_R_Poreklo
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> R_Poreklo)
+
+TABLE: EXT_R_Tarife
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> R_Tarife)
+
+TABLE: EXT_R_Vrste dokumenata
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> R_Vrste dokumenata)
+
+TABLE: EXT_Radninalozi
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> RadniNalozi)
+
+TABLE: EXT_SpecifikacijaZahtevaNabavke
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> SpecifikacijaZahtevaNabavke)
+
+TABLE: EXT_T_Robna dokumenta
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> T_Robna dokumenta)
+
+TABLE: EXT_T_Robne stavke
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> T_Robne stavke)
+
+TABLE: EXT_T_Statusi
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> T_Statusi)
+
+TABLE: EXT_T_Trebovanja
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> T_Trebovanja)
+
+TABLE: EXT_T_Trebovanja stavke
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> T_Trebovanja stavke)
+
+TABLE: EXT_T_UpitDobavljacu
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> T_UpitDobavljacu)
+
+TABLE: EXT_T_UpitDobavljacu Stavke
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> T_UpitDobavljacu Stavke)
+
+TABLE: EXT_Vrsta naloga
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> Vrsta naloga)
+
+TABLE: EXT_Vrste sifara
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> Vrste sifara)
+
+TABLE: EXT_ZahteviZaNabavku
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> ZahteviZaNabavku)
+
+TABLE: EXT_ZahteviZaPonude
+  (LINKED: ;DATABASE=P:\Servoteh\BigBit26\STH26\BB_T_26.MDB  -> ZahteviZaPonude)
+
+TABLE: InoJezik
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\EXTENDED\BB_Recnik.mdb  -> InoJezik)
+
+TABLE: Komitenti
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.Komitenti)
+  - Sifra	 type=4	 size=4	 req=True
+  - Naziv	 type=10	 size=50	 req=True
+  - Poslovnica	 type=10	 size=50	 req=False
+  - Mesto	 type=10	 size=30	 req=False
+  - Adresa	 type=10	 size=50	 req=False
+  - Postanski broj	 type=10	 size=20	 req=False
+  - Ziro racun_1	 type=10	 size=30	 req=False
+  - Ziro racun_2	 type=10	 size=30	 req=False
+  - Ziro racun_3	 type=10	 size=30	 req=False
+  - Telefon	 type=10	 size=20	 req=False
+  - Fax	 type=10	 size=20	 req=False
+  - Kontakt	 type=10	 size=50	 req=False
+  - Napomena	 type=12	 size=0	 req=False
+  - Drzava	 type=10	 size=30	 req=False
+  - Region	 type=4	 size=4	 req=False
+  - Vrsta sifre	 type=10	 size=10	 req=False
+  - Email	 type=10	 size=50	 req=False
+  - Mobilni	 type=10	 size=20	 req=False
+  - Datum rodjenja	 type=8	 size=8	 req=False
+  - Web adresa	 type=10	 size=50	 req=False
+  - Sifra prodavca	 type=4	 size=4	 req=False
+  - RabatKomitenta	 type=7	 size=8	 req=False
+  - ZastKodKupca	 type=10	 size=50	 req=False
+  - PIB	 type=10	 size=20	 req=True
+  - PDVStatus	 type=4	 size=4	 req=False
+  - MSifra	 type=10	 size=10	 req=False
+  - Odlozeno	 type=3	 size=2	 req=False
+  - IDRuta	 type=4	 size=4	 req=False
+  - IDVozac	 type=4	 size=4	 req=False
+  - IDUplatniRacun	 type=4	 size=4	 req=False
+  - FakturisanjePoMestimaIsporuke	 type=1	 size=1	 req=False
+  - Cenovnik	 type=10	 size=5	 req=False
+  - PrviUnos	 type=8	 size=8	 req=False
+  - PoslednjaIzmena	 type=8	 size=8	 req=False
+  - PrviUnosUser	 type=10	 size=20	 req=False
+  - PoslednjaIzmenaUser	 type=10	 size=20	 req=False
+  - ProcenatProvizije	 type=7	 size=8	 req=False
+  - FiktRabatKomitenta	 type=7	 size=8	 req=False
+  - KomitentiNacinPlacanja	 type=10	 size=50	 req=False
+  - PotpisKom	 type=10	 size=50	 req=False
+  - SkraceniNaziv	 type=10	 size=30	 req=False
+  - DatumIVremeKom	 type=8	 size=8	 req=False
+  - ProveraDuga	 type=1	 size=1	 req=False
+  - KreditLimit	 type=5	 size=8	 req=False
+  - NeProveravajPIB	 type=1	 size=1	 req=False
+  - IDPantheon	 type=10	 size=30	 req=False
+  - NewsLetter	 type=1	 size=1	 req=False
+  - PostaNaDruguAdresu	 type=1	 size=1	 req=False
+  - GLN	 type=10	 size=30	 req=False
+  - KLRucProc	 type=5	 size=8	 req=False
+  - NapomenaZaSalda	 type=12	 size=0	 req=False
+  - NePrikazatiUPregledu	 type=1	 size=1	 req=False
+  - JBKJS	 type=10	 size=10	 req=False
+  - MaticniBroj	 type=10	 size=20	 req=False
+  - ER_XMLSaPopustomPoArtiklu	 type=1	 size=1	 req=False
+  - CRF	 type=1	 size=1	 req=False
+  IDX IDPantheon [primary=False unique=False]: IDPantheon
+  IDX IDRuta [primary=False unique=False]: IDRuta
+  IDX IDUplatniRacun [primary=False unique=False]: IDUplatniRacun
+  IDX IDVozac [primary=False unique=False]: IDVozac
+  IDX IX_PIB_UniqueColumn [primary=False unique=True]: PIB
+  IDX PK_Komitenti [primary=True unique=True]: Sifra
+  IDX Sifra prodavca [primary=False unique=False]: Sifra prodavca
+  IDX Vrsta sifre [primary=False unique=False]: Vrsta sifre
+
+TABLE: KomponentePDMCrteza
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.KomponentePDMCrteza)
+  - IDKomponenteCrteza	 type=4	 size=4	 req=True
+  - ZaIDCrtez	 type=4	 size=4	 req=True
+  - TrebaIDCrtez	 type=4	 size=4	 req=True
+  - PotrebnoKomada	 type=4	 size=4	 req=True
+  IDX IX_KomponentePDMCrteza_TrebaIDCrteza [primary=False unique=False]: TrebaIDCrtez
+  IDX IX_KomponentePDMCrteza_ZaIDCrtez [primary=False unique=False]: ZaIDCrtez
+  IDX IX_KomponentePDMCrteza_ZaIDCrteza [primary=False unique=False]: ZaIDCrtez
+  IDX PK_KomponentePDMCrteza [primary=True unique=True]: IDKomponenteCrteza
+
+TABLE: LIB_CFG_Sys
+  - Parametar	 type=10	 size=120	 req=False
+  - Vrednost	 type=10	 size=50	 req=False
+  - Tip	 type=10	 size=20	 req=False
+  - Opis	 type=10	 size=255	 req=False
+  - DIVUnos	 type=8	 size=8	 req=False
+  IDX ID [primary=False unique=False]: Parametar
+  IDX PrimaryKey [primary=True unique=True]: Parametar
+
+TABLE: Magacini
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.Magacini)
+  - IDFirma	 type=4	 size=4	 req=False
+  - IDMagacin	 type=4	 size=4	 req=True
+  - Magacin	 type=10	 size=50	 req=True
+  - UlicaIBroj	 type=10	 size=50	 req=False
+  - Mesto	 type=10	 size=30	 req=False
+  - ProsecneCene	 type=1	 size=1	 req=False
+  - VrstaMag	 type=10	 size=5	 req=False
+  - KontoMag	 type=10	 size=10	 req=False
+  - ImeMagacionera	 type=10	 size=30	 req=False
+  - BrLkMagacionera	 type=10	 size=20	 req=False
+  - PotpisSlika	 type=10	 size=250	 req=False
+  IDX IDFirma [primary=False unique=False]: IDFirma
+  IDX Magacin [primary=False unique=True]: Magacin
+  IDX PK_Magacini [primary=True unique=True]: IDMagacin
+
+TABLE: MiniRecnik
+  - LosSrpski	 type=10	 size=255	 req=False
+  - Srpski	 type=10	 size=255	 req=False
+  IDX PrimaryKey [primary=True unique=True]: LosSrpski
+
+TABLE: MRP_Potrebe
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.MRP_Potrebe)
+  - IDPotreba	 type=4	 size=4	 req=True
+  - IDPredmet	 type=4	 size=4	 req=True
+  - IDCrtezRoot	 type=4	 size=4	 req=False
+  - SifraRadnika	 type=4	 size=4	 req=False
+  - Izvor	 type=2	 size=1	 req=True
+  - TipEksplozije	 type=2	 size=1	 req=False
+  - Status	 type=2	 size=1	 req=True
+  - DatumPotrebe	 type=10	 size=10	 req=True
+  - Napomena	 type=12	 size=0	 req=False
+  - DIVUnosa	 type=8	 size=8	 req=True
+  - DIVUnosaKorisnik	 type=10	 size=20	 req=False
+  - DIVIzmena	 type=8	 size=8	 req=False
+  - DIVIzmenaKorisnik	 type=10	 size=20	 req=False
+  - PlaniranaKolicina	 type=20	 size=16	 req=True
+  - IDPlan	 type=4	 size=4	 req=False
+  - Zakljucano	 type=1	 size=1	 req=True
+  IDX IX_MRP_Potrebe_CrtezPredmet [primary=False unique=False]: IDCrtezRoot, IDPredmet
+  IDX IX_MRP_Potrebe_IDPredmet [primary=False unique=False]: IDPredmet
+  IDX IX_MRP_Potrebe_PredmetStatus [primary=False unique=False]: IDPredmet, Status
+  IDX IX_MRP_Potrebe_SifraRadnika [primary=False unique=False]: SifraRadnika
+  IDX IX_MRP_Potrebe_Status [primary=False unique=False]: Status
+  IDX PK_MRP_Potrebe [primary=True unique=True]: IDPotreba
+  IDX UX_MRP_Potrebe_BOM [primary=False unique=True]: IDPredmet, IDCrtezRoot, TipEksplozije
+
+TABLE: MRP_PotrebeStavke
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.MRP_PotrebeStavke)
+  - IDPotrebaStavka	 type=4	 size=4	 req=True
+  - IDPotreba	 type=4	 size=4	 req=True
+  - IDCrtezIzvora	 type=4	 size=4	 req=False
+  - IDCrtezNabavke	 type=4	 size=4	 req=False
+  - SifraArtikla	 type=4	 size=4	 req=False
+  - KataloskiBrojStavka	 type=10	 size=100	 req=True
+  - NazivArtiklaStavka	 type=10	 size=200	 req=True
+  - JedinicaMereStavka	 type=10	 size=10	 req=True
+  - IzvorStavke	 type=2	 size=1	 req=True
+  - KolicinaPotrebna	 type=20	 size=16	 req=True
+  - DatumPotrebe	 type=10	 size=10	 req=True
+  - VremeIsporukeDana	 type=4	 size=4	 req=False
+  - DatumNabavke	 type=10	 size=10	 req=False
+  - Napomena	 type=12	 size=0	 req=False
+  - DIVUnosa	 type=8	 size=8	 req=True
+  - DIVUnosaKorisnik	 type=10	 size=20	 req=False
+  - DIVIzmena	 type=8	 size=8	 req=False
+  - DIVIzmenaKorisnik	 type=10	 size=20	 req=False
+  - DobavljacID	 type=4	 size=4	 req=False
+  - StatusStavke	 type=2	 size=1	 req=True
+  - KolicinaRezervisano	 type=20	 size=16	 req=True
+  - KolicinaZaNabavku	 type=20	 size=16	 req=True
+  IDX IX_MRP_PotrebeStavke_ArtikalDatum [primary=False unique=False]: SifraArtikla, DatumPotrebe
+  IDX IX_MRP_PotrebeStavke_DatumNabavke [primary=False unique=False]: DatumNabavke
+  IDX IX_MRP_PotrebeStavke_DatumNabavke_Status [primary=False unique=False]: DatumNabavke, StatusStavke
+  IDX IX_MRP_PotrebeStavke_Dobavljac [primary=False unique=False]: DobavljacID
+  IDX IX_MRP_PotrebeStavke_IDCrtez [primary=False unique=False]: IDCrtezNabavke
+  IDX IX_MRP_PotrebeStavke_IDPotreba [primary=False unique=False]: IDPotreba
+  IDX IX_MRP_PotrebeStavke_SifraArtikla [primary=False unique=False]: SifraArtikla
+  IDX IX_MRP_PotrebeStavke_Status [primary=False unique=False]: StatusStavke
+  IDX PK_MRP_PotrebeStavke [primary=True unique=True]: IDPotrebaStavka
+
+TABLE: MRP_StanjeArtikala
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.MRP_StanjeArtikala)
+  - SifraArtikla	 type=4	 size=4	 req=True
+  - Zalihe	 type=20	 size=16	 req=True
+  - Rezervisane	 type=20	 size=16	 req=True
+  - Naziv	 type=10	 size=200	 req=False
+  - KataloskiBroj	 type=10	 size=100	 req=False
+  - JedinicaMere	 type=10	 size=20	 req=False
+  - PoslednjaIzmena	 type=8	 size=8	 req=False
+  IDX PK__MRP_Stan__EFFE88FFCECEC468 [primary=True unique=True]: SifraArtikla
+
+TABLE: MRP_StanjeArtikala_TMP
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.MRP_StanjeArtikala_TMP)
+  - SifraArtikla	 type=4	 size=4	 req=True
+  - Zalihe	 type=20	 size=16	 req=True
+  - Rezervisane	 type=20	 size=16	 req=True
+  - Naziv	 type=10	 size=200	 req=False
+  - KataloskiBroj	 type=10	 size=100	 req=False
+  - JedinicaMere	 type=10	 size=20	 req=False
+  IDX PK__MRP_Stan__EFFE88FF6AAFC5E3 [primary=True unique=True]: SifraArtikla
+
+TABLE: MRP_SyncStatus
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.MRP_SyncStatus)
+  - SyncKey	 type=10	 size=50	 req=True
+  - PoslednjiSync	 type=8	 size=8	 req=False
+  - PoslednjiSyncKorisnik	 type=10	 size=100	 req=False
+  - Napomena	 type=10	 size=255	 req=False
+  IDX PK__MRP_Sync__0E76E39BC4155691 [primary=True unique=True]: SyncKey
+
+TABLE: NacrtPrimopredaje
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.NacrtPrimopredaje)
+  - IDNacrtPrim	 type=4	 size=4	 req=True
+  - IDProjektant	 type=4	 size=4	 req=True
+  - DatumNacrta	 type=8	 size=8	 req=True
+  - IDPredmet	 type=4	 size=4	 req=True
+  - BrojKomada	 type=4	 size=4	 req=True
+  - IDStatusNacrtaPrimopredaje	 type=4	 size=4	 req=True
+  - Napomena	 type=10	 size=250	 req=False
+  - Potpis	 type=10	 size=30	 req=False
+  - PrviUnos	 type=8	 size=8	 req=False
+  - PoslednjaIzmena	 type=8	 size=8	 req=False
+  - BrojNacrta	 type=10	 size=30	 req=True
+  - Zakljucano	 type=1	 size=1	 req=False
+  - TipNacrta	 type=2	 size=1	 req=True
+  - IDGlavniCrtez	 type=4	 size=4	 req=False
+  IDX IDX_NacrtPrim_IDPredmet [primary=False unique=False]: IDPredmet
+  IDX IDX_NacrtPrim_IDProjektant [primary=False unique=False]: IDProjektant
+  IDX IX_NacrtPrimopredaje_ID [primary=False unique=False]: IDNacrtPrim
+  IDX IX_NacrtPrimopredaje_IDStatusNacrtaPrimopredaje [primary=False unique=False]: IDStatusNacrtaPrimopredaje
+  IDX IX_NP_IDGlavniCrtez [primary=False unique=False]: IDGlavniCrtez
+  IDX PK__NacrtPri__B53794FEFDF70DD3 [primary=True unique=True]: IDNacrtPrim
+
+TABLE: NacrtPrimopredajeStavke
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.NacrtPrimopredajeStavke)
+  - IDNacrtStavka	 type=4	 size=4	 req=True
+  - IDNacrtPrim	 type=4	 size=4	 req=True
+  - IDCrtez	 type=4	 size=4	 req=True
+  - Napomena	 type=10	 size=250	 req=False
+  - Potpis	 type=10	 size=30	 req=False
+  - PrviUnos	 type=8	 size=8	 req=False
+  - PoslednjaIzmena	 type=8	 size=8	 req=False
+  - KolicinaZaIzradu	 type=4	 size=4	 req=True
+  - IDGlavniCrtez	 type=4	 size=4	 req=False
+  - IsGlavni	 type=1	 size=1	 req=True
+  - PredProveraDuplikat	 type=1	 size=1	 req=True
+  - PredProveraIDNacrtPrim	 type=4	 size=4	 req=False
+  - PredProveraIDRN	 type=4	 size=4	 req=False
+  - IskljuciPrimopredaju	 type=1	 size=1	 req=True
+  - OdlukaAkcija	 type=2	 size=1	 req=True
+  - DIVOdluke	 type=10	 size=19	 req=False
+  - KolicinaDefinisanaUCrtezu	 type=4	 size=4	 req=False
+  IDX IDX_NacrtPrimStavke_IDCrtez [primary=False unique=False]: IDCrtez
+  IDX IDX_NacrtPrimStavke_IDNacrtPrim [primary=False unique=False]: IDNacrtPrim
+  IDX IX_NPS_IskljuciPrimopredaju [primary=False unique=False]: IDNacrtPrim, IskljuciPrimopredaju
+  IDX IX_NPS_PredProveraDuplikat [primary=False unique=False]: IDNacrtPrim, PredProveraDuplikat
+  IDX PK__NacrtPri__9CC646ECEB33ECF9 [primary=True unique=True]: IDNacrtStavka
+  IDX UX_NPS_NoDup_Active [primary=False unique=True]: IDNacrtPrim, IDCrtez
+
+TABLE: Nalepnice
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.Nalepnice)
+  - ID	 type=4	 size=4	 req=True
+  - IDRN	 type=4	 size=4	 req=True
+  - IDPostupka	 type=4	 size=4	 req=True
+  - IdentBroj	 type=10	 size=20	 req=True
+  - BarKod	 type=10	 size=20	 req=True
+  - NazivPredmeta	 type=10	 size=50	 req=True
+  - Komitent	 type=10	 size=255	 req=True
+  - NazivDela	 type=10	 size=250	 req=True
+  - BrojCrteza	 type=10	 size=100	 req=True
+  - Materijal	 type=10	 size=250	 req=True
+  - DatumUnosa	 type=8	 size=8	 req=True
+  - Kolicina	 type=3	 size=2	 req=True
+  - UkupnaKolicina	 type=3	 size=2	 req=False
+  - PRN	 type=1	 size=1	 req=False
+  IDX PK_Nalepnice [primary=True unique=True]: ID
+
+TABLE: Nalepnice_TMP
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_TMP.mdb  -> Nalepnice)
+
+TABLE: NalepniceNNID
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_TMP.mdb  -> NalepniceNNID)
+
+TABLE: ODBC_DataTypeEnum
+  - dbTypeCode	 type=3	 size=2	 req=True
+  - dbTypeText	 type=10	 size=64	 req=True
+  - dbTypeDesc	 type=10	 size=255	 req=False
+  - SQLName	 type=10	 size=50	 req=False
+  IDX PrimaryKey [primary=True unique=True]: dbTypeCode
+
+TABLE: PDM_Document
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_TMP.mdb  -> TMP_PDM_Document)
+
+TABLE: PDM_Document_APL
+  - DocID	 type=10	 size=50	 req=True
+  - TransactionDate	 type=8	 size=8	 req=False
+  - DocPDMWeID	 type=4	 size=4	 req=False
+  - CfgName	 type=10	 size=50	 req=False
+  - Attr_ApprovedDate	 type=10	 size=255	 req=False
+  - Attr_Revision	 type=10	 size=255	 req=False
+  - Attr_DesignDate	 type=10	 size=255	 req=False
+  - Attr_Naziv	 type=10	 size=255	 req=False
+  - Attr_Document_Number	 type=10	 size=255	 req=False
+  - Attr_Materijal	 type=10	 size=255	 req=False
+  - Attr_Approved_by	 type=10	 size=255	 req=False
+  - Attr_RN	 type=10	 size=255	 req=False
+  - Attr_Comment	 type=10	 size=255	 req=False
+  - Attr_DesignBy	 type=10	 size=255	 req=False
+  - Attr_Dimenzije	 type=10	 size=255	 req=False
+  - Attr_MakeOrBuy	 type=10	 size=255	 req=False
+  - Attr_Naziv_projekta	 type=10	 size=255	 req=False
+  - Attr_Oznaka	 type=10	 size=255	 req=False
+  - Attr_Povrsinska_zastita	 type=10	 size=255	 req=False
+  - Attr_Standard	 type=10	 size=255	 req=False
+  - Attr_Termicka_obrada	 type=10	 size=255	 req=False
+  - Attr_Weight	 type=10	 size=255	 req=False
+  - Attr_Komintent	 type=10	 size=255	 req=False
+  - Attr_WhereUsed	 type=10	 size=255	 req=False
+  - Attr_ZiliS	 type=10	 size=255	 req=False
+  - Attr_Broj_Komada	 type=10	 size=255	 req=False
+  - Attr_Bb_Kataloski_broj	 type=10	 size=50	 req=False
+  - Attr_Name	 type=10	 size=255	 req=False
+  - Attr_State	 type=10	 size=255	 req=False
+  - Attr_Reference_Count	 type=10	 size=255	 req=False
+  - ParentDocID	 type=10	 size=50	 req=False
+  IDX DocID [primary=False unique=False]: DocID
+  IDX DocPDMWeID [primary=False unique=False]: DocPDMWeID
+  IDX ParentDocID [primary=False unique=False]: ParentDocID
+
+TABLE: PDM_PDFCrtezi
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.PDM_PDFCrtezi)
+  - BrojCrteza	 type=10	 size=100	 req=True
+  - Revizija	 type=10	 size=10	 req=True
+  - NazivFajla	 type=10	 size=255	 req=False
+  - DatumUnosa	 type=8	 size=8	 req=True
+  - VelicinaKB	 type=4	 size=4	 req=False
+  - KorisnikUnosa	 type=10	 size=50	 req=False
+  - PDFBinary	 type=11	 size=0	 req=False
+  IDX IX_PDM_PDFCrtezi_BrojCrteza [primary=False unique=False]: BrojCrteza
+  IDX PK_PDM_PDFCrtezi [primary=True unique=True]: BrojCrteza, Revizija
+
+TABLE: PDM_Planiranje
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.PDM_Planiranje)
+  - IDPlan	 type=4	 size=4	 req=True
+  - IDPredmet	 type=4	 size=4	 req=True
+  - IDCrtezSklopa	 type=4	 size=4	 req=False
+  - KolicinaZaIzradu	 type=20	 size=16	 req=True
+  - StatusPlaniranja	 type=4	 size=4	 req=True
+  - DatumPlaniranja	 type=8	 size=8	 req=True
+  - SifraRadnikaPlaniranja	 type=4	 size=4	 req=True
+  - Napomena	 type=10	 size=255	 req=False
+  - Potpis	 type=10	 size=30	 req=False
+  - PrviUnos	 type=8	 size=8	 req=False
+  - PoslednjaIzmena	 type=8	 size=8	 req=False
+  - Zakljucano	 type=1	 size=1	 req=False
+  - BrojPlana	 type=10	 size=30	 req=False
+  - BrojCrtezaPlana	 type=10	 size=20	 req=False
+  - RevizijaPlana	 type=10	 size=3	 req=False
+  IDX IX_PDM_Planiranje_Predmet_Crtez_BrojPlana [primary=False unique=False]: IDPredmet, IDCrtezSklopa, BrojPlana
+  IDX IX_Planiranje_Predmet [primary=False unique=False]: IDPredmet
+  IDX PK_PDM_Planiranje [primary=True unique=True]: IDPlan
+
+TABLE: PDM_PlaniranjeStavke
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.PDM_PlaniranjeStavke)
+  - IDPlanStavka	 type=4	 size=4	 req=True
+  - IDPlan	 type=4	 size=4	 req=True
+  - IDCrtezNabavke	 type=4	 size=4	 req=True
+  - SifraArtikla	 type=4	 size=4	 req=False
+  - KolicinaPoSklopu	 type=20	 size=16	 req=True
+  - PotrebnoUkupno	 type=20	 size=16	 req=False
+  - PredProveraIDPlan	 type=4	 size=4	 req=False
+  - OdlukaAkcija	 type=2	 size=1	 req=True
+  - RucnaKolicina	 type=20	 size=16	 req=False
+  - Rezervisano	 type=20	 size=16	 req=True
+  - ZaNabavku	 type=20	 size=16	 req=True
+  - Zalihe	 type=20	 size=16	 req=False
+  - NazivArtiklaStavke	 type=10	 size=150	 req=False
+  - KataloskiBrojStavke	 type=10	 size=20	 req=False
+  - JMStavke	 type=10	 size=5	 req=False
+  - JeRucnaStavka	 type=1	 size=1	 req=True
+  - IskljuciNabavku	 type=1	 size=1	 req=True
+  - DobavljacID	 type=4	 size=4	 req=False
+  IDX IX_PlaniranjeStavke_ArtikalPlan [primary=False unique=False]: SifraArtikla, IDPlan
+  IDX IX_PlaniranjeStavke_IDPlan [primary=False unique=False]: IDPlan
+  IDX IX_PlaniranjeStavke_Rezervisanje [primary=False unique=False]: IDPlan, IskljuciNabavku
+  IDX IX_PlaniranjeStavke_SifraArtikla [primary=False unique=False]: SifraArtikla
+  IDX PK_PDM_PlaniranjeStavke [primary=True unique=True]: IDPlanStavka
+
+TABLE: PDMCrtezi
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.PDMCrtezi)
+  - IDCrtez	 type=4	 size=4	 req=True
+  - pdmWeID	 type=10	 size=20	 req=True
+  - TransactionDate	 type=8	 size=8	 req=False
+  - DesignDate	 type=8	 size=8	 req=False
+  - DesignBy	 type=10	 size=50	 req=False
+  - ApprovedDate	 type=8	 size=8	 req=False
+  - ApprovedBy	 type=10	 size=50	 req=False
+  - BrojCrteza	 type=10	 size=20	 req=True
+  - Revizija	 type=10	 size=3	 req=True
+  - Kolicina	 type=4	 size=4	 req=True
+  - KataloskiBroj	 type=10	 size=50	 req=True
+  - Naziv	 type=10	 size=255	 req=True
+  - Materijal	 type=10	 size=255	 req=False
+  - RN	 type=10	 size=20	 req=False
+  - Dimenzije	 type=10	 size=255	 req=False
+  - Oznaka	 type=10	 size=20	 req=True
+  - Tezina	 type=7	 size=8	 req=False
+  - Naziv fajla	 type=12	 size=0	 req=False
+  - PDMStatusCrteza	 type=10	 size=20	 req=True
+  - Comment	 type=10	 size=255	 req=False
+  - WhereUsed	 type=10	 size=255	 req=False
+  - Naziv_projekta	 type=10	 size=255	 req=False
+  - DIVUnosa	 type=8	 size=8	 req=False
+  - Potpis	 type=10	 size=50	 req=False
+  - IDStatusCrteza	 type=4	 size=4	 req=True
+  - Nabavka	 type=1	 size=1	 req=True
+  IDX IX_PDMCrtez_BrojCrteza [primary=False unique=False]: BrojCrteza
+  IDX PK_Crtez [primary=True unique=True]: IDCrtez
+  IDX UQ_Crtez_BrojRev [primary=False unique=True]: BrojCrteza, Revizija
+
+TABLE: PDMXMLImportLog
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.PDMXMLImportLog)
+  - IDLog	 type=4	 size=4	 req=True
+  - NazivFajla	 type=10	 size=255	 req=True
+  - PutanjaFajla	 type=12	 size=0	 req=True
+  - ImportTimestamp	 type=8	 size=8	 req=True
+  - Uspesno	 type=1	 size=1	 req=True
+  - StatusPoruka	 type=12	 size=0	 req=False
+  - Kriticno	 type=1	 size=1	 req=True
+  IDX IX_PDMXMLImportLog_ImportTimestamp [primary=False unique=False]: ImportTimestamp
+  IDX PK__PDMXMLIm__95D0020887815D9D [primary=True unique=True]: IDLog
+
+TABLE: Predmeti
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.Predmeti)
+  - IDPredmet	 type=4	 size=4	 req=True
+  - BrojPredmeta	 type=10	 size=20	 req=True
+  - Opis	 type=10	 size=50	 req=False
+  - DatumOtvaranja	 type=8	 size=8	 req=False
+  - IDProdavac	 type=4	 size=4	 req=True
+  - IDKomitent	 type=4	 size=4	 req=True
+  - NextAction	 type=10	 size=50	 req=False
+  - DatumZakljucenja	 type=8	 size=8	 req=False
+  - Memo	 type=12	 size=0	 req=False
+  - Status	 type=10	 size=20	 req=False
+  - NasaRef	 type=10	 size=20	 req=False
+  - NasKontakt1	 type=10	 size=50	 req=False
+  - NasKontakt2	 type=10	 size=50	 req=False
+  - NasTel1	 type=10	 size=20	 req=False
+  - NasTel2	 type=10	 size=20	 req=False
+  - VasaRef	 type=10	 size=20	 req=False
+  - VasKontakt1	 type=10	 size=50	 req=False
+  - VasKontakt2	 type=10	 size=50	 req=False
+  - VasTel1	 type=10	 size=20	 req=False
+  - VasTel2	 type=10	 size=20	 req=False
+  - NabavnaVrednost	 type=5	 size=8	 req=False
+  - Carina	 type=5	 size=8	 req=False
+  - Spedicija	 type=5	 size=8	 req=False
+  - Prevoz	 type=5	 size=8	 req=False
+  - Ostalo	 type=5	 size=8	 req=False
+  - InoDobavljac	 type=4	 size=4	 req=False
+  - RJ	 type=10	 size=4	 req=False
+  - devvaluta	 type=10	 size=3	 req=False
+  - kurs	 type=5	 size=8	 req=False
+  - IDVrstaPosla	 type=4	 size=4	 req=False
+  - NazivPredmeta	 type=10	 size=250	 req=False
+  - RokZavrsetka	 type=8	 size=8	 req=False
+  - Potpis	 type=10	 size=50	 req=False
+  - DatumIVreme	 type=8	 size=8	 req=False
+  - BrojUgovora	 type=10	 size=100	 req=False
+  - DatumUgovora	 type=8	 size=8	 req=False
+  - BrojNarudzbenice	 type=10	 size=100	 req=False
+  - DatumNarudzbenice	 type=8	 size=8	 req=False
+  IDX BrojPredmeta [primary=False unique=True]: BrojPredmeta
+  IDX IDKomitent [primary=False unique=False]: IDKomitent
+  IDX IDProdavac [primary=False unique=False]: IDProdavac
+  IDX IDVrstaPosla [primary=False unique=False]: IDVrstaPosla
+  IDX PK_Predmeti [primary=True unique=True]: IDPredmet
+  IDX Status [primary=False unique=False]: Status
+
+TABLE: PredmetiVrstaPosla
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.PredmetiVrstaPosla)
+  - IDVrstaPosla	 type=4	 size=4	 req=True
+  - VrstaPosla	 type=10	 size=20	 req=False
+  - Opis	 type=10	 size=150	 req=False
+  IDX IDVrstaPosla [primary=False unique=False]: IDVrstaPosla
+  IDX PK_PredmetiVrstaPosla [primary=True unique=True]: IDVrstaPosla
+
+TABLE: PrimopredajaCrteza
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.PrimopredajaCrteza)
+  - IDPrimopredaje	 type=4	 size=4	 req=True
+  - IDCrtez	 type=4	 size=4	 req=True
+  - DatumPredaje	 type=8	 size=8	 req=True
+  - IDRadnikPredaje	 type=4	 size=4	 req=True
+  - IDStatusPrimopredaje	 type=4	 size=4	 req=True
+  - DatumPromeneStatusa	 type=8	 size=8	 req=False
+  - IDRadnikPromeneStatusa	 type=4	 size=4	 req=False
+  - KomentarPromeneStatusa	 type=10	 size=250	 req=False
+  - DatumLansiranja	 type=8	 size=8	 req=False
+  - IDRadnikLansiranja	 type=4	 size=4	 req=False
+  - Napomena	 type=10	 size=250	 req=False
+  - Potpis	 type=10	 size=30	 req=False
+  - PrviUnos	 type=8	 size=8	 req=False
+  - PoslednjaIzmena	 type=8	 size=8	 req=False
+  - Zakljucano	 type=1	 size=1	 req=False
+  IDX IDX_PPcr_DatumPredaje [primary=False unique=False]: DatumPredaje
+  IDX IDX_PPcr_IDCrtez [primary=False unique=False]: IDCrtez
+  IDX IDX_PPcr_Status [primary=False unique=False]: IDStatusPrimopredaje
+  IDX PK__Primopre__146269DD8F294B2F [primary=True unique=True]: IDPrimopredaje
+
+TABLE: PrimopredajaPDFCrteza
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.PrimopredajaPDFCrteza)
+  - ID	 type=4	 size=4	 req=True
+  - IDPrimopredaje	 type=4	 size=4	 req=True
+  - LinkFajla	 type=12	 size=0	 req=True
+  - NazivFajla	 type=10	 size=255	 req=True
+  IDX PK__Primopre__3214EC27EAC44163 [primary=True unique=True]: ID
+  IDX UQ_PrimopredajaPDFCrteza_IDPrimopredaje_LinkFajla [primary=False unique=True]: IDPrimopredaje, LinkFajla
+
+TABLE: Prodavci
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.Prodavci)
+  - Sifra prodavca	 type=4	 size=4	 req=True
+  - Prodavac	 type=10	 size=50	 req=True
+  - Region	 type=4	 size=4	 req=False
+  - ProcenatZaObracun	 type=7	 size=8	 req=False
+  - DeljivoUGrupi	 type=1	 size=1	 req=False
+  - ImeProdavca	 type=10	 size=30	 req=False
+  - BrLkProdavca	 type=10	 size=20	 req=False
+  - LogAcc	 type=10	 size=50	 req=False
+  - Password	 type=10	 size=20	 req=False
+  - Aktivan	 type=1	 size=1	 req=False
+  - NefiskalniRN	 type=1	 size=1	 req=False
+  - Storniranje	 type=1	 size=1	 req=False
+  - PotpisSlika	 type=10	 size=250	 req=False
+  - OznakaTima	 type=10	 size=10	 req=False
+  - Telefon	 type=10	 size=20	 req=False
+  - Email	 type=10	 size=50	 req=False
+  IDX IX_Password_UniqueColumn [primary=False unique=True]: Password
+  IDX OznakaTima [primary=False unique=False]: OznakaTima
+  IDX PK_Prodavci [primary=True unique=True]: Sifra prodavca
+  IDX Prodavac [primary=False unique=True]: Prodavac
+
+TABLE: PS_TabeleZaImportIzPG
+  - Redosled	 type=4	 size=4	 req=True
+  - ImeIzTabele	 type=10	 size=64	 req=True
+  - ImeUTabelu	 type=10	 size=64	 req=True
+  - Uradi	 type=1	 size=1	 req=False
+  - SQLTexImport	 type=12	 size=0	 req=False
+  - SQLTextPostImport	 type=12	 size=0	 req=False
+  - SQLTexImport_SPEC	 type=12	 size=0	 req=False
+  - SQL_SELECT_IzTabele	 type=12	 size=0	 req=False
+  - BrojSlogovaIzTabele	 type=4	 size=4	 req=False
+  - BrojSlogovaUTabelu	 type=4	 size=4	 req=False
+  IDX PrimaryKey [primary=True unique=True]: Redosled
+
+TABLE: R_Artikli
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.R_Artikli)
+  - Sifra artikla	 type=4	 size=4	 req=True
+  - Kataloski broj	 type=10	 size=20	 req=True
+  - BarKod	 type=10	 size=50	 req=False
+  - PLU	 type=4	 size=4	 req=False
+  - ExtSifra	 type=10	 size=20	 req=False
+  - Naziv	 type=10	 size=50	 req=True
+  - Jedinica mere	 type=10	 size=5	 req=False
+  - Pakovanje	 type=10	 size=10	 req=False
+  - InoJm	 type=10	 size=5	 req=False
+  - Kutija	 type=7	 size=8	 req=False
+  - Transportno pakovanje	 type=7	 size=8	 req=False
+  - Poreklo	 type=10	 size=5	 req=True
+  - Grupa	 type=10	 size=10	 req=True
+  - Podgrupa	 type=10	 size=10	 req=True
+  - Tarifa robe	 type=10	 size=5	 req=True
+  - Tarifa usluga	 type=10	 size=5	 req=True
+  - Uvek porez na robu	 type=1	 size=1	 req=False
+  - Uvek porez na usluge	 type=1	 size=1	 req=False
+  - VP cena	 type=7	 size=8	 req=False
+  - MP cena	 type=7	 size=8	 req=False
+  - NabDevCena	 type=7	 size=8	 req=False
+  - ProdDevCena	 type=7	 size=8	 req=False
+  - Minimalna kolicina	 type=7	 size=8	 req=False
+  - ArtTaksa	 type=7	 size=8	 req=False
+  - Odlozeno	 type=3	 size=2	 req=False
+  - Neoporezivi deo	 type=7	 size=8	 req=False
+  - MaxRabatProc	 type=7	 size=8	 req=False
+  - Memo	 type=12	 size=0	 req=False
+  - KngSifra	 type=10	 size=10	 req=False
+  - ArtAkciza	 type=7	 size=8	 req=False
+  - KngSifra_2	 type=10	 size=10	 req=False
+  - ZavTrosProiz	 type=7	 size=8	 req=False
+  - CarStopa	 type=7	 size=8	 req=False
+  - IDRaster	 type=4	 size=4	 req=False
+  - CarTarifa	 type=10	 size=20	 req=False
+  - ZemljaPorekla	 type=10	 size=20	 req=False
+  - Polica	 type=10	 size=10	 req=False
+  - INONaziv	 type=10	 size=50	 req=False
+  - SifDob	 type=4	 size=4	 req=False
+  - WebOpis	 type=10	 size=255	 req=False
+  - OpisArtikla	 type=10	 size=50	 req=False
+  - Tezina	 type=7	 size=8	 req=False
+  - PDFLink	 type=10	 size=255	 req=False
+  - ZaBrisanje	 type=1	 size=1	 req=False
+  - Aktivan	 type=1	 size=1	 req=False
+  - CenaZaUpisUCen	 type=7	 size=8	 req=False
+  - IDMestoIzdavanja	 type=4	 size=4	 req=False
+  - Proizvodjac	 type=10	 size=50	 req=False
+  - HPS	 type=10	 size=50	 req=False
+  - PotpisArt	 type=10	 size=50	 req=False
+  - DatumIVremeArt	 type=8	 size=8	 req=False
+  - KolUPak	 type=7	 size=8	 req=False
+  - KLRucProc	 type=5	 size=8	 req=False
+  - OsnJM	 type=10	 size=5	 req=False
+  - SlikaSimbolaLink	 type=10	 size=250	 req=False
+  - MPKaloProc	 type=7	 size=8	 req=False
+  - WordLokacija	 type=10	 size=250	 req=False
+  - VPKaloProc	 type=7	 size=8	 req=False
+  - NeVodiZalihe	 type=1	 size=1	 req=False
+  - TezinaKg	 type=7	 size=8	 req=False
+  - Zapremina	 type=7	 size=8	 req=False
+  - Povrsina	 type=7	 size=8	 req=False
+  - RSort	 type=4	 size=4	 req=False
+  - AkcijskiRabat	 type=7	 size=8	 req=False
+  - Napomena2	 type=10	 size=255	 req=False
+  - IDKvalitetArtikla	 type=4	 size=4	 req=False
+  - Debljina	 type=7	 size=8	 req=False
+  - BBSifra artikla	 type=4	 size=4	 req=True
+  IDX Grupa [primary=False unique=False]: Grupa
+  IDX IDKvalitetArtikla [primary=False unique=False]: IDKvalitetArtikla
+  IDX IDMestoIzdavanja [primary=False unique=False]: IDMestoIzdavanja
+  IDX IDRaster [primary=False unique=False]: IDRaster
+  IDX PK_R_Artikli [primary=True unique=True]: Sifra artikla
+  IDX Podgrupa [primary=False unique=False]: Podgrupa
+  IDX Poreklo [primary=False unique=False]: Poreklo
+  IDX Tarifa robe [primary=False unique=False]: Tarifa robe
+  IDX Tarifa usluga [primary=False unique=False]: Tarifa usluga
+
+TABLE: R_Grupa
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.R_Grupa)
+  - Grupa	 type=10	 size=10	 req=True
+  - Opis	 type=10	 size=50	 req=True
+  IDX PK_R_Grupa [primary=True unique=True]: Grupa
+
+TABLE: R_Podgrupa
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.R_Podgrupa)
+  - Podgrupa	 type=10	 size=10	 req=True
+  - Opis	 type=10	 size=50	 req=True
+  - GrupaVeza	 type=10	 size=10	 req=False
+  IDX PK_R_Podgrupa [primary=True unique=True]: Podgrupa
+
+TABLE: R_Poreklo
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.R_Poreklo)
+  - Poreklo	 type=10	 size=5	 req=True
+  - Opis	 type=10	 size=50	 req=True
+  - PodgrupaVeza	 type=10	 size=10	 req=False
+  - PopustProc	 type=5	 size=8	 req=False
+  IDX PK_R_Poreklo [primary=True unique=True]: Poreklo
+
+TABLE: R_Tarife
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.R_Tarife)
+  - ID	 type=4	 size=4	 req=True
+  - Tarifa	 type=10	 size=5	 req=True
+  - Osnovna stopa	 type=7	 size=8	 req=False
+  - Zeleznica stopa	 type=7	 size=8	 req=False
+  - Gradska stopa	 type=7	 size=8	 req=False
+  - Ratna stopa	 type=7	 size=8	 req=False
+  - Posebna stopa	 type=7	 size=8	 req=False
+  - Opis	 type=12	 size=0	 req=False
+  - Vazi od	 type=8	 size=8	 req=False
+  - Vazi do	 type=8	 size=8	 req=False
+  - PDVGrupa	 type=10	 size=10	 req=False
+  IDX PK_R_Tarife [primary=True unique=True]: ID
+  IDX Tarifa [primary=False unique=True]: Tarifa
+
+TABLE: R_Vrste dokumenata
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.R_Vrste dokumenata)
+  - ID	 type=4	 size=4	 req=True
+  - Vrsta dokumenta	 type=10	 size=5	 req=True
+  - Opis	 type=10	 size=50	 req=True
+  - Ulazni	 type=1	 size=1	 req=True
+  - Analiticki konto	 type=10	 size=10	 req=False
+  - Knjiziti analitiku	 type=1	 size=1	 req=False
+  - Sema za kontiranje	 type=4	 size=4	 req=False
+  - Knjiziti sintetiku	 type=1	 size=1	 req=False
+  - Prodaja sa PPP	 type=1	 size=1	 req=False
+  - Prodaja sa PPU	 type=1	 size=1	 req=False
+  - KnjizitiTKZad	 type=1	 size=1	 req=False
+  - KnjizitiTKRazd	 type=1	 size=1	 req=False
+  - TextZaReport	 type=10	 size=50	 req=False
+  - KnjizitiUPDVEvidenciju	 type=1	 size=1	 req=False
+  - KEPUDefZaduzenje	 type=10	 size=30	 req=False
+  - KEPUDefRazduzenje	 type=10	 size=30	 req=False
+  - InterniDokument	 type=1	 size=1	 req=False
+  - NumeracijaOd	 type=4	 size=4	 req=False
+  - KOTP	 type=1	 size=1	 req=False
+  - PrefiksBrojaDok	 type=10	 size=5	 req=False
+  - IDMagacinZaVrstuDok	 type=4	 size=4	 req=False
+  - KODJ	 type=1	 size=1	 req=False
+  - FR	 type=1	 size=1	 req=False
+  - UticeNaZalihe	 type=1	 size=1	 req=False
+  IDX IDMagacinZaVrstuDok [primary=False unique=False]: IDMagacinZaVrstuDok
+  IDX NumeracijaOd [primary=False unique=False]: NumeracijaOd
+  IDX PK_R_Vrste dokumenata [primary=True unique=True]: ID
+
+TABLE: Radni fajlovi
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.Radni fajlovi)
+  - IDBaze	 type=4	 size=4	 req=True
+  - Firma	 type=10	 size=150	 req=True
+  - Naziv baze	 type=10	 size=255	 req=False
+  - Logo	 type=11	 size=0	 req=False
+  - Mesto	 type=10	 size=50	 req=False
+  - Adresa	 type=10	 size=50	 req=False
+  - Telefon	 type=10	 size=50	 req=False
+  - Fax	 type=10	 size=50	 req=False
+  - Ziro racun	 type=10	 size=50	 req=False
+  - Delatnost	 type=10	 size=255	 req=False
+  - Sifra delatnosti	 type=10	 size=50	 req=False
+  - Opstina	 type=10	 size=50	 req=False
+  - Napomena	 type=12	 size=0	 req=False
+  - Specijal	 type=10	 size=50	 req=False
+  - e-mail	 type=10	 size=30	 req=False
+  - Maticni broj	 type=10	 size=50	 req=False
+  - Registarski broj	 type=10	 size=50	 req=False
+  - Podracuni	 type=10	 size=100	 req=False
+  - Kasa_ProdavnicaID	 type=4	 size=4	 req=False
+  - Kasa_KupacID	 type=4	 size=4	 req=False
+  - Kasa_VrstaDokumenta	 type=10	 size=5	 req=False
+  - Kasa_RadniNalogID	 type=4	 size=4	 req=False
+  - BrDecUlKl	 type=3	 size=2	 req=False
+  - BrDecIzKl	 type=3	 size=2	 req=False
+  - KursDeli	 type=1	 size=1	 req=False
+  - ProveraZalihaMag	 type=1	 size=1	 req=False
+  - AutoPodelaPrihoda	 type=1	 size=1	 req=False
+  - FakturnaJeVPZaUlKl	 type=1	 size=1	 req=False
+  - KepuPoNabavnojCeni	 type=1	 size=1	 req=False
+  - TrgovackaPoKursu	 type=1	 size=1	 req=False
+  - KepuPoKursu	 type=1	 size=1	 req=False
+  - GKPoKursu	 type=1	 size=1	 req=False
+  - KontoKupac	 type=10	 size=20	 req=False
+  - KontoDobavljac	 type=10	 size=20	 req=False
+  - KnjiziRazlikeNaTK	 type=1	 size=1	 req=False
+  - KnjiziRazlikeNaKEPU	 type=1	 size=1	 req=False
+  - KnjiziRazlikeNaMPKEPU	 type=1	 size=1	 req=False
+  - GKPoKursuObrnuto	 type=1	 size=1	 req=False
+  - AutoZakRoba	 type=1	 size=1	 req=False
+  - AutoZakGK	 type=1	 size=1	 req=False
+  - StarijeOdDanaRoba	 type=4	 size=4	 req=False
+  - StarijeOdDanaGk	 type=4	 size=4	 req=False
+  - ProveraPorukaInterval	 type=4	 size=4	 req=False
+  - DekodirajBarKod	 type=1	 size=1	 req=False
+  - PIB	 type=10	 size=20	 req=False
+  - Garancija	 type=12	 size=0	 req=False
+  - KEPUPoKNGCeni	 type=1	 size=1	 req=False
+  - PEPDV	 type=10	 size=20	 req=False
+  - Vlasnik	 type=10	 size=50	 req=False
+  - PoreskaSifra	 type=10	 size=50	 req=False
+  - Galeb	 type=1	 size=1	 req=False
+  - Raster	 type=1	 size=1	 req=False
+  - PG_Naziv baze	 type=10	 size=255	 req=False
+  - ServerZaGaleb	 type=1	 size=1	 req=False
+  - KlijentZaGaleb	 type=1	 size=1	 req=False
+  - FP_ImeStampaca	 type=10	 size=50	 req=False
+  - MestoIzdavanjaRacuna	 type=10	 size=50	 req=False
+  - Kasa_KasaID	 type=4	 size=4	 req=False
+  - WebAdresa	 type=10	 size=50	 req=False
+  - APRText	 type=10	 size=250	 req=False
+  - SaljiBosson	 type=1	 size=1	 req=False
+  - Kasa_Cenovnik	 type=10	 size=5	 req=False
+  - VPCenovnik	 type=10	 size=5	 req=False
+  - FooterText	 type=10	 size=255	 req=False
+  - Logo_Footer	 type=11	 size=0	 req=False
+  - RPT_Memorandum_Header	 type=10	 size=64	 req=True
+  - RPT_Memorandum_Footer	 type=10	 size=64	 req=True
+  - LogoFontSize	 type=4	 size=4	 req=True
+  - PDVStatus	 type=4	 size=4	 req=True
+  - JBKJS	 type=10	 size=20	 req=False
+  - ER_ApiKey	 type=10	 size=50	 req=False
+  - NazivFirmeNezvanicno	 type=10	 size=150	 req=False
+  IDX aaaaaRadni fajlovi_PK [primary=True unique=True]: IDBaze
+
+TABLE: RibbonAllForm
+  - ID	 type=4	 size=4	 req=False
+  - FormName	 type=10	 size=255	 req=True
+  IDX FormNameIndex [primary=False unique=True]: FormName
+  IDX PrimaryKey [primary=True unique=True]: ID
+
+TABLE: RibbonGrupeUsera
+  - IDGrupe	 type=4	 size=4	 req=True
+  - Grupa	 type=10	 size=50	 req=True
+  IDX Grupa [primary=False unique=True]: Grupa
+  IDX IDGrupe [primary=False unique=False]: IDGrupe
+  IDX PrimaryKey [primary=True unique=True]: IDGrupe
+
+TABLE: RibbonOnClickDetails
+  - btnIDName	 type=10	 size=50	 req=True
+  - FormName	 type=10	 size=50	 req=True
+  - stOpenArgs	 type=10	 size=10	 req=False
+  IDX FormName [primary=False unique=False]: FormName
+  IDX JEdinstven [primary=False unique=True]: FormName, stOpenArgs
+  IDX PrimaryKey [primary=True unique=True]: btnIDName
+
+TABLE: RibbonOnForm
+  - ID	 type=4	 size=4	 req=False
+  - FormName	 type=10	 size=100	 req=True
+  - IDGrupe	 type=4	 size=4	 req=True
+  - RibbonName	 type=10	 size=255	 req=False
+  IDX FormName [primary=False unique=False]: FormName
+  IDX IDGrupe [primary=False unique=False]: IDGrupe
+  IDX Jedinstvo [primary=False unique=True]: FormName, IDGrupe, RibbonName
+  IDX PrimaryKey [primary=True unique=True]: ID
+  IDX RibbonGrupeUseraRibbonOnForm [primary=False unique=False]: IDGrupe
+
+TABLE: RibbonRadniciGrupeDef
+  - ID	 type=4	 size=4	 req=False
+  - SifraRadnika	 type=4	 size=4	 req=False
+  - IDGrupe	 type=4	 size=4	 req=False
+  IDX ID [primary=False unique=False]: ID
+  IDX IDGrupe [primary=False unique=False]: IDGrupe
+  IDX Jedinstvo [primary=False unique=True]: SifraRadnika, IDGrupe
+  IDX PrimaryKey [primary=True unique=True]: ID
+  IDX RibbonGrupeUseraRibbonRadniciGrupeDef [primary=False unique=False]: IDGrupe
+
+TABLE: RobnaDokumentaMirror
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.RobnaDokumentaMirror)
+  - IDDok	 type=4	 size=4	 req=True
+  - VrstaDokumenta	 type=10	 size=5	 req=True
+  - DatumDokumenta	 type=10	 size=10	 req=True
+  IDX PK__RobnaDok__93E3A414D61BB4C9 [primary=True unique=True]: IDDok
+
+TABLE: RobneStavkeMirror
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.RobneStavkeMirror)
+  - IDStavke	 type=4	 size=4	 req=True
+  - IDDok	 type=4	 size=4	 req=True
+  - SifraArtikla	 type=4	 size=4	 req=True
+  - KataloskiBroj	 type=10	 size=100	 req=False
+  - IDMagacin	 type=4	 size=4	 req=True
+  - KolicinaUlaz	 type=20	 size=16	 req=True
+  - KolicinaIzlaz	 type=20	 size=16	 req=True
+  - PoslednjaIzmena	 type=8	 size=8	 req=True
+  IDX PK__RobneSta__8A2E825491942312 [primary=True unique=True]: IDStavke
+
+TABLE: SklopoviPDMCrteza
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.SklopoviPDMCrteza)
+  - IDSklopoviCrteza	 type=4	 size=4	 req=True
+  - IDCrtez	 type=4	 size=4	 req=True
+  - KoristiSeUIDCrteza	 type=4	 size=4	 req=True
+  - KoristiSeBrojKomada	 type=4	 size=4	 req=True
+  IDX IX_SklopoviPDMCrteza_IDCrteza [primary=False unique=False]: IDCrtez
+  IDX IX_SklopoviPDMCrteza_KoristiSeUIDCrteza [primary=False unique=False]: KoristiSeUIDCrteza
+  IDX PK_SklopoviPDMCrteza [primary=True unique=True]: IDSklopoviCrteza
+
+TABLE: SQL_Log
+  (LINKED: ;DATABASE=C:\SHARES\Servoteh\QBigTehn\SQL_LOG.accdb  -> SQL_Log)
+
+TABLE: StatusiCrteza
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.StatusiCrteza)
+  - IDStatusCrteza	 type=4	 size=4	 req=True
+  - NazivStatusa	 type=10	 size=50	 req=True
+  IDX PK__StatusiC__408C1FFCCF702619 [primary=True unique=True]: IDStatusCrteza
+
+TABLE: StatusiNacrtaPrimopredaje
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.StatusiNacrtaPrimopredaje)
+  - IDStatusNacrtaPrimopredaje	 type=4	 size=4	 req=True
+  - StatusNacrtaPrimopredaje	 type=10	 size=100	 req=True
+  IDX PK__StatusiN__F02D07CA8B95B38F [primary=True unique=True]: IDStatusNacrtaPrimopredaje
+
+TABLE: StatusiPrimopredaje
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.StatusiPrimopredaje)
+  - IDStatusPrimopredaje	 type=4	 size=4	 req=True
+  - NazivStatusa	 type=10	 size=50	 req=True
+  IDX PK_StatusiPrimopredaje [primary=True unique=True]: IDStatusPrimopredaje
+  IDX UQ__StatusiP__359EEA11A546AEDA [primary=False unique=True]: NazivStatusa
+
+TABLE: SveLinkovaneTabele
+  - ID	 type=4	 size=4	 req=False
+  - Name	 type=10	 size=50	 req=False
+  - SourceTableName	 type=10	 size=50	 req=False
+  - Database	 type=10	 size=255	 req=False
+  - Status	 type=1	 size=1	 req=True
+  - IDBaze	 type=4	 size=4	 req=False
+  - ID_ZaUpis	 type=4	 size=4	 req=False
+  IDX ID [primary=False unique=False]: ID
+  IDX ID_ZaUpis [primary=False unique=False]: ID_ZaUpis
+  IDX IDBaze [primary=False unique=False]: IDBaze
+  IDX PrimaryKey [primary=True unique=True]: ID
+
+TABLE: T_CNN
+  - CNNStringName	 type=10	 size=64	 req=True
+  - RSort	 type=4	 size=4	 req=True
+  - PrviUnos	 type=8	 size=8	 req=False
+  - PoslednjaIzmena	 type=8	 size=8	 req=False
+  - Desc	 type=10	 size=255	 req=False
+  IDX PrimaryKey [primary=True unique=True]: CNNStringName
+
+TABLE: T_Planer
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.T_Planer)
+  - ID	 type=4	 size=4	 req=True
+  - IDFirma	 type=4	 size=4	 req=True
+  - KadaDatum	 type=8	 size=8	 req=True
+  - KadaVreme	 type=8	 size=8	 req=True
+  - OdKoga	 type=10	 size=50	 req=True
+  - ZaKoga	 type=10	 size=50	 req=True
+  - Subject	 type=10	 size=255	 req=True
+  - Prioritet	 type=4	 size=4	 req=True
+  - Poruka	 type=12	 size=0	 req=False
+  - RepeatCode	 type=10	 size=10	 req=True
+  - CheckUradjeno	 type=1	 size=1	 req=True
+  - KadaJeUradjeno	 type=8	 size=8	 req=False
+  - KoJeUradio	 type=10	 size=50	 req=False
+  - IDProgToExecute	 type=10	 size=255	 req=False
+  - AutoExec	 type=1	 size=1	 req=True
+  - DIVPrviUnos	 type=8	 size=8	 req=True
+  - DIVPoslednjaIzmena	 type=8	 size=8	 req=False
+  IDX IX_T_Planer_Main [primary=False unique=False]: CheckUradjeno, KadaDatum, ZaKoga
+  IDX PK_T_Planer [primary=True unique=True]: ID
+
+TABLE: T_PlanerGrupeUsera
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.T_PlanerGrupeUsera)
+  - ID	 type=4	 size=4	 req=True
+  - NazivGrupe	 type=10	 size=50	 req=True
+  - UserName	 type=10	 size=50	 req=True
+  IDX PK__T_Planer__3214EC27A3340006 [primary=True unique=True]: ID
+
+TABLE: T_Recnik
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\EXTENDED\BB_Recnik.mdb  -> T_Recnik)
+
+TABLE: T_Robna dokumenta
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.T_Robna dokumenta)
+  - IDDok	 type=4	 size=4	 req=True
+  - IDFirma	 type=4	 size=4	 req=True
+  - Ulaz	 type=1	 size=1	 req=True
+  - Broj naloga	 type=10	 size=20	 req=True
+  - Vrsta naloga	 type=10	 size=5	 req=True
+  - Broj dokumenta	 type=10	 size=20	 req=True
+  - Vrsta dokumenta	 type=10	 size=5	 req=True
+  - Sifra komitenta	 type=4	 size=4	 req=True
+  - Datum dokumenta	 type=8	 size=8	 req=True
+  - Datum knjizenja	 type=8	 size=8	 req=True
+  - Datum valute	 type=8	 size=8	 req=True
+  - Opis	 type=10	 size=30	 req=False
+  - Nacin otpreme	 type=10	 size=30	 req=False
+  - Fco	 type=10	 size=30	 req=False
+  - Broj izjave	 type=10	 size=20	 req=False
+  - Datum izjave	 type=8	 size=8	 req=False
+  - Sifra prodavca	 type=4	 size=4	 req=False
+  - Nacin placanja	 type=10	 size=50	 req=False
+  - IDTrebZaProizvodnju	 type=4	 size=4	 req=False
+  - IDMagacinDOK	 type=4	 size=4	 req=True
+  - Memo	 type=12	 size=0	 req=False
+  - Kurs	 type=7	 size=8	 req=False
+  - IDRadniNalog	 type=4	 size=4	 req=False
+  - ObrKurs	 type=7	 size=8	 req=False
+  - Carina	 type=7	 size=8	 req=False
+  - Spedicija	 type=7	 size=8	 req=False
+  - OstaliZavTros	 type=7	 size=8	 req=False
+  - DevVredFak	 type=7	 size=8	 req=False
+  - Level	 type=3	 size=2	 req=False
+  - IDPredmet	 type=4	 size=4	 req=False
+  - Zakljucano	 type=1	 size=1	 req=False
+  - IDDokUF	 type=4	 size=4	 req=False
+  - IDDokIF	 type=4	 size=4	 req=False
+  - Rezervisi	 type=1	 size=1	 req=False
+  - CarKurs	 type=7	 size=8	 req=False
+  - IDDokUSL	 type=4	 size=4	 req=False
+  - PovCarOsn	 type=7	 size=8	 req=False
+  - DevValuta	 type=10	 size=3	 req=False
+  - IDMestoIsporuke	 type=4	 size=4	 req=False
+  - IDRuta	 type=4	 size=4	 req=False
+  - IDVozac	 type=4	 size=4	 req=False
+  - OJ	 type=4	 size=4	 req=False
+  - Potpisano	 type=1	 size=1	 req=False
+  - OD	 type=4	 size=4	 req=False
+  - Potpis	 type=10	 size=50	 req=False
+  - DatumIVreme	 type=8	 size=8	 req=False
+  - Godina	 type=4	 size=4	 req=False
+  - DatIVreme	 type=8	 size=8	 req=False
+  - IDKontaktOsobe	 type=4	 size=4	 req=False
+  - PrimljenNovac	 type=5	 size=8	 req=False
+  - UsloviPlacanja	 type=10	 size=50	 req=False
+  - PrimljeniCekovi	 type=5	 size=8	 req=False
+  - PrimljenaKartica	 type=5	 size=8	 req=False
+  - IDKasa	 type=4	 size=4	 req=False
+  - StampanFiskalno	 type=1	 size=1	 req=False
+  - PrimljeniVirmani	 type=5	 size=8	 req=False
+  - IDDokExtBaza	 type=4	 size=4	 req=False
+  - DokBarKod	 type=10	 size=30	 req=False
+  - DokBrojKutija	 type=3	 size=2	 req=False
+  IDX Broj dokumenta [primary=False unique=False]: Broj dokumenta
+  IDX Godina [primary=False unique=False]: Godina
+  IDX IDDokExtBaza [primary=False unique=False]: IDDokExtBaza
+  IDX IDDokIF [primary=False unique=False]: IDDokIF
+  IDX IDDokUF [primary=False unique=False]: IDDokUF
+  IDX IDDokUSL [primary=False unique=False]: IDDokUSL
+  IDX IDFirma [primary=False unique=False]: IDFirma
+  IDX IDKasa [primary=False unique=False]: IDKasa
+  IDX IDKontaktOsobe [primary=False unique=False]: IDKontaktOsobe
+  IDX IDMagacin [primary=False unique=False]: IDMagacinDOK
+  IDX IDMestoIsporuke [primary=False unique=False]: IDMestoIsporuke
+  IDX IDPredmet [primary=False unique=False]: IDPredmet
+  IDX IDRadniNalog [primary=False unique=False]: IDRadniNalog
+  IDX IDRuta [primary=False unique=False]: IDRuta
+  IDX IDTrebZaProizvodnju [primary=False unique=False]: IDTrebZaProizvodnju
+  IDX IDVozac [primary=False unique=False]: IDVozac
+  IDX Jedinstven [primary=False unique=True]: Vrsta dokumenta, Broj dokumenta, Level, Sifra komitenta
+  IDX Level [primary=False unique=False]: Level
+  IDX PK_T_Robna dokumenta [primary=True unique=True]: IDDok
+  IDX Sifra komitenta [primary=False unique=False]: Sifra komitenta
+  IDX Sifra prodavca [primary=False unique=False]: Sifra prodavca
+  IDX Vrsta dokumenta [primary=False unique=False]: Vrsta dokumenta
+  IDX Vrsta naloga [primary=False unique=False]: Vrsta naloga
+
+TABLE: T_Robne stavke
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.T_Robne stavke)
+  - IDStavke	 type=4	 size=4	 req=True
+  - IDDok	 type=4	 size=4	 req=True
+  - Sifra artikla	 type=4	 size=4	 req=True
+  - Kolicina	 type=7	 size=8	 req=True
+  - KG_Kolicina	 type=7	 size=8	 req=False
+  - Nabavna cena - neto	 type=7	 size=8	 req=True
+  - Zavisni trosak - sopstveni	 type=7	 size=8	 req=True
+  - Zavisni trosak - dobavljac	 type=7	 size=8	 req=True
+  - Kalkulativna VP cena	 type=7	 size=8	 req=True
+  - Kalkulativna MP cena	 type=7	 size=8	 req=True
+  - Stvarna VP cena	 type=7	 size=8	 req=True
+  - Stvarna MP cena	 type=7	 size=8	 req=True
+  - Taksa	 type=7	 size=8	 req=False
+  - Obracunat porez na ulazu - roba	 type=1	 size=1	 req=True
+  - Tarifa - roba - ulaz	 type=10	 size=5	 req=True
+  - Obracunat porez na usluge	 type=1	 size=1	 req=True
+  - Tarifa - usluge - izlaz	 type=10	 size=5	 req=True
+  - Obracunat  porez na robu	 type=1	 size=1	 req=True
+  - Tarifa - roba - Izlaz	 type=10	 size=5	 req=True
+  - RabatProc	 type=7	 size=8	 req=True
+  - KasaProc	 type=7	 size=8	 req=True
+  - Odlozeno	 type=3	 size=2	 req=False
+  - Neoporezivi deo	 type=7	 size=8	 req=False
+  - Akciza	 type=7	 size=8	 req=False
+  - FiksniPorez	 type=7	 size=8	 req=False
+  - DevNabCena	 type=7	 size=8	 req=False
+  - IDMagacin	 type=4	 size=4	 req=True
+  - KNGCena	 type=7	 size=8	 req=False
+  - CarStopa	 type=7	 size=8	 req=False
+  - IDPredmetStavka	 type=4	 size=4	 req=True
+  - OpisStavke	 type=10	 size=50	 req=False
+  - ID_PO	 type=4	 size=4	 req=False
+  - PakPoOsnJM	 type=7	 size=8	 req=False
+  - IDPrepisaneStavke	 type=4	 size=4	 req=False
+  - ProknjizenoIzProfUIF	 type=1	 size=1	 req=False
+  - IDStavkeTrebovanja	 type=4	 size=4	 req=False
+  IDX ID_PO [primary=False unique=False]: ID_PO
+  IDX IDDok [primary=False unique=False]: IDDok
+  IDX IDMagacin [primary=False unique=False]: IDMagacin
+  IDX IDPredmetStavka [primary=False unique=False]: IDPredmetStavka
+  IDX IDPrepisaneStavke [primary=False unique=False]: IDPrepisaneStavke
+  IDX IDStavkeTrebovanja [primary=False unique=False]: IDStavkeTrebovanja
+  IDX PK_T_Robne stavke [primary=True unique=True]: IDStavke
+  IDX Sifra artikla [primary=False unique=False]: Sifra artikla
+  IDX Tarifa - roba - Izlaz [primary=False unique=False]: Tarifa - roba - Izlaz
+  IDX Tarifa - roba - ulaz [primary=False unique=False]: Tarifa - roba - ulaz
+  IDX Tarifa - usluge - izlaz [primary=False unique=False]: Tarifa - usluge - izlaz
+
+TABLE: T_UniCodeToAnsi
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\EXTENDED\BB_Recnik.mdb  -> T_UniCodeToAnsi)
+
+TABLE: T_UplatniRacuni
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.UplatniRacuni)
+  - IDFirma	 type=4	 size=4	 req=True
+  - ID	 type=4	 size=4	 req=True
+  - UplatniRacun	 type=10	 size=50	 req=True
+  - NazivBanke	 type=10	 size=50	 req=False
+  - Default	 type=1	 size=1	 req=True
+  - Rbr	 type=3	 size=2	 req=True
+  - KodZemlje	 type=10	 size=20	 req=False
+  - OznakaBanke	 type=10	 size=20	 req=False
+  IDX aaaaaUplatniRacuni_PK [primary=True unique=True]: ID
+  IDX IX_UplatniRacun [primary=False unique=False]: UplatniRacun
+
+TABLE: tLansiranRN
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tLansiranRN)
+  - IDLansiran	 type=4	 size=4	 req=True
+  - IDRN	 type=4	 size=4	 req=True
+  - Lansiran	 type=1	 size=1	 req=False
+  - DatumUnosa	 type=8	 size=8	 req=True
+  - DIVUnos	 type=8	 size=8	 req=True
+  - SifraRadnikaUnos	 type=4	 size=4	 req=True
+  - PotpisUnos	 type=10	 size=50	 req=False
+  - DIVIspravke	 type=8	 size=8	 req=True
+  - SifraRadnikaIspravka	 type=4	 size=4	 req=True
+  - PotpisIspravka	 type=10	 size=50	 req=False
+  IDX IDRN [primary=False unique=False]: IDRN
+  IDX PK_tLansiranRN [primary=True unique=True]: IDLansiran
+  IDX SifraRadnika [primary=False unique=False]: SifraRadnikaUnos
+  IDX SifraRadnikaUnos [primary=False unique=False]: SifraRadnikaIspravka
+
+TABLE: tLokacijeDelova
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tLokacijeDelova)
+  - IDLokacije	 type=4	 size=4	 req=True
+  - IDRN	 type=4	 size=4	 req=True
+  - IDPredmet	 type=4	 size=4	 req=True
+  - IDVrstaKvaliteta	 type=4	 size=4	 req=True
+  - IDPozicija	 type=4	 size=4	 req=True
+  - SifraRadnika	 type=4	 size=4	 req=True
+  - Datum	 type=8	 size=8	 req=True
+  - Kolicina	 type=4	 size=4	 req=True
+  - DatumIVremeUnosa	 type=8	 size=8	 req=False
+  IDX IX_IDPozicija [primary=False unique=False]: IDPozicija
+  IDX IX_IDRN [primary=False unique=False]: IDRN
+  IDX IX_SifraRadnika [primary=False unique=False]: SifraRadnika
+  IDX PK_tLokacijeDelova [primary=True unique=True]: IDLokacije
+
+TABLE: tmp_B_ZaliheArtPoMagIProd
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_TMP.mdb  -> tmp_B_ZaliheArtPoMagIProd)
+
+TABLE: TMP_MRP_Stanje
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_TMP.mdb  -> TMP_MRP_Stanje)
+
+TABLE: tmp_Nalepnice
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_TMP.mdb  -> tmp_Nalepnice)
+
+TABLE: tmp_NaloziZaKreiranjeNovogProjekta
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_TMP.mdb  -> tmp_NaloziZaKreiranjeNovogProjekta)
+
+TABLE: tmp_OdlukePredProvera
+  (LINKED: ;DATABASE=C:\Users\nenad.jarakovic\SHARES\SERVOTEH\QBigTehn\BB_TMP.MDB  -> tmp_OdlukePredProvera)
+
+TABLE: tmp_PDM_KataloskiBrojevi
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_TMP.mdb  -> tmp_PDM_KataloskiBrojevi)
+
+TABLE: tmp_PlanSporneStavke
+  (LINKED: ;DATABASE=C:\SHARES\SERVOTEH\QBigTehn\BB_TMP.mdb  -> tmp_PlanSporneStavke)
+
+TABLE: tOperacije
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tOperacije)
+  - RJgrupaRC	 type=10	 size=5	 req=True
+  - NazivGrupeRC	 type=10	 size=50	 req=True
+  - Napomena	 type=10	 size=255	 req=False
+  - IDRadneJedinice	 type=10	 size=5	 req=True
+  - BezPostupka	 type=1	 size=1	 req=False
+  - ZnacajneOperacijeZaZavrsen	 type=1	 size=1	 req=False
+  - KoristiPrioritet	 type=1	 size=1	 req=True
+  - IDOperacije	 type=4	 size=4	 req=True
+  - PreskocivaOperacija	 type=1	 size=1	 req=True
+  IDX IDRadneJedinice [primary=False unique=False]: IDRadneJedinice
+  IDX IX_tOperacije_RJ_Zavrsen [primary=False unique=False]: RJgrupaRC
+  IDX NazivGrupeRC [primary=False unique=True]: NazivGrupeRC
+  IDX PK_tOperacije [primary=True unique=True]: IDOperacije
+  IDX RJgrupaRC [primary=False unique=True]: RJgrupaRC
+
+TABLE: tPDM
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tPDM)
+  - IDStavkePDM	 type=4	 size=4	 req=True
+  - IDRN	 type=4	 size=4	 req=True
+  - PozicijaPDM	 type=10	 size=50	 req=True
+  - OperacijaPDM	 type=4	 size=4	 req=False
+  - RJgrupaRC	 type=10	 size=5	 req=True
+  - NazivP	 type=10	 size=60	 req=False
+  - BrojCrtezaP	 type=10	 size=50	 req=False
+  - Komada	 type=4	 size=4	 req=False
+  - DIVUnosa	 type=8	 size=8	 req=True
+  - DIVIspravke	 type=8	 size=8	 req=True
+  - SifraRadnika	 type=4	 size=4	 req=True
+  IDX IDRN [primary=False unique=False]: IDRN
+  IDX Jedinstvo [primary=True unique=True]: IDRN, PozicijaPDM, OperacijaPDM
+  IDX PK_tPDM [primary=False unique=True]: IDStavkePDM
+  IDX RJgrupaRC [primary=False unique=False]: RJgrupaRC
+  IDX SifraMajstora [primary=False unique=False]: SifraRadnika
+
+TABLE: tPLP
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tPLP)
+  - IDStavkePLP	 type=4	 size=4	 req=True
+  - IDRN	 type=4	 size=4	 req=True
+  - PozicijaPLP	 type=10	 size=50	 req=True
+  - RJgrupaRC	 type=10	 size=5	 req=True
+  - Materijal	 type=10	 size=50	 req=False
+  - DimenzijaMaterijala	 type=10	 size=50	 req=False
+  - JM	 type=10	 size=5	 req=False
+  - TezinaJed	 type=7	 size=8	 req=False
+  - Komada	 type=4	 size=4	 req=False
+  - BrojPozicije	 type=10	 size=50	 req=False
+  - DIVUnosa	 type=8	 size=8	 req=True
+  - DIVIspravke	 type=8	 size=8	 req=True
+  - SifraRadnika	 type=4	 size=4	 req=True
+  IDX IdentBroj1 [primary=False unique=False]: BrojPozicije
+  IDX IDRN [primary=False unique=False]: IDRN
+  IDX Jedinstvo [primary=True unique=True]: IDRN, PozicijaPLP
+  IDX PK_tPLP [primary=False unique=True]: IDStavkePLP
+  IDX RJgrupaRC [primary=False unique=False]: RJgrupaRC
+  IDX SifraMajstora [primary=False unique=False]: SifraRadnika
+
+TABLE: tPND
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tPND)
+  - IDStavkePND	 type=4	 size=4	 req=True
+  - IDRN	 type=4	 size=4	 req=True
+  - PozicijaPND	 type=10	 size=50	 req=True
+  - OperacijaPND	 type=4	 size=4	 req=False
+  - RJgrupaRC	 type=10	 size=5	 req=True
+  - NazivDela	 type=10	 size=80	 req=True
+  - Komada	 type=7	 size=8	 req=False
+  - Napomena	 type=10	 size=50	 req=False
+  - DIVUnosa	 type=8	 size=8	 req=True
+  - DIVIspravke	 type=8	 size=8	 req=True
+  - SifraRadnika	 type=4	 size=4	 req=True
+  IDX IDRN [primary=False unique=False]: IDRN
+  IDX Jedinstvo [primary=False unique=False]: IDRN, PozicijaPND, OperacijaPND
+  IDX PK_tPND [primary=True unique=True]: IDStavkePND
+  IDX RJgrupaRC [primary=False unique=False]: RJgrupaRC
+  IDX SifraMajstora [primary=False unique=False]: SifraRadnika
+
+TABLE: tPozicije
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tPozicije)
+  - IDPozicije	 type=4	 size=4	 req=True
+  - Pozicija	 type=10	 size=20	 req=True
+  - Opis	 type=10	 size=250	 req=False
+  IDX IX_Pozicije [primary=False unique=True]: Pozicija
+  IDX PK_tPozicije [primary=True unique=True]: IDPozicije
+
+TABLE: tPristupMasini
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tPristupMasini)
+  - IDPristupMasini	 type=4	 size=4	 req=True
+  - SifraRadnika	 type=4	 size=4	 req=True
+  - RJgrupaRC	 type=10	 size=5	 req=True
+  - Napomena	 type=10	 size=250	 req=False
+  IDX PK_tPristupMasini [primary=True unique=True]: IDPristupMasini
+  IDX RJgrupaRC [primary=False unique=False]: RJgrupaRC
+  IDX SifraRadnika [primary=False unique=False]: SifraRadnika
+
+TABLE: tR_Grupa
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tR_Grupa)
+  - ID	 type=4	 size=4	 req=True
+  - Grupa	 type=10	 size=10	 req=True
+  - Opis	 type=10	 size=50	 req=False
+  IDX Kategorija [primary=True unique=True]: Grupa
+  IDX Opis [primary=False unique=True]: Opis
+  IDX PK_tR_Grupa [primary=False unique=True]: ID
+
+TABLE: tRadneJedinice
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tRadneJedinice)
+  - ID	 type=4	 size=4	 req=True
+  - IDRadneJedinice	 type=10	 size=5	 req=True
+  - RadnaJedinica	 type=10	 size=50	 req=True
+  IDX idx_IDRadneJedinice [primary=True unique=True]: IDRadneJedinice
+  IDX PK_tRadneJedinice [primary=False unique=True]: ID
+
+TABLE: tRadnici
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tRadnici)
+  - SifraRadnika	 type=4	 size=4	 req=True
+  - Radnik	 type=10	 size=50	 req=True
+  - ProcenatZaObracun	 type=7	 size=8	 req=False
+  - ImeIPrezime	 type=10	 size=50	 req=False
+  - BrLkRadnika	 type=10	 size=20	 req=False
+  - Password	 type=10	 size=20	 req=False
+  - Aktivan	 type=1	 size=1	 req=False
+  - IDRadneJedinice	 type=10	 size=5	 req=True
+  - IDKartice	 type=10	 size=50	 req=True
+  - LogAcc	 type=10	 size=50	 req=False
+  - IDVrsteRadnika	 type=4	 size=4	 req=True
+  - PotpisSlika	 type=10	 size=150	 req=False
+  - DefiniseSaglasan	 type=1	 size=1	 req=False
+  - DefiniseLansiran	 type=1	 size=1	 req=False
+  - MultiNalog	 type=1	 size=1	 req=False
+  - PasswordRadnika	 type=10	 size=50	 req=True
+  IDX aaaaatRadnici_PK [primary=True unique=True]: SifraRadnika
+  IDX IDRadneJedinice [primary=False unique=False]: IDRadneJedinice
+  IDX IDVrsteRadnika [primary=False unique=False]: IDVrsteRadnika
+  IDX IX_IDKartice_UniqueColumn [primary=False unique=True]: IDKartice
+  IDX Radnik [primary=False unique=False]: Radnik
+
+TABLE: tRN
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tRN)
+  - IDRN	 type=4	 size=4	 req=True
+  - IDPredmet	 type=4	 size=4	 req=True
+  - IdentBroj	 type=10	 size=50	 req=True
+  - Varijanta	 type=4	 size=4	 req=True
+  - BBIDKomitent	 type=4	 size=4	 req=True
+  - BBNazivPredmeta	 type=10	 size=250	 req=False
+  - BBDatumOtvaranja	 type=8	 size=8	 req=True
+  - DatumUnosa	 type=8	 size=8	 req=True
+  - Komada	 type=4	 size=4	 req=True
+  - BrojCrteza	 type=10	 size=100	 req=True
+  - Proizvod	 type=10	 size=150	 req=False
+  - TezinaNeobrDela	 type=7	 size=8	 req=False
+  - NazivDela	 type=10	 size=250	 req=True
+  - IdentMaterijala	 type=4	 size=4	 req=False
+  - Materijal	 type=10	 size=250	 req=True
+  - DimenzijaMaterijala	 type=10	 size=150	 req=True
+  - JM	 type=10	 size=50	 req=True
+  - TezinaObrDela	 type=7	 size=8	 req=False
+  - Napomena	 type=12	 size=0	 req=False
+  - StatusRN	 type=1	 size=1	 req=False
+  - RokIzrade	 type=8	 size=8	 req=False
+  - DIVUnosaRN	 type=8	 size=8	 req=True
+  - DIVIspravkeRN	 type=8	 size=8	 req=True
+  - SifraRadnika	 type=4	 size=4	 req=True
+  - Zakljucano	 type=1	 size=1	 req=False
+  - Potpis	 type=10	 size=50	 req=False
+  - PrnTimer	 type=4	 size=4	 req=False
+  - VezaSaBrojemCrteza	 type=10	 size=100	 req=False
+  - IDVrstaKvaliteta	 type=4	 size=4	 req=True
+  - Revizija	 type=10	 size=3	 req=True
+  - IDPrimopredaje	 type=4	 size=4	 req=True
+  - IDCrtez	 type=4	 size=4	 req=True
+  - IDStatusPrimopredaje	 type=4	 size=4	 req=True
+  - SifraRadnikaPrimopredaje	 type=4	 size=4	 req=True
+  IDX aaaaatRN_PK [primary=True unique=True]: IDRN
+  IDX BBIDKomitent [primary=False unique=False]: BBIDKomitent
+  IDX IdentBroj [primary=False unique=False]: IdentBroj
+  IDX IdentMaterijala [primary=False unique=False]: IdentMaterijala
+  IDX IDPredmet [primary=False unique=False]: IDPredmet
+  IDX IDX_tRN_IDCrtez [primary=False unique=False]: IDCrtez
+  IDX IDX_tRN_IDPrimPred [primary=False unique=False]: IDPrimopredaje
+  IDX IX_tRN_DatumIdent [primary=False unique=False]: DatumUnosa, IdentBroj
+  IDX IX_tRN_Filter [primary=False unique=False]: DatumUnosa, IDRN
+  IDX IX_tRN_IDStatusPrimopredaje [primary=False unique=False]: IDStatusPrimopredaje
+  IDX IX_tRN_PredProvera [primary=False unique=False]: IDStatusPrimopredaje, IDCrtez, IDPredmet
+  IDX jedinstvo [primary=False unique=True]: IDPredmet, Varijanta, BrojCrteza, Revizija
+  IDX TerminKartaVarijanta [primary=False unique=False]: Varijanta
+  IDX tRadnicitRN [primary=False unique=False]: SifraRadnika
+
+TABLE: tRNKomponente
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tRNKomponente)
+  - IDKomponente	 type=4	 size=4	 req=True
+  - IDRN	 type=4	 size=4	 req=True
+  - IDRNPodkomponenta	 type=4	 size=4	 req=True
+  - BrojKomada	 type=4	 size=4	 req=True
+  - Napomena	 type=10	 size=255	 req=False
+  IDX IX_tRNKomponente_IDRN [primary=False unique=False]: IDRN
+  IDX IX_tRNKomponente_Rekurzija [primary=False unique=False]: IDRN, IDRNPodkomponenta
+  IDX PK__tRNKompo__5EC8D11ED0352F17 [primary=True unique=True]: IDKomponente
+  IDX UQ_tRNKomponente_IDRN_IDPodkomponente [primary=False unique=True]: IDRN, IDRNPodkomponenta
+
+TABLE: tRNNDKomponente
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tRNNDKomponente)
+  - IDNDKomponente	 type=4	 size=4	 req=True
+  - IDRN	 type=4	 size=4	 req=True
+  - SifraArtikla	 type=4	 size=4	 req=True
+  - BrojKomada	 type=4	 size=4	 req=True
+  - Napomena	 type=10	 size=255	 req=False
+  IDX PK__tRNNDKom__D17BED9564F48F4F [primary=True unique=True]: IDNDKomponente
+
+TABLE: tSaglasanRN
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tSaglasanRN)
+  - IDSaglasan	 type=4	 size=4	 req=True
+  - IDRN	 type=4	 size=4	 req=True
+  - Saglasan	 type=1	 size=1	 req=False
+  - DatumUnosa	 type=8	 size=8	 req=True
+  - DIVUnos	 type=8	 size=8	 req=True
+  - SifraRadnikaUnos	 type=4	 size=4	 req=True
+  - PotpisUnos	 type=10	 size=50	 req=False
+  - DIVIspravke	 type=8	 size=8	 req=True
+  - SifraRadnikaIspravka	 type=4	 size=4	 req=True
+  - PotpisIspravka	 type=10	 size=50	 req=False
+  IDX IDRN [primary=False unique=False]: IDRN
+  IDX PK_tSaglasanRN [primary=True unique=True]: IDSaglasan
+  IDX SifraRadnika [primary=False unique=False]: SifraRadnikaUnos
+  IDX SifraRadnikaUnos [primary=False unique=False]: SifraRadnikaIspravka
+
+TABLE: tStavkeRN
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tStavkeRN)
+  - IDStavkeRN	 type=4	 size=4	 req=True
+  - IDRN	 type=4	 size=4	 req=True
+  - Operacija	 type=4	 size=4	 req=True
+  - RJgrupaRC	 type=10	 size=5	 req=True
+  - OpisRada	 type=12	 size=0	 req=True
+  - AlatPribor	 type=10	 size=50	 req=False
+  - Tpz	 type=7	 size=8	 req=False
+  - Tk	 type=7	 size=8	 req=False
+  - TezinaTO	 type=7	 size=8	 req=False
+  - SifraRadnika	 type=4	 size=4	 req=True
+  - DIVUnosa	 type=8	 size=8	 req=True
+  - DIVIspravke	 type=8	 size=8	 req=True
+  - Prioritet	 type=4	 size=4	 req=True
+  IDX IX_tStavkeRN_IDRN_Operacija [primary=False unique=False]: IDRN, Operacija
+  IDX Jedinstvo [primary=True unique=True]: IDRN, Operacija
+  IDX Operacija [primary=False unique=False]: Operacija
+  IDX PK_tStavkeRN [primary=False unique=True]: IDStavkeRN
+  IDX RJgrupaRC [primary=False unique=False]: RJgrupaRC
+  IDX tMajstoritStavkeRN [primary=False unique=False]: SifraRadnika
+  IDX tRNtStavkeRN [primary=False unique=False]: IDRN
+
+TABLE: tStavkeRNSlike
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tStavkeRNSlike)
+  - ID	 type=4	 size=4	 req=True
+  - IDStavkeRN	 type=4	 size=4	 req=True
+  - LinkSlika	 type=10	 size=250	 req=True
+  - ImeFajla	 type=10	 size=50	 req=True
+  IDX PK_tStavkeRNSlike [primary=True unique=True]: ID
+  IDX tStavkeRNtStavkeRNSlike [primary=False unique=False]: IDStavkeRN
+
+TABLE: tStrukturaProizvodaTMP
+  - IDRN	 type=4	 size=4	 req=False
+  - BrojCrteza	 type=10	 size=100	 req=False
+  - NazivDela	 type=10	 size=250	 req=False
+  - Op1	 type=10	 size=50	 req=False
+  - Op2	 type=10	 size=50	 req=False
+  - Op3	 type=10	 size=50	 req=False
+  - Op4	 type=10	 size=50	 req=False
+  - Op5	 type=10	 size=50	 req=False
+  - Op6	 type=10	 size=50	 req=False
+  - Op7	 type=10	 size=50	 req=False
+  - Op8	 type=10	 size=50	 req=False
+  - Op9	 type=10	 size=50	 req=False
+  - Op10	 type=10	 size=50	 req=False
+  - Op11	 type=10	 size=50	 req=False
+  - Op12	 type=10	 size=50	 req=False
+  - Op13	 type=10	 size=50	 req=False
+  - Op14	 type=10	 size=50	 req=False
+  - Op15	 type=10	 size=50	 req=False
+  - Op16	 type=10	 size=50	 req=False
+  - Op17	 type=10	 size=50	 req=False
+  - Op18	 type=10	 size=50	 req=False
+  - Op19	 type=10	 size=50	 req=False
+  - Op20	 type=10	 size=50	 req=False
+  - Op21	 type=10	 size=50	 req=False
+  - Op22	 type=10	 size=50	 req=False
+  - Op23	 type=10	 size=50	 req=False
+  - Op24	 type=10	 size=50	 req=False
+  - Op25	 type=10	 size=50	 req=False
+  - Op26	 type=10	 size=50	 req=False
+  - Op27	 type=10	 size=50	 req=False
+  - Op28	 type=10	 size=50	 req=False
+  - Op29	 type=10	 size=50	 req=False
+  - Op30	 type=10	 size=50	 req=False
+  - Op1_Status	 type=4	 size=4	 req=False
+  - Op2_Status	 type=4	 size=4	 req=False
+  - Op3_Status	 type=4	 size=4	 req=False
+  - Op4_Status	 type=4	 size=4	 req=False
+  - Op5_Status	 type=4	 size=4	 req=False
+  - Op6_Status	 type=4	 size=4	 req=False
+  - Op7_Status	 type=4	 size=4	 req=False
+  - Op8_Status	 type=4	 size=4	 req=False
+  - Op9_Status	 type=4	 size=4	 req=False
+  - Op10_Status	 type=4	 size=4	 req=False
+  - Op11_Status	 type=4	 size=4	 req=False
+  - Op12_Status	 type=4	 size=4	 req=False
+  - Op13_Status	 type=4	 size=4	 req=False
+  - Op14_Status	 type=4	 size=4	 req=False
+  - Op15_Status	 type=4	 size=4	 req=False
+  - Op16_Status	 type=4	 size=4	 req=False
+  - Op17_Status	 type=4	 size=4	 req=False
+  - Op18_Status	 type=4	 size=4	 req=False
+  - Op19_Status	 type=4	 size=4	 req=False
+  - Op20_Status	 type=4	 size=4	 req=False
+  - Op21_Status	 type=4	 size=4	 req=False
+  - Op22_Status	 type=4	 size=4	 req=False
+  - Op23_Status	 type=4	 size=4	 req=False
+  - Op24_Status	 type=4	 size=4	 req=False
+  - Op25_Status	 type=4	 size=4	 req=False
+  - Op26_Status	 type=4	 size=4	 req=False
+  - Op27_Status	 type=4	 size=4	 req=False
+  - Op28_Status	 type=4	 size=4	 req=False
+  - Op29_Status	 type=4	 size=4	 req=False
+  - Op30_Status	 type=4	 size=4	 req=False
+
+TABLE: tTehPostupak
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tTehPostupak)
+  - IDPostupka	 type=4	 size=4	 req=True
+  - SifraRadnika	 type=4	 size=4	 req=True
+  - IDPredmet	 type=4	 size=4	 req=True
+  - IdentBroj	 type=10	 size=50	 req=True
+  - Varijanta	 type=4	 size=4	 req=True
+  - PrnTimer	 type=4	 size=4	 req=False
+  - DatumIVremeUnosa	 type=8	 size=8	 req=True
+  - Operacija	 type=4	 size=4	 req=True
+  - RJgrupaRC	 type=10	 size=5	 req=True
+  - Toznaka	 type=10	 size=50	 req=True
+  - Komada	 type=4	 size=4	 req=True
+  - Potpis	 type=10	 size=50	 req=False
+  - SimbolRadnik	 type=1	 size=1	 req=False
+  - SimbolPostupak	 type=1	 size=1	 req=False
+  - SimbolOperacija	 type=1	 size=1	 req=False
+  - DatumIVremeZavrsetka	 type=8	 size=8	 req=False
+  - ZavrsenPostupak	 type=1	 size=1	 req=False
+  - Napomena	 type=12	 size=0	 req=False
+  - IDRN	 type=4	 size=4	 req=True
+  - IDVrstaKvaliteta	 type=4	 size=4	 req=True
+  - DoradaOperacije	 type=4	 size=4	 req=False
+  IDX IdentBroj [primary=False unique=False]: IdentBroj
+  IDX IDPredmet [primary=False unique=False]: IDPredmet
+  IDX IX_tTehPostupak_DatumUnosa [primary=False unique=False]: DatumIVremeUnosa
+  IDX IX_tTehPostupak_DatumZavrsetka [primary=False unique=False]: DatumIVremeZavrsetka
+  IDX IX_tTehPostupak_IDRN_RJ [primary=False unique=False]: IDRN, RJgrupaRC
+  IDX IX_tTehPostupak_RN_Op [primary=False unique=False]: IDRN, Operacija
+  IDX Operacija [primary=False unique=False]: Operacija
+  IDX PK_tTehPostupak [primary=True unique=True]: IDPostupka
+  IDX RJgrupaRC [primary=False unique=False]: RJgrupaRC
+  IDX SifraMajstora [primary=False unique=False]: SifraRadnika
+  IDX TerminKartaVarijanta [primary=False unique=False]: Varijanta
+
+TABLE: tTehPostupakBackup
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tTehPostupakBackup)
+  - IDPostupka	 type=4	 size=4	 req=True
+  - SifraRadnika	 type=4	 size=4	 req=True
+  - IDPredmet	 type=4	 size=4	 req=True
+  - IdentBroj	 type=10	 size=50	 req=True
+  - Varijanta	 type=4	 size=4	 req=True
+  - PrnTimer	 type=4	 size=4	 req=False
+  - DatumIVremeUnosa	 type=8	 size=8	 req=True
+  - Operacija	 type=4	 size=4	 req=True
+  - RJgrupaRC	 type=10	 size=5	 req=True
+  - Toznaka	 type=10	 size=50	 req=True
+  - Komada	 type=4	 size=4	 req=True
+  - Potpis	 type=10	 size=50	 req=False
+  - SimbolRadnik	 type=1	 size=1	 req=False
+  - SimbolPostupak	 type=1	 size=1	 req=False
+  - SimbolOperacija	 type=1	 size=1	 req=False
+  - DatumIVremeZavrsetka	 type=8	 size=8	 req=False
+  - ZavrsenPostupak	 type=1	 size=1	 req=False
+  - Napomena	 type=12	 size=0	 req=False
+  - IDRN	 type=4	 size=4	 req=True
+  - IDVrstaKvaliteta	 type=4	 size=4	 req=True
+  - DoradaOperacije	 type=4	 size=4	 req=False
+  - DatumIspravke	 type=8	 size=8	 req=False
+  - NapomenaIspravke	 type=12	 size=0	 req=False
+
+TABLE: tTehPostupakDokumentacija
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tTehPostupakDokumentacija)
+  - ID	 type=4	 size=4	 req=True
+  - IDPostupka	 type=4	 size=4	 req=True
+  - LinkFajla	 type=10	 size=250	 req=True
+  - ImeFajla	 type=10	 size=50	 req=True
+  IDX PK_tTehPostupakDokumentacija [primary=True unique=True]: ID
+
+TABLE: tVrsteKvalitetaDelova
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tVrsteKvalitetaDelova)
+  - IDVrstaKvaliteta	 type=4	 size=4	 req=True
+  - VrstaKvaliteta	 type=10	 size=50	 req=True
+  IDX PK_IDVrstaKvaliteta [primary=True unique=True]: IDVrstaKvaliteta
+
+TABLE: tVrsteRadnika
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.tVrsteRadnika)
+  - IDVrsteRadnika	 type=4	 size=4	 req=True
+  - VrstaRadnika	 type=10	 size=50	 req=True
+  - DodatnaOvlascenja	 type=1	 size=1	 req=True
+  IDX PK_tVrsteRadnika [primary=True unique=True]: IDVrsteRadnika
+  IDX VrstaRadnika [primary=False unique=True]: VrstaRadnika
+
+TABLE: USysRibbons
+  - ID	 type=4	 size=4	 req=False
+  - RibbonName	 type=10	 size=255	 req=True
+  - RibbonXML	 type=12	 size=0	 req=True
+  IDX ID [primary=False unique=False]: ID
+  IDX PrimaryKey [primary=True unique=True]: ID
+  IDX RibbonName [primary=False unique=True]: RibbonName
+
+TABLE: viewAktivniRNPreLansiranja
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.viewAktivniRNPreLansiranja)
+  - IDRN	 type=4	 size=4	 req=True
+  - IDCrtez	 type=4	 size=4	 req=True
+  - IDPredmet	 type=4	 size=4	 req=True
+
+TABLE: viewMRP_PregledDetaljno
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.viewMRP_PregledDetaljno)
+  - IDPredmet	 type=4	 size=4	 req=True
+  - IDCrtezRoot	 type=4	 size=4	 req=False
+  - TipEksplozije	 type=2	 size=1	 req=False
+  - DatumPotrebeDok	 type=10	 size=10	 req=True
+  - SifraRadnika	 type=4	 size=4	 req=False
+  - IDPotreba	 type=4	 size=4	 req=True
+  - IDPotrebaStavka	 type=4	 size=4	 req=True
+  - SifraArtikla	 type=4	 size=4	 req=False
+  - KataloskiBrojStavka	 type=10	 size=100	 req=True
+  - NazivArtiklaStavka	 type=10	 size=200	 req=True
+  - KolicinaPotrebna	 type=20	 size=16	 req=True
+  - DatumPotrebe	 type=10	 size=10	 req=True
+  - DatumNabavke	 type=10	 size=10	 req=False
+  - VremeIsporukeDana	 type=4	 size=4	 req=False
+  - DobavljacID	 type=4	 size=4	 req=False
+  - StatusStavke	 type=2	 size=1	 req=True
+  - KolicinaRezervisano	 type=20	 size=16	 req=True
+  - KolicinaZaNabavku	 type=20	 size=16	 req=True
+  - IDCrtezNabavke	 type=4	 size=4	 req=False
+  - NazivKomitenta	 type=10	 size=50	 req=False
+  - BrojPredmeta	 type=10	 size=20	 req=True
+  - BojaGrupa	 type=10	 size=255	 req=False
+
+TABLE: viewMRP_PregledPoArtiklu
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.viewMRP_PregledPoArtiklu)
+  - IDPredmet	 type=4	 size=4	 req=True
+  - SifraArtikla	 type=4	 size=4	 req=False
+  - KataloskiBrojStavka	 type=10	 size=100	 req=True
+  - NazivArtiklaStavka	 type=10	 size=200	 req=True
+  - UkupnoPotrebno	 type=20	 size=16	 req=False
+  - UkupnoRezervisano	 type=20	 size=16	 req=False
+  - UkupnoZaNabavku	 type=20	 size=16	 req=False
+  - NajranijiDatum	 type=10	 size=10	 req=False
+  - NajkasnijiDatum	 type=10	 size=10	 req=False
+  - BrojeviCrteza	 type=12	 size=0	 req=False
+  - BrojSklopova	 type=4	 size=4	 req=False
+
+TABLE: viewOdlukePredProvera
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.viewOdlukePredProvera)
+  - IDNacrtPrim	 type=4	 size=4	 req=True
+  - TipNacrta	 type=2	 size=1	 req=True
+  - IDPredmet	 type=4	 size=4	 req=True
+  - IDNacrtStavka	 type=4	 size=4	 req=True
+  - IDCrtez	 type=4	 size=4	 req=True
+  - BrojCrteza	 type=10	 size=20	 req=True
+  - Naziv	 type=10	 size=255	 req=True
+  - Revizija	 type=10	 size=3	 req=True
+  - KolicinaZaIzradu	 type=4	 size=4	 req=True
+  - PredProveraDuplikat	 type=1	 size=1	 req=True
+  - PredProveraIDNacrtPrim	 type=4	 size=4	 req=False
+  - PredProveraIDRN	 type=4	 size=4	 req=False
+  - IskljuciPrimopredaju	 type=1	 size=1	 req=True
+  - OdlukaAkcija	 type=2	 size=1	 req=True
+  - Napomena	 type=10	 size=250	 req=False
+  - PrethodnoPredateKolicine	 type=20	 size=16	 req=False
+  - NeedsDecision	 type=1	 size=1	 req=False
+  - SuggestedAction	 type=4	 size=4	 req=True
+
+TABLE: viewPlaniranjeOdlukePredProvera
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.viewPlaniranjeOdlukePredProvera)
+  - IDPlanStavka	 type=4	 size=4	 req=True
+  - IDPlan	 type=4	 size=4	 req=True
+  - IDPredmet	 type=4	 size=4	 req=True
+  - IDCrtezNabavke	 type=4	 size=4	 req=True
+  - PredProveraIDPlan	 type=4	 size=4	 req=False
+  - SifraArtikla	 type=4	 size=4	 req=False
+  - NazivArtiklaStavke	 type=10	 size=150	 req=False
+  - KataloskiBrojStavke	 type=10	 size=20	 req=False
+  - KolicinaZaNabavku	 type=20	 size=16	 req=False
+  - PrethodnoPlaniraneKolicine	 type=10	 size=38	 req=True
+  - CrtezPlaniranUDokumentu	 type=4	 size=4	 req=False
+  - OdlukaAkcija	 type=2	 size=1	 req=False
+  - NeedsDecision	 type=1	 size=1	 req=False
+  - SuggestedAction	 type=4	 size=4	 req=True
+  - BrojCrteza	 type=10	 size=20	 req=False
+  - Revizija	 type=10	 size=3	 req=False
+  - IskljuciNabavku	 type=1	 size=1	 req=True
+
+TABLE: VrednostiZaKombo
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.VrednostiZaKombo)
+  - Kolona	 type=10	 size=64	 req=True
+  - Vrednost	 type=10	 size=255	 req=True
+  IDX PK_TabelaVrednostiZaKombo [primary=True unique=True]: Kolona, Vrednost
+
+TABLE: Vrste sifara
+  (LINKED: ODBC;DRIVER=SQL Server;SERVER=tcp:Vasa-SQL,5765;APP=QBigTehn;DATABASE=QBigTehn  -> dbo.Vrste sifara)
+  - Vrsta sifre	 type=10	 size=10	 req=True
+  - Opis	 type=10	 size=50	 req=False
+  IDX aaaaaVrste sifara_PK [primary=True unique=True]: Vrsta sifre
+
+TABLE: ZagDigitron
+  (LINKED: ;DATABASE=C:\SHARES\Servoteh\QBigTehn\EXTENDED\Digitron.mdb  -> ZagDigitron)
+

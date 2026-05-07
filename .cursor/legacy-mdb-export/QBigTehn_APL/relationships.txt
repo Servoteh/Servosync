@@ -1,0 +1,7 @@
+﻿{846F79D2-94D5-4115-B42A-EFB9BC0C6527}: BBQueryDef -> BBQueryParDef  [QueryName->QueryName]  attr=256
+{9A956AE2-B90E-4C1C-ACC2-6AB000290840}: CFG_Apl_Parametri_DEF -> CFG_Apl_Parametri_DozvoljeneVrednosti  [Parametar->Parametar]  attr=256
+{9D4630FA-6930-4403-B78C-8B83D8D39366}: CFG_Apl_Parametri_DEF -> CFG_APL_KatParPrip  [Parametar->Parametar]  attr=256
+MSysNavPaneGroupCategoriesMSysNavPaneGroups: MSysNavPaneGroupCategories -> MSysNavPaneGroups  [Id->GroupCategoryID]  attr=4352
+MSysNavPaneGroupsMSysNavPaneGroupToObjects: MSysNavPaneGroups -> MSysNavPaneGroupToObjects  [Id->GroupID]  attr=4352
+RibbonGrupeUseraRibbonOnForm: RibbonGrupeUsera -> RibbonOnForm  [IDGrupe->IDGrupe]  attr=256
+RibbonGrupeUseraRibbonRadniciGrupeDef: RibbonGrupeUsera -> RibbonRadniciGrupeDef  [IDGrupe->IDGrupe]  attr=256

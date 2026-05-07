@@ -1,0 +1,5 @@
+﻿Source : C:\zec\QBigTehn_APL.accdb
+Out    : C:\Users\nenad.jarakovic\Documents\GitHub\servoteh-plan-montaze\.cursor\legacy-mdb-export\QBigTehn_APL
+VBA    : bas=0 cls=0 frm=0 rpt=0 err=0
+DAO    : q=0 t=0 rel=0
+Done   : 05/07/2026 23:29:31

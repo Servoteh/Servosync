@@ -1,0 +1,4 @@
+﻿Source (CurrentDb): C:\zec\QBigTehn_APL.accdb
+Project: QBigTeh
+Exported: 05/08/2026 00:01:04
+bas=184 cls=13 frm=231 rpt=27 err=0

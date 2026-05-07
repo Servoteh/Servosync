@@ -1,0 +1,22 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "Form_PregledTehnoloskihPostupaka"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = True
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Compare Database
+Option Explicit
+
+Public Function PrimeniUslove()
+   BBTimerStart
+    SetProperlyRecordSource BBCFG.CNNString, Me
+   Me!LabelTrajanjeUpita.Caption = BBTimerTrajanjeSec("Query=")
+End Function
+
+Public Function NapuniPodformu()
+    PrimeniUslove
+End Function
+
