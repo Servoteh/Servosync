@@ -420,6 +420,7 @@ export async function openScanMoveModal({
     androidChromeHintTimer: null,
     /** Kada je true, sledeći barkod sa kamere tretira se kao lokacija (ne RNZ forma). */
     pickLocationMode: false,
+  };
 
   const $ = sel => overlay.querySelector(sel);
   const stageScan = overlay.querySelector('[data-stage="scan"]');
