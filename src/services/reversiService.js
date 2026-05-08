@@ -469,6 +469,203 @@ export async function uploadReversalPdf(docNumber, pdfBlob) {
   return path;
 }
 
+/* ============================================================
+ * Rezni alat (Sprint RZ-2) — katalog, stock, RPC-i, scanner lookup
+ * ============================================================ */
+
+/**
+ * Lista šifri reznog alata sa zbirnim stanjem na svim lokacijama (sum on_hand_qty)
+ * i zbirnim stanjem na recipient (MACHINE) lokacijama (= "trenutno na reversu").
+ *
+ * @param {{ search?: string, status?: 'active'|'scrapped'|'all', machine?: string, limit?: number, offset?: number }} params
+ */
+export async function fetchCuttingToolCatalog(params = {}) {
+  return wrap(async () => {
+    const limit = Math.max(1, Math.min(Number(params.limit) || 25, 100));
+    const offset = Math.max(0, Number(params.offset) || 0);
+    const parts = ['select=*', 'order=oznaka.asc', `limit=${limit}`, `offset=${offset}`];
+
+    const st = params.status && String(params.status).trim();
+    if (st === 'active') parts.push('status=eq.active');
+    else if (st === 'scrapped') parts.push('status=eq.scrapped');
+
+    const search = params.search && String(params.search).trim();
+    if (search) {
+      const enc = encodeURIComponent(`*${search}*`);
+      parts.push(`or=(oznaka.ilike.${enc},naziv.ilike.${enc},klasa.ilike.${enc},barcode.ilike.${enc})`);
+    }
+    const m = params.machine && String(params.machine).trim();
+    if (m) {
+      parts.push(`compatible_machine_codes=cs.{${encodeURIComponent(m)}}`);
+    }
+
+    const q = `rev_cutting_tool_catalog?${parts.join('&')}`;
+    const res = await sbReqWithCount(q);
+    const rows = Array.isArray(res?.rows) ? res.rows : [];
+    if (rows.length === 0) return { rows: [], total: res?.total ?? 0 };
+
+    const ids = rows.map((r) => r.id);
+    const inList = ids.map((x) => encodeURIComponent(x)).join(',');
+    const stockRows = await sbReq(
+      `rev_cutting_tool_stock?catalog_id=in.(${inList})&select=catalog_id,location_id,on_hand_qty,loc_locations(location_code,location_type)`,
+    );
+    const stockByCatalog = new Map();
+    for (const s of Array.isArray(stockRows) ? stockRows : []) {
+      const k = s.catalog_id;
+      if (!stockByCatalog.has(k)) stockByCatalog.set(k, []);
+      stockByCatalog.get(k).push(s);
+    }
+
+    const enriched = rows.map((r) => {
+      const stock = stockByCatalog.get(r.id) || [];
+      let totalOnHand = 0;
+      let onMachines = 0;
+      for (const s of stock) {
+        const qty = Number(s.on_hand_qty) || 0;
+        totalOnHand += qty;
+        const loc = Array.isArray(s.loc_locations) ? s.loc_locations[0] : s.loc_locations;
+        const code = loc?.location_code || '';
+        if (code.startsWith('ZADU-M-')) onMachines += qty;
+      }
+      const inWarehouse = totalOnHand - onMachines;
+      return { ...r, total_on_hand: totalOnHand, on_machines_qty: onMachines, in_warehouse_qty: inWarehouse, stock };
+    });
+
+    return { rows: enriched, total: res?.total ?? null };
+  })();
+}
+
+/**
+ * Stock detaljno po lokaciji za jednu šifru (pregled gde je alat trenutno).
+ * @param {string} catalogId
+ */
+export async function fetchCuttingToolStockDetails(catalogId) {
+  return wrap(async () => {
+    const rows = await sbReq(
+      `rev_cutting_tool_stock?catalog_id=eq.${encodeURIComponent(catalogId)}` +
+        '&select=*,loc_locations(location_code,name,location_type)' +
+        '&order=on_hand_qty.desc',
+    );
+    return Array.isArray(rows) ? rows : [];
+  })();
+}
+
+/**
+ * Pretraži šifru po barkodu (Code128 sa nalepnice).
+ * @param {string} barcode
+ */
+export async function fetchCuttingToolByBarcode(barcode) {
+  return wrap(async () => {
+    if (!barcode) return null;
+    const rows = await sbReq(
+      `rev_cutting_tool_catalog?barcode=eq.${encodeURIComponent(barcode)}&select=*&limit=1`,
+    );
+    return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  })();
+}
+
+/** @param {object} payload polja za rev_cutting_tool_catalog */
+export async function insertCuttingTool(payload) {
+  return wrap(async () => {
+    const row = await sbReqThrow('rev_cutting_tool_catalog', 'POST', payload, { upsert: false });
+    const created = Array.isArray(row) ? row[0] : row;
+    if (!created?.id || !created?.barcode) throw new Error('Insert šifre nije vratio očekivani red');
+    return created;
+  })();
+}
+
+/**
+ * Update postojeće šifre (oznaka, naziv, klasa, mašine, status, napomena).
+ * @param {string} id
+ * @param {object} patch
+ */
+export async function updateCuttingTool(id, patch) {
+  return wrap(async () => {
+    const rows = await sbReqThrow(
+      `rev_cutting_tool_catalog?id=eq.${encodeURIComponent(id)}`,
+      'PATCH',
+      patch,
+      { upsert: false },
+    );
+    if (!Array.isArray(rows) || !rows[0]) throw new Error('Update šifre nije vratio red');
+    return rows[0];
+  })();
+}
+
+export async function issueCuttingReversal(payload) {
+  return wrap(async () => {
+    const raw = await sbReqThrow('rpc/rev_issue_cutting_reversal', 'POST', { p_payload: payload }, { upsert: false });
+    return raw;
+  })();
+}
+
+export async function confirmCuttingReturn(payload) {
+  return wrap(async () => {
+    const raw = await sbReqThrow('rpc/rev_confirm_cutting_return', 'POST', { p_payload: payload }, { upsert: false });
+    return raw;
+  })();
+}
+
+export async function fetchMyIssuedCuttingTools() {
+  return wrap(async () => {
+    const rows = await sbReq(
+      'v_rev_my_issued_cutting_tools?select=*&order=issued_at.desc&limit=200',
+    );
+    return Array.isArray(rows) ? rows : [];
+  })();
+}
+
+/**
+ * Self-service: rezni alat na mašinama na kojima operater trenutno radi.
+ * Fallback: ako view ne postoji (CI / nema production schema), vraća empty list bez greške.
+ */
+export async function fetchMyMachinesCuttingTools() {
+  return wrap(async () => {
+    try {
+      const rows = await sbReq(
+        'v_rev_my_machines_cutting_tools?select=*&order=recipient_machine_code.asc,issued_at.desc&limit=300',
+      );
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      const msg = String(e?.message || '');
+      if (/relation|does not exist|42P01|404/i.test(msg)) return [];
+      throw e;
+    }
+  })();
+}
+
+/**
+ * Lista mašina iz BigTehn cache-a (rj_code = "8.3", "10.1", ...).
+ * @param {{ search?: string }} [opts]
+ */
+export async function fetchMachines(opts = {}) {
+  return wrap(async () => {
+    const parts = ['select=rj_code,name,no_procedure', 'order=rj_code.asc', 'limit=500'];
+    const s = opts.search && String(opts.search).trim();
+    if (s) {
+      const enc = encodeURIComponent(`*${s}*`);
+      parts.push(`or=(rj_code.ilike.${enc},name.ilike.${enc})`);
+    }
+    const rows = await sbReq(`bigtehn_machines_cache?${parts.join('&')}`);
+    return Array.isArray(rows) ? rows : [];
+  })();
+}
+
+/**
+ * Pronađi radnika po card_barcode — koristi scanner za potpisnika preuzimanja.
+ * @param {string} cardBarcode
+ */
+export async function fetchEmployeeByCardBarcode(cardBarcode) {
+  return wrap(async () => {
+    const v = String(cardBarcode || '').trim();
+    if (!v) return null;
+    const rows = await sbReq(
+      `employees?card_barcode=eq.${encodeURIComponent(v)}&select=id,full_name,department,is_active&limit=1`,
+    );
+    return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  })();
+}
+
 /**
  * Ažurira pdf_storage_path i pdf_generated_at na rev_documents redu.
  * @param {string} docId

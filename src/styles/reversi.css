@@ -1100,3 +1100,390 @@ html[data-theme='light'] .rev-stat-card--teal .rev-stat-value {
     border: 1px solid #ccc;
   }
 }
+
+/* ─── Rezni alat (Sprint RZ-2) ─────────────────────────────────────── */
+
+.module-reversi .rev-mchip {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 1px 2px;
+  font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  font-size: 11px;
+  background: var(--rev-pill-bg, rgba(63, 102, 156, 0.12));
+  color: var(--rev-pill-fg, #3f669c);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.module-reversi .rev-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  margin: 2px 4px 2px 0;
+  background: var(--rev-pill-bg, rgba(63, 102, 156, 0.10));
+  color: var(--rev-text, inherit);
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.module-reversi .rev-chip-x {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.module-reversi .rev-chip-x:hover {
+  color: var(--rev-danger, #c0392b);
+}
+
+.module-reversi .rev-chip-row {
+  margin-bottom: 6px;
+  min-height: 24px;
+}
+
+.module-reversi .rev-th-num,
+.module-reversi .rev-td-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.module-reversi .rev-th-cb {
+  width: 28px;
+  text-align: center;
+}
+
+.module-reversi .rev-rzn-cb {
+  cursor: pointer;
+}
+
+.module-reversi .rev-h3 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.module-reversi .rev-meta-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.module-reversi .rev-meta-grid dt {
+  font-weight: 600;
+  color: var(--rev-muted, #6b6b6b);
+}
+
+.module-reversi .rev-meta-grid dd {
+  margin: 0;
+}
+
+/* ─── Scanner modal (Sprint RZ-3) ──────────────────────────────────── */
+
+.rev-modal.rev-modal--scanner {
+  max-width: 720px;
+}
+
+.rev-scan-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rev-scan-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rev-input--scan {
+  font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  font-size: 16px;
+  letter-spacing: 0.5px;
+  padding: 10px 12px;
+  border: 2px dashed var(--rev-accent, #4a8fc7);
+  background: rgba(74, 143, 199, 0.05);
+}
+
+.rev-input--scan:focus {
+  outline: none;
+  border-style: solid;
+  background: rgba(74, 143, 199, 0.1);
+}
+
+.rev-scan-hint {
+  font-size: 11px;
+  margin: 0;
+}
+
+.rev-scan-hint code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.rev-scan-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.rev-scan-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--rev-border, #d8d8d8);
+  border-radius: 6px;
+  background: var(--rev-card-bg, #fff);
+  min-height: 50px;
+}
+
+.rev-scan-pill.is-on {
+  border-color: var(--rev-accent, #4a8fc7);
+  background: rgba(74, 143, 199, 0.08);
+}
+
+.rev-scan-pill-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--rev-muted, #6b6b6b);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.rev-scan-pill-val {
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.rev-scan-pill-val em {
+  color: var(--rev-muted, #aaa);
+  font-style: normal;
+}
+
+.rev-scan-fallback details {
+  font-size: 13px;
+}
+
+.rev-scan-fallback summary {
+  cursor: pointer;
+  color: var(--rev-muted, #6b6b6b);
+  padding: 4px 0;
+}
+
+.rev-scan-fallback summary:hover {
+  color: var(--rev-accent, #4a8fc7);
+}
+
+.rev-warn-banner {
+  padding: 8px 12px;
+  background: rgba(255, 165, 0, 0.12);
+  border-left: 3px solid #f0a020;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #7a5410;
+}
+
+.rev-qty-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--rev-border, #ccc);
+  background: var(--rev-card-bg, #fff);
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.rev-qty-btn:hover {
+  background: var(--rev-hover-bg, rgba(0, 0, 0, 0.04));
+}
+
+.rev-qty-input {
+  width: 56px;
+  text-align: center;
+  border: 1px solid var(--rev-border, #ccc);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-variant-numeric: tabular-nums;
+  margin: 0 4px;
+}
+
+.rev-scan-lines h3.rev-h3 {
+  margin-top: 4px;
+}
+
+@media (max-width: 600px) {
+  .rev-scan-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Moja zaduženja (Sprint RZ-4 — mobile self-service) ──────────── */
+
+.module-reversi .rev-mz-shell {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 12px 14px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.module-reversi .rev-mz-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.module-reversi .rev-mz-title {
+  margin: 0;
+  font-size: 22px;
+}
+
+.module-reversi .rev-mz-subtitle {
+  margin: 0;
+  font-size: 13px;
+}
+
+.module-reversi .rev-mz-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.module-reversi .rev-mz-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--rev-border, #e5e5e5);
+}
+
+.module-reversi .rev-mz-section-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.module-reversi .rev-mz-count {
+  background: var(--rev-pill-bg, rgba(63, 102, 156, 0.12));
+  color: var(--rev-pill-fg, #3f669c);
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.module-reversi .rev-mz-machine-block {
+  margin-top: 6px;
+}
+
+.module-reversi .rev-mz-machine-h {
+  margin: 6px 0 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--rev-muted, #555);
+}
+
+.module-reversi .rev-mz-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.module-reversi .rev-mz-card {
+  background: var(--rev-card-bg, #fff);
+  border: 1px solid var(--rev-border, #e0e0e0);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.module-reversi .rev-mz-card.is-overdue {
+  border-color: #f0a020;
+  background: rgba(255, 165, 0, 0.04);
+}
+
+.module-reversi .rev-mz-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.module-reversi .rev-mz-doc {
+  color: var(--rev-muted, #777);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.module-reversi .rev-mz-mchip {
+  display: inline-block;
+  padding: 1px 8px;
+  background: var(--rev-pill-bg, rgba(63, 102, 156, 0.12));
+  color: var(--rev-pill-fg, #3f669c);
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.module-reversi .rev-mz-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.module-reversi .rev-mz-name {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.module-reversi .rev-mz-meta {
+  font-size: 12px;
+  color: var(--rev-muted, #555);
+}
+
+.module-reversi .rev-mz-card-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--rev-muted, #888);
+  border-top: 1px solid var(--rev-border-light, #f0f0f0);
+  padding-top: 4px;
+  margin-top: 2px;
+}
+
+.module-reversi .rev-warn {
+  color: #c87010;
+  font-weight: 600;
+}
+
+.module-reversi .rev-mz-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+@media (max-width: 600px) {
+  .module-reversi .rev-mz-cards {
+    grid-template-columns: 1fr;
+  }
+  .module-reversi .rev-mz-shell {
+    padding: 10px 10px 80px;
+  }
+}

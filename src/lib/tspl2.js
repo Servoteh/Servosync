@@ -229,3 +229,67 @@ export function buildTspShelfLabelProgram(loc) {
   lines.push(`PRINT ${copies},1`);
   return lines.join('\r\n') + '\r\n';
 }
+
+/**
+ * Generiše TSPL2 program za nalepnicu reznog alata (Sprint RZ-2).
+ *
+ * Layout (80.34×40.3mm):
+ *   ┌───────────────────────────────────────┐
+ *   │ RZN-000123                            │  y=1.5mm  font "5" — barkod (čitljiv)
+ *   │ Glodalo HSS D12                       │  y=9mm    font "3" — naziv
+ *   │ Klasa: glodalo                        │  y=13mm   font "2" — klasa
+ *   │ Mašine: 8.3, 10.1                     │  y=16mm   font "2" — kompatibilne mašine
+ *   │ ║║│║║║│║│║║│║║║║│║│║║│║║║║│║║│║║│║║│   │  y=19.5mm h=18mm — Code128 barkod
+ *   └───────────────────────────────────────┘
+ *
+ * @param {{ barcode: string, oznaka?: string, naziv?: string, klasa?: string,
+ *   compatible_machine_codes?: string[], copies?: number }} tool
+ * @returns {string}
+ */
+export function buildTspCuttingToolLabelProgram(tool) {
+  const barcode = String(tool?.barcode || '').trim();
+  if (!barcode) throw new Error('buildTspCuttingToolLabelProgram: barcode je obavezan');
+
+  const oznaka = String(tool?.oznaka || '').trim();
+  const naziv = String(tool?.naziv || '').trim();
+  const klasa = String(tool?.klasa || '').trim();
+  const machines = Array.isArray(tool?.compatible_machine_codes)
+    ? tool.compatible_machine_codes.filter(Boolean).join(', ')
+    : '';
+  const copies = Math.max(1, Math.floor(Number(tool?.copies) || 1));
+
+  const lines = [];
+  lines.push('CLS');
+
+  /* ─ Red 1: barkod string (font "5" ~16pt) — čitljiv pored barkoda ─ */
+  lines.push(`TEXT ${mm(2)},${mm(1.5)},"5",0,1,1,${tsplStr(truncFit(barcode, 18))}`);
+
+  /* ─ Red 2: oznaka — ako se razlikuje od barkoda, prikaži je ─ */
+  if (oznaka && oznaka !== barcode) {
+    lines.push(`TEXT ${mm(46)},${mm(2.5)},"2",0,1,1,${tsplStr(truncFit(oznaka, 16))}`);
+  }
+
+  /* ─ Red 3: naziv (full width, font "3" ~10pt) ─ */
+  if (naziv) {
+    lines.push(`TEXT ${mm(2)},${mm(9)},"3",0,1,1,${tsplStr(truncFit(naziv, 38))}`);
+  }
+
+  /* ─ Red 4: klasa ─ */
+  if (klasa) {
+    lines.push(`TEXT ${mm(2)},${mm(13.5)},"2",0,1,1,${tsplStr('Klasa: ' + truncFit(klasa, 26))}`);
+  }
+
+  /* ─ Red 5: kompatibilne mašine ─ */
+  if (machines) {
+    lines.push(`TEXT ${mm(2)},${mm(16.5)},"2",0,1,1,${tsplStr('Masine: ' + truncFit(machines, 50))}`);
+  }
+
+  /* ─ Barkod horizontalan, full width minus 2mm svake strane, h=18mm ─ */
+  const BC_X = mm(2);
+  const BC_Y = mm(19.5);
+  const BC_H = mm(18);
+  lines.push(`BARCODE ${BC_X},${BC_Y},"128M",${BC_H},1,0,2,4,${tsplStr(barcode)}`);
+
+  lines.push(`PRINT ${copies},1`);
+  return lines.join('\r\n') + '\r\n';
+}

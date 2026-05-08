@@ -36,6 +36,7 @@ sql/migrations/add_maintenance_module.sql
 # Reversi — zavisi od loc_* + touch_updated_at() (add_maintenance_module)
 sql/migrations/add_reversi_module.sql
 sql/migrations/add_reversi_reversal_pdf_storage.sql
+sql/migrations/add_reversi_cutting_tools.sql
 
 # Sastanci — baza + RLS hardening + prefs/draft/lock/RPC koje pokrivaju pgTAP testovi
 sql/migrations/add_sastanci_module.sql

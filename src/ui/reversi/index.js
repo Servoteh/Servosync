@@ -28,14 +28,24 @@ import {
   fmtDateShort,
   handleReversalPdfClick,
 } from './modals.js';
+import { renderReznialatTab, teardownReznialatTab } from './reznialat.js';
+import {
+  openCuttingToolIssueScannerModal,
+  openCuttingToolReturnScannerModal,
+} from './cuttingToolScannerModal.js';
+import { renderMojaZaduzenjaTab, teardownMojaZaduzenjaTab } from './mojaZaduzenja.js';
 import { rowsToCsv, CSV_BOM, parseCsv } from '../../lib/csv.js';
 
 const ICON_TAB_ZAD = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14h6"/><path d="M9 18h6"/></svg>`;
 const ICON_TAB_INV = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>`;
+const ICON_TAB_RZN = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 010 1.4l-1 1-3-3 1-1a1 1 0 011.4 0l1.6 1.6z"/><path d="M11 7L4 14v3h3l7-7"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`;
+const ICON_TAB_MOJ = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
 
 const TABS = [
+  { id: 'moja', label: 'Moja zaduženja' },
   { id: 'zaduzenja', label: 'Zaduženja' },
   { id: 'inventar', label: 'Inventar alata i opreme' },
+  { id: 'rezni-alat', label: 'Rezni alat' },
 ];
 
 let mountRoot = null;
@@ -180,6 +190,8 @@ function csvPickColumn(headers, aliases) {
 
 export function teardownReversiModule() {
   mountRoot = null;
+  teardownReznialatTab();
+  teardownMojaZaduzenjaTab();
 }
 
 /**
@@ -195,6 +207,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
 
   mountRoot = root;
   let activeTab = loadTab();
+  if (!TABS.find((t) => t.id === activeTab)) activeTab = 'moja';
   let magacinId = null;
   let locations = [];
 
@@ -209,6 +222,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
   let toolsTotal = null;
   let tabCountZ = null;
   let tabCountI = null;
+  let tabCountR = null;
   let myIssued = [];
   let myIssuedOpen = true;
 
@@ -321,14 +335,22 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
       </header>
       <nav class="rev-tab-strip" role="tablist">
         ${TABS.map(
-          (t) => `
+          (t) => {
+            const icon = t.id === 'zaduzenja' ? ICON_TAB_ZAD
+              : t.id === 'inventar' ? ICON_TAB_INV
+              : t.id === 'rezni-alat' ? ICON_TAB_RZN
+              : ICON_TAB_MOJ;
+            const cnt = t.id === 'zaduzenja' ? tabCountZ
+              : t.id === 'inventar' ? tabCountI
+              : t.id === 'rezni-alat' ? tabCountR
+              : null;
+            return `
           <button type="button" role="tab" class="rev-strip-tab ${activeTab === t.id ? 'is-active' : ''}" data-rev-tab="${escHtml(t.id)}">
-            ${t.id === 'zaduzenja' ? ICON_TAB_ZAD : ICON_TAB_INV}
+            ${icon}
             <span class="rev-strip-label">${escHtml(t.label)}</span>
-            <span class="rev-strip-count ${activeTab === t.id ? 'is-active' : ''}" data-rev-tab-count="${escHtml(t.id)}">${escHtml(
-              countLabel(t.id === 'zaduzenja' ? tabCountZ : tabCountI),
-            )}</span>
-          </button>`,
+            <span class="rev-strip-count ${activeTab === t.id ? 'is-active' : ''}" data-rev-tab-count="${escHtml(t.id)}">${escHtml(countLabel(cnt))}</span>
+          </button>`;
+          },
         ).join('')}
       </nav>`;
 
@@ -352,13 +374,16 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
     });
   }
 
-  function setTabCounts(z, i) {
+  function setTabCounts(z, i, rcnt) {
     if (z != null) tabCountZ = z;
     if (i != null) tabCountI = i;
+    if (rcnt != null) tabCountR = rcnt;
     const ez = root.querySelector('[data-rev-tab-count="zaduzenja"]');
     const ei = root.querySelector('[data-rev-tab-count="inventar"]');
+    const er = root.querySelector('[data-rev-tab-count="rezni-alat"]');
     if (z != null && ez) ez.textContent = countLabel(z);
     if (i != null && ei) ei.textContent = countLabel(i);
+    if (rcnt != null && er) er.textContent = countLabel(rcnt);
   }
 
   async function ensureMeta() {
@@ -382,7 +407,25 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
     }
 
     body.innerHTML = `<div class="rev-loading-card">Učitavanje…</div>`;
+
+    if (activeTab === 'moja') {
+      await renderMojaZaduzenjaTab(body);
+      return;
+    }
+
     await ensureMeta();
+
+    if (activeTab === 'rezni-alat') {
+      await renderReznialatTab(body, {
+        onIssueScan: () => {
+          openCuttingToolIssueScannerModal({ onSuccess: () => void refreshBody() });
+        },
+        onReturnScan: () => {
+          openCuttingToolReturnScannerModal({ onSuccess: () => void refreshBody() });
+        },
+      });
+      return;
+    }
 
     if (activeTab === 'zaduzenja') {
       await loadMyIssued();
