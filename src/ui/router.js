@@ -70,11 +70,12 @@ import {
   canAccessLokacije,
   canAccessReversi,
   canAccessSelfService,
+  canAccessMagacionerHubModule,
 } from '../state/auth.js';
 import { resetKadrovskaState } from '../state/kadrovska.js';
 import { resetSastanciState } from '../state/sastanci.js';
 import { showToast } from '../lib/dom.js';
-import { loadAndApplyUserRole } from '../services/userRoles.js';
+import { loadAndApplyUserRole, ackUserRolesPasswordChanged } from '../services/userRoles.js';
 import { renderMaintenanceShell, teardownMaintenanceShell } from './odrzavanjeMasina/index.js';
 
 const MODULES = [
@@ -227,6 +228,7 @@ function showResetPassword() {
        * Primeni ulogu pa idi na hub. */
       try {
         await loadAndApplyUserRole();
+        await ackUserRolesPasswordChanged();
       } catch (e) {
         /* ignore — ako nije moguće, korisnik može ručno da ode na hub */
       }
@@ -789,6 +791,10 @@ function escMsg(e) {
 function assertModuleAllowed(moduleId) {
   if (!MODULES.includes(moduleId)) {
     showToast('⚠ Nepoznat modul: ' + moduleId);
+    return false;
+  }
+  if (!canAccessMagacionerHubModule(moduleId)) {
+    showToast('🔒 Magacioner nema pristup ovom modulu.');
     return false;
   }
   if (moduleId === 'kadrovska' && !canAccessKadrovska()) {

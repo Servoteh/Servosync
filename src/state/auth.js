@@ -97,6 +97,16 @@ export function canEdit() {
 export function isMagacioner() {
   return state.role === 'magacioner';
 }
+
+/**
+ * Magacioner u hub-u vidi samo Lokacije delova, Reversi i Moj profil.
+ * Mobilni /m/* ostaje dostupan kao operativni deo lokacija.
+ */
+export function canAccessMagacionerHubModule(moduleId) {
+  if (state.role !== 'magacioner') return true;
+  if (moduleId === 'lokacije-delova' || moduleId === 'reversi' || moduleId === 'moj-profil') return true;
+  return false;
+}
 export function isCncOperater() {
   return state.role === 'cnc_operater';
 }
