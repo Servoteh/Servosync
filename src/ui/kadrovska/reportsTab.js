@@ -23,7 +23,7 @@ import {
   compareEmployeesByLastFirst,
   employeeDisplayName,
 } from '../../lib/employeeNames.js';
-import { canViewEmployeePii } from '../../state/auth.js';
+import { canViewEmployeePii, isAdmin } from '../../state/auth.js';
 import { KADR_EDU_LEVEL_LABELS } from '../../lib/constants.js';
 import {
   kadrovskaState,
@@ -39,10 +39,18 @@ import {
 import {
   bolovanjeListFromWorkHours,
   countGoDaysByEmployeeForYear,
+  overtimeByEmployeeForPeriod,
+  fieldWorkByEmployeeForPeriod,
 } from '../../services/workHoursAbsenceReporting.js';
 import { loadChildrenForEmployee } from '../../services/employeeChildren.js';
+import { loadAllMedExamStatus } from '../../services/medicalExams.js';
+import { openMedicalExamsModal } from './medicalExamsModal.js';
+import { CERT_TYPE_LABELS, loadAllCertificateStatus } from '../../services/certificates.js';
+import { openCertificatesModal } from './certificatesModal.js';
+import { AUDIT_TABLE_LABELS, loadAuditLog, diffAuditRow } from '../../services/auditLog.js';
 import { renderSummaryChips } from './shared.js';
 import { loadXlsx } from '../../lib/xlsx.js';
+import { downloadCsv } from '../../lib/csv.js';
 
 let panelRoot = null;
 /** Bolovanja iz work_hours (mesečni grid), keš za trenutni period filtera. */
@@ -84,10 +92,20 @@ function _periodLabel(from, to) {
  * Effective period: explicit From/To → month picker → year picker → all-time.
  */
 function _readPeriod() {
-  const fromEl = panelRoot?.querySelector('#repSickFrom')?.value || '';
-  const toEl = panelRoot?.querySelector('#repSickTo')?.value || '';
+  return _readPeriodFor('repSick');
+}
+
+/**
+ * Generičko čitanje perioda iz prefix-grupe ID-eva.
+ *  - {prefix}From / {prefix}To  — eksplicitni range
+ *  - {prefix}Month               — 'YYYY-MM'
+ *  - {prefix}Year                — 'YYYY'
+ */
+function _readPeriodFor(prefix) {
+  const fromEl = panelRoot?.querySelector('#' + prefix + 'From')?.value || '';
+  const toEl = panelRoot?.querySelector('#' + prefix + 'To')?.value || '';
   if (fromEl || toEl) return { from: fromEl || '', to: toEl || '' };
-  const monthEl = panelRoot?.querySelector('#repSickMonth')?.value || '';
+  const monthEl = panelRoot?.querySelector('#' + prefix + 'Month')?.value || '';
   if (monthEl) {
     const [y, m] = monthEl.split('-').map(n => parseInt(n, 10));
     if (y && m) {
@@ -95,7 +113,7 @@ function _readPeriod() {
       return { from: _ymd(y, m, 1), to: _ymd(y, m, last) };
     }
   }
-  const yEl = panelRoot?.querySelector('#repSickYear')?.value || '';
+  const yEl = panelRoot?.querySelector('#' + prefix + 'Year')?.value || '';
   if (yEl) {
     const y = parseInt(yEl, 10);
     if (y >= 2000 && y <= 2100) return { from: _ymd(y, 1, 1), to: _ymd(y, 12, 31) };
@@ -116,14 +134,21 @@ function _intersectingDays(absFrom, absTo, periodFrom, periodTo) {
 export function renderReportsTab() {
   const curYear = String(new Date().getFullYear());
   const showChildren = canViewEmployeePii();
+  const showAudit = isAdmin();
   return `
     <section class="kadr-panel-inner kadr-reports-panel" aria-label="Izveštaji">
       <div class="kadr-toolbar reports-toolbar">
         <div class="kadr-toolbar-row" role="tablist" aria-label="Izveštaj — vrsta">
           <button type="button" class="report-tab active" data-report-tab="sick" role="tab" aria-selected="true">🩺 Bolovanja</button>
           <button type="button" class="report-tab" data-report-tab="demo" role="tab" aria-selected="false">📈 Demografija</button>
+          <button type="button" class="report-tab" data-report-tab="org" role="tab" aria-selected="false">🏢 Organogram</button>
           <button type="button" class="report-tab" data-report-tab="vacation" role="tab" aria-selected="false">🏖 Saldo GO</button>
+          <button type="button" class="report-tab" data-report-tab="overtime" role="tab" aria-selected="false">⏱ Prekovremeni</button>
+          <button type="button" class="report-tab" data-report-tab="field" role="tab" aria-selected="false">🚐 Terenski</button>
+          ${showChildren ? '<button type="button" class="report-tab" data-report-tab="medical" role="tab" aria-selected="false">🩺 Lekarski</button>' : ''}
+          ${showChildren ? '<button type="button" class="report-tab" data-report-tab="certs" role="tab" aria-selected="false">📜 Sertifikati</button>' : ''}
           ${showChildren ? '<button type="button" class="report-tab" data-report-tab="children" role="tab" aria-selected="false">👶 Deca</button>' : ''}
+          ${showAudit ? '<button type="button" class="report-tab" data-report-tab="audit" role="tab" aria-selected="false">📒 Audit log</button>' : ''}
         </div>
       </div>
 
@@ -156,6 +181,7 @@ export function renderReportsTab() {
             </label>
             <button type="button" class="btn btn-ghost" id="repSickReset">Resetuj filtere</button>
             <button type="button" class="btn btn-ghost" id="repSickExport" title="Izvoz u Excel">📊 Excel</button>
+            <button type="button" class="btn btn-ghost" id="repSickExportCsv" title="Izvoz u CSV">📑 CSV</button>
             <span class="kadr-count" id="repSickCount">0 evidencija</span>
           </div>
         </div>
@@ -197,6 +223,29 @@ export function renderReportsTab() {
         <div class="kadr-demo-grid" id="repDemoGrid"></div>
       </div>
 
+      <div class="report-panel" id="reportPanel-org" role="tabpanel" hidden>
+        <div class="kadr-toolbar">
+          <div class="kadr-toolbar-row">
+            <label class="kadr-field">
+              <span>Status</span>
+              <select id="repOrgStatus">
+                <option value="active" selected>Samo aktivni</option>
+                <option value="all">Svi</option>
+              </select>
+            </label>
+            <label class="kadr-field">
+              <span>Pretraga zaposlenog</span>
+              <input type="text" id="repOrgSearch" placeholder="ime ili pozicija…">
+            </label>
+            <button type="button" class="btn btn-ghost" id="repOrgExpand">⬇ Otvori sve</button>
+            <button type="button" class="btn btn-ghost" id="repOrgCollapse">⬆ Zatvori sve</button>
+          </div>
+        </div>
+        <div class="kadr-summary-strip" id="repOrgSummary"></div>
+        <div class="kadr-org-tree" id="repOrgTree"></div>
+        <div id="repOrgEmpty" class="kadr-empty" style="display:none">Org struktura nije konfigurisana — popuni odeljenja u Zaposleni tabu.</div>
+      </div>
+
       <div class="report-panel" id="reportPanel-vacation" role="tabpanel" hidden>
         <div class="kadr-toolbar">
           <div class="kadr-toolbar-row">
@@ -212,6 +261,7 @@ export function renderReportsTab() {
               </select>
             </label>
             <button type="button" class="btn btn-ghost" id="repVacExport" title="Izvoz u Excel">📊 Excel</button>
+            <button type="button" class="btn btn-ghost" id="repVacExportCsv" title="Izvoz u CSV">📑 CSV</button>
             <span class="kadr-count" id="repVacCount">0 zaposlenih</span>
           </div>
         </div>
@@ -233,6 +283,245 @@ export function renderReportsTab() {
         </div>
         <div id="repVacEmpty" class="kadr-empty" style="display:none">Nema podataka o GO za izabranu godinu.</div>
       </div>
+
+      <div class="report-panel" id="reportPanel-overtime" role="tabpanel" hidden>
+        <div class="kadr-toolbar">
+          <div class="kadr-toolbar-row">
+            <label class="kadr-field">
+              <span>Mesec</span>
+              <input type="month" id="repOtMonth">
+            </label>
+            <label class="kadr-field">
+              <span>Godina</span>
+              <input type="number" id="repOtYear" min="2000" max="2100" value="${curYear}" style="max-width:90px">
+            </label>
+            <label class="kadr-field">
+              <span>Od</span>
+              <input type="date" id="repOtFrom">
+            </label>
+            <label class="kadr-field">
+              <span>Do</span>
+              <input type="date" id="repOtTo">
+            </label>
+            <button type="button" class="btn btn-ghost" id="repOtReset">Resetuj filtere</button>
+            <button type="button" class="btn btn-ghost" id="repOtExport" title="Izvoz u Excel">📊 Excel</button>
+            <span class="kadr-count" id="repOtCount">0 zaposlenih</span>
+          </div>
+        </div>
+        <div class="kadr-summary-strip" id="repOtSummary"></div>
+        <div class="kadr-table-wrap">
+          <table class="kadr-table">
+            <thead>
+              <tr>
+                <th>Zaposleni</th>
+                <th class="col-hide-sm">Odeljenje</th>
+                <th>Σ prekovr. (h)</th>
+                <th class="col-hide-sm">Dani sa prekovr.</th>
+                <th class="col-hide-sm">2 mašine (h)</th>
+                <th class="col-hide-sm">Poslednji datum</th>
+              </tr>
+            </thead>
+            <tbody id="repOtTbody"></tbody>
+            <tfoot id="repOtTfoot"></tfoot>
+          </table>
+        </div>
+        <div id="repOtEmpty" class="kadr-empty" style="display:none">Nema prekovremenog rada u izabranom periodu.</div>
+      </div>
+
+      <div class="report-panel" id="reportPanel-field" role="tabpanel" hidden>
+        <div class="kadr-toolbar">
+          <div class="kadr-toolbar-row">
+            <label class="kadr-field">
+              <span>Mesec</span>
+              <input type="month" id="repFwMonth">
+            </label>
+            <label class="kadr-field">
+              <span>Godina</span>
+              <input type="number" id="repFwYear" min="2000" max="2100" value="${curYear}" style="max-width:90px">
+            </label>
+            <label class="kadr-field">
+              <span>Od</span>
+              <input type="date" id="repFwFrom">
+            </label>
+            <label class="kadr-field">
+              <span>Do</span>
+              <input type="date" id="repFwTo">
+            </label>
+            <label class="kadr-field">
+              <span>Tip</span>
+              <select id="repFwType">
+                <option value="">Sve</option>
+                <option value="domestic">Domaći</option>
+                <option value="foreign">Inostrani</option>
+              </select>
+            </label>
+            <button type="button" class="btn btn-ghost" id="repFwReset">Resetuj filtere</button>
+            <button type="button" class="btn btn-ghost" id="repFwExport" title="Izvoz u Excel">📊 Excel</button>
+            <span class="kadr-count" id="repFwCount">0 zaposlenih</span>
+          </div>
+        </div>
+        <div class="kadr-summary-strip" id="repFwSummary"></div>
+        <div class="kadr-table-wrap">
+          <table class="kadr-table">
+            <thead>
+              <tr>
+                <th>Zaposleni</th>
+                <th class="col-hide-sm">Odeljenje</th>
+                <th>Domaći (dani)</th>
+                <th class="col-hide-sm">Domaći (h)</th>
+                <th>Inostrani (dani)</th>
+                <th class="col-hide-sm">Inostrani (h)</th>
+                <th class="col-hide-sm">Σ dani</th>
+                <th class="col-hide-sm">Poslednji datum</th>
+              </tr>
+            </thead>
+            <tbody id="repFwTbody"></tbody>
+            <tfoot id="repFwTfoot"></tfoot>
+          </table>
+        </div>
+        <div id="repFwEmpty" class="kadr-empty" style="display:none">Nema terenskog rada u izabranom periodu.</div>
+      </div>
+
+      ${showChildren ? `
+      <div class="report-panel" id="reportPanel-certs" role="tabpanel" hidden>
+        <div class="kadr-toolbar">
+          <div class="kadr-toolbar-row">
+            <label class="kadr-field">
+              <span>Tip</span>
+              <select id="repCertType">
+                <option value="" selected>Svi tipovi</option>
+                ${Object.entries(CERT_TYPE_LABELS).map(([k, v]) => `<option value="${k}">${escHtml(v)}</option>`).join('')}
+              </select>
+            </label>
+            <label class="kadr-field">
+              <span>Status</span>
+              <select id="repCertStatus">
+                <option value="problem" selected>Problemi (istekli + ističu)</option>
+                <option value="expired">Samo istekli</option>
+                <option value="expiring_soon">Samo ističu &lt;30 dana</option>
+                <option value="lifetime">Trajni</option>
+                <option value="all">Svi</option>
+              </select>
+            </label>
+            <button type="button" class="btn btn-ghost" id="repCertReload">🔄 Osveži</button>
+            <button type="button" class="btn btn-ghost" id="repCertExport" title="Izvoz u Excel">📊 Excel</button>
+            <button type="button" class="btn btn-ghost" id="repCertExportCsv" title="Izvoz u CSV">📑 CSV</button>
+            <span class="kadr-count" id="repCertCount">0 sertifikata</span>
+          </div>
+        </div>
+        <div class="kadr-summary-strip" id="repCertSummary"></div>
+        <div class="kadr-table-wrap">
+          <table class="kadr-table">
+            <thead>
+              <tr>
+                <th>Zaposleni</th>
+                <th>Tip</th>
+                <th>Naziv / br.</th>
+                <th>Izdat</th>
+                <th>Ističe</th>
+                <th>Status</th>
+                <th class="col-actions">Akcije</th>
+              </tr>
+            </thead>
+            <tbody id="repCertTbody"></tbody>
+          </table>
+        </div>
+        <div id="repCertEmpty" class="kadr-empty" style="display:none">Nema sertifikata u izabranom filteru.</div>
+      </div>
+      ` : ''}
+
+      ${showChildren ? `
+      <div class="report-panel" id="reportPanel-medical" role="tabpanel" hidden>
+        <div class="kadr-toolbar">
+          <div class="kadr-toolbar-row">
+            <label class="kadr-field">
+              <span>Status</span>
+              <select id="repMedStatus">
+                <option value="problem" selected>Problemi (istekli + ističu + nikad)</option>
+                <option value="expired">Samo istekli</option>
+                <option value="expiring_soon">Samo ističu &lt;30 dana</option>
+                <option value="never">Nikad nije bio</option>
+                <option value="all">Svi</option>
+              </select>
+            </label>
+            <button type="button" class="btn btn-ghost" id="repMedReload">🔄 Osveži</button>
+            <button type="button" class="btn btn-ghost" id="repMedExport" title="Izvoz u Excel">📊 Excel</button>
+            <button type="button" class="btn btn-ghost" id="repMedExportCsv" title="Izvoz u CSV">📑 CSV</button>
+            <span class="kadr-count" id="repMedCount">0 zaposlenih</span>
+          </div>
+        </div>
+        <div class="kadr-summary-strip" id="repMedSummary"></div>
+        <div class="kadr-table-wrap">
+          <table class="kadr-table">
+            <thead>
+              <tr>
+                <th>Zaposleni</th>
+                <th class="col-hide-sm">Odeljenje</th>
+                <th>Poslednji pregled</th>
+                <th>Važi do</th>
+                <th>Status</th>
+                <th class="col-actions">Akcije</th>
+              </tr>
+            </thead>
+            <tbody id="repMedTbody"></tbody>
+          </table>
+        </div>
+        <div id="repMedEmpty" class="kadr-empty" style="display:none">Nema podataka o lekarskim pregledima.</div>
+      </div>
+      ` : ''}
+
+      ${showAudit ? `
+      <div class="report-panel" id="reportPanel-audit" role="tabpanel" hidden>
+        <div class="kadr-toolbar">
+          <div class="kadr-toolbar-row">
+            <label class="kadr-field">
+              <span>Tabela</span>
+              <select id="repAuditTable">
+                <option value="">Sve</option>
+                ${Object.entries(AUDIT_TABLE_LABELS).map(([k, v]) => `<option value="${k}">${escHtml(v)}</option>`).join('')}
+              </select>
+            </label>
+            <label class="kadr-field">
+              <span>Akcija</span>
+              <select id="repAuditAction">
+                <option value="">Sve</option>
+                <option value="INSERT">INSERT</option>
+                <option value="UPDATE">UPDATE</option>
+                <option value="DELETE">DELETE</option>
+              </select>
+            </label>
+            <label class="kadr-field">
+              <span>Od</span>
+              <input type="date" id="repAuditFrom">
+            </label>
+            <label class="kadr-field">
+              <span>Do</span>
+              <input type="date" id="repAuditTo">
+            </label>
+            <button type="button" class="btn btn-ghost" id="repAuditReload">🔄 Učitaj</button>
+            <button type="button" class="btn btn-ghost" id="repAuditExport" title="Izvoz u CSV">📑 CSV</button>
+            <span class="kadr-count" id="repAuditCount">0 zapisa</span>
+          </div>
+        </div>
+        <div class="kadr-summary-strip" id="repAuditSummary"></div>
+        <div class="kadr-table-wrap">
+          <table class="kadr-table">
+            <thead>
+              <tr>
+                <th>Vreme</th>
+                <th>Akter</th>
+                <th>Akcija</th>
+                <th>Tabela</th>
+                <th>Zaposleni</th>
+                <th>Promene</th>
+              </tr>
+            </thead>
+            <tbody id="repAuditTbody"></tbody>
+          </table>
+        </div>
+        <div id="repAuditEmpty" class="kadr-empty" style="display:none">Nema audit zapisa za izabrani filter.</div>
+      </div>
+      ` : ''}
 
       ${showChildren ? `
       <div class="report-panel" id="reportPanel-children" role="tabpanel" hidden>
@@ -586,6 +875,214 @@ async function _exportDemoXlsx() {
 }
 
 /* ═════════════════════════════════════════════════════════════════════
+   ORGANOGRAM — vizuelno stablo Department → SubDepartment → Position
+   ═════════════════════════════════════════════════════════════════════ */
+
+let orgExpanded = new Set(); /* keys: "dept-<id>", "sub-<id>", "pos-<id>" */
+
+function _orgEmployeesByGroup(emps) {
+  const byPos = new Map();
+  const bySubNoPos = new Map();
+  const byDeptNoSub = new Map();
+  const ungrouped = [];
+  for (const e of emps) {
+    if (e.positionId) {
+      if (!byPos.has(e.positionId)) byPos.set(e.positionId, []);
+      byPos.get(e.positionId).push(e);
+    } else if (e.subDepartmentId) {
+      if (!bySubNoPos.has(e.subDepartmentId)) bySubNoPos.set(e.subDepartmentId, []);
+      bySubNoPos.get(e.subDepartmentId).push(e);
+    } else if (e.departmentId) {
+      if (!byDeptNoSub.has(e.departmentId)) byDeptNoSub.set(e.departmentId, []);
+      byDeptNoSub.get(e.departmentId).push(e);
+    } else {
+      ungrouped.push(e);
+    }
+  }
+  return { byPos, bySubNoPos, byDeptNoSub, ungrouped };
+}
+
+function _orgEmployeeRowHtml(e) {
+  return `<div class="org-emp-row">
+    <span class="org-emp-name">${escHtml(employeeDisplayName(e) || '—')}</span>
+    ${e.position ? `<span class="emp-sub">${escHtml(e.position)}</span>` : ''}
+    ${!e.isActive ? '<span class="kadr-pill muted">neaktivan</span>' : ''}
+  </div>`;
+}
+
+function _renderOrgChart() {
+  if (!panelRoot) return;
+  const host = panelRoot.querySelector('#repOrgTree');
+  const empty = panelRoot.querySelector('#repOrgEmpty');
+  if (!host) return;
+
+  const status = panelRoot.querySelector('#repOrgStatus')?.value || 'active';
+  const q = (panelRoot.querySelector('#repOrgSearch')?.value || '').trim().toLowerCase();
+  const allEmps = kadrovskaState.employees.filter(e => status === 'all' || e.isActive);
+  const filteredEmps = q
+    ? allEmps.filter(e => {
+        const hay = [employeeDisplayName(e), e.position, e.department].join(' ').toLowerCase();
+        return hay.includes(q);
+      })
+    : allEmps;
+
+  const { byPos, bySubNoPos, byDeptNoSub, ungrouped } = _orgEmployeesByGroup(filteredEmps);
+  const depts = orgStructureState.departments.slice()
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name, 'sr'));
+  const subDeptsByDept = new Map();
+  for (const sd of orgStructureState.subDepartments) {
+    if (!subDeptsByDept.has(sd.department_id)) subDeptsByDept.set(sd.department_id, []);
+    subDeptsByDept.get(sd.department_id).push(sd);
+  }
+  const positionsBySub = new Map();
+  const positionsByDeptNoSub = new Map();
+  for (const p of orgStructureState.jobPositions) {
+    if (p.sub_department_id) {
+      if (!positionsBySub.has(p.sub_department_id)) positionsBySub.set(p.sub_department_id, []);
+      positionsBySub.get(p.sub_department_id).push(p);
+    } else if (p.department_id) {
+      if (!positionsByDeptNoSub.has(p.department_id)) positionsByDeptNoSub.set(p.department_id, []);
+      positionsByDeptNoSub.get(p.department_id).push(p);
+    }
+  }
+
+  if (!depts.length && !ungrouped.length) {
+    host.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  let totalEmp = 0;
+  let totalPositions = 0;
+  const sortByOrder = (a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name, 'sr');
+
+  const renderPosition = (pos) => {
+    const empsHere = byPos.get(pos.id) || [];
+    if (q && !empsHere.length) return ''; /* sa pretragom skrivamo prazne */
+    totalPositions += 1;
+    totalEmp += empsHere.length;
+    const key = 'pos-' + pos.id;
+    const open = q ? true : orgExpanded.has(key);
+    return `<div class="org-node org-pos">
+      <div class="org-node-head" data-key="${escHtml(key)}">
+        <span class="org-toggle">${empsHere.length ? (open ? '▾' : '▸') : '·'}</span>
+        <span class="org-icon">👤</span>
+        <span class="org-name">${escHtml(pos.name)}</span>
+        <span class="org-count">${empsHere.length}</span>
+      </div>
+      ${open ? `<div class="org-children">${empsHere.map(_orgEmployeeRowHtml).join('') || '<div class="emp-sub" style="padding:4px 0">Nema zaposlenih</div>'}</div>` : ''}
+    </div>`;
+  };
+
+  const renderSubDept = (sd) => {
+    const subPositions = (positionsBySub.get(sd.id) || []).slice().sort(sortByOrder);
+    const subEmps = bySubNoPos.get(sd.id) || [];
+    const positionHtml = subPositions.map(renderPosition).join('');
+    const total = (subPositions.reduce((s, p) => s + (byPos.get(p.id) || []).length, 0)) + subEmps.length;
+    if (q && !total) return '';
+    const key = 'sub-' + sd.id;
+    const open = q ? true : orgExpanded.has(key);
+    totalEmp += subEmps.length;
+    return `<div class="org-node org-sub">
+      <div class="org-node-head" data-key="${escHtml(key)}">
+        <span class="org-toggle">${(subPositions.length || subEmps.length) ? (open ? '▾' : '▸') : '·'}</span>
+        <span class="org-icon">📂</span>
+        <span class="org-name">${escHtml(sd.name)}</span>
+        <span class="org-count">${total}</span>
+      </div>
+      ${open ? `<div class="org-children">
+        ${positionHtml}
+        ${subEmps.length ? `<div class="org-children-direct">${subEmps.map(_orgEmployeeRowHtml).join('')}</div>` : ''}
+      </div>` : ''}
+    </div>`;
+  };
+
+  const renderDept = (d) => {
+    const subs = (subDeptsByDept.get(d.id) || []).slice().sort(sortByOrder);
+    const noSubPositions = (positionsByDeptNoSub.get(d.id) || []).slice().sort(sortByOrder);
+    const noSubEmps = byDeptNoSub.get(d.id) || [];
+    const subHtml = subs.map(renderSubDept).join('');
+    const posHtml = noSubPositions.map(renderPosition).join('');
+    const total =
+      subs.reduce((s, sd) => {
+        const sp = (positionsBySub.get(sd.id) || []).reduce((ss, p) => ss + (byPos.get(p.id) || []).length, 0);
+        return s + sp + (bySubNoPos.get(sd.id) || []).length;
+      }, 0)
+      + noSubPositions.reduce((s, p) => s + (byPos.get(p.id) || []).length, 0)
+      + noSubEmps.length;
+    if (q && !total) return '';
+    const key = 'dept-' + d.id;
+    const open = q ? true : orgExpanded.has(key);
+    totalEmp += noSubEmps.length;
+    return `<div class="org-node org-dept">
+      <div class="org-node-head" data-key="${escHtml(key)}">
+        <span class="org-toggle">${open ? '▾' : '▸'}</span>
+        <span class="org-icon">🏢</span>
+        <span class="org-name">${escHtml(d.name)}</span>
+        <span class="org-count">${total}</span>
+      </div>
+      ${open ? `<div class="org-children">
+        ${subHtml}
+        ${posHtml}
+        ${noSubEmps.length ? `<div class="org-children-direct">${noSubEmps.map(_orgEmployeeRowHtml).join('')}</div>` : ''}
+      </div>` : ''}
+    </div>`;
+  };
+
+  let html = depts.map(renderDept).join('');
+  if (ungrouped.length) {
+    const key = 'dept-none';
+    const open = q ? true : orgExpanded.has(key);
+    html += `<div class="org-node org-dept">
+      <div class="org-node-head" data-key="${escHtml(key)}">
+        <span class="org-toggle">${open ? '▾' : '▸'}</span>
+        <span class="org-icon">❓</span>
+        <span class="org-name">Bez odeljenja</span>
+        <span class="org-count">${ungrouped.length}</span>
+      </div>
+      ${open ? `<div class="org-children"><div class="org-children-direct">${ungrouped.map(_orgEmployeeRowHtml).join('')}</div></div>` : ''}
+    </div>`;
+    totalEmp += ungrouped.length;
+  }
+  host.innerHTML = html;
+
+  /* Total broj koji se renderuje smo akumulirali u petlji — nije pouzdano
+     jer mora ići pre _renderOrgChart() poziva. Računamo iz allEmps. */
+  const totalActive = allEmps.length;
+  renderSummaryChips('repOrgSummary', [
+    { label: 'Odeljenja', value: depts.length, tone: 'accent' },
+    { label: 'Pododeljenja', value: orgStructureState.subDepartments.length, tone: 'muted' },
+    { label: 'Pozicija', value: orgStructureState.jobPositions.length, tone: 'muted' },
+    { label: 'Zaposlenih', value: totalActive, tone: 'accent' },
+    { label: 'Bez odeljenja', value: ungrouped.length, tone: ungrouped.length > 0 ? 'warn' : 'muted' },
+  ]);
+
+  /* Klik na čvor zaglavlja = toggle. */
+  host.querySelectorAll('.org-node-head').forEach(el => {
+    el.addEventListener('click', () => {
+      const k = el.dataset.key;
+      if (orgExpanded.has(k)) orgExpanded.delete(k);
+      else orgExpanded.add(k);
+      _renderOrgChart();
+    });
+  });
+}
+
+function _orgExpandAll() {
+  orgExpanded = new Set();
+  for (const d of orgStructureState.departments) orgExpanded.add('dept-' + d.id);
+  for (const s of orgStructureState.subDepartments) orgExpanded.add('sub-' + s.id);
+  for (const p of orgStructureState.jobPositions) orgExpanded.add('pos-' + p.id);
+  orgExpanded.add('dept-none');
+  _renderOrgChart();
+}
+function _orgCollapseAll() {
+  orgExpanded = new Set();
+  _renderOrgChart();
+}
+
+/* ═════════════════════════════════════════════════════════════════════
    SALDO GO (po godini)
    ═════════════════════════════════════════════════════════════════════ */
 
@@ -676,6 +1173,519 @@ async function _exportVacXlsx() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, `Saldo GO ${year}`);
   XLSX.writeFile(wb, `Saldo_GO_${year}.xlsx`);
+  showToast('📊 Izvezeno');
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+   PREKOVREMENI RAD
+   ═════════════════════════════════════════════════════════════════════ */
+
+async function _renderOvertimeReport() {
+  if (!panelRoot) return;
+  const tbody = panelRoot.querySelector('#repOtTbody');
+  const tfoot = panelRoot.querySelector('#repOtTfoot');
+  const empty = panelRoot.querySelector('#repOtEmpty');
+  const countEl = panelRoot.querySelector('#repOtCount');
+  if (!tbody) return;
+
+  const { from, to } = _readPeriodFor('repOt');
+  let map;
+  try {
+    map = await overtimeByEmployeeForPeriod(from, to);
+  } catch (err) {
+    console.warn('[reports] overtime', err);
+    map = new Map();
+  }
+
+  const empById = new Map(kadrovskaState.employees.map(e => [e.id, e]));
+  const rows = Array.from(map.entries()).map(([id, agg]) => {
+    const emp = empById.get(id);
+    return {
+      id,
+      emp,
+      name: emp ? employeeDisplayName(emp) : '(obrisan)',
+      dept: emp?.departmentName || emp?.department || '',
+      totalOvertime: agg.totalOvertime,
+      twoMachineHours: agg.twoMachineHours,
+      days: agg.days,
+      lastDate: agg.lastDate,
+    };
+  }).sort((a, b) => b.totalOvertime - a.totalOvertime
+    || String(a.name).localeCompare(String(b.name), 'sr'));
+
+  const sumOt = rows.reduce((s, r) => s + r.totalOvertime, 0);
+  const sumTm = rows.reduce((s, r) => s + r.twoMachineHours, 0);
+  const sumDays = rows.reduce((s, r) => s + r.days, 0);
+
+  if (countEl) countEl.textContent = `${rows.length} ${rows.length === 1 ? 'zaposleni' : 'zaposlenih'}`;
+
+  renderSummaryChips('repOtSummary', [
+    { label: 'Period', value: _periodLabel(from, to), tone: 'muted' },
+    { label: 'Zaposlenih', value: rows.length, tone: rows.length ? 'accent' : 'muted' },
+    { label: 'Σ prekovr. (h)', value: sumOt, tone: sumOt > 0 ? 'warn' : 'muted' },
+    { label: 'Σ dani sa prekovr.', value: sumDays, tone: 'muted' },
+    { label: 'Σ 2 mašine (h)', value: sumTm, tone: sumTm > 0 ? 'accent' : 'muted' },
+  ]);
+
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    if (tfoot) tfoot.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td><strong>${escHtml(r.name)}</strong></td>
+    <td class="col-hide-sm">${escHtml(r.dept || '—')}</td>
+    <td><strong>${r.totalOvertime}</strong></td>
+    <td class="col-hide-sm">${r.days}</td>
+    <td class="col-hide-sm">${r.twoMachineHours || 0}</td>
+    <td class="col-hide-sm">${r.lastDate ? _fmtSrDate(r.lastDate) : '—'}</td>
+  </tr>`).join('');
+
+  if (tfoot) {
+    tfoot.innerHTML = `<tr class="row-totals">
+      <td colspan="2" style="text-align:right;font-weight:700">UKUPNO</td>
+      <td><strong>${sumOt}</strong></td>
+      <td>${sumDays}</td>
+      <td>${sumTm}</td>
+      <td></td>
+    </tr>`;
+  }
+}
+
+async function _exportOvertimeXlsx() {
+  let XLSX;
+  try { XLSX = await loadXlsx(); } catch { showToast('⚠ XLSX nedostupan'); return; }
+  const { from, to } = _readPeriodFor('repOt');
+  const map = await overtimeByEmployeeForPeriod(from, to);
+  if (!map.size) { showToast('Nema podataka za izvoz'); return; }
+  const empById = new Map(kadrovskaState.employees.map(e => [e.id, e]));
+  const aoa = [
+    ['IZVEŠTAJ — PREKOVREMENI RAD'],
+    ['Period', _periodLabel(from, to)],
+    [],
+    ['Zaposleni', 'Odeljenje', 'Prekovr. (h)', 'Dani sa prekovr.', '2 mašine (h)', 'Poslednji datum'],
+  ];
+  Array.from(map.entries())
+    .map(([id, a]) => ({ id, emp: empById.get(id), agg: a }))
+    .sort((a, b) => b.agg.totalOvertime - a.agg.totalOvertime)
+    .forEach(({ emp, agg }) => {
+      aoa.push([
+        emp ? (employeeDisplayName(emp) || '') : '(obrisan)',
+        emp?.department || '',
+        agg.totalOvertime,
+        agg.days,
+        agg.twoMachineHours || 0,
+        agg.lastDate || '',
+      ]);
+    });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Prekovremeni');
+  const tag = (from || '') + (to ? '_' + to : '') || 'all';
+  XLSX.writeFile(wb, `Prekovremeni_${tag}.xlsx`);
+  showToast('📊 Izvezeno');
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+   TERENSKI RAD (domaci / inostrani)
+   ═════════════════════════════════════════════════════════════════════ */
+
+async function _renderFieldReport() {
+  if (!panelRoot) return;
+  const tbody = panelRoot.querySelector('#repFwTbody');
+  const tfoot = panelRoot.querySelector('#repFwTfoot');
+  const empty = panelRoot.querySelector('#repFwEmpty');
+  const countEl = panelRoot.querySelector('#repFwCount');
+  if (!tbody) return;
+
+  const { from, to } = _readPeriodFor('repFw');
+  const typeFilter = panelRoot.querySelector('#repFwType')?.value || '';
+  let map;
+  try {
+    map = await fieldWorkByEmployeeForPeriod(from, to);
+  } catch (err) {
+    console.warn('[reports] field', err);
+    map = new Map();
+  }
+
+  const empById = new Map(kadrovskaState.employees.map(e => [e.id, e]));
+  let rows = Array.from(map.entries()).map(([id, agg]) => {
+    const emp = empById.get(id);
+    return {
+      id,
+      emp,
+      name: emp ? employeeDisplayName(emp) : '(obrisan)',
+      dept: emp?.departmentName || emp?.department || '',
+      ...agg,
+      totalDays: agg.domesticDays + agg.foreignDays,
+    };
+  });
+  if (typeFilter === 'domestic') rows = rows.filter(r => r.domesticDays > 0);
+  else if (typeFilter === 'foreign') rows = rows.filter(r => r.foreignDays > 0);
+  rows.sort((a, b) => b.totalDays - a.totalDays
+    || String(a.name).localeCompare(String(b.name), 'sr'));
+
+  const sumDomD = rows.reduce((s, r) => s + r.domesticDays, 0);
+  const sumDomH = rows.reduce((s, r) => s + r.domesticHours, 0);
+  const sumForD = rows.reduce((s, r) => s + r.foreignDays, 0);
+  const sumForH = rows.reduce((s, r) => s + r.foreignHours, 0);
+
+  if (countEl) countEl.textContent = `${rows.length} ${rows.length === 1 ? 'zaposleni' : 'zaposlenih'}`;
+
+  renderSummaryChips('repFwSummary', [
+    { label: 'Period', value: _periodLabel(from, to), tone: 'muted' },
+    { label: 'Zaposlenih', value: rows.length, tone: rows.length ? 'accent' : 'muted' },
+    { label: 'Σ domaći (dani)', value: sumDomD, tone: sumDomD > 0 ? 'accent' : 'muted' },
+    { label: 'Σ inostrani (dani)', value: sumForD, tone: sumForD > 0 ? 'accent' : 'muted' },
+    { label: 'Σ ukupno (dani)', value: sumDomD + sumForD, tone: 'muted' },
+  ]);
+
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    if (tfoot) tfoot.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td><strong>${escHtml(r.name)}</strong></td>
+    <td class="col-hide-sm">${escHtml(r.dept || '—')}</td>
+    <td>${r.domesticDays}</td>
+    <td class="col-hide-sm">${r.domesticHours}</td>
+    <td>${r.foreignDays}</td>
+    <td class="col-hide-sm">${r.foreignHours}</td>
+    <td class="col-hide-sm"><strong>${r.totalDays}</strong></td>
+    <td class="col-hide-sm">${r.lastDate ? _fmtSrDate(r.lastDate) : '—'}</td>
+  </tr>`).join('');
+
+  if (tfoot) {
+    tfoot.innerHTML = `<tr class="row-totals">
+      <td colspan="2" style="text-align:right;font-weight:700">UKUPNO</td>
+      <td><strong>${sumDomD}</strong></td>
+      <td>${sumDomH}</td>
+      <td><strong>${sumForD}</strong></td>
+      <td>${sumForH}</td>
+      <td><strong>${sumDomD + sumForD}</strong></td>
+      <td></td>
+    </tr>`;
+  }
+}
+
+async function _exportFieldXlsx() {
+  let XLSX;
+  try { XLSX = await loadXlsx(); } catch { showToast('⚠ XLSX nedostupan'); return; }
+  const { from, to } = _readPeriodFor('repFw');
+  const map = await fieldWorkByEmployeeForPeriod(from, to);
+  if (!map.size) { showToast('Nema podataka za izvoz'); return; }
+  const empById = new Map(kadrovskaState.employees.map(e => [e.id, e]));
+  const aoa = [
+    ['IZVEŠTAJ — TERENSKI RAD'],
+    ['Period', _periodLabel(from, to)],
+    [],
+    ['Zaposleni', 'Odeljenje', 'Domaći (dani)', 'Domaći (h)', 'Inostrani (dani)', 'Inostrani (h)', 'Σ dana', 'Poslednji datum'],
+  ];
+  Array.from(map.entries())
+    .map(([id, a]) => ({ id, emp: empById.get(id), agg: a }))
+    .sort((a, b) => (b.agg.domesticDays + b.agg.foreignDays) - (a.agg.domesticDays + a.agg.foreignDays))
+    .forEach(({ emp, agg }) => {
+      aoa.push([
+        emp ? (employeeDisplayName(emp) || '') : '(obrisan)',
+        emp?.department || '',
+        agg.domesticDays,
+        agg.domesticHours,
+        agg.foreignDays,
+        agg.foreignHours,
+        agg.domesticDays + agg.foreignDays,
+        agg.lastDate || '',
+      ]);
+    });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 14 }];
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Terenski rad');
+  const tag = (from || '') + (to ? '_' + to : '') || 'all';
+  XLSX.writeFile(wb, `Terenski_${tag}.xlsx`);
+  showToast('📊 Izvezeno');
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+   SERTIFIKATI / LICENCE (samo HR/admin)
+   ═════════════════════════════════════════════════════════════════════ */
+
+let certCache = [];
+
+const CERT_STATUS_LABELS = {
+  expired:       { label: 'Istekao',     tone: 'warn' },
+  expiring_soon: { label: 'Ističe <30d', tone: 'accent' },
+  lifetime:      { label: 'Trajno',      tone: 'muted' },
+  ok:            { label: 'Važi',        tone: 'ok' },
+};
+
+async function _renderCertsReport() {
+  if (!panelRoot || !canViewEmployeePii()) return;
+  const tbody = panelRoot.querySelector('#repCertTbody');
+  const empty = panelRoot.querySelector('#repCertEmpty');
+  const countEl = panelRoot.querySelector('#repCertCount');
+  if (!tbody) return;
+
+  const typeF = panelRoot.querySelector('#repCertType')?.value || '';
+  const statF = panelRoot.querySelector('#repCertStatus')?.value || 'problem';
+  if (!certCache.length) {
+    try { certCache = (await loadAllCertificateStatus()) || []; }
+    catch (err) { console.warn('[reports] certs', err); certCache = []; }
+  }
+
+  let rows = certCache.slice();
+  if (typeF) rows = rows.filter(r => r.certType === typeF);
+  if (statF === 'expired')         rows = rows.filter(r => r.status === 'expired');
+  else if (statF === 'expiring_soon') rows = rows.filter(r => r.status === 'expiring_soon');
+  else if (statF === 'lifetime')   rows = rows.filter(r => r.status === 'lifetime');
+  else if (statF === 'problem')    rows = rows.filter(r => r.status === 'expired' || r.status === 'expiring_soon');
+
+  /* Sort: najgori prvi */
+  const ord = { expired: 0, expiring_soon: 1, ok: 2, lifetime: 3 };
+  rows.sort((a, b) => {
+    const oa = ord[a.status] ?? 9; const ob = ord[b.status] ?? 9;
+    if (oa !== ob) return oa - ob;
+    return (a.daysToExpiry ?? 9999) - (b.daysToExpiry ?? 9999);
+  });
+
+  const cExp  = certCache.filter(r => r.status === 'expired').length;
+  const cSoon = certCache.filter(r => r.status === 'expiring_soon').length;
+  const cLife = certCache.filter(r => r.status === 'lifetime').length;
+  const cOk   = certCache.filter(r => r.status === 'ok').length;
+  const sumCost = certCache.reduce((s, r) => s + (Number(r.costRsd) || 0), 0);
+
+  renderSummaryChips('repCertSummary', [
+    { label: 'Ukupno sertifikata', value: certCache.length, tone: 'accent' },
+    { label: 'Istekli', value: cExp, tone: cExp > 0 ? 'warn' : 'muted' },
+    { label: 'Ističu <30d', value: cSoon, tone: cSoon > 0 ? 'accent' : 'muted' },
+    { label: 'Trajni', value: cLife, tone: 'muted' },
+    { label: 'OK', value: cOk, tone: 'ok' },
+    { label: 'Σ trošak', value: sumCost.toLocaleString('sr-RS') + ' RSD', tone: 'muted' },
+  ]);
+
+  if (countEl) countEl.textContent = `${rows.length} ${rows.length === 1 ? 'sertifikat' : 'sertifikata'}`;
+
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  tbody.innerHTML = rows.map(r => {
+    const cls = CERT_STATUS_LABELS[r.status] || { label: r.status, tone: 'muted' };
+    const days = r.daysToExpiry != null
+      ? (r.daysToExpiry < 0 ? ` (${-r.daysToExpiry}d kasni)` : ` (za ${r.daysToExpiry}d)`)
+      : '';
+    return `<tr data-emp-id="${escHtml(r.employeeId)}">
+      <td><strong>${escHtml(r.employeeName || '—')}</strong></td>
+      <td>${escHtml(CERT_TYPE_LABELS[r.certType] || r.certType)}</td>
+      <td>
+        <strong>${escHtml(r.certName || '—')}</strong>
+        ${r.documentNo ? `<div class="emp-sub">${escHtml(r.documentNo)}</div>` : ''}
+      </td>
+      <td>${r.issuedOn ? _fmtSrDate(r.issuedOn) : '—'}</td>
+      <td>${r.expiresOn ? _fmtSrDate(r.expiresOn) + days : '<em class="emp-sub">—</em>'}</td>
+      <td><span class="kadr-pill ${cls.tone}">${escHtml(cls.label)}</span></td>
+      <td class="col-actions">
+        <button class="btn-row-act" data-act="open">📜 Otvori</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('button[data-act="open"]').forEach(b => {
+    b.addEventListener('click', () => {
+      const empId = b.closest('tr').dataset.empId;
+      openCertificatesModal(empId, {
+        onChange: async () => {
+          certCache = [];
+          await _renderCertsReport();
+        },
+      });
+    });
+  });
+}
+
+async function _exportCertsXlsx() {
+  let XLSX;
+  try { XLSX = await loadXlsx(); } catch { showToast('⚠ XLSX nedostupan'); return; }
+  if (!certCache.length) {
+    try { certCache = (await loadAllCertificateStatus()) || []; } catch {}
+  }
+  if (!certCache.length) { showToast('Nema podataka za izvoz'); return; }
+  const aoa = [
+    ['IZVEŠTAJ — SERTIFIKATI / LICENCE'],
+    ['Datum izvoza', _isoToday()],
+    [],
+    ['Zaposleni', 'Pozicija', 'Odeljenje', 'Tip', 'Naziv', 'Br. dokumenta', 'Izdavalac', 'Izdat', 'Ističe', 'Dana do isteka', 'Trošak (RSD)', 'Status'],
+  ];
+  certCache.forEach(r => {
+    const cls = CERT_STATUS_LABELS[r.status] || { label: r.status };
+    aoa.push([
+      r.employeeName || '',
+      r.employeePosition || '',
+      r.employeeDepartment || '',
+      CERT_TYPE_LABELS[r.certType] || r.certType,
+      r.certName || '',
+      r.documentNo || '',
+      r.issuer || '',
+      r.issuedOn || '',
+      r.expiresOn || '',
+      r.daysToExpiry != null ? r.daysToExpiry : '',
+      r.costRsd || 0,
+      cls.label,
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [
+    { wch: 30 }, { wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 28 }, { wch: 16 },
+    { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 14 },
+  ];
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 11 } }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sertifikati');
+  XLSX.writeFile(wb, `Sertifikati_${_isoToday()}.xlsx`);
+  showToast('📊 Izvezeno');
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+   LEKARSKI PREGLEDI (samo HR/admin) — overdue/expiring overview
+   ═════════════════════════════════════════════════════════════════════ */
+
+let medExamCache = [];
+
+const MED_STATUS_LABELS = {
+  expired:       { label: 'Istekao',        tone: 'warn' },
+  expiring_soon: { label: 'Ističe <30d',    tone: 'accent' },
+  never:         { label: 'Nikad',          tone: 'warn' },
+  unknown_expiry:{ label: 'Bez datuma isteka', tone: 'muted' },
+  ok:            { label: 'Važi',           tone: 'ok' },
+};
+
+async function _renderMedicalReport() {
+  if (!panelRoot || !canViewEmployeePii()) return;
+  const tbody = panelRoot.querySelector('#repMedTbody');
+  const empty = panelRoot.querySelector('#repMedEmpty');
+  const countEl = panelRoot.querySelector('#repMedCount');
+  if (!tbody) return;
+
+  const filter = panelRoot.querySelector('#repMedStatus')?.value || 'problem';
+  if (!medExamCache.length) {
+    try { medExamCache = (await loadAllMedExamStatus()) || []; }
+    catch (err) { console.warn('[reports] medExam', err); medExamCache = []; }
+  }
+
+  let rows = medExamCache.slice();
+  if (filter === 'expired')         rows = rows.filter(r => r.status === 'expired');
+  else if (filter === 'expiring_soon') rows = rows.filter(r => r.status === 'expiring_soon');
+  else if (filter === 'never')      rows = rows.filter(r => r.status === 'never' || r.status === 'unknown_expiry');
+  else if (filter === 'problem')    rows = rows.filter(r => r.status === 'expired' || r.status === 'expiring_soon' || r.status === 'never');
+  /* 'all' — sve */
+
+  /* Sort: najgori prvi */
+  const ord = { expired: 0, never: 1, expiring_soon: 2, unknown_expiry: 3, ok: 4 };
+  rows.sort((a, b) => {
+    const oa = ord[a.status] ?? 9;
+    const ob = ord[b.status] ?? 9;
+    if (oa !== ob) return oa - ob;
+    return (a.daysToExpiry ?? 9999) - (b.daysToExpiry ?? 9999);
+  });
+
+  const cExp = medExamCache.filter(r => r.status === 'expired').length;
+  const cSoon = medExamCache.filter(r => r.status === 'expiring_soon').length;
+  const cNever = medExamCache.filter(r => r.status === 'never' || r.status === 'unknown_expiry').length;
+  const cOk = medExamCache.filter(r => r.status === 'ok').length;
+
+  renderSummaryChips('repMedSummary', [
+    { label: 'Aktivnih zaposlenih', value: medExamCache.length, tone: 'accent' },
+    { label: 'Istekli', value: cExp, tone: cExp > 0 ? 'warn' : 'muted' },
+    { label: 'Ističu <30d', value: cSoon, tone: cSoon > 0 ? 'accent' : 'muted' },
+    { label: 'Bez podataka', value: cNever, tone: cNever > 0 ? 'warn' : 'muted' },
+    { label: 'OK', value: cOk, tone: 'ok' },
+  ]);
+
+  if (countEl) countEl.textContent = `${rows.length} ${rows.length === 1 ? 'zaposleni' : 'zaposlenih'}`;
+
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  tbody.innerHTML = rows.map(r => {
+    const cls = MED_STATUS_LABELS[r.status] || { label: r.status, tone: 'muted' };
+    const lastTxt = r.medicalExamDate ? _fmtSrDate(r.medicalExamDate) : '<em class="emp-sub">—</em>';
+    const validTxt = r.medicalExamExpires ? _fmtSrDate(r.medicalExamExpires) : '<em class="emp-sub">—</em>';
+    const days = r.daysToExpiry != null
+      ? (r.daysToExpiry < 0 ? ` (${-r.daysToExpiry}d kasni)` : ` (za ${r.daysToExpiry}d)`)
+      : '';
+    return `<tr data-emp-id="${escHtml(r.employeeId)}">
+      <td><strong>${escHtml(r.employeeName || '—')}</strong>
+        <div class="emp-sub col-hide-sm">${escHtml(r.employeePosition || '')}</div></td>
+      <td class="col-hide-sm">${escHtml(r.employeeDepartment || '—')}</td>
+      <td>${lastTxt}</td>
+      <td>${validTxt}${days}</td>
+      <td><span class="kadr-pill ${cls.tone}">${escHtml(cls.label)}</span></td>
+      <td class="col-actions">
+        <button class="btn-row-act" data-act="open">🩺 Istorija</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('button[data-act="open"]').forEach(b => {
+    b.addEventListener('click', () => {
+      const empId = b.closest('tr').dataset.empId;
+      openMedicalExamsModal(empId, {
+        onChange: async () => {
+          medExamCache = [];
+          await _renderMedicalReport();
+        },
+      });
+    });
+  });
+}
+
+async function _exportMedicalXlsx() {
+  let XLSX;
+  try { XLSX = await loadXlsx(); } catch { showToast('⚠ XLSX nedostupan'); return; }
+  if (!medExamCache.length) {
+    try { medExamCache = (await loadAllMedExamStatus()) || []; } catch {}
+  }
+  if (!medExamCache.length) { showToast('Nema podataka za izvoz'); return; }
+  const aoa = [
+    ['IZVEŠTAJ — LEKARSKI PREGLEDI'],
+    ['Datum izvoza', _isoToday()],
+    [],
+    ['Zaposleni', 'Pozicija', 'Odeljenje', 'Poslednji pregled', 'Važi do', 'Dana do isteka', 'Status'],
+  ];
+  medExamCache.forEach(r => {
+    const cls = MED_STATUS_LABELS[r.status] || { label: r.status };
+    aoa.push([
+      r.employeeName || '',
+      r.employeePosition || '',
+      r.employeeDepartment || '',
+      r.medicalExamDate || '',
+      r.medicalExamExpires || '',
+      r.daysToExpiry != null ? r.daysToExpiry : '',
+      cls.label,
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 30 }, { wch: 22 }, { wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Lekarski pregledi');
+  XLSX.writeFile(wb, `Lekarski_pregledi_${_isoToday()}.xlsx`);
   showToast('📊 Izvezeno');
 }
 
@@ -865,6 +1875,233 @@ async function _exportToXlsx() {
   showToast('📊 Izvezeno: ' + fname);
 }
 
+/* ═════════════════════════════════════════════════════════════════════
+   AUDIT LOG (samo admin)
+   ═════════════════════════════════════════════════════════════════════ */
+
+let auditCache = [];
+
+function _fmtAuditTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function _fmtAuditValue(v) {
+  if (v == null || v === '') return '<em class="emp-sub">—</em>';
+  if (typeof v === 'object') return escHtml(JSON.stringify(v));
+  return escHtml(String(v));
+}
+
+function _renderAuditDiff(row) {
+  if (row.action === 'INSERT') {
+    const fields = row.afterData ? Object.keys(row.afterData).filter(k => k !== 'updated_at' && k !== 'created_at') : [];
+    if (!fields.length) return '<em class="emp-sub">—</em>';
+    const preview = fields.slice(0, 3).map(k => `${escHtml(k)}: ${_fmtAuditValue(row.afterData[k])}`).join(' · ');
+    return `<span class="kadr-pill ok">+ kreiran</span> <span class="emp-sub">${preview}${fields.length > 3 ? ' …' : ''}</span>`;
+  }
+  if (row.action === 'DELETE') {
+    return '<span class="kadr-pill warn">obrisan</span>';
+  }
+  const diff = diffAuditRow(row);
+  const keys = Object.keys(diff);
+  if (!keys.length) return '<em class="emp-sub">bez promena</em>';
+  const list = keys.slice(0, 3).map(k =>
+    `<div class="audit-diff-row"><strong>${escHtml(k)}</strong>: ${_fmtAuditValue(diff[k].before)} → ${_fmtAuditValue(diff[k].after)}</div>`
+  ).join('');
+  const more = keys.length > 3 ? `<div class="emp-sub">+ još ${keys.length - 3} promena</div>` : '';
+  return list + more;
+}
+
+async function _renderAuditReport() {
+  if (!panelRoot || !isAdmin()) return;
+  const tbody = panelRoot.querySelector('#repAuditTbody');
+  const empty = panelRoot.querySelector('#repAuditEmpty');
+  const countEl = panelRoot.querySelector('#repAuditCount');
+  if (!tbody) return;
+
+  const filter = {
+    tableName: panelRoot.querySelector('#repAuditTable')?.value || '',
+    action:    panelRoot.querySelector('#repAuditAction')?.value || '',
+    fromIso:   panelRoot.querySelector('#repAuditFrom')?.value
+      ? panelRoot.querySelector('#repAuditFrom').value + 'T00:00:00.000Z' : '',
+    toIso:     panelRoot.querySelector('#repAuditTo')?.value
+      ? panelRoot.querySelector('#repAuditTo').value + 'T23:59:59.999Z' : '',
+    limit: 200,
+  };
+
+  try { auditCache = (await loadAuditLog(filter)) || []; }
+  catch (e) { console.warn('[reports] audit', e); auditCache = []; }
+
+  const cIns = auditCache.filter(r => r.action === 'INSERT').length;
+  const cUpd = auditCache.filter(r => r.action === 'UPDATE').length;
+  const cDel = auditCache.filter(r => r.action === 'DELETE').length;
+
+  renderSummaryChips('repAuditSummary', [
+    { label: 'Zapisa', value: auditCache.length, tone: 'accent' },
+    { label: 'Kreirano', value: cIns, tone: 'ok' },
+    { label: 'Promenjeno', value: cUpd, tone: 'muted' },
+    { label: 'Obrisano', value: cDel, tone: cDel > 0 ? 'warn' : 'muted' },
+  ]);
+
+  if (countEl) countEl.textContent = `${auditCache.length} ${auditCache.length === 1 ? 'zapis' : 'zapisa'}`;
+
+  if (!auditCache.length) {
+    tbody.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  tbody.innerHTML = auditCache.map(r => `<tr>
+    <td>${escHtml(_fmtAuditTime(r.changedAt))}</td>
+    <td>${escHtml(r.actorEmail || r.actorUserId || '—')}</td>
+    <td><span class="kadr-pill ${r.action === 'DELETE' ? 'warn' : (r.action === 'INSERT' ? 'ok' : 'muted')}">${escHtml(r.action)}</span></td>
+    <td>${escHtml(AUDIT_TABLE_LABELS[r.tableName] || r.tableName)}</td>
+    <td>${escHtml(r.employeeName || '—')}</td>
+    <td>${_renderAuditDiff(r)}</td>
+  </tr>`).join('');
+}
+
+async function _exportAuditCsv() {
+  if (!auditCache.length) { showToast('Nema podataka za izvoz'); return; }
+  const headers = ['Vreme', 'Akter', 'Akcija', 'Tabela', 'Zaposleni', 'Row ID', 'Pre', 'Posle'];
+  const rows = auditCache.map(r => [
+    r.changedAt || '',
+    r.actorEmail || r.actorUserId || '',
+    r.action,
+    AUDIT_TABLE_LABELS[r.tableName] || r.tableName,
+    r.employeeName || '',
+    r.rowId || '',
+    r.beforeData ? JSON.stringify(r.beforeData) : '',
+    r.afterData  ? JSON.stringify(r.afterData)  : '',
+  ]);
+  downloadCsv(`Audit_log_${_isoToday()}.csv`, headers, rows);
+  showToast('📑 CSV izvezen');
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+   CSV EXPORTS — paralelni Excel-u, koristi Blob + a[download]
+   ═════════════════════════════════════════════════════════════════════ */
+
+async function _exportSickCsv() {
+  const empFilter = panelRoot?.querySelector('#repSickEmpFilter')?.value || '';
+  const deptFilter = panelRoot?.querySelector('#repSickDeptFilter')?.value || '';
+  const { from: pFrom, to: pTo } = _readPeriod();
+  const allSick = (pFrom && pTo)
+    ? await bolovanjeListFromWorkHours(pFrom, pTo)
+    : await bolovanjeListFromWorkHours('', '');
+  const empById = new Map(kadrovskaState.employees.map(e => [e.id, e]));
+
+  const headers = ['Zaposleni', 'Odeljenje', 'Od', 'Do', 'Trajanje (d)', 'Dana u periodu', 'Napomena'];
+  const rows = [];
+  allSick.forEach(a => {
+    if (!a.employeeId) return;
+    if (empFilter && a.employeeId !== empFilter) return;
+    const emp = empById.get(a.employeeId);
+    if (deptFilter) {
+      if (!emp) return;
+      const deptId = parseInt(deptFilter, 10);
+      if (orgStructureState.departments.length && !isNaN(deptId)) {
+        if (emp.departmentId !== deptId) return;
+      } else {
+        if (emp.department !== deptFilter) return;
+      }
+    }
+    const days = _intersectingDays(a.dateFrom, a.dateTo, pFrom, pTo);
+    if (days <= 0) return;
+    rows.push([
+      emp ? (employeeDisplayName(emp) || '') : '(obrisan)',
+      emp?.department || '',
+      a.dateFrom || '',
+      a.dateTo || '',
+      daysInclusive(a.dateFrom, a.dateTo),
+      days,
+      a.note || '',
+    ]);
+  });
+  if (!rows.length) { showToast('⚠ Nema podataka za izvoz'); return; }
+  const tag = (pFrom || '') + (pTo ? '_' + pTo : '') || 'all';
+  downloadCsv(`Bolovanja_${tag}.csv`, headers, rows);
+  showToast('📑 CSV izvezen');
+}
+
+async function _exportVacCsv() {
+  const year = Number(panelRoot.querySelector('#repVacYear').value || new Date().getFullYear());
+  const status = panelRoot.querySelector('#repVacStatus').value || 'active';
+  const goFromGrid = await countGoDaysByEmployeeForYear(year);
+  const balByEmp = new Map();
+  for (const b of kadrVacationState.balances) if (b.year === year) balByEmp.set(b.employeeId, b);
+  const entByEmp = new Map();
+  for (const e of kadrVacationState.entitlements) if (e.year === year) entByEmp.set(e.employeeId, e);
+
+  const headers = ['Zaposleni', 'Odeljenje', 'Dana pravo', 'Preneto', 'Iskorišćeno', 'Preostalo'];
+  const rows = [];
+  kadrovskaState.employees
+    .filter(e => status === 'all' || e.isActive)
+    .forEach(emp => {
+      const ent = entByEmp.get(emp.id);
+      const bal = balByEmp.get(emp.id);
+      const dt = ent?.daysTotal ?? 20;
+      const dc = ent?.daysCarriedOver ?? 0;
+      const du = bal?.daysUsed ?? (goFromGrid.get(emp.id) ?? 0);
+      rows.push([employeeDisplayName(emp) || '', emp.department || '', dt, dc, du, dt + dc - du]);
+    });
+  downloadCsv(`Saldo_GO_${year}.csv`, headers, rows);
+  showToast('📑 CSV izvezen');
+}
+
+async function _exportMedCsv() {
+  if (!medExamCache.length) {
+    try { medExamCache = (await loadAllMedExamStatus()) || []; } catch {}
+  }
+  if (!medExamCache.length) { showToast('Nema podataka za izvoz'); return; }
+  const headers = ['Zaposleni', 'Pozicija', 'Odeljenje', 'Poslednji pregled', 'Važi do', 'Dana do isteka', 'Status'];
+  const rows = medExamCache.map(r => {
+    const cls = MED_STATUS_LABELS[r.status] || { label: r.status };
+    return [
+      r.employeeName || '',
+      r.employeePosition || '',
+      r.employeeDepartment || '',
+      r.medicalExamDate || '',
+      r.medicalExamExpires || '',
+      r.daysToExpiry != null ? r.daysToExpiry : '',
+      cls.label,
+    ];
+  });
+  downloadCsv(`Lekarski_pregledi_${_isoToday()}.csv`, headers, rows);
+  showToast('📑 CSV izvezen');
+}
+
+async function _exportCertsCsv() {
+  if (!certCache.length) {
+    try { certCache = (await loadAllCertificateStatus()) || []; } catch {}
+  }
+  if (!certCache.length) { showToast('Nema podataka za izvoz'); return; }
+  const headers = ['Zaposleni', 'Pozicija', 'Odeljenje', 'Tip', 'Naziv', 'Br. dokumenta', 'Izdavalac', 'Izdat', 'Ističe', 'Dana do isteka', 'Trošak (RSD)', 'Status'];
+  const rows = certCache.map(r => {
+    const cls = CERT_STATUS_LABELS[r.status] || { label: r.status };
+    return [
+      r.employeeName || '',
+      r.employeePosition || '',
+      r.employeeDepartment || '',
+      CERT_TYPE_LABELS[r.certType] || r.certType,
+      r.certName || '',
+      r.documentNo || '',
+      r.issuer || '',
+      r.issuedOn || '',
+      r.expiresOn || '',
+      r.daysToExpiry != null ? r.daysToExpiry : '',
+      r.costRsd || 0,
+      cls.label,
+    ];
+  });
+  downloadCsv(`Sertifikati_${_isoToday()}.csv`, headers, rows);
+  showToast('📑 CSV izvezen');
+}
+
 /* ─── PUBLIC: WIRE ────────────────────────────────────────────────────── */
 
 export async function wireReportsTab(panel) {
@@ -915,6 +2152,7 @@ export async function wireReportsTab(panel) {
   });
 
   panel.querySelector('#repSickExport')?.addEventListener('click', _exportToXlsx);
+  panel.querySelector('#repSickExportCsv')?.addEventListener('click', _exportSickCsv);
 
   /* ── Subtab switching ────────────────────────────── */
   const reportTabs = Array.from(panel.querySelectorAll('.report-tab'));
@@ -934,14 +2172,26 @@ export async function wireReportsTab(panel) {
         else p.setAttribute('hidden', '');
       });
       if (tab === 'demo') _renderDemo();
+      if (tab === 'org') _renderOrgChart();
       if (tab === 'vacation') {
         const year = Number(panel.querySelector('#repVacYear').value);
         await ensureVacationLoaded(year, true);
         await _renderVacReport();
       }
+      if (tab === 'overtime') await _renderOvertimeReport();
+      if (tab === 'field') await _renderFieldReport();
+      if (tab === 'medical') await _renderMedicalReport();
+      if (tab === 'certs') await _renderCertsReport();
       if (tab === 'children') await _renderChildrenReport();
+      if (tab === 'audit') await _renderAuditReport();
     });
   });
+
+  /* ── Organogram listeners ─────────────────────────── */
+  panel.querySelector('#repOrgStatus')?.addEventListener('change', _renderOrgChart);
+  panel.querySelector('#repOrgSearch')?.addEventListener('input', _renderOrgChart);
+  panel.querySelector('#repOrgExpand')?.addEventListener('click', _orgExpandAll);
+  panel.querySelector('#repOrgCollapse')?.addEventListener('click', _orgCollapseAll);
 
   /* ── Demografija listeners ────────────────────────── */
   panel.querySelector('#repDemoStatus')?.addEventListener('change', _renderDemo);
@@ -957,6 +2207,98 @@ export async function wireReportsTab(panel) {
     void _renderVacReport().catch(e => console.warn('[reports] vac', e));
   });
   panel.querySelector('#repVacExport')?.addEventListener('click', _exportVacXlsx);
+  panel.querySelector('#repVacExportCsv')?.addEventListener('click', _exportVacCsv);
+
+  /* ── Prekovremeni listeners ──────────────────────── */
+  const reRenderOt = () => { void _renderOvertimeReport().catch(e => console.warn('[reports] ot', e)); };
+  panel.querySelector('#repOtMonth')?.addEventListener('change', () => {
+    const f = panel.querySelector('#repOtFrom'); const t = panel.querySelector('#repOtTo');
+    if (f) f.value = ''; if (t) t.value = '';
+    reRenderOt();
+  });
+  panel.querySelector('#repOtYear')?.addEventListener('change', () => {
+    const m = panel.querySelector('#repOtMonth'); const f = panel.querySelector('#repOtFrom'); const t = panel.querySelector('#repOtTo');
+    if (m) m.value = ''; if (f) f.value = ''; if (t) t.value = '';
+    reRenderOt();
+  });
+  const onOtRange = () => {
+    const m = panel.querySelector('#repOtMonth'); if (m) m.value = '';
+    reRenderOt();
+  };
+  panel.querySelector('#repOtFrom')?.addEventListener('change', onOtRange);
+  panel.querySelector('#repOtTo')?.addEventListener('change', onOtRange);
+  panel.querySelector('#repOtReset')?.addEventListener('click', () => {
+    ['repOtMonth', 'repOtYear', 'repOtFrom', 'repOtTo'].forEach(id => {
+      const el = panel.querySelector('#' + id); if (el) el.value = '';
+    });
+    const y = panel.querySelector('#repOtYear');
+    if (y) y.value = String(new Date().getFullYear());
+    reRenderOt();
+  });
+  panel.querySelector('#repOtExport')?.addEventListener('click', _exportOvertimeXlsx);
+
+  /* ── Terenski listeners ──────────────────────────── */
+  const reRenderFw = () => { void _renderFieldReport().catch(e => console.warn('[reports] fw', e)); };
+  panel.querySelector('#repFwMonth')?.addEventListener('change', () => {
+    const f = panel.querySelector('#repFwFrom'); const t = panel.querySelector('#repFwTo');
+    if (f) f.value = ''; if (t) t.value = '';
+    reRenderFw();
+  });
+  panel.querySelector('#repFwYear')?.addEventListener('change', () => {
+    const m = panel.querySelector('#repFwMonth'); const f = panel.querySelector('#repFwFrom'); const t = panel.querySelector('#repFwTo');
+    if (m) m.value = ''; if (f) f.value = ''; if (t) t.value = '';
+    reRenderFw();
+  });
+  const onFwRange = () => {
+    const m = panel.querySelector('#repFwMonth'); if (m) m.value = '';
+    reRenderFw();
+  };
+  panel.querySelector('#repFwFrom')?.addEventListener('change', onFwRange);
+  panel.querySelector('#repFwTo')?.addEventListener('change', onFwRange);
+  panel.querySelector('#repFwType')?.addEventListener('change', reRenderFw);
+  panel.querySelector('#repFwReset')?.addEventListener('click', () => {
+    ['repFwMonth', 'repFwYear', 'repFwFrom', 'repFwTo', 'repFwType'].forEach(id => {
+      const el = panel.querySelector('#' + id); if (el) el.value = '';
+    });
+    const y = panel.querySelector('#repFwYear');
+    if (y) y.value = String(new Date().getFullYear());
+    reRenderFw();
+  });
+  panel.querySelector('#repFwExport')?.addEventListener('click', _exportFieldXlsx);
+
+  /* ── Sertifikati listeners ────────────────────────── */
+  panel.querySelector('#repCertType')?.addEventListener('change', () => {
+    void _renderCertsReport().catch(e => console.warn('[reports] certs', e));
+  });
+  panel.querySelector('#repCertStatus')?.addEventListener('change', () => {
+    void _renderCertsReport().catch(e => console.warn('[reports] certs', e));
+  });
+  panel.querySelector('#repCertReload')?.addEventListener('click', () => {
+    certCache = [];
+    void _renderCertsReport().catch(e => console.warn('[reports] certs', e));
+  });
+  panel.querySelector('#repCertExport')?.addEventListener('click', _exportCertsXlsx);
+  panel.querySelector('#repCertExportCsv')?.addEventListener('click', _exportCertsCsv);
+
+  /* ── Lekarski pregledi listeners ──────────────────── */
+  panel.querySelector('#repMedStatus')?.addEventListener('change', () => {
+    void _renderMedicalReport().catch(e => console.warn('[reports] med', e));
+  });
+  panel.querySelector('#repMedReload')?.addEventListener('click', () => {
+    medExamCache = [];
+    void _renderMedicalReport().catch(e => console.warn('[reports] med', e));
+  });
+  panel.querySelector('#repMedExport')?.addEventListener('click', _exportMedicalXlsx);
+  panel.querySelector('#repMedExportCsv')?.addEventListener('click', _exportMedCsv);
+
+  /* ── Audit log listeners ──────────────────────────── */
+  const reRenderAudit = () => { void _renderAuditReport().catch(e => console.warn('[reports] audit', e)); };
+  panel.querySelector('#repAuditTable')?.addEventListener('change', reRenderAudit);
+  panel.querySelector('#repAuditAction')?.addEventListener('change', reRenderAudit);
+  panel.querySelector('#repAuditFrom')?.addEventListener('change', reRenderAudit);
+  panel.querySelector('#repAuditTo')?.addEventListener('change', reRenderAudit);
+  panel.querySelector('#repAuditReload')?.addEventListener('click', reRenderAudit);
+  panel.querySelector('#repAuditExport')?.addEventListener('click', _exportAuditCsv);
 
   /* ── Deca listeners ──────────────────────────────── */
   panel.querySelector('#repChildrenExport')?.addEventListener('click', _exportChildrenXlsx);

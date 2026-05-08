@@ -27,6 +27,7 @@ import { escHtml, showToast } from '../../lib/dom.js';
 import { canViewEmployeePii } from '../../state/auth.js';
 import { loadXlsx } from '../../lib/xlsx.js';
 import { saveEmployeeToDb } from '../../services/employees.js';
+import { isValidJmbgFormat, parseJmbg as parseJmbgLib } from '../../lib/jmbg.js';
 
 /* ─── KOLONE ─────────────────────────────────────────────────────────── */
 
@@ -98,7 +99,7 @@ function validateRow(row) {
     if (c.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
       errs.push(`${c.label}: neispravan email`);
     }
-    if (c.type === 'jmbg' && !/^\d{13}$/.test(v)) {
+    if (c.type === 'jmbg' && !isValidJmbgFormat(v)) {
       errs.push(`${c.label}: mora imati 13 cifara`);
     }
     if (c.type === 'gender' && !/^(M|Z)$/i.test(v)) {
@@ -109,17 +110,8 @@ function validateRow(row) {
 }
 
 function parseJmbgToDobGender(jmbg) {
-  if (!jmbg || !/^\d{13}$/.test(jmbg)) return null;
-  const dd = +jmbg.slice(0, 2);
-  const mm = +jmbg.slice(2, 4);
-  const yyy = +jmbg.slice(4, 7);
-  const rrr = +jmbg.slice(9, 12);
-  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
-  const year = yyy >= 900 ? 1000 + yyy : 2000 + yyy;
-  return {
-    birthDate: `${year}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`,
-    gender: rrr >= 500 ? 'Z' : 'M',
-  };
+  const r = parseJmbgLib(jmbg);
+  return r ? { birthDate: r.birthDate, gender: r.gender } : null;
 }
 
 /** Normalizacija Excel date vrednosti u ISO YYYY-MM-DD. */

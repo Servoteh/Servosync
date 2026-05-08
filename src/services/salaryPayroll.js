@@ -248,12 +248,18 @@ export function computeDisplayTotals(row) {
   const ymdMap = ctx.workHoursByEmp.get(row.employeeId) || new Map();
   const agg = aggregateWorkHoursForMonth(int(row.periodYear), int(row.periodMonth), ymdMap, ctx.holidaySet);
   const workType = row.employeeWorkType || 'ugovor';
+  const fond = computeMonthlyFond(int(row.periodYear), int(row.periodMonth), ctx.holidaySet);
   const earned = computeEarnings({
     workType,
     terms,
     hours: agg,
     terrain: { domestic: int(row.domesticDays), foreign: int(row.foreignDays) },
     advanceAmount: num(row.advanceAmount),
+    /* Faza K3.2 fix: prosleđujemo broj neplaćenih radnih dana → fiksna
+       plata se proporcijalno umanjuje. Za satnica/dva_dela samo loguje
+       upozorenje (sati neplaćenih dana su već 0 u agg). */
+    neplacenoDays: agg.neplacenoDays || 0,
+    fondSati: fond.fondSati,
   });
 
   const totalRsd = round2(
@@ -264,7 +270,6 @@ export function computeDisplayTotals(row) {
   );
   const totalEur = round2(num(row.perDiemEur) * int(row.foreignDays));
   const secondPartRsd = round2(totalRsd - earned.prviDeo);
-  const fond = computeMonthlyFond(int(row.periodYear), int(row.periodMonth), ctx.holidaySet);
 
   return {
     baseRsd: round2(earned.breakdown.baseEarnings + earned.breakdown.extraEarnings),

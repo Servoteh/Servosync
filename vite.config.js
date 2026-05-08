@@ -79,6 +79,10 @@ export default defineConfig({
          * novu verziju — praktično nikad). */
         clientsClaim: true,
         skipWaiting: true,
+        /* Default 2 MiB nije dovoljno otkad je Kadrovska modul porastao
+         * (UI za lekarske preglede, sertifikate, izveštaje, bulk akcije).
+         * Podižemo na 5 MiB — i dalje sigurno za mobilni cache. */
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,svg}'],
         /* Navigacijski fallback: sve unknown rute pod `/m/*` idu na
          * `index.html` (SPA). Vite-plugin-pwa ovo radi automatski, ali

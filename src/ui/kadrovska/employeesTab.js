@@ -52,25 +52,19 @@ import {
 import { orgStructureState } from '../../state/kadrovska.js';
 import { renderSummaryChips } from './shared.js';
 import { openEmployeesBulkModal } from './employeesBulkModal.js';
+import { openMedicalExamsModal } from './medicalExamsModal.js';
+import { openCertificatesModal } from './certificatesModal.js';
+import { parseJmbg as parseJmbgLib, validateJmbg } from '../../lib/jmbg.js';
 
 let panelRef = null;
 let onChangeCb = null;
 
 /* ─── HELPERS ────────────────────────────────────────────────────────── */
 
-/** Izračunaj datum rođenja i pol iz JMBG-a (13 cifara). Vrati {birthDate, gender} ili null. */
+/** Tanki wrapper za centralnu lib/jmbg.js parser. */
 function parseJmbg(jmbg) {
-  if (!jmbg || !/^\d{13}$/.test(jmbg)) return null;
-  const dd = parseInt(jmbg.slice(0, 2), 10);
-  const mm = parseInt(jmbg.slice(2, 4), 10);
-  const yyy = parseInt(jmbg.slice(4, 7), 10);
-  const rrr = parseInt(jmbg.slice(9, 12), 10);
-  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
-  /* Godišnji okvir: yyy je poslednje 3 cifre; 000-899 → 2000-2899 (modern), 900-999 → 1900-1999. */
-  const year = yyy >= 900 ? 1000 + yyy : 2000 + yyy;
-  const iso = `${year}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
-  const gender = rrr >= 500 ? 'Z' : 'M';
-  return { birthDate: iso, gender };
+  const r = parseJmbgLib(jmbg);
+  return r ? { birthDate: r.birthDate, gender: r.gender } : null;
 }
 
 /** Maskiraj JMBG/broj računa za prikaz ne-HR korisnicima: prikaži prvih 2 + ••• + poslednjih 3. */
@@ -147,12 +141,20 @@ export async function wireEmployeesTab(panelEl, { onChange } = {}) {
   });
 
   panelEl.addEventListener('click', e => {
-    const btn = e.target.closest('.btn-emp-edit, .btn-emp-delete');
+    const btn = e.target.closest('.btn-emp-edit, .btn-emp-delete, .btn-emp-medical, .btn-emp-certs');
     if (!btn || btn.disabled) return;
     const empId = btn.getAttribute('data-id');
     if (!empId) return;
-    if (btn.classList.contains('btn-emp-edit'))   openEmployeeModal(empId);
-    if (btn.classList.contains('btn-emp-delete')) confirmDeleteEmployee(empId);
+    if (btn.classList.contains('btn-emp-edit'))    openEmployeeModal(empId);
+    if (btn.classList.contains('btn-emp-delete'))  confirmDeleteEmployee(empId);
+    if (btn.classList.contains('btn-emp-medical')) openMedicalExamsModal(empId, {
+      onChange: async () => {
+        /* Trigger u DB-u je već ažurirao employees.medical_exam_*. Reload + refresh. */
+        await ensureEmployeesLoaded(true);
+        refreshEmployeesTab();
+      },
+    });
+    if (btn.classList.contains('btn-emp-certs'))   openCertificatesModal(empId);
   });
 
   await ensureEmployeesLoaded(true);
@@ -304,6 +306,8 @@ export function refreshEmployeesTab() {
       <td><span class="emp-status-badge ${statusCls}">${statusTxt}</span></td>
       <td class="col-actions">
         <button class="btn-row-act btn-emp-edit" data-id="${rowId}" ${edit ? '' : 'disabled'} title="${edit ? 'Izmeni' : 'Samo pregled'}">Izmeni</button>
+        ${canViewEmployeePii() ? `<button class="btn-row-act btn-emp-medical" data-id="${rowId}" title="Lekarski pregledi — istorija">🩺</button>` : ''}
+        ${canViewEmployeePii() ? `<button class="btn-row-act btn-emp-certs" data-id="${rowId}" title="Sertifikati / licence / obuke">📜</button>` : ''}
         <button class="btn-row-act danger btn-emp-delete" data-id="${rowId}" ${edit ? '' : 'disabled'} title="${edit ? 'Obriši' : 'Samo pregled'}">Obriši</button>
       </td>
     </tr>`;
@@ -458,18 +462,6 @@ function buildEmployeeModalHtml(emp) {
                      ${sensitiveDisabled}>
             </div>
             <div class="emp-field">
-              <label for="empEmergencyName">Kontakt osoba — ime</label>
-              <input type="text" id="empEmergencyName" maxlength="120"
-                     value="${escHtml(piiOk ? (emp?.emergencyContactName || '') : '')}"
-                     ${sensitiveDisabled}>
-            </div>
-            <div class="emp-field">
-              <label for="empEmergencyPhone">Kontakt osoba — telefon</label>
-              <input type="tel" id="empEmergencyPhone" maxlength="40"
-                     value="${escHtml(piiOk ? (emp?.emergencyContactPhone || '') : maskSensitive(emp?.emergencyContactPhone || ''))}"
-                     ${sensitiveDisabled}>
-            </div>
-            <div class="emp-field">
               <label for="empSlava">Krsna slava</label>
               <input type="text" id="empSlava" maxlength="80" placeholder="npr. Sveti Nikola" value="${escHtml(emp?.slava || '')}">
             </div>
@@ -477,6 +469,36 @@ function buildEmployeeModalHtml(emp) {
               <label for="empSlavaDay">Dan slave (MM-DD)</label>
               <input type="text" id="empSlavaDay" maxlength="5" placeholder="12-19"
                      value="${escHtml(emp?.slavaDay ? emp.slavaDay.slice(0, 2) + '-' + emp.slavaDay.slice(2, 4) : '')}">
+            </div>
+          `, { locked: !piiOk })}
+
+          ${sectionHtml('🚨 Kontakt u hitnom slučaju' + (piiOk ? '' : ' (samo admin)'), `
+            <div class="emp-field">
+              <label for="empEmergencyName">Ime kontakt osobe</label>
+              <input type="text" id="empEmergencyName" maxlength="120"
+                     value="${escHtml(piiOk ? (emp?.emergencyContactName || '') : '')}"
+                     ${sensitiveDisabled}>
+            </div>
+            <div class="emp-field">
+              <label for="empEmergencyRelation">Srodstvo</label>
+              <select id="empEmergencyRelation" ${sensitiveDisabled}>
+                <option value="">—</option>
+                ${['supruga','suprug','majka','otac','sin','ćerka','brat','sestra','dete','partner/ka','komšija/nica','prijatelj/ica','drugi rođak','ostalo'].map(rel =>
+                  `<option value="${escHtml(rel)}"${(emp?.emergencyContactRelation === rel) ? ' selected' : ''}>${escHtml(rel)}</option>`
+                ).join('')}
+              </select>
+            </div>
+            <div class="emp-field">
+              <label for="empEmergencyPhone">Telefon (primarni) *</label>
+              <input type="tel" id="empEmergencyPhone" maxlength="40"
+                     value="${escHtml(piiOk ? (emp?.emergencyContactPhone || '') : maskSensitive(emp?.emergencyContactPhone || ''))}"
+                     ${sensitiveDisabled}>
+            </div>
+            <div class="emp-field">
+              <label for="empEmergencyPhoneAlt">Telefon (rezervni)</label>
+              <input type="tel" id="empEmergencyPhoneAlt" maxlength="40"
+                     value="${escHtml(piiOk ? (emp?.emergencyContactPhoneAlt || '') : maskSensitive(emp?.emergencyContactPhoneAlt || ''))}"
+                     ${sensitiveDisabled}>
             </div>
           `, { locked: !piiOk })}
 
@@ -761,17 +783,28 @@ async function submitEmployeeForm() {
     basePayload.phonePrivate = document.getElementById('empPhonePrivate').value.trim() || null;
     basePayload.emergencyContactName = document.getElementById('empEmergencyName').value.trim() || null;
     basePayload.emergencyContactPhone = document.getElementById('empEmergencyPhone').value.trim() || null;
+    basePayload.emergencyContactRelation = document.getElementById('empEmergencyRelation').value || null;
+    basePayload.emergencyContactPhoneAlt = document.getElementById('empEmergencyPhoneAlt').value.trim() || null;
     basePayload.address = document.getElementById('empAddress').value.trim() || null;
     basePayload.city = document.getElementById('empCity').value.trim() || null;
     basePayload.postalCode = document.getElementById('empPostalCode').value.trim() || null;
     basePayload.bankName = document.getElementById('empBankName').value.trim() || null;
     basePayload.bankAccount = document.getElementById('empBankAccount').value.trim() || null;
 
-    /* JMBG format check */
-    if (basePayload.personalId && !/^\d{13}$/.test(basePayload.personalId)) {
-      errEl.textContent = 'JMBG mora imati tačno 13 cifara.';
-      errEl.classList.add('visible');
-      return;
+    /* JMBG full validation: format + datum + (warn-only) checksum.
+       Legacy zaposleni mogu imati nevalidnu kontrolnu cifru — ne blokiramo,
+       samo logujemo upozorenje u konzoli da admin vidi. */
+    if (basePayload.personalId) {
+      const v = validateJmbg(basePayload.personalId);
+      if (!v.valid) {
+        errEl.textContent = v.error;
+        errEl.classList.add('visible');
+        return;
+      }
+      const checksum = validateJmbg(basePayload.personalId, { requireChecksum: true });
+      if (!checksum.valid) {
+        console.warn('[kadrovska] JMBG checksum mismatch (dozvoljeno za legacy unose):', basePayload.personalId);
+      }
     }
   }
 

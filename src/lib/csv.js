@@ -56,6 +56,25 @@ export function rowsToCsv(headers, rows) {
 export const CSV_BOM = '\uFEFF';
 
 /**
+ * Trigger-uje download CSV fajla u browseru.
+ *  - automatski dodaje BOM (Excel kompatibilnost)
+ *  - koristi Blob + a[download] pattern (radi u svim modernim browserima)
+ *  - filename treba da bude kompletno ime sa .csv ekstenzijom
+ */
+export function downloadCsv(filename, headers, rows) {
+  const csv = CSV_BOM + rowsToCsv(headers, rows);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+}
+
+/**
  * Jednostavan CSV parser (RFC 4180 — navodnici i duplirani `"`).
  * @param {string} text
  * @returns {{ headers: string[], rows: string[][] }}

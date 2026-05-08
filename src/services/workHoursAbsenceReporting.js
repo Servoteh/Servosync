@@ -131,6 +131,91 @@ export async function latestGoSegmentForEmployeeYear(empId, year) {
 }
 
 /**
+ * Prekovremeni rad — agregat po zaposlenom u periodu.
+ * Vraća Map<employeeId, { totalOvertime, days, twoMachineHours, lastDate }>.
+ *
+ * @param {string} fromYmd  npr. '2026-01-01' — '' za bez donje granice
+ * @param {string} toYmd    '' za bez gornje granice
+ */
+export async function overtimeByEmployeeForPeriod(fromYmd, toYmd) {
+  const map = new Map();
+  if (!hasSupabaseConfig()) return map;
+  let path = 'work_hours?select=employee_id,work_date,overtime_hours,two_machine_hours&overtime_hours=gt.0';
+  if (fromYmd) path += `&work_date=gte.${encodeURIComponent(fromYmd)}`;
+  if (toYmd)   path += `&work_date=lte.${encodeURIComponent(toYmd)}`;
+  const dataOt = await sbReq(path);
+  if (Array.isArray(dataOt)) {
+    for (const r of dataOt) {
+      const id = r.employee_id;
+      if (!id) continue;
+      const ot = Number(r.overtime_hours || 0);
+      const tm = Number(r.two_machine_hours || 0);
+      if (ot <= 0 && tm <= 0) continue;
+      if (!map.has(id)) {
+        map.set(id, { totalOvertime: 0, twoMachineHours: 0, days: 0, lastDate: '' });
+      }
+      const cur = map.get(id);
+      cur.totalOvertime += ot;
+      cur.twoMachineHours += tm;
+      if (ot > 0) cur.days += 1;
+      if (r.work_date && r.work_date > cur.lastDate) cur.lastDate = r.work_date;
+    }
+  }
+  /* Dodaj zaposlene koji imaju samo two_machine_hours (radi na 2 maš., bez overtime). */
+  let pathTm = 'work_hours?select=employee_id,work_date,two_machine_hours&two_machine_hours=gt.0';
+  if (fromYmd) pathTm += `&work_date=gte.${encodeURIComponent(fromYmd)}`;
+  if (toYmd)   pathTm += `&work_date=lte.${encodeURIComponent(toYmd)}`;
+  const dataTm = await sbReq(pathTm);
+  if (Array.isArray(dataTm)) {
+    for (const r of dataTm) {
+      const id = r.employee_id;
+      if (!id) continue;
+      const tm = Number(r.two_machine_hours || 0);
+      if (tm <= 0) continue;
+      if (map.has(id)) continue; /* već uračunato u prethodnoj petlji */
+      map.set(id, { totalOvertime: 0, twoMachineHours: tm, days: 0, lastDate: r.work_date || '' });
+    }
+  }
+  return map;
+}
+
+/**
+ * Terenski rad — agregat po zaposlenom u periodu, podeljeno na domaći/ino.
+ * Vraća Map<employeeId, { domesticDays, domesticHours, foreignDays, foreignHours, lastDate }>.
+ *
+ * Dan se računa kao "terenski dan" ako field_hours > 0; subtype iz field_subtype.
+ */
+export async function fieldWorkByEmployeeForPeriod(fromYmd, toYmd) {
+  const map = new Map();
+  if (!hasSupabaseConfig()) return map;
+  let path = 'work_hours?select=employee_id,work_date,field_hours,field_subtype&field_hours=gt.0';
+  if (fromYmd) path += `&work_date=gte.${encodeURIComponent(fromYmd)}`;
+  if (toYmd)   path += `&work_date=lte.${encodeURIComponent(toYmd)}`;
+  const data = await sbReq(path);
+  if (!Array.isArray(data)) return map;
+  for (const r of data) {
+    const id = r.employee_id;
+    if (!id) continue;
+    const fh = Number(r.field_hours || 0);
+    if (fh <= 0) continue;
+    const isForeign = r.field_subtype === 'foreign';
+    if (!map.has(id)) {
+      map.set(id, { domesticDays: 0, domesticHours: 0, foreignDays: 0, foreignHours: 0, lastDate: '' });
+    }
+    const cur = map.get(id);
+    if (isForeign) {
+      cur.foreignDays += 1;
+      cur.foreignHours += fh;
+    } else {
+      cur.domesticDays += 1;
+      cur.domesticHours += fh;
+    }
+    if (r.work_date && r.work_date > cur.lastDate) cur.lastDate = r.work_date;
+  }
+  return map;
+}
+
+/**
  * Svi GO segmenti za celu godinu, grupisani po employee.
  * Jednim SQL upitom. Vraća Map<employeeId, Segment[]>.
  */

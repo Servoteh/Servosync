@@ -19,6 +19,11 @@ import { logout } from '../../services/auth.js';
 import { toggleTheme } from '../../lib/theme.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
 import { ssSet } from '../../lib/storage.js';
+import {
+  installKadrAutoFlush,
+  countKadrPending,
+  flushKadrPending,
+} from '../../services/kadrOfflineQueue.js';
 
 import {
   kadrovskaHeaderHtml,
@@ -98,7 +103,7 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
     </section>
   `;
 
-  /* Header: back / theme / logout */
+  /* Header: back / theme / logout / pending-badge */
   root.querySelector('#kadrBackBtn').addEventListener('click', () => {
     onBackToHubCb?.();
   });
@@ -106,6 +111,21 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
   root.querySelector('#kadrLogoutBtn').addEventListener('click', async () => {
     await logout();
     onLogoutCb?.();
+  });
+
+  /* Offline queue: auto-flush + badge. Klik na badge = ručni retry. */
+  installKadrAutoFlush();
+  refreshPendingBadge();
+  setInterval(refreshPendingBadge, 5000);
+  root.querySelector('#kadrPendingBadge').addEventListener('click', async () => {
+    const before = countKadrPending();
+    if (!before) return;
+    showToast(`⏳ Pokušaj sinhronizacije ${before} stavki…`);
+    const r = await flushKadrPending();
+    refreshPendingBadge();
+    if (r.ok > 0) showToast(`✅ Sinhronizovano ${r.ok}${r.failed ? `, neuspešno ${r.failed}` : ''}`);
+    else if (r.failed > 0) showToast(`⚠ Neuspeh: ${r.failed} stavki ostaje za retry`);
+    else if (r.dropped > 0) showToast(`⚠ Odbačeno ${r.dropped} stavki (max attempts)`);
   });
 
   /* Tab strip — switch */
@@ -131,6 +151,20 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
         });
       });
     });
+  }
+}
+
+function refreshPendingBadge() {
+  if (!rootEl) return;
+  const badge = rootEl.querySelector('#kadrPendingBadge');
+  const cnt = rootEl.querySelector('#kadrPendingCount');
+  if (!badge || !cnt) return;
+  const n = countKadrPending();
+  if (n > 0) {
+    badge.hidden = false;
+    cnt.textContent = String(n);
+  } else {
+    badge.hidden = true;
   }
 }
 

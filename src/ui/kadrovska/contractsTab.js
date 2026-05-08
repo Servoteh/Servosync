@@ -33,6 +33,8 @@ import {
 import { renderSummaryChips, employeeOptionsHtml } from './shared.js';
 
 let panelRef = null;
+/** Set izabranih ID-jeva ugovora za bulk akcije. Survives re-render. */
+const selectedIds = new Set();
 
 const CON_TYPE_OPTS = [
   { v: 'neodredjeno', l: 'Neodređeno vreme' },
@@ -77,12 +79,14 @@ export function renderContractsTab() {
       </select>
       <div class="kadrovska-toolbar-spacer"></div>
       <span class="kadrovska-count" id="conCount">0 ugovora</span>
+      <button class="btn btn-ghost" id="conBulkBtn" disabled title="Selektuj redove za bulk akcije">⚙ Bulk (0)</button>
       <button class="btn btn-primary" id="conAddBtn">+ Novi ugovor</button>
     </div>
     <main class="kadrovska-main">
       <table class="kadrovska-table" id="conTable">
         <thead>
           <tr>
+            <th style="width:32px"><input type="checkbox" id="conSelAll" title="Selektuj sve"></th>
             <th>Zaposleni</th>
             <th>Tip</th>
             <th class="col-hide-sm">Br. ugovora</th>
@@ -108,10 +112,36 @@ export async function wireContractsTab(panelEl) {
   panelEl.querySelector('#conTypeFilter').addEventListener('change', refreshContractsTab);
   panelEl.querySelector('#conStatusFilter').addEventListener('change', refreshContractsTab);
   panelEl.querySelector('#conAddBtn').addEventListener('click', () => openContractModal(null));
+  panelEl.querySelector('#conBulkBtn').addEventListener('click', openBulkActionsModal);
+  panelEl.querySelector('#conSelAll').addEventListener('change', e => {
+    const on = e.target.checked;
+    panelEl.querySelectorAll('.con-row-sel').forEach(cb => {
+      cb.checked = on;
+      const id = cb.dataset.id;
+      if (on) selectedIds.add(id); else selectedIds.delete(id);
+    });
+    updateBulkBtn();
+  });
+  panelEl.addEventListener('change', e => {
+    const cb = e.target.closest('.con-row-sel');
+    if (!cb) return;
+    const id = cb.dataset.id;
+    if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+    updateBulkBtn();
+  });
 
   await ensureEmployeesLoaded();
   await ensureContractsLoaded(true);
+  selectedIds.clear();
   refreshContractsTab();
+}
+
+function updateBulkBtn() {
+  const btn = panelRef?.querySelector('#conBulkBtn');
+  if (!btn) return;
+  const n = selectedIds.size;
+  btn.disabled = n === 0 || !canEdit();
+  btn.textContent = `⚙ Bulk (${n})`;
 }
 
 function populateEmpFilter() {
@@ -200,6 +230,7 @@ export function refreshContractsTab() {
     else if (status.key === 'expired') expiryHint = `<div class="kadr-expiry-hint danger">ISTEKAO</div>`;
     const statusBadgeCls = (status.cls === 'expired' || status.cls === 'expiring') ? 'active' : status.cls;
     return `<tr data-id="${id}" class="${rowCls}">
+      <td><input type="checkbox" class="con-row-sel" data-id="${id}" ${edit ? '' : 'disabled'}></td>
       <td><div class="emp-name">${escHtml(employeeNameById(c.employeeId))}</div></td>
       <td><span class="kadr-type-badge c-${escHtml(c.type)}">${escHtml(typeLbl)}</span></td>
       <td class="col-hide-sm">${escHtml(c.number || '—')}</td>
@@ -220,6 +251,150 @@ export function refreshContractsTab() {
   tbody.querySelectorAll('button[data-action="delete"]').forEach(b => {
     b.addEventListener('click', () => confirmDeleteContract(b.dataset.id));
   });
+
+  /* Vrati selekciju iz state-a (preživljava re-render). */
+  tbody.querySelectorAll('.con-row-sel').forEach(cb => {
+    if (selectedIds.has(cb.dataset.id)) cb.checked = true;
+  });
+  updateBulkBtn();
+}
+
+/* ── Bulk akcije ─────────────────────────────────────────────────────── */
+
+function openBulkActionsModal() {
+  if (!canEdit() || selectedIds.size === 0) return;
+  closeBulkModal();
+  const ids = Array.from(selectedIds);
+  const items = kadrContractsState.items.filter(c => ids.includes(c.id));
+  const namesPreview = items.slice(0, 5)
+    .map(c => `${employeeNameById(c.employeeId)}${c.dateTo ? ' (do ' + formatDate(c.dateTo) + ')' : ''}`)
+    .join(', ');
+  const more = items.length > 5 ? ` … i još ${items.length - 5}` : '';
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="kadr-modal-overlay" id="conBulkModal" role="dialog" aria-modal="true">
+      <div class="kadr-modal">
+        <div class="kadr-modal-title">⚙ Bulk akcija — ${items.length} ugovor(a)</div>
+        <div class="kadr-modal-subtitle">${escHtml(namesPreview)}${escHtml(more)}</div>
+        <div class="kadr-modal-err" id="conBulkErr"></div>
+        <fieldset class="emp-section">
+          <legend>Izaberi akciju</legend>
+          <div class="emp-form-grid">
+            <div class="emp-field col-full">
+              <label>
+                <input type="radio" name="conBulkAct" value="extendDate" checked>
+                Postavi novi „Datum do"
+              </label>
+              <input type="date" id="conBulkExtendTo" min="${todayIso}" style="margin-top:4px">
+            </div>
+            <div class="emp-field col-full">
+              <label>
+                <input type="radio" name="conBulkAct" value="extendMonths">
+                Produži za N meseci od trenutnog „Datum do" (ili od danas ako je prazan)
+              </label>
+              <input type="number" id="conBulkExtendMonths" min="1" max="60" value="12" style="margin-top:4px;max-width:120px">
+            </div>
+            <div class="emp-field col-full">
+              <label>
+                <input type="radio" name="conBulkAct" value="deactivate">
+                Deaktiviraj selektovane (isActive = false)
+              </label>
+            </div>
+          </div>
+        </fieldset>
+        <div class="kadr-modal-actions">
+          <button type="button" class="btn" id="conBulkCancel">Otkaži</button>
+          <button type="button" class="btn btn-warning" id="conBulkApply">Primeni</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap.firstElementChild);
+  const m = document.getElementById('conBulkModal');
+  m.querySelector('#conBulkCancel').addEventListener('click', closeBulkModal);
+  m.addEventListener('click', e => { if (e.target === m) closeBulkModal(); });
+  m.querySelector('#conBulkApply').addEventListener('click', () => applyBulkAction(items));
+}
+
+function closeBulkModal() {
+  document.getElementById('conBulkModal')?.remove();
+}
+
+function ymdAddMonths(ymd, months) {
+  if (!ymd) return null;
+  const [y, m, d] = ymd.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const dt = new Date(y, m - 1, d);
+  dt.setMonth(dt.getMonth() + months);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+async function applyBulkAction(items) {
+  const err = document.getElementById('conBulkErr');
+  const btn = document.getElementById('conBulkApply');
+  err.textContent = ''; err.classList.remove('visible');
+  const act = document.querySelector('input[name="conBulkAct"]:checked')?.value;
+
+  let extendTo = null;
+  let months = 0;
+  if (act === 'extendDate') {
+    extendTo = document.getElementById('conBulkExtendTo').value;
+    if (!extendTo) {
+      err.textContent = 'Izaberi novi „Datum do".';
+      err.classList.add('visible'); return;
+    }
+  } else if (act === 'extendMonths') {
+    months = parseInt(document.getElementById('conBulkExtendMonths').value, 10);
+    if (!months || months < 1) {
+      err.textContent = 'Broj meseci mora biti ≥ 1.';
+      err.classList.add('visible'); return;
+    }
+  }
+
+  const ok = confirm(`Primeniti akciju nad ${items.length} ugovor(a)? Akcija se ne može poništiti.`);
+  if (!ok) return;
+
+  btn.disabled = true; btn.textContent = '⏳ Obrada…';
+  const todayIso = new Date().toISOString().slice(0, 10);
+  let okCount = 0; let failCount = 0;
+  for (const c of items) {
+    let payload = { ...c };
+    if (act === 'extendDate') {
+      if (extendTo < (c.dateFrom || '0000-00-00')) { failCount++; continue; }
+      payload.dateTo = extendTo;
+    } else if (act === 'extendMonths') {
+      const base = c.dateTo || todayIso;
+      payload.dateTo = ymdAddMonths(base, months);
+    } else if (act === 'deactivate') {
+      payload.isActive = false;
+    }
+    try {
+      let res;
+      if (getIsOnline() && hasSupabaseConfig() && payload.id && !String(payload.id).startsWith('local_')) {
+        res = await updateContractInDb(payload);
+      } else {
+        res = [payload];
+      }
+      if (res && res.length) {
+        const saved = res[0]?.id ? mapDbContract(res[0]) : payload;
+        const idx = kadrContractsState.items.findIndex(x => x.id === saved.id);
+        if (idx >= 0) kadrContractsState.items[idx] = saved;
+        okCount++;
+      } else {
+        failCount++;
+      }
+    } catch (e) {
+      console.error('[con] bulk', e);
+      failCount++;
+    }
+  }
+  saveContractsCache(kadrContractsState.items);
+  closeBulkModal();
+  selectedIds.clear();
+  refreshContractsTab();
+  if (failCount === 0) showToast(`✅ Promenjeno ${okCount} ugovor(a)`);
+  else showToast(`⚠ Promenjeno ${okCount}, neuspešno ${failCount}`);
 }
 
 /* ── Modal ── */

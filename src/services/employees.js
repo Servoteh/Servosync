@@ -61,6 +61,8 @@ export function mapDbEmployee(d) {
     bankAccount: d.bank_account || '',
     emergencyContactName: d.emergency_contact_name || '',
     emergencyContactPhone: d.emergency_contact_phone || '',
+    emergencyContactRelation: d.emergency_contact_relation || '',
+    emergencyContactPhoneAlt: d.emergency_contact_phone_alt || '',
     slava: d.slava || '',
     slavaDay: d.slava_day || '',
     educationLevel: d.education_level || '',
@@ -118,8 +120,10 @@ export function buildEmployeePayload(emp) {
   if ('bankName' in emp)              p.bank_name = emp.bankName || null;
   if ('bankAccount' in emp)           p.bank_account = emp.bankAccount || null;
   if ('phonePrivate' in emp)          p.phone_private = emp.phonePrivate || null;
-  if ('emergencyContactName' in emp)  p.emergency_contact_name = emp.emergencyContactName || null;
-  if ('emergencyContactPhone' in emp) p.emergency_contact_phone = emp.emergencyContactPhone || null;
+  if ('emergencyContactName' in emp)     p.emergency_contact_name = emp.emergencyContactName || null;
+  if ('emergencyContactPhone' in emp)    p.emergency_contact_phone = emp.emergencyContactPhone || null;
+  if ('emergencyContactRelation' in emp) p.emergency_contact_relation = emp.emergencyContactRelation || null;
+  if ('emergencyContactPhoneAlt' in emp) p.emergency_contact_phone_alt = emp.emergencyContactPhoneAlt || null;
 
   if (emp.id) p.id = emp.id;
   return p;

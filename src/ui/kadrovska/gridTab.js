@@ -38,32 +38,26 @@ import { ssGet, ssSet } from '../../lib/storage.js';
 import { loadHolidaysForRange, holidayDateSet } from '../../services/holidays.js';
 import { parseDateLocal } from '../../lib/date.js';
 import { gridRedovniUnitsOneDay } from '../../services/payrollCalc.js';
+import {
+  GRID_ABS_CODES,
+  GRID_BO_SUBTYPE_MAP,
+  GRID_DAY_LETTERS,
+  GRID_FIELD_SUBTYPE_DEFAULT,
+  ymdOf,
+  gridIsoToday as _gridIsoToday,
+  gridDirtyKey as _gridDirtyKey,
+  gridDaysInMonth as _gridDaysInMonth,
+  gridDayClasses as _gridDayClasses,
+  gridParseCellText as _gridParseCellText,
+  gridFormatNum as _gridFormatNum,
+  gridFormatSum as _gridFormatSum,
+} from './gridUtils.js';
 
-/* ─── KONSTANTE ───────────────────────────────────────────────────────── */
-
-/* Šifre odsustva koje Redovni red prihvata:
- *   go  = godišnji odmor
- *   bo  = bolovanje 65% (obicno)
- *   bop = bolovanje 100% (povreda na radu) — mapira se kao bo+subtype
- *   bot = bolovanje 100% (odrzavanje trudnoce) — mapira se kao bo+subtype
- *   sp  = slobodan/plaćeni praznik
- *   np  = neopravdano (legacy)
- *   sl  = slobodan dan
- *   pr  = prazan dan
- *   nop = neplaćeno odsustvo (odobreno; sati=0, dan se ne plaća) */
-const GRID_ABS_CODES = ['go', 'bo', 'sp', 'np', 'sl', 'pr', 'nop'];
-/* Faza K3.3 — bolovanje subtype kodovi za grid:
-   'bo'  → obicno (65%)
-   'bop' → povreda na radu (100%)
-   'bot' → održavanje trudnoće (100%) */
-const GRID_BO_SUBTYPE_MAP = {
-  bo:  'obicno',
-  bop: 'povreda_na_radu',
-  bot: 'odrzavanje_trudnoce',
-};
-/** Dani u nedelji — index 0 = Sunday. */
-const GRID_DAY_LETTERS = ['N', 'P', 'U', 'S', 'Č', 'P', 'S'];
-const GRID_FIELD_SUBTYPE_DEFAULT = 'domestic';
+/* Konstante (GRID_ABS_CODES, GRID_BO_SUBTYPE_MAP, GRID_DAY_LETTERS,
+   GRID_FIELD_SUBTYPE_DEFAULT) i pure helpers (ymdOf, _gridDaysInMonth,
+   _gridIsoToday, _gridDirtyKey, _gridDayClasses, _gridParseCellText,
+   _gridFormatNum, _gridFormatSum) su izvojeni u ./gridUtils.js radi
+   testabilnosti i smanjivanja veličine ovog fajla. Vidi import iznad. */
 
 /** State je modulom-lokalan — reset se radi u `wireGridTab` pri prvom mountu. */
 const gridState = {
@@ -95,51 +89,8 @@ function _gridQ(sel) {
 let _gridSearchDebounce = null;
 
 /* ─── HELPERS ──────────────────────────────────────────────────────────── */
-
-/** "YYYY-MM-DD" iz (y, m1, d) gde je m1 1-based. */
-function ymdOf(y, m1, d) {
-  return `${y}-${String(m1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
-
-function _gridDaysInMonth(yyyymm) {
-  if (!yyyymm) return [];
-  const [y, m] = yyyymm.split('-').map(n => parseInt(n, 10));
-  if (!y || !m) return [];
-  const last = new Date(y, m, 0).getDate();
-  const out = [];
-  for (let d = 1; d <= last; d++) {
-    const ymd = ymdOf(y, m, d);
-    const dt = parseDateLocal(ymd);
-    const dow = dt ? dt.getDay() : new Date(y, m - 1, d).getDay();
-    out.push({
-      day: d,
-      ymd,
-      dow,
-      isWeekend: dow === 0 || dow === 6,
-      letter: GRID_DAY_LETTERS[dow],
-    });
-  }
-  return out;
-}
-
-function _gridIsoToday() {
-  const t = new Date();
-  return ymdOf(t.getFullYear(), t.getMonth() + 1, t.getDate());
-}
-
-function _gridDirtyKey(empId, ymd) {
-  return empId + '|' + ymd;
-}
-
-function _gridDayClasses(day, holidayYmdSet, extra = []) {
-  const cls = ['col-day'];
-  if (day?.isWeekend) cls.push('cell-weekend');
-  if (day?.dow === 6) cls.push('cell-weekend-sat');
-  if (day?.dow === 0) cls.push('cell-weekend-sun');
-  if (holidayYmdSet?.has?.(day?.ymd)) cls.push('cell-holiday');
-  if (extra?.length) cls.push(...extra.filter(Boolean));
-  return cls;
-}
+/* (Pure helpers — ymdOf, _gridDaysInMonth, _gridIsoToday, _gridDirtyKey,
+    _gridDayClasses — su importovani iz ./gridUtils.js.) */
 
 /** Effective vrednost ćelije: dirty override → DB row → defaults. */
 function _gridEffective(empId, ymd) {
@@ -168,43 +119,7 @@ function _gridEffective(empId, ymd) {
   };
 }
 
-/**
- * Parsiraj sirov tekst ćelije.
- * @returns {{kind:'num',value:number} | {kind:'abs',code:string} | {kind:'empty'} | {kind:'err'}}
- */
-function _gridParseCellText(raw) {
-  const v = String(raw || '').trim().toLowerCase();
-  if (!v) return { kind: 'empty' };
-  /* Faza K3.3 — bolovanje subtype kodovi: bo / bop / bot. */
-  if (Object.prototype.hasOwnProperty.call(GRID_BO_SUBTYPE_MAP, v)) {
-    return { kind: 'abs', code: 'bo', subtype: GRID_BO_SUBTYPE_MAP[v] };
-  }
-  if (GRID_ABS_CODES.includes(v)) return { kind: 'abs', code: v, subtype: null };
-  const num = parseFloat(v.replace(',', '.'));
-  if (
-    isFinite(num) &&
-    num >= 0 &&
-    num <= 24 &&
-    /^[0-9]+([.,][0-9]+)?$/.test(v)
-  ) {
-    return { kind: 'num', value: Math.round(num * 100) / 100 };
-  }
-  return { kind: 'err' };
-}
-
-function _gridFormatNum(n) {
-  if (n == null || n === 0) return '';
-  const r = Math.round(Number(n) * 100) / 100;
-  if (Number.isInteger(r)) return String(r);
-  return String(r).replace(/0+$/, '').replace(/\.$/, '');
-}
-
-function _gridFormatSum(n) {
-  if (!n || n === 0) return '0';
-  const r = Math.round(Number(n) * 100) / 100;
-  if (Number.isInteger(r)) return String(r);
-  return r.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
-}
+/* _gridParseCellText, _gridFormatNum, _gridFormatSum — videti ./gridUtils.js. */
 
 /** Updejtuj dirty cache za jednu (empId, ymd, kind) izmenu. kind = 'reg'|'ot'|'field'|'twomach'. */
 function _gridApplyEdit(empId, ymd, kind, parsed) {

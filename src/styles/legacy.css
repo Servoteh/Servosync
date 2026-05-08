@@ -4065,6 +4065,70 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .payroll-toolbar #payrPrevMonth,
 .payroll-toolbar #payrNextMonth { padding:6px 10px; font-size:14px; line-height:1; }
 
+/* --- KADROVSKA ORG TREE (Reports → Organogram) --- */
+.kadr-org-tree { padding: 12px 0; }
+.kadr-org-tree .org-node { margin-left: 0; }
+.kadr-org-tree .org-node-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; cursor: pointer;
+  border-radius: 4px;
+  user-select: none;
+}
+.kadr-org-tree .org-node-head:hover { background: var(--surface2); }
+.kadr-org-tree .org-toggle { width: 14px; color: var(--text3); font-size: 10px; }
+.kadr-org-tree .org-icon { font-size: 14px; }
+.kadr-org-tree .org-name { flex: 1; font-weight: 500; }
+.kadr-org-tree .org-dept > .org-node-head { font-weight: 700; font-size: 14px; color: var(--accent); }
+.kadr-org-tree .org-sub > .org-node-head { font-weight: 600; }
+.kadr-org-tree .org-pos > .org-node-head { color: var(--text2); }
+.kadr-org-tree .org-count {
+  background: var(--surface3); padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; color: var(--text2);
+}
+.kadr-org-tree .org-children { margin-left: 24px; padding: 4px 0; border-left: 1px dashed var(--border2); }
+.kadr-org-tree .org-children-direct { padding: 4px 0 4px 14px; }
+.kadr-org-tree .org-emp-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 10px; font-size: 12px;
+  border-left: 2px solid transparent;
+}
+.kadr-org-tree .org-emp-row:hover { background: var(--surface2); border-left-color: var(--accent); }
+.kadr-org-tree .org-emp-name { font-weight: 500; }
+
+/* Audit log — diff redovi unutar tabele. */
+.audit-diff-row { font-size: 11px; line-height: 1.5; padding: 2px 0; border-bottom: 1px dashed var(--border2); }
+.audit-diff-row:last-child { border-bottom: none; }
+.audit-diff-row strong { color: var(--accent); }
+
+/* Pending badge u Kadrovska header-u (offline queue). */
+.kadr-pending-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px;
+  font-size: 11px; font-weight: 600;
+  background: color-mix(in srgb, #F2994A 18%, var(--surface));
+  color: #F2994A;
+  border: 1px solid color-mix(in srgb, #F2994A 50%, transparent);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.kadr-pending-badge:hover {
+  background: color-mix(in srgb, #F2994A 28%, var(--surface));
+  border-color: #F2994A;
+}
+
+/* Warning ton — koristi se za "Zakljucaj mesec" (permanentna akcija). */
+.btn-warning {
+  background: color-mix(in srgb, #F2994A 18%, var(--surface));
+  border-color: color-mix(in srgb, #F2994A 50%, transparent);
+  color: #F2994A;
+}
+.btn-warning:hover {
+  background: color-mix(in srgb, #F2994A 28%, var(--surface));
+  border-color: #F2994A;
+  color: #F2994A;
+}
+
 .payroll-hint {
   padding:10px 20px;
   font-size:11px; color:var(--text3); line-height:1.55;

@@ -367,6 +367,9 @@ export function aggregateWorkHoursForMonth(year, month, rowsByYmd, holidayYmdSet
     bolovanje65Sati: 0,
     bolovanje100Sati: 0,
     dveMasineSati: 0,
+    /* Faza K3.2 fix: brojač neplaćenih dana (np / nop / pr) na radnim danima.
+       Koristi se za proporcijalno umanjenje fiksne plate u computeEarnings. */
+    neplacenoDays: 0,
   };
 
   for (let day = 1; day <= last; day++) {
@@ -391,6 +394,8 @@ export function aggregateWorkHoursForMonth(year, month, rowsByYmd, holidayYmdSet
     const isHol = hol.has(ymd);
 
     if (weekend) {
+      /* Vikend + neplaćeno odsustvo se NE broji — pravo na neplaćeno
+         odsustvo se troši samo radnim danima (proporcijalno fond/8). */
       if (!abs && h > 0) {
         out.redovanRadSati += h;
         continue;
@@ -472,7 +477,9 @@ export function aggregateWorkHoursForMonth(year, month, rowsByYmd, holidayYmdSet
     } else if (abs === 'sl') {
       out.slobodniDaniSati += REGULAR_DAY_HOURS;
     } else if (abs === 'np' || abs === 'pr' || abs === 'nop') {
-      /* neplaćeno odsustvo / praznik / nop — 0 sati */
+      /* neplaćeno odsustvo / praznik / nop na radnom danu — 0 sati za sve modele,
+         a za fiksno se proporcijalno smanjuje plata kroz neplacenoDays brojač. */
+      out.neplacenoDays += 1;
     } else {
       out.redovanRadSati += h;
     }

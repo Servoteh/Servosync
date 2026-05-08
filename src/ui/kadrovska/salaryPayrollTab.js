@@ -91,6 +91,7 @@ export function renderPayrollSubtab() {
         <button class="btn btn-ghost" id="payrReload">🔄 Osveži</button>
         <button class="btn btn-ghost" id="payrExport">📊 Excel</button>
         <button class="btn btn-primary" id="payrInit" title="Kreiraj draft redove za sve aktivne zaposlene za izabrani mesec">+ Pripremi mesec</button>
+        <button class="btn btn-warning" id="payrLockMonth" title="Markiraj sve finalizovane redove kao isplaćene — više ne mogu da se menjaju">🔒 Zaključaj mesec</button>
       </div>
       <div class="payroll-hint">
         <strong>Prvi deo</strong> = akontacija (do 5. u mesecu). <strong>Drugi deo</strong> = ukupno − prvi deo (15–20. u mesecu).
@@ -140,6 +141,7 @@ export async function wirePayrollSubtab(panelEl) {
   panelEl.querySelector('#payrReload').addEventListener('click', () => reloadPeriod(true));
   panelEl.querySelector('#payrInit').addEventListener('click', initCurrentMonth);
   panelEl.querySelector('#payrExport').addEventListener('click', exportXlsx);
+  panelEl.querySelector('#payrLockMonth').addEventListener('click', lockMonthBulk);
 
   await ensureEmployeesLoaded();
   await reloadPeriod(true);
@@ -191,6 +193,65 @@ async function reloadPeriod(force = false) {
     );
   }
   refreshRows();
+}
+
+/**
+ * Bulk lock — sve redove u statusu `finalized` prebaci u `paid` (immutable).
+ * Draft / advance_paid se NE diraju (još nisu spremni). Ako nema kandidata,
+ * korisnik dobija jasan toast.
+ */
+async function lockMonthBulk() {
+  if (!canAccessSalary()) return;
+  const rows = kadrPayrollState.byPeriod.get(currentKey()) || [];
+  const candidates = rows.filter(r => r.status === 'finalized');
+  if (!candidates.length) {
+    const draftCount = rows.filter(r => r.status === 'draft' || r.status === 'advance_paid').length;
+    if (draftCount) {
+      showToast(`ℹ Nema finalizovanih redova. ${draftCount} red(ova) još nisu finalizovani.`);
+    } else {
+      showToast('ℹ Nema redova za zaključavanje');
+    }
+    return;
+  }
+  const y = kadrPayrollState.selectedYear;
+  const m = kadrPayrollState.selectedMonth;
+  const ok = confirm(
+    `Zaključati mesec ${MONTH_NAMES[m - 1]} ${y}?\n\n`
+    + `${candidates.length} red(ova) će biti markirano kao ISPLAĆENO.\n`
+    + `Nakon toga se ti redovi VIŠE NE MOGU menjati ni brisati.\n\n`
+    + `Ova akcija se ne može poništiti.`
+  );
+  if (!ok) return;
+
+  const btn = rootEl.querySelector('#payrLockMonth');
+  btn.disabled = true;
+  const txt = btn.textContent;
+  btn.textContent = '⏳ Zaključavanje…';
+
+  let okCount = 0;
+  let failCount = 0;
+  for (const r of candidates) {
+    try {
+      const saved = await upsertPayroll({ ...r, status: 'paid' });
+      if (saved) {
+        Object.assign(r, saved);
+        okCount += 1;
+      } else {
+        failCount += 1;
+      }
+    } catch (e) {
+      console.error('[payroll] lockMonth row', r.id, e);
+      failCount += 1;
+    }
+  }
+  btn.disabled = false;
+  btn.textContent = txt;
+  refreshRows();
+  if (failCount === 0) {
+    showToast(`🔒 Zaključano ${okCount} red(ova)`);
+  } else {
+    showToast(`⚠ Zaključano ${okCount}, neuspešno ${failCount} red(ova)`);
+  }
 }
 
 async function initCurrentMonth() {
