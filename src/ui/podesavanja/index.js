@@ -37,9 +37,10 @@ let _onBackToHubCb = null;
 let _authUnsubscribe = null;
 let _activeTab = 'users';
 
-/** Jedinstven izvor istine za „jednu kolonu“ + padajući izbor (ne samo @media — keš/zoom/Desktop site). */
-const SETTINGS_COMPACT_MQ = '(max-width: 1200px)';
-let _compactMql = null;
+/** Širina do koje koristimo jednu kolonu + padajući izbor (sidebar ostaje u DOM). */
+const SETTINGS_COMPACT_MAX_W = 1200;
+
+let _viewportListenersAttached = false;
 
 /* ── Sidebar struktura ───────────────────────────────────────────────── */
 
@@ -144,49 +145,147 @@ export async function renderPodesavanjaModule(mountEl, options = {}) {
 
 export function teardownPodesavanjaModule() {
   if (_authUnsubscribe) { _authUnsubscribe(); _authUnsubscribe = null; }
-  if (_compactMql) {
-    if (typeof _compactMql.removeEventListener === 'function') {
-      _compactMql.removeEventListener('change', _onCompactMqlChange);
-    } else {
-      _compactMql.removeListener(_onCompactMqlChange);
-    }
-    _compactMql = null;
+  if (_viewportListenersAttached) {
+    window.removeEventListener('resize', _onSettingsViewportEvent);
+    window.removeEventListener('orientationchange', _onSettingsViewportEvent);
+    window.visualViewport?.removeEventListener('resize', _onSettingsViewportEvent);
+    _viewportListenersAttached = false;
   }
-  document.body.classList.remove('settings-layout-compact');
-  document.documentElement.classList.remove('settings-html-fill');
+  _clearSettingsCompactClasses();
 }
 
-function _onCompactMqlChange() {
+function _onSettingsViewportEvent() {
   _syncSettingsCompactLayout();
 }
 
 function _ensureSettingsCompactListener() {
-  if (_compactMql) return;
-  _compactMql = window.matchMedia(SETTINGS_COMPACT_MQ);
-  if (typeof _compactMql.addEventListener === 'function') {
-    _compactMql.addEventListener('change', _onCompactMqlChange);
-  } else {
-    _compactMql.addListener(_onCompactMqlChange);
-  }
+  if (_viewportListenersAttached) return;
+  _viewportListenersAttached = true;
+  window.addEventListener('resize', _onSettingsViewportEvent);
+  window.addEventListener('orientationchange', _onSettingsViewportEvent);
+  window.visualViewport?.addEventListener('resize', _onSettingsViewportEvent);
 }
 
-/** Sinhronizuje body/html klase sa stvarnom širinom prozora (posle rendera i pri resize/orijentaciji). */
+/** iOS / Safari: visualViewport često tačniji od matchMedia pri toolbar zoom / desktop mode. */
+function _readViewportWidth() {
+  if (typeof window === 'undefined') return SETTINGS_COMPACT_MAX_W + 1;
+  const vv = window.visualViewport;
+  const w = vv?.width ?? window.innerWidth;
+  const n = Math.round(w || window.innerWidth || 0);
+  return n > 0 ? n : SETTINGS_COMPACT_MAX_W + 1;
+}
+
+function _isSettingsCompactViewport() {
+  return _readViewportWidth() <= SETTINGS_COMPACT_MAX_W;
+}
+
+function _clearAppViewportInlineStyles() {
+  const app = document.getElementById('app');
+  if (!app) return;
+  ['display', 'flex-direction', 'min-height'].forEach(p => app.style.removeProperty(p));
+}
+
+/**
+ * Kompakt raspored: klase za legacy.css + inline !important da stariji keš CSS / konkurentni
+ * pravila ne mogu ponovo da prikažu sidebar ili sakriju padajući izbor.
+ */
 function _syncSettingsCompactLayout() {
   if (!_mountEl) return;
+  if (!canAccessPodesavanja()) return;
+
+  const compact = _isSettingsCompactViewport();
   const shell = _mountEl.querySelector('.set-shell');
-  const compact = typeof window !== 'undefined' && window.matchMedia(SETTINGS_COMPACT_MQ).matches;
+  const navWrap = _mountEl.querySelector('.set-nav-mobile-wrap');
+  const sidebar = _mountEl.querySelector('.set-sidebar');
+  const layout = _mountEl.querySelector('.set-layout');
+  const content = _mountEl.querySelector('.set-content');
+  const app = document.getElementById('app');
+
   document.body.classList.toggle('settings-layout-compact', compact);
   document.documentElement.classList.toggle('settings-html-fill', compact);
+
   if (shell) {
     shell.classList.toggle('set-shell--compact', compact);
-    const sidebar = shell.querySelector('.set-sidebar');
-    if (sidebar) sidebar.setAttribute('aria-hidden', compact ? 'true' : 'false');
+  }
+
+  if (sidebar) {
+    sidebar.setAttribute('aria-hidden', compact ? 'true' : 'false');
+    if (compact) {
+      sidebar.style.setProperty('display', 'none', 'important');
+      sidebar.style.setProperty('visibility', 'hidden', 'important');
+      sidebar.style.setProperty('width', '0', 'important');
+      sidebar.style.setProperty('min-width', '0', 'important');
+      sidebar.style.setProperty('margin', '0', 'important');
+      sidebar.style.setProperty('padding', '0', 'important');
+      sidebar.style.setProperty('overflow', 'hidden', 'important');
+      sidebar.style.setProperty('pointer-events', 'none', 'important');
+      sidebar.style.setProperty('flex', '0 0 0', 'important');
+      sidebar.style.setProperty('flex-shrink', '0', 'important');
+    } else {
+      ['display', 'visibility', 'width', 'min-width', 'margin', 'padding', 'overflow', 'pointer-events', 'flex', 'flex-shrink'].forEach(
+        p => sidebar.style.removeProperty(p),
+      );
+    }
+  }
+
+  if (navWrap) {
+    if (compact) {
+      navWrap.style.setProperty('display', 'flex', 'important');
+      navWrap.style.setProperty('flex-direction', 'column', 'important');
+      navWrap.style.setProperty('align-items', 'stretch', 'important');
+    } else {
+      ['display', 'flex-direction', 'align-items'].forEach(p => navWrap.style.removeProperty(p));
+    }
+  }
+
+  if (layout) {
+    if (compact) {
+      layout.style.setProperty('flex-direction', 'column', 'important');
+    } else {
+      layout.style.removeProperty('flex-direction');
+    }
+  }
+
+  if (content) {
+    if (compact) {
+      content.style.setProperty('width', '100%', 'important');
+      content.style.setProperty('max-width', '100%', 'important');
+      content.style.setProperty('min-width', '0', 'important');
+      content.style.setProperty('flex', '1 1 auto', 'important');
+    } else {
+      ['width', 'max-width', 'min-width', 'flex'].forEach(p => content.style.removeProperty(p));
+    }
+  }
+
+  if (shell) {
+    if (compact) {
+      shell.style.setProperty('display', 'flex', 'important');
+      shell.style.setProperty('flex-direction', 'column', 'important');
+      shell.style.setProperty('flex', '1 1 auto', 'important');
+      shell.style.setProperty('min-height', '-webkit-fill-available', 'important');
+      shell.style.setProperty('min-height', '100dvh', 'important');
+      shell.style.setProperty('height', 'auto', 'important');
+    } else {
+      ['display', 'flex-direction', 'flex', 'min-height', 'height'].forEach(p => shell.style.removeProperty(p));
+    }
+  }
+
+  if (app) {
+    if (compact) {
+      app.style.setProperty('display', 'flex', 'important');
+      app.style.setProperty('flex-direction', 'column', 'important');
+      app.style.setProperty('min-height', '-webkit-fill-available', 'important');
+      app.style.setProperty('min-height', '100dvh', 'important');
+    } else {
+      _clearAppViewportInlineStyles();
+    }
   }
 }
 
 function _clearSettingsCompactClasses() {
   document.body.classList.remove('settings-layout-compact');
   document.documentElement.classList.remove('settings-html-fill');
+  _clearAppViewportInlineStyles();
 }
 
 /* ── INTERNAL ─────────────────────────────────────────────────────────── */
@@ -236,6 +335,9 @@ function _renderShell() {
   _wireTabBody();
   _ensureSettingsCompactListener();
   _syncSettingsCompactLayout();
+  requestAnimationFrame(() => {
+    _syncSettingsCompactLayout();
+  });
 }
 
 function _sidebarGroupsHtml() {
