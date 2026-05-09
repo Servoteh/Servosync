@@ -35,6 +35,7 @@ import { parseDateLocal, today } from '../../lib/date.js';
 import { calcRisk, normalizePhaseType } from '../../lib/phase.js';
 import { buildDayRange, buildMonthsHeader } from '../../lib/gantt.js';
 import { wireGanttDrag } from './ganttDrag.js';
+import { sortProjectsForPredmetPrioritet } from '../../services/projects.js';
 
 /* WP group header palette (rotira) */
 const WP_HEADER_COLORS = ['#1f3a6e', '#1a3a1a', '#3a2800', '#2a0a2a', '#002a2a'];
@@ -110,7 +111,7 @@ export function wireTotalGanttSection(root, { onChange } = {}) {
 /* ── INTERNAL: filter UI ────────────────────────────────────────────── */
 
 function _filtersHtml() {
-  const projects = allData.projects || [];
+  const projects = sortProjectsForPredmetPrioritet(allData.projects || []);
   const projOpts = ['<option value="">Svi projekti</option>'].concat(
     projects.map(p => `<option value="${escHtml(p.id)}"${totalGanttFilters.projectId === p.id ? ' selected' : ''}>${escHtml(p.code)} — ${escHtml(p.name)}</option>`)
   ).join('');
@@ -145,7 +146,9 @@ function _filtersHtml() {
 }
 
 function _wpFilterHtml() {
-  const projects = (allData.projects || []).filter(p => !totalGanttFilters.projectId || p.id === totalGanttFilters.projectId);
+  const projects = sortProjectsForPredmetPrioritet(
+    (allData.projects || []).filter(p => !totalGanttFilters.projectId || p.id === totalGanttFilters.projectId),
+  );
   const allWPs = [];
   projects.forEach(p => (p.workPackages || []).forEach(wp => {
     allWPs.push({ wp, project: p });
@@ -183,7 +186,9 @@ function _toolbarHtml() {
 
 function _tableHtml() {
   const f = totalGanttFilters;
-  const projects = (allData.projects || []).filter(p => !f.projectId || p.id === f.projectId);
+  const projects = sortProjectsForPredmetPrioritet(
+    (allData.projects || []).filter(p => !f.projectId || p.id === f.projectId),
+  );
 
   const rows = [];
   projects.forEach(project => {

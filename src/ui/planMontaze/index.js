@@ -29,6 +29,7 @@ import {
   setActiveView,
 } from '../../state/planMontaze.js';
 import { fetchAllProjectsHierarchy } from '../../services/plan.js';
+import { sortProjectsForPredmetPrioritet } from '../../services/projects.js';
 import { planHeaderHtml, viewTabsHtml } from './shared.js';
 import { projectContextCardHtml, wireProjectBar } from './projectBar.js';
 import { openProjectMetaModal, openWpMetaModal } from './metaModals.js';
@@ -40,6 +41,7 @@ import { totalGanttSectionHtml, wireTotalGanttSection } from './totalGantt.js';
 import { mountStatusPanel, unmountStatusPanel } from './statusPanel.js';
 import { openExportDialog } from './exportModal.js';
 import { wireGanttScrollDock } from './ganttScrollDock.js';
+import { ensurePrioritetHydrated } from '../podesavanja/podesavanjePredmeta/prioritetService.js';
 
 let _mountEl = null;
 let _onLogoutCb = null;
@@ -54,6 +56,8 @@ export async function renderPlanMontazeModule(mountEl, options = {}) {
   _onLogoutCb = options.onLogout || null;
   _onBackToHubCb = options.onBackToHub || null;
 
+  await ensurePrioritetHydrated().catch(() => {});
+
   /* Ako još nemamo podatke u memoriji — bootstrap. */
   if (!allData.projects?.length) {
     bootstrapFromLocalCache();
@@ -63,6 +67,8 @@ export async function renderPlanMontazeModule(mountEl, options = {}) {
     ensureLocationColorsForProjects();
     ensurePeopleFromProjects();
   }
+
+  _applyPredmetPrioritetProjectOrder();
 
   _renderShell();
 
@@ -93,6 +99,13 @@ export async function renderPlanMontazeModule(mountEl, options = {}) {
 export function teardownPlanMontazeModule() {
   unmountStatusPanel();
   if (_authUnsubscribe) { _authUnsubscribe(); _authUnsubscribe = null; }
+}
+
+function _applyPredmetPrioritetProjectOrder() {
+  if (!allData.projects?.length) return;
+  const sorted = sortProjectsForPredmetPrioritet(allData.projects);
+  allData.projects.length = 0;
+  sorted.forEach(p => allData.projects.push(p));
 }
 
 /* ── INTERNAL: render + wire ─────────────────────────────────────────── */

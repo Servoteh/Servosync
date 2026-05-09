@@ -21,6 +21,7 @@ import {
   stopPbIzvestajiSpeech,
   pbErrorMessage,
 } from './shared.js';
+import { sortProjectsForPredmetPrioritet } from '../../services/projects.js';
 import { renderPlanTab } from './planTab.js';
 import { renderKanbanTab } from './kanbanTab.js';
 import { renderGanttTab } from './ganttTab.js';
@@ -131,7 +132,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         pbSafe('tasks', getPbTasks({ ...projFilter, ...engFilter })),
       ]);
 
-      projects = rProj.data;
+      projects = sortProjectsForPredmetPrioritet(rProj.data);
       engineers = rEng.data;
       tasks = rTasks.data;
 

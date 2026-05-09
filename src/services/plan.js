@@ -23,6 +23,7 @@ import {
   deletePhaseFromDb,
   deleteWorkPackageFromDb,
   deleteProjectFromDb,
+  sortProjectsForPredmetPrioritet,
 } from './projects.js';
 import { canEdit, getIsOnline } from '../state/auth.js';
 import {
@@ -108,9 +109,10 @@ export async function fetchAllProjectsHierarchy() {
     const wps = await loadAllProjectData(p.id);
     p.workPackages = wps || [];
   }
-  /* Replace allData.projects in place tako da getteri vide novi state. */
+  /* Replace allData.projects — isti redosled kao ⭐ prioritet u podešavanjima predmeta. */
+  const sorted = sortProjectsForPredmetPrioritet(projects);
   allData.projects.length = 0;
-  projects.forEach(p => allData.projects.push(p));
+  sorted.forEach(p => allData.projects.push(p));
   allData.projects.forEach(ensureProjectLocations);
   ensureLocationColorsForProjects();
   ensurePeopleFromProjects();

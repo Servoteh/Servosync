@@ -6,10 +6,8 @@ import { sbReqThrow } from './supabase.js';
 import { ensureSessionFresh, refreshSessionNow } from './auth.js';
 import { SUPABASE_CONFIG, hasSupabaseConfig } from '../lib/constants.js';
 import { getCurrentUser, getIsOnline } from '../state/auth.js';
-import {
-  ensurePrioritetHydrated,
-  sortByPredmetPrioritet,
-} from '../ui/podesavanja/podesavanjePredmeta/prioritetService.js';
+import { ensurePrioritetHydrated } from '../ui/podesavanja/podesavanjePredmeta/prioritetService.js';
+import { sortProjectsForPredmetPrioritet } from './projects.js';
 
 /** @returns {string|null} */
 function actorEmail() {
@@ -76,9 +74,7 @@ export async function getPbProjects() {
   await ensurePrioritetHydrated().catch(() => {});
   const data = await sbReqThrow('rpc/pb_list_projects', 'POST', {});
   const rows = Array.isArray(data) ? data : [];
-  return sortByPredmetPrioritet(rows, r => r.predmet_item_id, (a, b) =>
-    String(a.project_code || '').localeCompare(String(b.project_code || ''), 'sr'),
-  );
+  return sortProjectsForPredmetPrioritet(rows);
 }
 
 /**

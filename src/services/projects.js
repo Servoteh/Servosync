@@ -19,6 +19,40 @@ import {
   sortByPredmetPrioritet,
 } from '../ui/podesavanja/podesavanjePredmeta/prioritetService.js';
 
+/** `bigtehn_items_cache.id` na projektu (Plan montaže) ili `predmet_item_id` sa RPC reda (PB). */
+export function getPredmetItemIdFromProjectRow(p) {
+  if (!p || typeof p !== 'object') return null;
+  const a = p.predmetItemId;
+  if (a != null) {
+    const n = Number(a);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  const b = p.predmet_item_id;
+  if (b != null) {
+    const n = Number(b);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  return null;
+}
+
+/**
+ * Redosled kao u Podešavanjima predmeta (⭐ prioritet), pa šifra projekta.
+ * @template T
+ * @param {T[]} list
+ * @returns {T[]}
+ */
+export function sortProjectsForPredmetPrioritet(list) {
+  return sortByPredmetPrioritet(
+    Array.isArray(list) ? [...list] : [],
+    getPredmetItemIdFromProjectRow,
+    (a, b) =>
+      String(a?.project_code ?? a?.code ?? '').localeCompare(
+        String(b?.project_code ?? b?.code ?? ''),
+        'sr',
+      ),
+  );
+}
+
 let phaseTypeSchemaSupported = true;
 
 export function setPhaseTypeSchemaSupported(v) {
@@ -218,9 +252,7 @@ export async function loadProjectsFromDb() {
       predmet_item_id: row.predmet_item_id,
     }),
   );
-  return sortByPredmetPrioritet(mapped, r => r.predmetItemId, (a, b) =>
-    String(a.code || '').localeCompare(String(b.code || ''), 'sr'),
-  );
+  return sortProjectsForPredmetPrioritet(mapped);
 }
 
 export async function loadWorkPackagesFromDb(projectId) {

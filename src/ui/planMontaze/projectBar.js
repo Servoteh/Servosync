@@ -13,6 +13,7 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { canEdit, isLeadPM, getIsOnline } from '../../state/auth.js';
+import { sortProjectsForPredmetPrioritet } from '../../services/projects.js';
 import {
   allData,
   planMontazeState,
@@ -41,7 +42,7 @@ let onChangeCb = null;
 /** Jedna kartica: projekat + pozicije + glavni crtež sklopa (samo HTML). */
 export function projectContextCardHtml() {
   const p = getActiveProject();
-  const opts = (allData.projects || [])
+  const opts = sortProjectsForPredmetPrioritet(allData.projects || [])
     .map(pr => `<option value="${escHtml(pr.id)}"${pr.id === planMontazeState.activeProjectId ? ' selected' : ''}>${escHtml(pr.code)} — ${escHtml(pr.name)}</option>`)
     .join('');
   const isAdmin = canEdit();
