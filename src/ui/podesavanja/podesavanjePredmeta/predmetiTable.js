@@ -90,7 +90,7 @@ export function renderPredmetiTable() {
       </select>
     </div>
     <div class="mnt-table-wrap" style="overflow:auto;max-height:70vh">
-      <table class="mnt-table" style="font-size:13px;min-width:780px">
+      <table class="mnt-table" style="font-size:13px;min-width:980px">
         <thead>
           <tr>
             <th style="width:40px;text-align:center" title="Prioritet (top 10 — prikazuju se prvi u svim pregledima)">⭐</th>
@@ -98,12 +98,13 @@ export function renderPredmetiTable() {
             <th>Naziv</th>
             <th>Komitent</th>
             <th style="width:64px;text-align:center">Aktivan</th>
+            <th style="width:120px;text-align:center;line-height:1.25" title="Kasnije: vidljivost u modulima projektovanja i plana montaže (uz Aktivan)">Projektovanje<br>i montaža</th>
             <th>Poslednja izmena</th>
             <th>Napomena</th>
           </tr>
         </thead>
         <tbody>
-          ${list.length ? list.map(r => _rowHtml(r, prioIds)).join('') : `<tr><td colspan="7" class="mnt-muted">Nema redova za filter.</td></tr>`}
+          ${list.length ? list.map(r => _rowHtml(r, prioIds)).join('') : `<tr><td colspan="8" class="mnt-muted">Nema redova za filter.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -130,6 +131,7 @@ function _prioritetLegendHtml(prioIds) {
 function _rowHtml(r, prioIds) {
   const id = Number(r.item_id);
   const chk = r.je_aktivan ? 'checked' : '';
+  const chkPm = r.je_projektovanje_montaza ? 'checked' : '';
   const who = r.azurirao_email ? escHtml(r.azurirao_email) : '—';
   const when = formatAt(r.azurirano_at);
   const nap = r.napomena != null && String(r.napomena).trim() !== '' ? escHtml(String(r.napomena)) : '—';
@@ -158,6 +160,7 @@ function _rowHtml(r, prioIds) {
     <td>${escHtml(String(r.naziv_predmeta || ''))}</td>
     <td>${escHtml(String(r.customer_name || ''))}</td>
     <td style="text-align:center"><label class="mnt-toggle"><input type="checkbox" data-pred-akt-toggle="${id}" ${chk} aria-label="Aktivan"></label></td>
+    <td style="text-align:center"><label class="mnt-toggle"><input type="checkbox" data-pred-proj-toggle="${id}" ${chkPm} aria-label="Projektovanje i montaža"></label></td>
     <td style="white-space:nowrap;font-size:12px">${who}<br><span class="mnt-muted">${when}</span></td>
     <td><button type="button" class="kadr-action-btn" data-pred-akt-nap="${id}" title="Izmeni napomenu">${nap}</button></td>
   </tr>`;
@@ -208,6 +211,39 @@ export function wirePredmetiTable(root, opts = {}) {
       if (ok == null) {
         if (prev) prev.je_aktivan = oldAkt;
         input.checked = oldAkt;
+        showToast('Snimanje nije uspelo (proveri dozvolu ili mrežu).');
+        return;
+      }
+      showToast('Sačuvano');
+      onChanged?.();
+    });
+  });
+
+  /* Projektovanje i montaža — poseban flag (filtriranje u drugim modulima naknadno) */
+  root.querySelectorAll('[data-pred-proj-toggle]').forEach(el => {
+    el.addEventListener('change', async ev => {
+      const input = ev.target;
+      if (!(input instanceof HTMLInputElement) || input.type !== 'checkbox') return;
+      const id = Number(input.getAttribute('data-pred-proj-toggle'));
+      const next = input.checked;
+      const prev = findRow(id);
+      const oldPm = !!prev?.je_projektovanje_montaza;
+      input.checked = oldPm;
+      const sif = prev ? String(prev.broj_predmeta || '').trim() : '';
+      const naz = prev ? String(prev.naziv_predmeta || '').trim() : '';
+      const opis = [sif || `#${id}`, naz].filter(Boolean).join(' — ');
+      const akcija = next ? 'uključite' : 'isključite';
+      const potvrdi = window.confirm(
+        `Da li želite da ${akcija} predmet za projektovanje i montažu?\n\n${opis}\n\n` +
+          'U modulima projektovanja i plana montaže videće se samo predmeti koji su aktivni i ovde uključeni (kad ti moduli budu vezani za ovu opciju).\n\nNastaviti?'
+      );
+      if (!potvrdi) return;
+      input.checked = next;
+      if (prev) prev.je_projektovanje_montaza = next;
+      const ok = await setPredmetAktivacija(id, !!prev?.je_aktivan, undefined, next);
+      if (ok == null) {
+        if (prev) prev.je_projektovanje_montaza = oldPm;
+        input.checked = oldPm;
         showToast('Snimanje nije uspelo (proveri dozvolu ili mrežu).');
         return;
       }

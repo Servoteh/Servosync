@@ -228,7 +228,12 @@ function _cleanEnvUrl(v) {
   if (!s) return '';
   try {
     const u = new URL(s.includes('://') ? s : `https://${s}`);
-    return `${u.protocol}//${u.host}`;
+    const host = u.host;
+    /* HTTPS stranica + http://*.supabase.co → browser blokira (mixed content) → „Failed to fetch”. */
+    if (host.endsWith('.supabase.co') || host === 'supabase.co') {
+      return `https://${host}`;
+    }
+    return `${u.protocol}//${host}`;
   } catch {
     s = s.replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
     return s;

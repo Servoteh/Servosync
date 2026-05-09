@@ -223,7 +223,7 @@ export async function softDeletePbTask(id) {
   );
 }
 
-export async function getPbLoadStats(windowDays = 30) {
+export async function getPbLoadStats(windowDays = 20) {
   if (!getIsOnline()) return [];
   const body = { window_days: windowDays };
   const data = await sbReqThrow('rpc/pb_get_load_stats', 'POST', body);

@@ -29,15 +29,19 @@ export async function listPredmetAktivacijaAdmin() {
  * @param {number} itemId
  * @param {boolean} aktivan
  * @param {string|null|undefined} napomena null = ne menja postojeću
+ * @param {boolean|undefined} projektovanjeMontaza undefined = ne menja flag
  * @returns {Promise<boolean|null>} true uspeh, null greška
  */
-export async function setPredmetAktivacija(itemId, aktivan, napomena = undefined) {
+export async function setPredmetAktivacija(itemId, aktivan, napomena = undefined, projektovanjeMontaza = undefined) {
   assertOnline();
   const id = Number(itemId);
   if (!Number.isFinite(id) || id <= 0) throw new Error('Neispravan ID predmeta.');
   const body = { p_item_id: id, p_aktivan: !!aktivan };
   if (napomena !== undefined) {
     body.p_napomena = napomena === null || napomena === '' ? null : String(napomena);
+  }
+  if (projektovanjeMontaza !== undefined) {
+    body.p_projektovanje_montaza = !!projektovanjeMontaza;
   }
   const res = await sbReq('rpc/set_predmet_aktivacija', 'POST', body, { upsert: false });
   if (res == null) return null;

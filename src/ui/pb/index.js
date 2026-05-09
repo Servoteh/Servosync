@@ -126,7 +126,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       }
       void mountActiveTab();
     } catch (err) {
-      const msg = err?.message || 'Greška pri učitavanju';
+      const msg = pbErrorMessage(err) || 'Greška pri učitavanju';
       if (body) {
         body.classList.remove('pb-tab-body--loading');
         body.removeAttribute('aria-busy');

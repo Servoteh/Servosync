@@ -444,6 +444,14 @@ body.module-projektni-biro {
   color: #f07178;
 }
 
+.pb-alarm--green {
+  color: #1e8449;
+}
+
+[data-theme="dark"] .pb-alarm--green {
+  color: #6fcf97;
+}
+
 /* == LOAD SECTION (collapsible) == */
 
 .pb-load-section {
@@ -906,6 +914,22 @@ body.module-projektni-biro {
   font: inherit;
   padding: 0;
   text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+
+.pb-th-label {
+  display: inline-block;
+}
+
+.pb-th-unit {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text3, #9ca3af);
+  margin-top: 1px;
 }
 
 .pb-done {
@@ -1014,6 +1038,19 @@ body.module-projektni-biro {
 .pb-icon-btn--danger:hover {
   background: rgba(235, 87, 87, 0.1);
   color: #c0392b;
+}
+
+.pb-act-prob--active {
+  color: var(--risk-high, #EB5757);
+}
+
+.pb-act-prob--active:hover {
+  background: rgba(235, 87, 87, 0.12);
+  color: #c0392b;
+}
+
+[data-theme="dark"] .pb-act-prob--active {
+  color: #f07178;
 }
 
 .pb-row-actions {

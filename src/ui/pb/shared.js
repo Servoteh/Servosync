@@ -267,15 +267,33 @@ export function stopPbIzvestajiSpeech() {
   pbIzvestajiSpeechRec = null;
 }
 
+/** Chrome / Edge / standard; Firefox; Safari; ime tipa. */
+const PB_NETWORK_ERR_RE = /failed to fetch|networkerror|load failed|err_network|internet.*disconnected/i;
+
+const PB_NO_INTERNET_HINT =
+  'Nema internet veze ili je mreža nestabilna — proverite Wi‑Fi ili mobilne podatke, pa pokušajte ponovo.'
+  + ' Ako ste na poslovnoj mreži, firewall ili VPN mogu da blokiraju pristup serveru.';
+
 /**
  * Poruka za korisnika iz greške backend-a ili mreže.
  * @param {unknown} err
  */
 export function pbErrorMessage(err) {
   if (err == null) return 'Nepoznata greška';
-  if (typeof err === 'string') return err;
-  if (typeof err === 'object' && err !== null && 'message' in err && err.message) {
-    return String((/** @type {{ message?: string }} */ (err)).message);
+  if (typeof err === 'string') {
+    return PB_NETWORK_ERR_RE.test(err) ? PB_NO_INTERNET_HINT : err;
+  }
+  if (typeof err === 'object' && err !== null) {
+    const code = Object.prototype.hasOwnProperty.call(err, 'code')
+      ? String((/** @type {{ code?: unknown }} */ (err)).code ?? '')
+      : '';
+    const msg = 'message' in err && /** @type {{ message?: unknown }} */ (err).message != null
+      ? String((/** @type {{ message?: unknown }} */ (err)).message)
+      : '';
+    if (code === 'NETWORK' || PB_NETWORK_ERR_RE.test(msg)) {
+      return PB_NO_INTERNET_HINT;
+    }
+    if (msg) return msg;
   }
   return String(err);
 }

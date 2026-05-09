@@ -76,6 +76,7 @@ function filterTasks(tasks, f) {
   if (f.prioritet && f.prioritet !== 'all') list = list.filter(t => t.prioritet === f.prioritet);
   if (!f.showDone) list = list.filter(t => t.status !== 'Završeno');
   if (f.problemOnly) list = list.filter(t => String(t.problem || '').trim().length > 0);
+  if (f.unassignedOnly) list = list.filter(t => !t.employee_id);
   return list;
 }
 
@@ -115,6 +116,7 @@ function buildAlarms(tasks, loadRows) {
     const done = t.status === 'Završeno';
     const planEnd = parseYmd(t.datum_zavrsetka_plan);
     const planStart = parseYmd(t.datum_pocetka_plan);
+    const realEnd = parseYmd(t.datum_zavrsetka_real);
     if (!done && planEnd) {
       const days = Math.round((startOfDay(planEnd) - today) / 86400000);
       if (days < 0) alarms.push({ level: 'red', text: `Rok prošao: ${t.naziv || '(bez naziva)'}` });
@@ -128,6 +130,13 @@ function buildAlarms(tasks, loadRows) {
     }
     if (!done && planStart && startOfDay(planStart) < today && !t.employee_id) {
       alarms.push({ level: 'red', text: `Počelo bez inženjera: ${t.naziv || ''}` });
+    }
+    if (done && realEnd && planEnd) {
+      const onTime = startOfDay(realEnd) <= startOfDay(planEnd);
+      const sinceFinish = Math.round((today - startOfDay(realEnd)) / 86400000);
+      if (onTime && sinceFinish >= 0 && sinceFinish <= 1) {
+        alarms.push({ level: 'green', text: `Završen u roku: ${t.naziv || ''}` });
+      }
     }
   }
   const seenLoad = new Set();
@@ -154,6 +163,7 @@ export function renderPlanTab(root, ctx) {
     prioritet: 'all',
     showDone: pbMod.moduleShowDone ?? false,
     problemOnly: false,
+    unassignedOnly: false,
   };
   let sortCol = 'datumi';
   let sortDir = 'asc';
@@ -236,7 +246,8 @@ export function renderPlanTab(root, ctx) {
 
     /* ── Filter toolbar ── */
     const hasActiveFilter = filters.status !== 'all' || filters.vrsta !== 'all'
-      || filters.prioritet !== 'all' || filters.problemOnly || filters.showDone || filters.search;
+      || filters.prioritet !== 'all' || filters.problemOnly || filters.unassignedOnly
+      || filters.showDone || filters.search;
 
     const filterHtml = `
       <div class="pb-filter-toolbar">
@@ -269,6 +280,7 @@ export function renderPlanTab(root, ctx) {
           <span class="pb-ft-label">&nbsp;</span>
           <div class="pb-ft-toggles">
             <button type="button" class="pb-ft-toggle ${filters.problemOnly ? 'active' : ''}" id="pbFProb">⚠ Problemi</button>
+            <button type="button" class="pb-ft-toggle ${filters.unassignedOnly ? 'active' : ''}" id="pbFUnassigned">⊘ Ne dodeljeni</button>
             <button type="button" class="pb-ft-toggle ${filters.showDone ? 'active' : ''}" id="pbFDoneBtn">☐ Završeni</button>
           </div>
         </div>
@@ -312,17 +324,18 @@ export function renderPlanTab(root, ctx) {
           <div class="pb-card-actions">
             ${canEdit ? `<button type="button" class="btn btn-sm pb-act-edit" data-id="${escHtml(t.id)}">✏ Izmeni</button>` : ''}
             <button type="button" class="btn btn-sm pb-act-desc" data-id="${escHtml(t.id)}">📄 Opis</button>
-            ${canEdit ? `<button type="button" class="btn btn-sm pb-act-prob" data-id="${escHtml(t.id)}">⚠ Problem</button>` : ''}
+            ${canEdit ? `<button type="button" class="btn btn-sm pb-act-prob ${String(t.problem || '').trim() ? 'pb-act-prob--active' : ''}" data-id="${escHtml(t.id)}">⚠ Problem</button>` : ''}
             ${canEdit ? `<button type="button" class="btn btn-sm pb-act-del" data-id="${escHtml(t.id)}">✕ Briši</button>` : ''}
           </div>
         </article>`;
     }).join('');
 
     /* ── Desktop table ── */
-    const th = (col, label) => {
+    const th = (col, label, unit) => {
       const active = sortCol === col;
       const arrow = active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
-      return `<th scope="col"><button type="button" class="pb-th" data-sort="${escHtml(col)}">${escHtml(label)}${arrow}</button></th>`;
+      const unitHtml = unit ? `<small class="pb-th-unit">${escHtml(unit)}</small>` : '';
+      return `<th scope="col"><button type="button" class="pb-th" data-sort="${escHtml(col)}"><span class="pb-th-label">${escHtml(label)}${arrow}</span>${unitHtml}</button></th>`;
     };
 
     const rowsHtml = sorted.map((t, i) => {
@@ -343,6 +356,7 @@ export function renderPlanTab(root, ctx) {
           ${hasReal ? `<div class="pb-td-dates-real"><span class="pb-date-lbl pb-date-lbl--real">OSTVAREN</span> ${escHtml(fmtDate(t.datum_pocetka_real))} <span class="pb-date-sep">→</span> ${escHtml(fmtDate(t.datum_zavrsetka_real))}</div>` : ''}
         </td>
         <td>${wd != null ? wd : '—'}</td>
+        <td>${Number(t.norma_sati_dan) || 0}</td>
         <td><span class="${statusBadgeClass(t.status)}">${escHtml(t.status || '')}</span></td>
         <td class="pb-td-pct">
           <div class="pb-pct-wrap">
@@ -351,11 +365,10 @@ export function renderPlanTab(root, ctx) {
           </div>
         </td>
         <td><span class="${prioClass(t.prioritet)}">${escHtml(t.prioritet || '')}</span></td>
-        <td>${Number(t.norma_sati_dan) || 0}</td>
         <td class="pb-row-actions">
           ${canEdit ? `<button type="button" class="pb-icon-btn pb-act-edit" data-id="${escHtml(t.id)}" title="Izmeni">✏</button>` : ''}
           <button type="button" class="pb-icon-btn pb-act-desc" data-id="${escHtml(t.id)}" title="Opis">📄</button>
-          ${canEdit ? `<button type="button" class="pb-icon-btn pb-act-prob" data-id="${escHtml(t.id)}" title="Problem">⚠</button>` : ''}
+          ${canEdit ? `<button type="button" class="pb-icon-btn pb-act-prob ${String(t.problem || '').trim() ? 'pb-act-prob--active' : ''}" data-id="${escHtml(t.id)}" title="${String(t.problem || '').trim() ? 'Problem aktivan' : 'Problem'}">⚠</button>` : ''}
           ${canEdit ? `<button type="button" class="pb-icon-btn pb-icon-btn--danger pb-act-del" data-id="${escHtml(t.id)}" title="Briši">✕</button>` : ''}
         </td>
       </tr>`;
@@ -378,11 +391,11 @@ export function renderPlanTab(root, ctx) {
                 ${th('engineer', 'Inženjer')}
                 ${th('vrsta', 'Vrsta')}
                 ${th('datumi', 'Datumi')}
-                ${th('trajanje', 'Trajanje')}
+                ${th('trajanje', 'Trajanje', 'dan')}
+                ${th('norma', 'Norma', 'h/dan')}
                 ${th('status', 'Status')}
                 ${th('pct', '%')}
                 ${th('prio', 'Prioritet')}
-                ${th('norma', 'Norma')}
                 <th></th>
               </tr></thead>
               <tbody>${rowsHtml || ''}</tbody>
@@ -415,8 +428,9 @@ export function renderPlanTab(root, ctx) {
       paint();
     });
     root.querySelector('#pbFProb')?.addEventListener('click', () => { filters.problemOnly = !filters.problemOnly; paint(); });
+    root.querySelector('#pbFUnassigned')?.addEventListener('click', () => { filters.unassignedOnly = !filters.unassignedOnly; paint(); });
     root.querySelector('#pbFReset')?.addEventListener('click', () => {
-      filters = { search: '', status: 'all', vrsta: 'all', prioritet: 'all', showDone: false, problemOnly: false };
+      filters = { search: '', status: 'all', vrsta: 'all', prioritet: 'all', showDone: false, problemOnly: false, unassignedOnly: false };
       syncPbModuleFilters({ moduleSearch: '', moduleShowDone: false });
       paint();
     });
