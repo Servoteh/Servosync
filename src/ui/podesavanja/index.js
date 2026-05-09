@@ -360,8 +360,8 @@ function _sidebarGroupsHtml() {
                   data-set-tab="${escHtml(it.id)}"
                   role="menuitem"
                   aria-current="${isActive ? 'page' : 'false'}">
-            <span aria-hidden="true">${it.icon}</span>
-            ${escHtml(it.label)}
+            <span class="set-sidebar-item-icon" aria-hidden="true">${it.icon}</span>
+            <span class="set-sidebar-item-label">${escHtml(it.label)}</span>
             ${badgeHtml}
           </button>`;
       }).join('')}
