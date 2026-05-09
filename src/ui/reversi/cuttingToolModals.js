@@ -12,6 +12,9 @@ import {
   insertCuttingTool,
   updateCuttingTool,
   fetchCuttingToolStockDetails,
+  fetchActiveLocations,
+  getMagacinLocationId,
+  seedCuttingToolStock,
 } from '../../services/reversiService.js';
 import { buildTspCuttingToolLabelProgram } from '../../lib/tspl2.js';
 import { dispatchOptionalNetworkLabelPrint } from '../lokacije/labelsPrint.js';
@@ -66,6 +69,10 @@ export function openAddCuttingToolModal(opts = {}) {
     napomena: opts.tool?.napomena || '',
     machineSearch: '',
     machines: [],
+    /* Inicijalni stock (samo na NEW, ne na edit) */
+    initialQty: '',
+    initialLocationId: '',
+    locations: [],
   };
 
   const overlay = modalShell(
@@ -84,6 +91,13 @@ export function openAddCuttingToolModal(opts = {}) {
     const r = await fetchMachines({ search: q });
     state.machines = r.ok && Array.isArray(r.data) ? r.data : [];
     machinesLoaded = true;
+  }
+
+  async function loadLocationsAndDefault() {
+    if (editing) return;
+    const [locRes, magId] = await Promise.all([fetchActiveLocations(), getMagacinLocationId()]);
+    state.locations = locRes.ok && Array.isArray(locRes.data) ? locRes.data : [];
+    if (magId && !state.initialLocationId) state.initialLocationId = magId;
   }
 
   function paint() {
@@ -151,6 +165,31 @@ export function openAddCuttingToolModal(opts = {}) {
         <label>Napomena
           <textarea id="revCtsNote" rows="2" class="input">${escHtml(state.napomena)}</textarea>
         </label>
+        ${
+          editing
+            ? ''
+            : `
+        <fieldset class="rev-fieldset">
+          <legend>Početno stanje (opciono)</legend>
+          <div class="rev-form-grid">
+            <label>Količina
+              <input type="number" id="revCtsInitQty" class="input" min="0" step="1" placeholder="0" value="${escHtml(String(state.initialQty || ''))}"/>
+            </label>
+            <label>Lokacija
+              <select id="revCtsInitLoc" class="rev-select">
+                <option value="">— izaberi —</option>
+                ${state.locations
+                  .map(
+                    (l) =>
+                      `<option value="${escHtml(l.id)}" ${state.initialLocationId === l.id ? 'selected' : ''}>${escHtml(l.location_code)} ${escHtml(l.name || '')}</option>`,
+                  )
+                  .join('')}
+              </select>
+            </label>
+          </div>
+          <p class="rev-muted" style="font-size:11px;margin:4px 0 0">Ako uneseš količinu, biće odmah upisana u stanje na izabranoj lokaciji (default: ALAT-MAG-01).</p>
+        </fieldset>`
+        }
       </div>`;
 
     foot.innerHTML = `
@@ -181,6 +220,12 @@ export function openAddCuttingToolModal(opts = {}) {
     });
     body.querySelector('#revCtsNote')?.addEventListener('input', (e) => {
       state.napomena = e.target.value;
+    });
+    body.querySelector('#revCtsInitQty')?.addEventListener('input', (e) => {
+      state.initialQty = e.target.value;
+    });
+    body.querySelector('#revCtsInitLoc')?.addEventListener('change', (e) => {
+      state.initialLocationId = e.target.value;
     });
     body.querySelector('#revCtsMSearch')?.addEventListener('input', (e) => {
       state.machineSearch = e.target.value;
@@ -241,7 +286,18 @@ export function openAddCuttingToolModal(opts = {}) {
             showToast(`Greška: ${r.error}`);
             return;
           }
-          showToast(`Šifra dodata: ${r.data.barcode}`);
+          /* Inicijalni stock — ako je uneta količina i lokacija */
+          const initQty = Math.max(0, Math.floor(Number(state.initialQty) || 0));
+          if (initQty > 0 && state.initialLocationId) {
+            const seed = await seedCuttingToolStock(r.data.id, state.initialLocationId, initQty);
+            if (!seed.ok) {
+              showToast(`Šifra dodata: ${r.data.barcode}, ali seed je pao: ${seed.error}`);
+            } else {
+              showToast(`✓ Šifra ${r.data.barcode} + ${initQty} ${payload.unit} u magacinu`);
+            }
+          } else {
+            showToast(`Šifra dodata: ${r.data.barcode}`);
+          }
           opts.onSuccess?.(r.data);
         }
         overlay.remove();
@@ -252,8 +308,7 @@ export function openAddCuttingToolModal(opts = {}) {
   }
 
   paint();
-  void loadMachines('').then(() => {
-    if (!machinesLoaded) return;
+  void Promise.all([loadMachines(''), loadLocationsAndDefault()]).then(() => {
     paint();
   });
 }

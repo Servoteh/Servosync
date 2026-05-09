@@ -13,6 +13,63 @@
 -- ============================================================
 
 -- ------------------------------------------------------------
+-- 0. Self-healing helper-i (ako prethodne migracije nisu primenjene
+--    ili je funkcija nestala). Sve idempotentno.
+-- ------------------------------------------------------------
+
+-- touch_updated_at() — ako fali (treba da postoji iz add_maintenance_module.sql)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'touch_updated_at'
+  ) THEN
+    CREATE OR REPLACE FUNCTION public.touch_updated_at()
+    RETURNS TRIGGER AS $f$
+    BEGIN NEW.updated_at := now(); RETURN NEW; END;
+    $f$ LANGUAGE plpgsql;
+  END IF;
+END$$;
+
+-- rev_current_employee_id() — ako fali (treba da postoji iz add_reversi_module.sql)
+CREATE OR REPLACE FUNCTION public.rev_current_employee_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT id
+  FROM public.employees
+  WHERE lower(email) = lower(auth.jwt() ->> 'email')
+    AND is_active IS TRUE
+  LIMIT 1;
+$$;
+
+REVOKE ALL ON FUNCTION public.rev_current_employee_id() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rev_current_employee_id() TO authenticated;
+
+-- rev_can_manage() — ako fali (treba da postoji iz add_reversi_module.sql)
+CREATE OR REPLACE FUNCTION public.rev_can_manage()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM user_roles
+    WHERE lower(email) = lower(auth.jwt() ->> 'email')
+      AND role IN ('admin', 'menadzment', 'pm', 'leadpm', 'magacioner')
+      AND (is_active IS NULL OR is_active = true)
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.rev_can_manage() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rev_can_manage() TO authenticated;
+
+-- ------------------------------------------------------------
 -- 1. employees.card_barcode — Code128 sa fizičke kartice radnika
 -- ------------------------------------------------------------
 
@@ -429,6 +486,46 @@ REVOKE ALL ON FUNCTION public.rev_cts_apply_delta(uuid, uuid, numeric) FROM PUBL
 
 COMMENT ON FUNCTION public.rev_cts_apply_delta(uuid, uuid, numeric) IS
   'UPSERT balance reznog alata po lokaciji. Zove se isključivo iz rev_issue_cutting_reversal i rev_confirm_cutting_return. Negativan delta dekrementuje, pozitivan inkrementuje.';
+
+-- ------------------------------------------------------------
+-- 9.b RPC: rev_cutting_tool_seed_stock — magacioner inicijalni stock
+-- ------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.rev_cutting_tool_seed_stock(
+  p_catalog_id  uuid,
+  p_location_id uuid,
+  p_qty         numeric
+)
+RETURNS numeric
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_new numeric;
+BEGIN
+  IF NOT rev_can_manage() THEN
+    RAISE EXCEPTION 'Nemate pravo da menjate stanje reznog alata.'
+      USING ERRCODE = '42501';
+  END IF;
+  IF p_catalog_id IS NULL OR p_location_id IS NULL THEN
+    RAISE EXCEPTION 'catalog_id i location_id su obavezni.';
+  END IF;
+  IF COALESCE(p_qty, 0) <= 0 THEN
+    RAISE EXCEPTION 'Količina za seed mora biti > 0 (dobijeno: %).', p_qty;
+  END IF;
+
+  v_new := public.rev_cts_apply_delta(p_catalog_id, p_location_id, p_qty);
+
+  RETURN v_new;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.rev_cutting_tool_seed_stock(uuid, uuid, numeric) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.rev_cutting_tool_seed_stock(uuid, uuid, numeric) TO authenticated;
+
+COMMENT ON FUNCTION public.rev_cutting_tool_seed_stock(uuid, uuid, numeric) IS
+  'Magacioner unosi inicijalno stanje reznog alata na lokaciju (npr. ALAT-MAG-01). Samo pozitivna količina; samo rev_can_manage() role.';
 
 -- ------------------------------------------------------------
 -- 10. RPC: rev_issue_cutting_reversal(jsonb)

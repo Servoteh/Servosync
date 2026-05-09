@@ -592,6 +592,24 @@ export async function updateCuttingTool(id, patch) {
   })();
 }
 
+/**
+ * Magacioner unosi inicijalno stanje reznog alata na lokaciju (najčešće ALAT-MAG-01).
+ * @param {string} catalogId
+ * @param {string} locationId
+ * @param {number} qty pozitivan broj
+ */
+export async function seedCuttingToolStock(catalogId, locationId, qty) {
+  return wrap(async () => {
+    const raw = await sbReqThrow(
+      'rpc/rev_cutting_tool_seed_stock',
+      'POST',
+      { p_catalog_id: catalogId, p_location_id: locationId, p_qty: qty },
+      { upsert: false },
+    );
+    return raw;
+  })();
+}
+
 export async function issueCuttingReversal(payload) {
   return wrap(async () => {
     const raw = await sbReqThrow('rpc/rev_issue_cutting_reversal', 'POST', { p_payload: payload }, { upsert: false });
