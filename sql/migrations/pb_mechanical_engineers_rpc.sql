@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- PB — lista inženjera za filter čipove
--- Uključuje: Mašinsko projektovanje + PM tim (Projekti) + imenovani zaposleni
+-- Uključuje: Mašinsko projektovanje + Hidraulika + Rukovodstvo inž. + PM tim + imenovani
 -- Isti predikat kao pb_get_load_stats u pb_load_stats_mechanical_engineering.sql
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -38,6 +38,15 @@ AS $$
         )
         AND lower(trim(coalesce(e.department, ''))) LIKE '%projektovanje%'
       )
+      -- 1c. Hidraulika i Rukovodstvo inženjeringa (Inženjering i projektovanje)
+      OR EXISTS (
+        SELECT 1
+        FROM public.sub_departments sd_ip
+        INNER JOIN public.departments d_ip ON d_ip.id = sd_ip.department_id
+        WHERE sd_ip.id = e.sub_department_id
+          AND d_ip.name = 'Inženjering i projektovanje'
+          AND sd_ip.name IN ('Hidraulika i algoritmi', 'Rukovodstvo inženjeringa')
+      )
       -- 2. PM tim (Projekti departman) — via sub_department FK
       OR EXISTS (
         SELECT 1
@@ -71,15 +80,24 @@ AS $$
         'milorad jerotic',
         'slaviša radosavljević',
         'slavisa radosavljevic',
+        'radosavljević slaviša',
+        'radosavljevic slavisa',
+        'radisavljević slaviša',
+        'radisavljevic slavisa',
+        'slaviša radisavljević',
         'igor voštić',
-        'igor vostic'
+        'igor vostic',
+        'voštić igor',
+        'vostic igor',
+        'gnjidić tatjana',
+        'tatjana gnjidić'
       )
     )
   ORDER BY e.full_name ASC;
 $$;
 
 COMMENT ON FUNCTION public.pb_get_mechanical_projecting_engineers() IS
-  'Projektni biro — aktivni zaposleni: Mašinsko projektovanje + PM tim (LEAD PM/PM) + imenički dodati';
+  'Projektni biro — aktivni zaposleni: Mašinsko projektovanje + Hidraulika + Rukovodstvo inž. + PM tim (LEAD PM/PM) + imenički';
 
 REVOKE ALL ON FUNCTION public.pb_get_mechanical_projecting_engineers() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.pb_get_mechanical_projecting_engineers() TO authenticated;
