@@ -15,6 +15,24 @@ import { getCurrentUser } from '../state/auth.js';
 
 export { hasSupabaseConfig };
 
+/** Skraćeno telo odgovora za konzolu (PostgREST JSON ili plain tekst). */
+function sbErrBodySnippet(txt, max = 700) {
+  const s = (txt ?? '').trim();
+  if (!s) return '(prazno telo)';
+  try {
+    const j = JSON.parse(s);
+    if (j && typeof j === 'object') {
+      const parts = ['message', 'code', 'details', 'hint']
+        .map(k => (j[k] != null && String(j[k]).trim() !== '' ? `${k}=${String(j[k]).slice(0, 200)}` : null))
+        .filter(Boolean);
+      if (parts.length) return parts.join(' | ');
+    }
+  } catch {
+    /* plain tekst */
+  }
+  return s.length <= max ? s : `${s.slice(0, max)}…`;
+}
+
 export function getSupabaseUrl() {
   return SUPABASE_CONFIG.url;
 }
@@ -79,7 +97,7 @@ export async function sbReq(path, method = 'GET', body = null, options = {}) {
     });
     const txt = await r.text();
     if (!r.ok) {
-      console.error('SB err', { path, method, status: r.status, body: txt });
+      console.error(`SB err ${method} ${path} HTTP ${r.status}: ${sbErrBodySnippet(txt)}`);
       return options.withCount ? { rows: null, total: null } : null;
     }
     /* PostgREST ponekad vrati prazno telo uz 2xx (npr. 204); ranije je to bilo kao greška (null). */
@@ -96,13 +114,10 @@ export async function sbReq(path, method = 'GET', body = null, options = {}) {
       try {
         parsed = JSON.parse(txt);
       } catch (parseErr) {
-        console.error('SB JSON parse err', {
-          path,
-          method,
-          status: r.status,
-          body: txt,
+        console.error(
+          `SB JSON parse err ${method} ${path} HTTP ${r.status}: ${sbErrBodySnippet(txt)}`,
           parseErr,
-        });
+        );
         return options.withCount ? { rows: null, total: null } : null;
       }
     }
@@ -113,7 +128,7 @@ export async function sbReq(path, method = 'GET', body = null, options = {}) {
     }
     return parsed;
   } catch (e) {
-    console.error('SB fetch failed', { path, method, error: e });
+    console.error(`SB fetch failed ${method} ${path}: ${e instanceof Error ? e.message : String(e)}`);
     return options.withCount ? { rows: null, total: null } : null;
   }
 }
