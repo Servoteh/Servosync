@@ -64,6 +64,16 @@ __pycache__/
 .claude/
 .cursorrules
 
+# Cursor lokalni export-i / privremeni artefakti (ne pravila u .cursor/rules ako ih tracked)
+.cursor/legacy-mdb-export/
+.cursor/rev-design-zip/
+.cursor_exec_part1.json
+.cursor_mig_*.json
+.cursor_rev_chunk_*.sql
+.cursor_rev_part*.sql
+.cursor_seg_*.sql
+.cursor_tmp_reversi_mig.json
+
 # Data export fajlovi (generisani, ne idu u git)
 /docs/reports/employees_*.csv
 /docs/reports/employees_*.xlsx
