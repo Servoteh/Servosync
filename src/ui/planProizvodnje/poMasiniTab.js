@@ -67,6 +67,7 @@ import {
 } from '../../services/drawings.js';
 import { openDrawingManager } from './drawingManager.js';
 import { openTechProcedureModal } from './techProcedureModal.js';
+import { openWhyBottleneckModal, teardownWhyBottleneckModal } from './whyBottleneckModal.js';
 import {
   DEPARTMENTS,
   DEPARTMENTS_ROW_1,
@@ -152,6 +153,7 @@ export async function renderPoMasiniTab(host, { canEdit }) {
 }
 
 export function teardownPoMasiniTab() {
+  teardownWhyBottleneckModal();
   state.host = null;
   state.allMachines = [];
   state.rows = [];
@@ -1168,6 +1170,12 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
       <td>
         <div class="pp-row-actions">
           <button type="button"
+                  class="pp-mini-action pp-why-btn"
+                  data-action="why-bottleneck"
+                  title="Objašnjenje redosleda, uskih grla i konteksta (bez novog izračuna u pozadini)">
+            Zašto?
+          </button>
+          <button type="button"
                   class="pp-mini-action ${r.is_urgent ? 'is-danger' : ''}"
                   data-action="toggle-urgent"
                   ${state.canEdit ? '' : 'disabled'}
@@ -1294,6 +1302,10 @@ function wireRows(wrap, { allowDragDrop }) {
 
   wrap.querySelectorAll('button[data-action="open-tech-procedure"]').forEach(btn => {
     btn.addEventListener('click', () => onOpenTechProcedure(btn));
+  });
+
+  wrap.querySelectorAll('button[data-action="why-bottleneck"]').forEach(btn => {
+    btn.addEventListener('click', () => onWhyBottleneck(btn));
   });
 
   if (allowDragDrop && state.canEdit) {
@@ -1501,6 +1513,19 @@ async function onOpenBigtehnDrawing(btn) {
     showToast('Greška pri otvaranju PDF-a.');
     console.error('[onOpenBigtehnDrawing]', e);
   }
+}
+
+/**
+ * „Zašto ovde?" — čita postojeća polja reda (v_production_operations*), bez novog API-ja.
+ */
+async function onWhyBottleneck(btn) {
+  const tr = btn.closest('tr');
+  if (!tr) return;
+  const woId = Number(tr.dataset.wo);
+  const lineId = Number(tr.dataset.line);
+  const row = state.rows.find(r => r.work_order_id === woId && r.line_id === lineId);
+  if (!row) return;
+  await openWhyBottleneckModal(row);
 }
 
 /**
