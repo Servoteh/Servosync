@@ -147,8 +147,12 @@ function buildAlarms(tasks, loadRows) {
     }
     if (done && realEnd && planEnd) {
       const onTime = startOfDay(realEnd) <= startOfDay(planEnd);
-      const sinceFinish = Math.round((today - startOfDay(realEnd)) / 86400000);
-      if (onTime && sinceFinish >= 0 && sinceFinish <= 1) {
+      const realEndDay = startOfDay(realEnd);
+      // Zeleni alarm samo dan-završetka i prvi sledeći radni dan (preskoči vikend).
+      const isToday = realEndDay.getTime() === today.getTime();
+      const wd = countWorkdaysBetween(realEndDay, today);
+      const isNextWorkday = !isToday && wd != null && wd <= 2 && realEndDay < today;
+      if (onTime && (isToday || isNextWorkday)) {
         reasons.push('završen u roku');
         level = 'green';
       }
@@ -187,6 +191,19 @@ export function renderPlanTab(root, ctx) {
   let sortCol = 'datumi';
   let sortDir = 'asc';
   let _searchDebounceTimer = null;
+  let _statsScope = pbMod.moduleStatsScope || 'global'; // 'global' | 'filtered'
+  let _delegationAttached = false;
+  const _mqMobile = window.matchMedia('(max-width: 767px)');
+  let _isMobile = _mqMobile.matches;
+  const _mqListener = e => {
+    if (!root.isConnected) {
+      _mqMobile.removeEventListener('change', _mqListener);
+      return;
+    }
+    _isMobile = e.matches;
+    paint();
+  };
+  _mqMobile.addEventListener('change', _mqListener);
 
   function filtered() {
     return filterTasks(ctx.tasks || [], filters);
@@ -215,21 +232,29 @@ export function renderPlanTab(root, ctx) {
     const sorted = sortTasks(tasks, sortCol, sortDir);
     const alarms = buildAlarms(ctx.tasks || [], ctx.loadStats || []);
 
-    const total = tasks.length;
-    const doneN = tasks.filter(t => t.status === 'Završeno').length;
+    const statsBase = _statsScope === 'filtered' ? tasks : (ctx.tasks || []);
+    const total = statsBase.length;
+    const doneN = statsBase.filter(t => t.status === 'Završeno').length;
     const pctDone = total ? Math.round((doneN / total) * 100) : 0;
-    const blockedN = tasks.filter(t => t.status === 'Blokirano').length;
-    const normSum = tasks
+    const blockedN = statsBase.filter(t => t.status === 'Blokirano').length;
+    const inProgN = statsBase.filter(t => t.status === 'U toku').length;
+    const normSum = statsBase
       .filter(t => t.status !== 'Završeno')
       .reduce((s, t) => s + (Number(t.norma_sati_dan) || 0), 0);
 
     /* ── Stat cards ── */
+    const scopeLabel = _statsScope === 'filtered' ? 'filtrirano' : 'globalno';
     const statsHtml = `
+      <div class="pb-stats-header">
+        <button type="button" class="pb-stats-scope-toggle" id="pbStatsScope" title="Promeni opseg statistike">
+          ${escHtml(scopeLabel)} ⇄
+        </button>
+      </div>
       <div class="pb-stats-grid">
         <div class="pb-stat-card">
           <span>Zadaci</span>
           <strong>${total}</strong>
-          <small class="pb-stat-sub">u toku: ${tasks.filter(t => t.status === 'U toku').length}</small>
+          <small class="pb-stat-sub">u toku: ${inProgN}</small>
         </div>
         <div class="pb-stat-card">
           <span>Završeno</span>
@@ -330,7 +355,7 @@ export function renderPlanTab(root, ctx) {
       </div>`;
 
     /* ── Mobile cards ── */
-    const cardsHtml = sorted.map(t => {
+    const cardsHtml = !_isMobile ? '' : sorted.map(t => {
       const strike = t.status === 'Završeno' ? ' style="text-decoration:line-through;opacity:.85"' : '';
       const projLabel = [t.project_code, t.project_name].filter(Boolean).join(' — ');
       const wd = countWorkdaysBetween(t.datum_pocetka_plan, t.datum_zavrsetka_plan);
@@ -376,7 +401,7 @@ export function renderPlanTab(root, ctx) {
       return `<th scope="col"><button type="button" class="pb-th" data-sort="${escHtml(col)}"><span class="pb-th-label">${escHtml(label)}${arrow}</span>${unitHtml}</button></th>`;
     };
 
-    const rowsHtml = sorted.map((t, i) => {
+    const rowsHtml = _isMobile ? '' : sorted.map((t, i) => {
       const wd = countWorkdaysBetween(t.datum_pocetka_plan, t.datum_zavrsetka_plan);
       const proj = [t.project_code, t.project_name].filter(Boolean).join(' ');
       const strike = t.status === 'Završeno' ? ' class="pb-done"' : '';
@@ -412,6 +437,32 @@ export function renderPlanTab(root, ctx) {
       </tr>`;
     }).join('');
 
+    const mobileBody = _isMobile
+      ? `<div class="pb-cards-wrap">${cardsHtml || '<p class="pb-muted">Nema zadataka za filter.</p>'}</div>`
+      : '';
+    const desktopBody = !_isMobile
+      ? `<div class="pb-table-wrap">
+          <div class="pb-table-container">
+            <table class="pb-table">
+              <thead><tr>
+                <th>#</th>
+                ${th('naziv', 'Naziv zadatka')}
+                ${th('project', 'Projekat')}
+                ${th('engineer', 'Inženjer')}
+                ${th('vrsta', 'Vrsta')}
+                ${th('datumi', 'Datumi')}
+                ${th('trajanje', 'Trajanje', 'dan')}
+                ${th('norma', 'Norma', 'h/dan')}
+                ${th('status', 'Status')}
+                ${th('pct', '%')}
+                ${th('prio', 'Prioritet')}
+                <th></th>
+              </tr></thead>
+              <tbody>${rowsHtml || `<tr><td colspan="12" class="pb-muted" style="text-align:center;padding:20px">Nema zadataka za filter.</td></tr>`}</tbody>
+            </table>
+          </div>
+        </div>`
+      : '';
     preserveFocus(() => {
       root.innerHTML = `
         ${statsHtml}
@@ -419,28 +470,8 @@ export function renderPlanTab(root, ctx) {
         ${loadHtml}
         ${filterHtml}
         <div class="pb-plan-split">
-          <div class="pb-cards-wrap">${cardsHtml || '<p class="pb-muted">Nema zadataka za filter.</p>'}</div>
-          <div class="pb-table-wrap">
-            <div class="pb-table-container">
-              <table class="pb-table">
-                <thead><tr>
-                  <th>#</th>
-                  ${th('naziv', 'Naziv zadatka')}
-                  ${th('project', 'Projekat')}
-                  ${th('engineer', 'Inženjer')}
-                  ${th('vrsta', 'Vrsta')}
-                  ${th('datumi', 'Datumi')}
-                  ${th('trajanje', 'Trajanje', 'dan')}
-                  ${th('norma', 'Norma', 'h/dan')}
-                  ${th('status', 'Status')}
-                  ${th('pct', '%')}
-                  ${th('prio', 'Prioritet')}
-                  <th></th>
-                </tr></thead>
-                <tbody>${rowsHtml || ''}</tbody>
-              </table>
-            </div>
-          </div>
+          ${mobileBody}
+          ${desktopBody}
         </div>`;
     });
 
@@ -452,6 +483,12 @@ export function renderPlanTab(root, ctx) {
       const chevron = root.querySelector('.pb-load-chevron');
       content?.classList.toggle('open', _loadOpen);
       chevron?.classList.toggle('open', _loadOpen);
+    });
+
+    root.querySelector('#pbStatsScope')?.addEventListener('click', () => {
+      _statsScope = _statsScope === 'global' ? 'filtered' : 'global';
+      syncPbModuleFilters({ moduleStatsScope: _statsScope });
+      paint();
     });
 
     root.querySelector('#pbSearch')?.addEventListener('input', e => {
@@ -514,20 +551,26 @@ export function renderPlanTab(root, ctx) {
       });
     });
 
+    if (!_delegationAttached) {
+      attachRootDelegation();
+      _delegationAttached = true;
+    }
+  }
+
+  /** Event delegation za sve dugmad u tabeli/karticama — postavlja se jednom. */
+  function attachRootDelegation() {
     const findTask = id => (ctx.tasks || []).find(x => x.id === id);
 
-    root.querySelectorAll('.pb-act-edit').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const task = findTask(btn.getAttribute('data-id'));
-        if (!task) return;
-        openTaskEditorModal({ task, projects: ctx.projects, engineers: ctx.engineers, canEdit, onSaved: () => ctx.onRefresh?.() });
-      });
-    });
+    root.addEventListener('click', e => {
+      const btn = e.target.closest('button[data-id]');
+      if (!btn || !root.contains(btn)) return;
+      const taskId = btn.getAttribute('data-id');
+      const task = findTask(taskId);
+      if (!task) return;
 
-    root.querySelectorAll('.pb-act-desc').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const task = findTask(btn.getAttribute('data-id'));
-        if (!task) return;
+      if (btn.classList.contains('pb-act-edit')) {
+        openTaskEditorModal({ task, projects: ctx.projects, engineers: ctx.engineers, canEdit, onSaved: () => ctx.onRefresh?.() });
+      } else if (btn.classList.contains('pb-act-desc')) {
         openTextAreaModal({
           title: 'Opis zadatka',
           initial: task.opis || '',
@@ -538,13 +581,7 @@ export function renderPlanTab(root, ctx) {
             if (ok) { showToast('Opis sačuvan'); ctx.onRefresh?.(); } else showToast('Greška');
           },
         });
-      });
-    });
-
-    root.querySelectorAll('.pb-act-prob').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const task = findTask(btn.getAttribute('data-id'));
-        if (!task) return;
+      } else if (btn.classList.contains('pb-act-prob')) {
         openTextAreaModal({
           title: 'Problem / prepreka',
           initial: task.problem || '',
@@ -556,13 +593,9 @@ export function renderPlanTab(root, ctx) {
             if (ok) { showToast('Problem sačuvan'); ctx.onRefresh?.(); } else showToast('Greška');
           },
         });
-      });
-    });
-
-    root.querySelectorAll('.pb-act-del').forEach(btn => {
-      btn.addEventListener('click', () => {
-        confirmDeletePbTask(btn.getAttribute('data-id'), () => ctx.onRefresh?.());
-      });
+      } else if (btn.classList.contains('pb-act-del')) {
+        confirmDeletePbTask(taskId, () => ctx.onRefresh?.());
+      }
     });
   }
 

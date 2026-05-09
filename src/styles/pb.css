@@ -365,6 +365,30 @@ body.module-projektni-biro {
 
 /* == STAT CARDS (kompaktne mini kartice) == */
 
+.pb-stats-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.pb-stats-scope-toggle {
+  background: transparent;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  color: var(--text2, #6b7280);
+  cursor: pointer;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pb-stats-scope-toggle:hover {
+  background: var(--surface3, #f3f4f6);
+  color: var(--text, #111);
+}
+
 .pb-stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
