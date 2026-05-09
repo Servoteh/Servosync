@@ -199,8 +199,17 @@ export function buildPhasePayload(ph, projectId, wpId, sortOrder) {
 /* ── Loaders ── */
 export async function loadProjectsFromDb() {
   if (!getIsOnline()) return null;
-  const data = await sbReq('projects?select=*&order=created_at');
-  return data ? data.map(mapDbProject) : null;
+  /* Isti skup kao Projektni biro: aktivni predmeti sa projektovanjem/montažom (RPC). */
+  const data = await sbReq('rpc/pb_list_projects', 'POST', {});
+  if (!Array.isArray(data)) return null;
+  return data.map(row =>
+    mapDbProject({
+      id: row.id,
+      project_code: row.project_code,
+      project_name: row.project_name,
+      status: row.status || 'active',
+    }),
+  );
 }
 
 export async function loadWorkPackagesFromDb(projectId) {
