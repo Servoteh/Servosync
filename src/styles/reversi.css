@@ -1487,3 +1487,35 @@ html[data-theme='light'] .rev-stat-card--teal .rev-stat-value {
     padding: 10px 10px 80px;
   }
 }
+
+/* ─── Sub-tab strip (Sprint RZ-5) ──────────────────────────────────── */
+
+.module-reversi .rev-subtab-strip {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0 12px;
+  border-bottom: 1px solid var(--rev-border, #e0e0e0);
+  padding: 0 8px;
+}
+
+.module-reversi .rev-subtab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--rev-muted, #666);
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+
+.module-reversi .rev-subtab:hover {
+  color: var(--rev-accent, #4a8fc7);
+}
+
+.module-reversi .rev-subtab.is-active {
+  color: var(--rev-accent, #4a8fc7);
+  border-bottom-color: var(--rev-accent, #4a8fc7);
+  font-weight: 600;
+}

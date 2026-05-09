@@ -34,15 +34,19 @@ import {
   openCuttingToolReturnScannerModal,
 } from './cuttingToolScannerModal.js';
 import { renderMojaZaduzenjaTab, teardownMojaZaduzenjaTab } from './mojaZaduzenja.js';
+import { renderMagacinTab, teardownMagacinTab } from './magacinTab.js';
+import { teardownCuttingByViews } from './cuttingByViews.js';
 import { rowsToCsv, CSV_BOM, parseCsv } from '../../lib/csv.js';
 
 const ICON_TAB_ZAD = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14h6"/><path d="M9 18h6"/></svg>`;
 const ICON_TAB_INV = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>`;
 const ICON_TAB_RZN = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 010 1.4l-1 1-3-3 1-1a1 1 0 011.4 0l1.6 1.6z"/><path d="M11 7L4 14v3h3l7-7"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`;
 const ICON_TAB_MOJ = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+const ICON_TAB_MAG = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4"/><path d="M12 11v10"/></svg>`;
 
 const TABS = [
   { id: 'moja', label: 'Moja zaduženja' },
+  { id: 'magacin', label: 'Magacin' },
   { id: 'zaduzenja', label: 'Zaduženja' },
   { id: 'inventar', label: 'Inventar alata i opreme' },
   { id: 'rezni-alat', label: 'Rezni alat' },
@@ -192,6 +196,8 @@ export function teardownReversiModule() {
   mountRoot = null;
   teardownReznialatTab();
   teardownMojaZaduzenjaTab();
+  teardownMagacinTab();
+  teardownCuttingByViews();
 }
 
 /**
@@ -339,6 +345,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
             const icon = t.id === 'zaduzenja' ? ICON_TAB_ZAD
               : t.id === 'inventar' ? ICON_TAB_INV
               : t.id === 'rezni-alat' ? ICON_TAB_RZN
+              : t.id === 'magacin' ? ICON_TAB_MAG
               : ICON_TAB_MOJ;
             const cnt = t.id === 'zaduzenja' ? tabCountZ
               : t.id === 'inventar' ? tabCountI
@@ -410,6 +417,11 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
 
     if (activeTab === 'moja') {
       await renderMojaZaduzenjaTab(body);
+      return;
+    }
+
+    if (activeTab === 'magacin') {
+      await renderMagacinTab(body);
       return;
     }
 

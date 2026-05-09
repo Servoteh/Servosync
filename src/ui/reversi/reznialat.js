@@ -5,6 +5,7 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { canManageReversi } from '../../state/auth.js';
+import { ssGet, ssSet } from '../../lib/storage.js';
 import {
   fetchCuttingToolCatalog,
   fetchMachines,
@@ -14,6 +15,14 @@ import {
   openCuttingToolDetailsModal,
   printCuttingToolLabel,
 } from './cuttingToolModals.js';
+import { renderByMachineSubview, renderByEmployeeSubview } from './cuttingByViews.js';
+
+const SUB_TAB_KEY = 'sess:rev_rzn_sub_tab';
+const SUB_TABS = [
+  { id: 'katalog', label: 'Katalog' },
+  { id: 'masine', label: 'Po mašinama' },
+  { id: 'zaposleni', label: 'Po zaposlenima' },
+];
 
 const PAGE = 25;
 
@@ -261,6 +270,28 @@ function bindEvents(refreshAll) {
   });
 }
 
+function subTabStripHtml(active) {
+  return `<nav class="rev-subtab-strip" role="tablist">
+    ${SUB_TABS.map(
+      (t) => `<button type="button" role="tab" class="rev-subtab ${t.id === active ? 'is-active' : ''}" data-rzn-sub="${escHtml(t.id)}">${escHtml(t.label)}</button>`,
+    ).join('')}
+  </nav>`;
+}
+
+async function renderKatalogSubview(body, refreshAll) {
+  await ensureMachines();
+  await load();
+  const subHost = body.querySelector('#revRznSubHost');
+  if (!subHost) return;
+  subHost.innerHTML = `
+    <div class="rev-print-area">
+    <p class="rev-module-hint"><strong>Rezni alat — katalog</strong>: jedna šifra → količina po lokaciji. Stanje na mašinama se gomila iz svih aktivnih reversa za tu šifru.</p>
+    ${renderToolbar()}
+    <div id="revRznTableHost">${renderTable()}</div>
+    </div>`;
+  bindEvents(refreshAll);
+}
+
 /**
  * @param {HTMLElement} body Mount tačka (#revTabBody iz reversi/index.js)
  * @param {{ onIssueScan?: () => void, onReturnScan?: () => void }} [opts]
@@ -272,21 +303,42 @@ export async function renderReznialatTab(body, opts = {}) {
 
   body.innerHTML = '<div class="rev-loading-card">Učitavanje reznog alata…</div>';
 
-  await ensureMachines();
-  await load();
+  let activeSub = ssGet(SUB_TAB_KEY, 'katalog') || 'katalog';
+  if (!SUB_TABS.find((t) => t.id === activeSub)) activeSub = 'katalog';
 
-  const refreshAll = async () => {
-    await load();
-    body.innerHTML = `
-      <div class="rev-print-area">
-      <p class="rev-module-hint"><strong>Rezni alat</strong>: jedna šifra → količina po lokaciji. Stanje na mašinama (kolona „Na mašinama“) se gomila iz svih aktivnih reversa za tu šifru.</p>
-      ${renderToolbar()}
-      <div id="revRznTableHost">${renderTable()}</div>
-      </div>`;
-    bindEvents(refreshAll);
+  const renderShell = () => {
+    body.innerHTML = `${subTabStripHtml(activeSub)}<div id="revRznSubHost"></div>`;
+    body.querySelectorAll('[data-rzn-sub]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        activeSub = btn.getAttribute('data-rzn-sub') || 'katalog';
+        ssSet(SUB_TAB_KEY, activeSub);
+        renderShell();
+        void renderActiveSub();
+      });
+    });
+    /* Sub-host se popunjava asinhrono */
   };
 
-  await refreshAll();
+  const refreshKatalog = async () => {
+    state.offset = 0;
+    await renderKatalogSubview(body, refreshKatalog);
+  };
+
+  const renderActiveSub = async () => {
+    const subHost = body.querySelector('#revRznSubHost');
+    if (!subHost) return;
+    subHost.innerHTML = '<div class="rev-loading-card">Učitavanje…</div>';
+    if (activeSub === 'masine') {
+      await renderByMachineSubview(subHost);
+    } else if (activeSub === 'zaposleni') {
+      await renderByEmployeeSubview(subHost);
+    } else {
+      await renderKatalogSubview(body, refreshKatalog);
+    }
+  };
+
+  renderShell();
+  await renderActiveSub();
 }
 
 /** Cleanup state when module unmounts. */
