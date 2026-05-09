@@ -37,6 +37,9 @@ sql/migrations/add_maintenance_module.sql
 sql/migrations/add_reversi_module.sql
 sql/migrations/add_reversi_reversal_pdf_storage.sql
 sql/migrations/add_reversi_cutting_tools.sql
+# BigTehn artikli mirror (R_Artikli + lookup tabele) — referenciraju rev_tools / rev_cutting_tool_catalog,
+# pa mora posle add_reversi_cutting_tools.sql.
+sql/migrations/add_bigtehn_artikli_cache.sql
 
 # Sastanci — baza + RLS hardening + prefs/draft/lock/RPC koje pokrivaju pgTAP testovi
 sql/migrations/add_sastanci_module.sql
