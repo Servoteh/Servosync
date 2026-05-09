@@ -16,6 +16,7 @@ import {
   fetchMyMachinesCuttingTools,
 } from '../../services/reversiService.js';
 import { openCuttingToolReturnScannerModal } from './cuttingToolScannerModal.js';
+import { formatRevAssetKind } from '../../lib/revAssetKind.js';
 
 let bodyRoot = null;
 
@@ -41,6 +42,7 @@ function handToolCard(r) {
     </header>
     <div class="rev-mz-card-body">
       <div class="rev-mz-name">${escHtml(r.naziv || '')}</div>
+      ${r.asset_kind ? `<div class="rev-mz-meta">${escHtml(formatRevAssetKind(r.asset_kind))}</div>` : ''}
       ${r.serijski_broj ? `<div class="rev-mz-meta">SN: ${escHtml(r.serijski_broj)}</div>` : ''}
       ${r.pribor ? `<div class="rev-mz-meta">Pribor: ${escHtml(r.pribor)}</div>` : ''}
     </div>

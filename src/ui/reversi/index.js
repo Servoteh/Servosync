@@ -1,5 +1,5 @@
 /**
- * Reversi modul — zaduženja alata / kooperacija.
+ * Reversi modul — zaduženja alata, radne odeće, zaštitne obuće, LZO i kooperacija.
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
@@ -37,6 +37,7 @@ import { renderMojaZaduzenjaTab, teardownMojaZaduzenjaTab } from './mojaZaduzenj
 import { renderMagacinTab, teardownMagacinTab } from './magacinTab.js';
 import { teardownCuttingByViews } from './cuttingByViews.js';
 import { rowsToCsv, CSV_BOM, parseCsv } from '../../lib/csv.js';
+import { formatRevAssetKind, parseRevAssetKindCsv, REV_ASSET_KIND_OPTIONS, REV_ASSET_KIND_LABEL } from '../../lib/revAssetKind.js';
 
 const ICON_TAB_ZAD = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14h6"/><path d="M9 18h6"/></svg>`;
 const ICON_TAB_INV = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>`;
@@ -223,7 +224,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
     doc_type: '',
     issuedMonth: ssGet(`sess:${STORAGE_KEYS.REVERSI_ISSUED_MONTH}`, '') || '',
   };
-  let toolFilters = { status: 'active', search: '' };
+  let toolFilters = { status: 'active', search: '', asset_kind: 'ALL' };
   let docsTotal = null;
   let toolsTotal = null;
   let tabCountZ = null;
@@ -253,7 +254,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
       const num = d?.doc_number != null ? String(d.doc_number) : '';
       zad = num ? `Na reversu ${num}` : 'Na reversu';
     }
-    return [t.oznaka, t.naziv, st.text, zad];
+    return [t.oznaka, formatRevAssetKind(t.asset_kind), t.naziv, st.text, zad];
   }
 
   async function runToolCsvImport(text) {
@@ -271,6 +272,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
     const iSn = csvPickColumn(headers, ['serijski_broj', 'serijski broj', 'sn', 'serial']);
     const iDt = csvPickColumn(headers, ['datum_kupovine', 'datum kupovine']);
     const iNo = csvPickColumn(headers, ['napomena', 'note']);
+    const iKind = csvPickColumn(headers, ['asset_kind', 'klasa', 'vrsta', 'kategorija', 'tip_stavke']);
     let ok = 0;
     let fail = 0;
     const magId = magacinId || (await getMagacinLocationId());
@@ -284,6 +286,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
       const row = {
         oznaka: oz,
         naziv: nz,
+        asset_kind: parseRevAssetKindCsv(iKind >= 0 ? r[iKind] : ''),
         serijski_broj: iSn >= 0 ? r[iSn]?.trim() || null : null,
         datum_kupovine: iDt >= 0 ? r[iDt]?.trim() || null : null,
         napomena: iNo >= 0 ? r[iNo]?.trim() || null : null,
@@ -326,7 +329,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
               <div class="rev-brand-icon" aria-hidden="true">↻</div>
               <div class="rev-brand-text">
                 <h1 class="rev-brand-title">Reversi</h1>
-                <span class="rev-brand-sub">Alati i oprema</span>
+                <span class="rev-brand-sub">Alat, radna odeća, cipele i zaštitna oprema</span>
               </div>
             </div>
           </div>
@@ -750,6 +753,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
       fetchTools({
         status: toolFilters.status,
         search: toolFilters.search,
+        asset_kind: toolFilters.asset_kind,
         limit: PAGE,
         offset: toolsOffset,
       }),
@@ -819,6 +823,16 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
           <input type="search" id="revToolSearch" class="rev-input rev-input--search" placeholder="npr. AL-001 ili naziv alata…" value="${escHtml(toolFilters.search)}"/>
         </div>
         <div class="rev-field">
+          <label class="rev-field-label">Klasa stavke</label>
+          <select id="revToolKind" class="rev-select">
+            <option value="ALL" ${toolFilters.asset_kind === 'ALL' || !toolFilters.asset_kind ? 'selected' : ''}>Sve</option>
+            ${REV_ASSET_KIND_OPTIONS.map(
+              (k) =>
+                `<option value="${escHtml(k)}" ${toolFilters.asset_kind === k ? 'selected' : ''}>${escHtml(REV_ASSET_KIND_LABEL[k])}</option>`,
+            ).join('')}
+          </select>
+        </div>
+        <div class="rev-field">
           <label class="rev-field-label">Status u evidenciji</label>
           <select id="revToolSt" class="rev-select">
             <option value="active" ${toolFilters.status === 'active' ? 'selected' : ''}>Aktivan (može se izdati)</option>
@@ -857,7 +871,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
         <div class="rev-table-shell">
           <table class="rev-data-table">
             <thead><tr>
-              <th>Oznaka</th><th>Naziv / opis</th><th>Zaduženje i lokacija</th><th>Status jedinice</th><th class="rev-th-actions">Akcije</th>
+              <th>Oznaka</th><th>Klasa</th><th>Naziv / opis</th><th>Zaduženje i lokacija</th><th>Status jedinice</th><th class="rev-th-actions">Akcije</th>
             </tr></thead>
             <tbody>${trows
               .map((t) => {
@@ -867,6 +881,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
                 const showZaduži = canManageReversi() && !issued && t.status === 'active';
                 return `<tr>
                   <td class="rev-mono rev-strong">${escHtml(t.oznaka)}</td>
+                  <td><span class="rev-pill rev-pill--muted rev-pill--sm">${escHtml(formatRevAssetKind(t.asset_kind))}</span></td>
                   <td>${escHtml(t.naziv)}</td>
                   <td>${iss}</td>
                   <td><span class="rev-pill ${st.cls} rev-pill--sm">${escHtml(st.text)}</span></td>
@@ -943,13 +958,19 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
         showToast('Nema redova za izvoz');
         return;
       }
-      const headers = ['Oznaka', 'Naziv', 'Status jedinice', 'Zaduženje / lokacija'];
+      const headers = ['Oznaka', 'Klasa', 'Naziv', 'Status jedinice', 'Zaduženje / lokacija'];
       const data = trows.map((t) => toolExportRow(t));
       const st = toolFilters.status || 'svi';
       downloadCsv(`reversi-inventar-${st}.csv`, rowsToCsv(headers, data));
     });
     body.querySelector('#revToolSt')?.addEventListener('change', (e) => {
       toolFilters.status = e.target.value;
+      toolsOffset = 0;
+      accumulatedTools = [];
+      void refreshBody();
+    });
+    body.querySelector('#revToolKind')?.addEventListener('change', (e) => {
+      toolFilters.asset_kind = e.target.value;
       toolsOffset = 0;
       accumulatedTools = [];
       void refreshBody();

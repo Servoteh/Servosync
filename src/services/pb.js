@@ -3,8 +3,13 @@
  */
 
 import { sbReqThrow } from './supabase.js';
+import { ensureSessionFresh, refreshSessionNow } from './auth.js';
 import { SUPABASE_CONFIG, hasSupabaseConfig } from '../lib/constants.js';
 import { getCurrentUser, getIsOnline } from '../state/auth.js';
+import {
+  ensurePrioritetHydrated,
+  sortByPredmetPrioritet,
+} from '../ui/podesavanja/podesavanjePredmeta/prioritetService.js';
 
 /** @returns {string|null} */
 function actorEmail() {
@@ -68,8 +73,12 @@ function assertValidTaskInput(data, partial) {
  */
 export async function getPbProjects() {
   if (!getIsOnline()) return [];
+  await ensurePrioritetHydrated().catch(() => {});
   const data = await sbReqThrow('rpc/pb_list_projects', 'POST', {});
-  return Array.isArray(data) ? data : [];
+  const rows = Array.isArray(data) ? data : [];
+  return sortByPredmetPrioritet(rows, r => r.predmet_item_id, (a, b) =>
+    String(a.project_code || '').localeCompare(String(b.project_code || ''), 'sr'),
+  );
 }
 
 /**
@@ -171,22 +180,49 @@ export async function quickUpdatePbTaskStatus(id, newStatus) {
 async function patchPbTasksResponse(path, payload) {
   if (!hasSupabaseConfig()) return { ok: false, status: 0 };
 
-  const user = getCurrentUser();
-  const token = user?._token || SUPABASE_CONFIG.anonKey;
-  const headers = {
-    'Content-Type': 'application/json',
-    'apikey': SUPABASE_CONFIG.anonKey,
-    'Authorization': `Bearer ${token}`,
-    Prefer: 'return=representation',
+  await ensureSessionFresh();
+
+  const headersBase = () => {
+    const user = getCurrentUser();
+    const token = user?._token || SUPABASE_CONFIG.anonKey;
+    return {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_CONFIG.anonKey,
+      'Authorization': `Bearer ${token}`,
+      Prefer: 'return=representation',
+    };
   };
 
+  function looksJwtExpired(status, txt) {
+    if (status !== 401) return false;
+    const raw = String(txt || '').toLowerCase();
+    if (raw.includes('jwt expired') || raw.includes('token expired')) return true;
+    try {
+      const j = JSON.parse(txt);
+      const m = String(j?.message || '').toLowerCase();
+      return m.includes('jwt expired') || m.includes('token expired');
+    } catch {
+      return false;
+    }
+  }
+
   try {
-    const r = await fetch(SUPABASE_CONFIG.url + '/rest/v1/' + path, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify(payload),
-    });
-    const txt = await r.text();
+    let r;
+    let txt;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      r = await fetch(SUPABASE_CONFIG.url + '/rest/v1/' + path, {
+        method: 'PATCH',
+        headers: headersBase(),
+        body: JSON.stringify(payload),
+      });
+      txt = await r.text();
+      if (r.ok || attempt === 1) break;
+      if (looksJwtExpired(r.status, txt)) {
+        const refreshed = await refreshSessionNow();
+        if (refreshed) continue;
+      }
+      break;
+    }
     if (!r.ok) {
       console.error('SB PATCH err', { path, status: r.status, body: txt });
       return { ok: false, status: r.status };

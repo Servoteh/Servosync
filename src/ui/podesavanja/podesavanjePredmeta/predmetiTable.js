@@ -1,9 +1,8 @@
 /**
  * Tabela predmeta + filter + toggle aktivacije + prioritet.
  *
- * Prioritet (top 10): predmeti sa zvezdicom se prikazuju prvi u svim
- * pregledima (Plan, Praćenje, pretraga). Redosled se menja strelicama.
- * Čuva se lokalno u localStorage (prioritetService.js).
+ * Prioritet (top 10): predmeti sa zvezdicom — trajno u bazi (`production.predmet_plan_prioritet`);
+ * Plan montaže, PB i Lokacije sortiraju istu listu. Praćenje koristi poseban `production.predmet_prioritet` (admin redosled).
  */
 
 import { escHtml, showToast } from '../../../lib/dom.js';
@@ -288,35 +287,55 @@ export function wirePredmetiTable(root, opts = {}) {
   /* Prioritet toggle */
   root.querySelectorAll('[data-pred-prio-toggle]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const id = Number(btn.getAttribute('data-pred-prio-toggle'));
-      if (isPrioritet(id)) {
-        removeFromPrioritet(id);
+      void (async () => {
+        const id = Number(btn.getAttribute('data-pred-prio-toggle'));
         const r = findRow(id);
-        showToast(`Uklonjen iz prioriteta: ${r?.broj_predmeta || id}`);
-      } else {
-        const ok = addToPrioritet(id);
-        if (!ok) {
-          showToast('Lista prioriteta je puna (max 10). Ukloni neki pre nego što dodaš novi.');
-          return;
+        try {
+          if (isPrioritet(id)) {
+            await removeFromPrioritet(id);
+            showToast(`Uklonjen iz prioriteta: ${r?.broj_predmeta || id}`);
+          } else {
+            const ok = await addToPrioritet(id);
+            if (!ok) {
+              showToast('Lista prioriteta je puna (max 10). Ukloni neki pre nego što dodaš novi.');
+              return;
+            }
+            showToast(`⭐ Dodat u prioritet: ${r?.broj_predmeta || id}`);
+          }
+          onChanged?.();
+        } catch (err) {
+          toastPredmetSaveErr(err);
+          onChanged?.();
         }
-        const r = findRow(id);
-        showToast(`⭐ Dodat u prioritet: ${r?.broj_predmeta || id}`);
-      }
-      onChanged?.();
+      })();
     });
   });
 
   /* Prioritet gore/dole */
   root.querySelectorAll('[data-pred-prio-up]').forEach(btn => {
     btn.addEventListener('click', () => {
-      movePrioritetUp(Number(btn.getAttribute('data-pred-prio-up')));
-      onChanged?.();
+      void (async () => {
+        try {
+          await movePrioritetUp(Number(btn.getAttribute('data-pred-prio-up')));
+          onChanged?.();
+        } catch (err) {
+          toastPredmetSaveErr(err);
+          onChanged?.();
+        }
+      })();
     });
   });
   root.querySelectorAll('[data-pred-prio-down]').forEach(btn => {
     btn.addEventListener('click', () => {
-      movePrioritetDown(Number(btn.getAttribute('data-pred-prio-down')));
-      onChanged?.();
+      void (async () => {
+        try {
+          await movePrioritetDown(Number(btn.getAttribute('data-pred-prio-down')));
+          onChanged?.();
+        } catch (err) {
+          toastPredmetSaveErr(err);
+          onChanged?.();
+        }
+      })();
     });
   });
 }

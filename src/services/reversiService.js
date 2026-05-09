@@ -176,7 +176,7 @@ export async function fetchDocumentLines(documentId) {
 }
 
 /**
- * @param {{ status?: string, search?: string, limit?: number, offset?: number }} params
+ * @param {{ status?: string, search?: string, asset_kind?: string, limit?: number, offset?: number }} params
  */
 export async function fetchTools(params = {}) {
   return wrap(async () => {
@@ -194,6 +194,11 @@ export async function fetchTools(params = {}) {
     if (search) {
       const enc = encodeURIComponent(`*${search}*`);
       parts.push(`or=(oznaka.ilike.${enc},naziv.ilike.${enc})`);
+    }
+
+    const ak = params.asset_kind && String(params.asset_kind).trim();
+    if (ak && ak !== 'ALL') {
+      parts.push(`asset_kind=eq.${encodeURIComponent(ak)}`);
     }
 
     const qTools = `rev_tools?${parts.join('&')}`;

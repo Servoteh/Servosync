@@ -15,7 +15,7 @@ import {
   searchBigtehnItems,
   fetchTpsForPredmet,
 } from '../../services/lokacije.js';
-import { getPrioritetIds, isPrioritet } from '../podesavanja/podesavanjePredmeta/prioritetService.js';
+import { getPrioritetIds, isPrioritet, ensurePrioritetHydrated } from '../podesavanja/podesavanjePredmeta/prioritetService.js';
 import { openDrawingPdf } from '../../services/drawings.js';
 import {
   getLokacijeUiState,
@@ -129,6 +129,7 @@ async function renderPickerView(host, refresh) {
 
   async function refreshList(q) {
     const reqId = ++lastReqId;
+    await ensurePrioritetHydrated().catch(() => {});
     listEl.innerHTML = `<div class="lp-empty"><span class="lp-empty-icon">⏳</span><span class="lp-empty-title">Učitavam predmete…</span></div>`;
     countEl.textContent = '';
     let rows;

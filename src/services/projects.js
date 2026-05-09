@@ -14,6 +14,10 @@
 import { sbReq } from './supabase.js';
 import { canEdit, getIsOnline, getCurrentUser } from '../state/auth.js';
 import { DEFAULT_LOCATIONS, NUM_CHECKS } from '../lib/constants.js';
+import {
+  ensurePrioritetHydrated,
+  sortByPredmetPrioritet,
+} from '../ui/podesavanja/podesavanjePredmeta/prioritetService.js';
 
 let phaseTypeSchemaSupported = true;
 
@@ -53,10 +57,12 @@ export function normalizePhaseType(t) {
 
 /* ── Mappers DB → State ── */
 export function mapDbProject(d) {
+  const pid = d.predmet_item_id != null ? Number(d.predmet_item_id) : null;
   return {
     id: d.id,
     code: d.project_code || '',
     name: d.project_name || '',
+    predmetItemId: Number.isFinite(pid) && pid > 0 ? pid : null,
     projectM: d.projectm || '',
     deadline: d.project_deadline || '',
     pmEmail: d.pm_email || '',
@@ -199,16 +205,21 @@ export function buildPhasePayload(ph, projectId, wpId, sortOrder) {
 /* ── Loaders ── */
 export async function loadProjectsFromDb() {
   if (!getIsOnline()) return null;
+  await ensurePrioritetHydrated().catch(() => {});
   /* Isti skup kao Projektni biro: aktivni predmeti sa projektovanjem/montažom (RPC). */
   const data = await sbReq('rpc/pb_list_projects', 'POST', {});
   if (!Array.isArray(data)) return null;
-  return data.map(row =>
+  const mapped = data.map(row =>
     mapDbProject({
       id: row.id,
       project_code: row.project_code,
       project_name: row.project_name,
       status: row.status || 'active',
+      predmet_item_id: row.predmet_item_id,
     }),
+  );
+  return sortByPredmetPrioritet(mapped, r => r.predmetItemId, (a, b) =>
+    String(a.code || '').localeCompare(String(b.code || ''), 'sr'),
   );
 }
 

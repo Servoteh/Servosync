@@ -27,6 +27,7 @@ import {
   upsertOperativnaAktivnost,
   zatvoriAktivnost,
 } from '../services/pracenjeProizvodnje.js';
+import { ensurePrioritetHydrated } from '../ui/podesavanja/podesavanjePredmeta/prioritetService.js';
 import { getCurrentRole, isAdminOrMenadzment } from '../state/auth.js';
 import { showToast } from '../lib/dom.js';
 
@@ -343,6 +344,7 @@ export async function loadAktivniPredmeti() {
   ap.isAdmin = getCurrentRole() === 'admin';
   emit();
   try {
+    await ensurePrioritetHydrated().catch(() => {});
     const raw = await fetchAktivniPredmeti();
     ap.predmeti = normalizePredmetiRpc(raw);
     ap.error = null;

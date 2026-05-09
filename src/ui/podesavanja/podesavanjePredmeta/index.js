@@ -9,11 +9,13 @@ import {
   setPredmetAktivacijaRows,
   wirePredmetiTable,
 } from './predmetiTable.js';
+import { ensurePrioritetHydrated } from './prioritetService.js';
 
 let _loadError = null;
 
 export async function refreshPredmetAktivacija() {
   _loadError = null;
+  await ensurePrioritetHydrated().catch(() => {});
   const raw = await listPredmetAktivacijaAdmin();
   if (raw == null) {
     _loadError = 'forbidden';

@@ -21,7 +21,100 @@ import {
   setOnline,
   persistSession,
   loadPersistedSession,
+  getCurrentUser,
 } from '../state/auth.js';
+
+/** Jedinstven refresh u toku (paralelni REST pozivi čekaju isti promise). */
+let refreshInFlight = null;
+
+function decodeJwtPayload(accessToken) {
+  try {
+    const parts = String(accessToken || '').split('.');
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+    return JSON.parse(atob(b64 + pad));
+  } catch {
+    return null;
+  }
+}
+
+async function exchangeRefreshToken(refreshToken) {
+  const refreshRes = await fetch(`${SUPABASE_CONFIG.url}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_CONFIG.anonKey,
+    },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  const refreshData = await refreshRes.json().catch(() => ({}));
+  if (!refreshRes.ok || refreshData.error) {
+    const msg =
+      refreshData.error_description
+      || refreshData.msg
+      || refreshData.message
+      || refreshData.error
+      || 'refresh_failed';
+    const err = new Error(msg);
+    err.code = refreshData.error || 'refresh_failed';
+    throw err;
+  }
+  return refreshData;
+}
+
+/**
+ * Osveži access token iz refresh_token-a u localStorage i ažuriraj {@link setUser}.
+ * @returns {Promise<boolean>}
+ */
+export async function refreshSessionNow() {
+  const session = loadPersistedSession();
+  if (!session?.refresh_token) return false;
+  try {
+    const refreshData = await exchangeRefreshToken(session.refresh_token);
+    const user = refreshData.user;
+    if (!user?.email || !refreshData.access_token) return false;
+    persistSession({
+      access_token: refreshData.access_token,
+      refresh_token: refreshData.refresh_token || session.refresh_token,
+      user: refreshData.user,
+    });
+    setUser({
+      email: (user.email || '').toLowerCase(),
+      emailRaw: String(user.email || '').trim(),
+      id: user.id,
+      _token: refreshData.access_token,
+    });
+    return true;
+  } catch (e) {
+    console.warn('[auth] refreshSessionNow failed', e);
+    return false;
+  }
+}
+
+/**
+ * Pre REST poziva: ako je JWT blizu isteka ili istekao, osveži ga (refresh_token).
+ */
+export async function ensureSessionFresh() {
+  if (!hasSupabaseConfig()) return;
+  const user = getCurrentUser();
+  if (!user?._token) return;
+  const session = loadPersistedSession();
+  if (!session?.refresh_token) return;
+
+  const payload = decodeJwtPayload(user._token);
+  const exp = payload?.exp;
+  const now = Math.floor(Date.now() / 1000);
+  const skewSec = 120;
+  if (typeof exp === 'number' && now < exp - skewSec) return;
+
+  if (!refreshInFlight) {
+    refreshInFlight = refreshSessionNow().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  await refreshInFlight;
+}
 
 /**
  * Login email + password.
@@ -241,16 +334,7 @@ export async function restoreSession() {
     let accessToken = session.access_token;
     let user = session.user || null;
     if (session.refresh_token) {
-      const refreshRes = await fetch(SUPABASE_CONFIG.url + '/auth/v1/token?grant_type=refresh_token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_CONFIG.anonKey,
-        },
-        body: JSON.stringify({ refresh_token: session.refresh_token }),
-      });
-      const refreshData = await refreshRes.json();
-      if (!refreshRes.ok || refreshData.error) throw new Error(refreshData.error || 'refresh_failed');
+      const refreshData = await exchangeRefreshToken(session.refresh_token);
       accessToken = refreshData.access_token;
       user = refreshData.user;
       persistSession({

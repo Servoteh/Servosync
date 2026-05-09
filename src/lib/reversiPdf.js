@@ -326,6 +326,24 @@ export async function generateReversalPdf(docRow, lines, extra = {}) {
     y += 4;
   }
 
+  if (!coopDoc) {
+    const ppeLines = doc.splitTextToSize(
+      'Zaduženje može obuhvatiti alat, opremu, radnu odeću, zaštitnu obuću i lična zaštitna sredstva (prema stavkama u tabeli). Primalac potpisom u nastavku potvrđuje prijem svih navedenih stavki.',
+      CONTENT_W,
+    );
+    const ppeBlockH = ppeLines.length * LINE_H + 6;
+    y = ensureSpace(doc, y, ppeBlockH, ctx);
+    doc.setFont('Roboto', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(75, 75, 75);
+    ppeLines.forEach(line => {
+      doc.text(line, MARGIN, y);
+      y += LINE_H;
+    });
+    doc.setTextColor(17, 24, 39);
+    y += 4;
+  }
+
   /* Potpisi — nova strana ako nema mesta */
   y = ensureSpace(doc, y, SIGNATURE_BLOCK_H + 6, ctx);
 

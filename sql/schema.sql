@@ -504,6 +504,7 @@ CREATE TABLE IF NOT EXISTS public.rev_tools (
   serijski_broj TEXT,
   datum_kupovine DATE,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'scrapped', 'lost')),
+  asset_kind TEXT NOT NULL DEFAULT 'GENERAL_TOOL' CHECK (asset_kind IN ('GENERAL_TOOL', 'PPE_WORKWEAR', 'PPE_FOOTWEAR', 'PPE_OTHER')),
   napomena TEXT,
   loc_item_ref_id TEXT UNIQUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -603,6 +604,7 @@ CREATE INDEX IF NOT EXISTS rev_document_lines_tool_idx ON public.rev_document_li
 CREATE INDEX IF NOT EXISTS rev_document_lines_status_idx ON public.rev_document_lines (line_status);
 CREATE INDEX IF NOT EXISTS rev_tools_status_idx ON public.rev_tools (status);
 CREATE INDEX IF NOT EXISTS rev_tools_oznaka_idx ON public.rev_tools (oznaka);
+CREATE INDEX IF NOT EXISTS rev_tools_asset_kind_idx ON public.rev_tools (asset_kind);
 
 CREATE OR REPLACE FUNCTION public.rev_can_manage()
 RETURNS BOOLEAN
@@ -760,6 +762,7 @@ SELECT
   t.oznaka,
   t.naziv,
   t.serijski_broj,
+  t.asset_kind,
   l.part_name,
   l.drawing_no,
   l.quantity,

@@ -3,7 +3,8 @@
  *
  * Ekvivalent legacy `sbReq()`:
  *  - bez framework-a, bez supabase-js zavisnosti
- *  - automatski koristi JWT iz state/auth.js ako postoji, inače anon ključ
+ *  - pre poziva: ensureSessionFresh() osvežava istekli JWT preko refresh_token-a iz sesije;
+ *    uz 401 „JWT expired" jedan ponavljan poziva refreshSessionNow().
  *  - Prefer header za UPSERT (POST → merge-duplicates) i RETURN=representation
  *
  * Vraća parsiran JSON, ili `null` na BILO KOJU grešku (HTTP, parse, mreža).
@@ -12,8 +13,21 @@
 
 import { SUPABASE_CONFIG, hasSupabaseConfig } from '../lib/constants.js';
 import { getCurrentUser } from '../state/auth.js';
+import { ensureSessionFresh, refreshSessionNow } from './auth.js';
 
 export { hasSupabaseConfig };
+
+function isJwtExpiredBody(txt) {
+  const raw = String(txt || '').trim().toLowerCase();
+  if (raw.includes('jwt expired') || raw.includes('token expired')) return true;
+  try {
+    const j = JSON.parse(txt);
+    const m = String(j?.message || '').toLowerCase();
+    return m.includes('jwt expired') || m.includes('token expired');
+  } catch {
+    return false;
+  }
+}
 
 /** Skraćeno telo odgovora za konzolu (PostgREST JSON ili plain tekst). */
 function sbErrBodySnippet(txt, max = 700) {
@@ -68,34 +82,47 @@ export function getSupabaseHeaders() {
 export async function sbReq(path, method = 'GET', body = null, options = {}) {
   if (!hasSupabaseConfig()) return options.withCount ? { rows: null, total: null } : null;
 
-  const user = getCurrentUser();
-  const token = user?._token || SUPABASE_CONFIG.anonKey;
-
-  const headers = {
-    'Content-Type': 'application/json',
-    'apikey': SUPABASE_CONFIG.anonKey,
-    'Authorization': 'Bearer ' + token,
-  };
-  if (method === 'POST') {
-    const upsert = options.upsert !== false;
-    headers['Prefer'] = upsert
-      ? 'return=representation,resolution=merge-duplicates'
-      : 'return=representation';
-  } else if (method === 'PATCH') {
-    headers['Prefer'] = 'return=representation';
-  }
-  if (options.withCount && method === 'GET') {
-    /* PostgREST `count=exact` → Content-Range header sadrži ukupan broj redova. */
-    headers['Prefer'] = (headers['Prefer'] ? headers['Prefer'] + ',' : '') + 'count=exact';
-  }
-
   try {
-    const r = await fetch(SUPABASE_CONFIG.url + '/rest/v1/' + path, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const txt = await r.text();
+    await ensureSessionFresh();
+
+    let r;
+    let txt;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const userNow = getCurrentUser();
+      const token = userNow?._token || SUPABASE_CONFIG.anonKey;
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_CONFIG.anonKey,
+        'Authorization': 'Bearer ' + token,
+      };
+      if (method === 'POST') {
+        const upsert = options.upsert !== false;
+        headers['Prefer'] = upsert
+          ? 'return=representation,resolution=merge-duplicates'
+          : 'return=representation';
+      } else if (method === 'PATCH') {
+        headers['Prefer'] = 'return=representation';
+      }
+      if (options.withCount && method === 'GET') {
+        headers['Prefer'] = (headers['Prefer'] ? headers['Prefer'] + ',' : '') + 'count=exact';
+      }
+
+      r = await fetch(SUPABASE_CONFIG.url + '/rest/v1/' + path, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      txt = await r.text();
+
+      if (r.ok || attempt === 1) break;
+      if (r.status === 401 && isJwtExpiredBody(txt)) {
+        const refreshed = await refreshSessionNow();
+        if (refreshed) continue;
+      }
+      break;
+    }
+
     if (!r.ok) {
       console.error(`SB err ${method} ${path} HTTP ${r.status}: ${sbErrBodySnippet(txt)}`);
       return options.withCount ? { rows: null, total: null } : null;
@@ -169,39 +196,51 @@ export async function sbReqThrow(path, method = 'GET', body = null, options = {}
     throw e;
   }
 
-  const user = getCurrentUser();
-  const token = user?._token || SUPABASE_CONFIG.anonKey;
-
-  const headers = {
-    'Content-Type': 'application/json',
-    'apikey': SUPABASE_CONFIG.anonKey,
-    'Authorization': `Bearer ${token}`,
-  };
-  if (method === 'POST') {
-    const upsert = options.upsert !== false;
-    headers['Prefer'] = upsert
-      ? 'return=representation,resolution=merge-duplicates'
-      : 'return=representation';
-  } else if (method === 'PATCH') {
-    headers['Prefer'] = 'return=representation';
-  }
-  if (options.withCount && method === 'GET') {
-    headers['Prefer'] = (headers['Prefer'] ? headers['Prefer'] + ',' : '') + 'count=exact';
-  }
+  await ensureSessionFresh();
 
   let r;
   let txt;
-  try {
-    r = await fetch(SUPABASE_CONFIG.url + '/rest/v1/' + path, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    txt = await r.text();
-  } catch (e) {
-    const err = new Error(e instanceof Error ? e.message : String(e));
-    err.code = 'NETWORK';
-    throw err;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const userNow = getCurrentUser();
+    const token = userNow?._token || SUPABASE_CONFIG.anonKey;
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_CONFIG.anonKey,
+      'Authorization': `Bearer ${token}`,
+    };
+    if (method === 'POST') {
+      const upsert = options.upsert !== false;
+      headers['Prefer'] = upsert
+        ? 'return=representation,resolution=merge-duplicates'
+        : 'return=representation';
+    } else if (method === 'PATCH') {
+      headers['Prefer'] = 'return=representation';
+    }
+    if (options.withCount && method === 'GET') {
+      headers['Prefer'] = (headers['Prefer'] ? headers['Prefer'] + ',' : '') + 'count=exact';
+    }
+
+    try {
+      r = await fetch(SUPABASE_CONFIG.url + '/rest/v1/' + path, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      txt = await r.text();
+    } catch (e) {
+      const err = new Error(e instanceof Error ? e.message : String(e));
+      err.code = 'NETWORK';
+      throw err;
+    }
+
+    if (r.ok || attempt === 1) break;
+    if (r.status === 401 && isJwtExpiredBody(txt)) {
+      const refreshed = await refreshSessionNow();
+      if (refreshed) continue;
+    }
+    break;
   }
 
   if (!r.ok) {

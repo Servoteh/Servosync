@@ -19,6 +19,7 @@ import {
   clearMagacinLocationCache,
 } from '../../services/reversiService.js';
 import { generateReversalPdf, openPdfInNewTab, getPdfBlob } from '../../lib/reversiPdf.js';
+import { formatRevAssetKind, REV_ASSET_KIND_OPTIONS, REV_ASSET_KIND_LABEL } from '../../lib/revAssetKind.js';
 
 function modalShell(title, bodyHtml, footerHtml, id) {
   const wrap = document.createElement('div');
@@ -248,7 +249,10 @@ export function openIssueReversalModal(opts = {}) {
       await loadAvailable();
       const optsHtml = state.availableTools
         .filter(t => !state.toolLines.some(l => l.tool_id === t.id))
-        .map(t => `<option value="${escHtml(t.id)}">${escHtml(t.oznaka)} — ${escHtml(t.naziv)}</option>`)
+        .map(
+          t =>
+            `<option value="${escHtml(t.id)}">${escHtml(t.oznaka)} — ${escHtml(t.naziv)} · ${escHtml(formatRevAssetKind(t.asset_kind))}</option>`,
+        )
         .join('');
       body.innerHTML = `
         <p class="rev-muted">Dodajte bar jedan alat.</p>
@@ -593,6 +597,9 @@ export function openAddToolModal({ onSuccess } = {}) {
     'Nova jedinica u inventaru',
     `<div class="rev-form-grid">
       <p class="rev-muted" style="grid-column:1/-1;font-size:12px;line-height:1.4;margin:0 0 4px">Jedan zapis = jedan fizički komad. Više komada iste oznake unesite kao odvojene stavke.</p>
+      <label>Klasa * <select id="revAddKind" class="input">${REV_ASSET_KIND_OPTIONS.map(
+        k => `<option value="${escHtml(k)}">${escHtml(REV_ASSET_KIND_LABEL[k])}</option>`,
+      ).join('')}</select></label>
       <label>Oznaka * <input type="text" id="revAddOz" class="input" required/></label>
       <label>Naziv * <input type="text" id="revAddNz" class="input" required/></label>
       <label>Serijski broj <input type="text" id="revAddSn" class="input"/></label>
@@ -613,9 +620,12 @@ export function openAddToolModal({ onSuccess } = {}) {
       showToast('Oznaka i naziv su obavezni');
       return;
     }
+    const kindEl = overlay.querySelector('#revAddKind');
+    const assetKind = kindEl && 'value' in kindEl ? String(kindEl.value).trim() : 'GENERAL_TOOL';
     const row = {
       oznaka: oz,
       naziv: nz,
+      asset_kind: assetKind || 'GENERAL_TOOL',
       serijski_broj: overlay.querySelector('#revAddSn')?.value?.trim() || null,
       datum_kupovine: overlay.querySelector('#revAddDt')?.value || null,
       napomena: overlay.querySelector('#revAddNo')?.value?.trim() || null,

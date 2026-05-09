@@ -41,6 +41,7 @@ import {
   loadMyVacationRequestsFromDb,
 } from '../../services/vacationRequests.js';
 import { fetchMyIssuedTools } from '../../services/reversiService.js';
+import { formatRevAssetKind } from '../../lib/revAssetKind.js';
 import { compareEmployeesByLastFirst, employeeDisplayName } from '../../lib/employeeNames.js';
 
 /* ── Helperi ────────────────────────────────────────────────────── */
@@ -462,6 +463,7 @@ function _reversiIssuedSectionHtml() {
     const unit = row.unit ? escHtml(String(row.unit)) : '';
     const qDisplay = unit ? `${escHtml(qty)} ${unit}` : escHtml(qty);
     return `<tr>
+      <td style="font-size:.85rem;color:var(--text2);">${escHtml(formatRevAssetKind(row.asset_kind))}</td>
       <td><span class="kadr-type-badge t-sluzbeno">${escHtml(dt)}</span></td>
       <td style="font-family:var(--mono);font-size:.85rem;">${escHtml(row.doc_number || '—')}</td>
       <td>${row.issued_at ? escHtml(formatDate(row.issued_at)) : '—'}</td>
@@ -485,6 +487,7 @@ function _reversiIssuedSectionHtml() {
       <table class="kadrovska-table" style="width:100%;">
         <thead>
           <tr>
+            <th>Klasa</th>
             <th>Tip</th>
             <th>Br. dokumenta</th>
             <th>Izdato</th>

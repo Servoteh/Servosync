@@ -1,10 +1,41 @@
 # Reversi modul
 
-Modul za pracenje zaduzenja alata i kooperacione robe u vlasnistvu Servoteh.
+Modul za praćenje zaduženja alata, lične i kolektivne zaštitne opreme i kooperacione robe u vlasništvu Servoteh.
+
+## Analiza (pregled arhitekture)
+
+- **Poslovni cilj:** jedinstveno mesto za izdavanje na revers i vraćanje u magacin — od klasičnog alata, preko **reznog alata** (poseban podmodul / katalog), do **radne odeće, zaštitne obuće i ostalih sredstava za ličnu zaštitu (LZO)**. Ista šema dokumenata (`rev_documents` + `rev_document_lines`) i integracija sa **Lokacije** modulom (`REVERSAL_ISSUE` / `REVERSAL_RETURN`) važe za sve stavke koje se vode kao inventarske jedinice u `rev_tools` (jedan red = jedan fizički komad ili jasno određena količina na dokumentu).
+- **Slojevi:** baza (Postgres + RLS, `rev_can_manage`), RPC-ovi za izdavanje i povraćaj, UI tabovi (Moja zaduženja, Magacin, Zaduženja, Inventar, Rezni alat), PDF potpisnica (jsPDF, arhiva u `reversal-pdf`).
+- **Primaoci:** radnik, odeljenje ili eksterna firma — za svakog se lenjo pravi virtuelna lokacija u `loc_locations` radi praćenja kretanja.
+- **Ovlašćenja:** čitanje i „moja zaduženja” za sve prijavljene; kreiranje dokumenata, potvrda povraćaja i upravljanje magacinom za uloge kao u `rev_can_manage()` (admin, menadžment, pm, leadpm, magacioner — tačan skup vidi migraciju).
+- **Potpis obaveze:** na izdavanje se generiše **potpisnica (PDF)** sa blokovima Predao / Primio (i blok za povraćaj). Primalac **mora potpisati prijem**, uključujući i stavke koje predstavljaju radnu odeću, cipele ili LZO — tekst u PDF-u to eksplicitno navodi; fizički potpis ostaje na odštampanom dokumentu ili u zastaralom internom procesu arhive.
+
+## Opseg zaduženja (alat + radna zaštita)
+
+U Reversiju se, pored alata i kooperacije, **zadužuju i**:
+
+- radna odeća,
+- zaštitna obuća (cipele / čizme prema internoj klasifikaciji),
+- ostala **lična zaštitna sredstva** (npr. zaštita za glavu, ruke, sluh — kao stavke u inventaru).
+
+Te stavke unose se u isti inventar (`rev_tools`) sa jasnim nazivima/oznakama i pojavljuju se na istom reversal dokumentu; **primopredaja je ista kao za alat** (PDF potpisnica).
+
+## Klasa inventara (`rev_tools.asset_kind`)
+
+Svaka jedinica u `rev_tools` ima polje **`asset_kind`** (migracija `add_reversi_tool_asset_kind.sql` / `supabase/migrations/20260509140000__rev_tools_asset_kind.sql`):
+
+| Vrednost | Značenje |
+|----------|----------|
+| `GENERAL_TOOL` | Alat i oprema opšteg karaktera (podrazumevano za postojeće redove) |
+| `PPE_WORKWEAR` | Radna odeća |
+| `PPE_FOOTWEAR` | Zaštitna obuća |
+| `PPE_OTHER` | Ostala LZO (rukavice, naočare, slušalice, kacige, itd.) |
+
+**UI:** pri „Novoj jedinici” bira se klasa; u tabu Inventar filter „Klasa stavke”; CSV uvoz podržava opcionu kolonu (`klasa`, `vrsta`, `asset_kind`, …) sa vrednostima kao `PPE_WORKWEAR` ili zgodnim sinonimima (`cipele`, `radna odeća`, `lzo` …). **Self-service** (`v_rev_my_issued_tools`, Moj profil, Moja zaduženja) prikazuje klasu gde postoji.
 
 ## Tipovi dokumenata
 
-- **TOOL** — zaduzenje alata (brusilice, srafilice, instrumenti) radniku, odeljenju ili eksternoj firmi
+- **TOOL** — zaduženje alata, rezne garniture, radne odeće, zaštitne obuće, LZO i slične stavke iz `rev_tools` radniku, odeljenju ili eksternoj firmi
 - **COOPERATION_GOODS** — roba na medjufaznu uslugu kooperantu (identifikovana brojem crteza)
 
 ## Integracija sa Lokacije modulom
@@ -21,7 +52,7 @@ Za svakog primaoca kreira se virtuelna `loc_locations` lokacija (lazy, pri prvom
 
 | Tabela | Svrha |
 |--------|-------|
-| `rev_tools` | Inventar alata |
+| `rev_tools` | Inventar jedinica (alat, radna odeća, obuća, LZO — vidi `asset_kind`) |
 | `rev_documents` | Zaglavlje reversal dokumenta |
 | `rev_document_lines` | Stavke dokumenta |
 | `rev_recipient_locations` | Mapa primalac → virtuelna lokacija |
@@ -55,7 +86,7 @@ Skripta: `scripts/seed-reversi-tools.mjs`. Kopiraj `Akumulatorske_brusilice.xlsx
 - **Filter meseca izdavanja** (tab Zaduženja) ograničava datum polja `rev_documents.issued_at` na izabrani kalendarski mesec. Vrednost se pamti u session storage (`REVERSI_ISSUED_MONTH`). KPI kartice (uključujući broj aktivnih dokumenata i procenu broja primalaca na otvorenim reversima) koriste isti kontekst kao lista dokumenata (mesec, tip dokumenta, tekst pretrage), ali **ne** segment statusa u toolbaru (Sve / U toku / …), da pregled ostane smislen pri sužavanju tabele.
 - **Export CSV** (dokumenti): kolone kao u tabeli pregleda (broj, datum izdavanja, primalac, stavki, rok, status). UTF-8 sa BOM radi Excela.
 - **Export CSV** (inventar): oznaka, naziv, status jedinice, zaduženje / lokacija (tekstualno).
-- **Uvoz CSV** (inventar, uloge sa pravom upravljanja): prvi red = zaglavlje. Obavezne kolone: **oznaka**, **naziv** (prepoznaju se i tipični sinonimi u zaglavlju). Opciono: serijski broj, datum kupovine, napomena. Za svaki red poziva se isti tok kao „Nova jedinica“: `insert_tool` + početni smeštaj u `ALAT-MAG-01` ako je magacin dostupan.
+- **Uvoz CSV** (inventar, uloge sa pravom upravljanja): prvi red = zaglavlje. Obavezne kolone: **oznaka**, **naziv** (prepoznaju se i tipični sinonimi u zaglavlju). Opciono: **klasa** / **vrsta** / **asset_kind** (vidi `rev_tools.asset_kind`), serijski broj, datum kupovine, napomena. Za svaki red poziva se isti tok kao „Nova jedinica“: `insert_tool` + početni smeštaj u `ALAT-MAG-01` ako je magacin dostupan.
 
 ## Ručni unos alata
 
