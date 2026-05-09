@@ -298,6 +298,10 @@ body.module-projektni-biro {
   border-bottom: 1px solid var(--border, #e5e7eb);
   overflow-x: auto;
   scrollbar-width: none;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg, #f8f9fa);
 }
 
 .pb-tabs::-webkit-scrollbar {
