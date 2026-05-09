@@ -135,6 +135,11 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       engineers = rEng.data;
       tasks = rTasks.data;
 
+      if (state.activeProject !== 'all' && !projects.some(p => p.id === state.activeProject)) {
+        state.activeProject = 'all';
+        savePbState(state);
+      }
+
       if (state.activeEngineer !== 'all' && !engineers.some(en => en.id === state.activeEngineer)) {
         state.activeEngineer = 'all';
         savePbState(state);

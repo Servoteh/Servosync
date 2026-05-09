@@ -63,15 +63,12 @@ function assertValidTaskInput(data, partial) {
 }
 
 /**
- * Aktivni projekti za dropdown (isti kriterijum kao loadProjektiLite — ne arhivirani).
+ * Lista projekata za PB — RPC iz production.predmet_aktivacija + bigtehn_items_cache
+ * (je_aktivan AND je_projektovanje_montaza), ne ručni public.projects bez predmeta.
  */
 export async function getPbProjects() {
   if (!getIsOnline()) return [];
-  const url =
-    'projects?select=id,project_code,project_name,status'
-    + '&status=neq.archived'
-    + '&order=project_code.asc.nullslast,project_name.asc';
-  const data = await sbReqThrow(url);
+  const data = await sbReqThrow('rpc/pb_list_projects', 'POST', {});
   return Array.isArray(data) ? data : [];
 }
 
