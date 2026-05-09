@@ -30,6 +30,11 @@ export function loadPbState() {
       activeTab: o.activeTab ?? 'plan',
       moduleSearch: o.moduleSearch ?? '',
       moduleShowDone: o.moduleShowDone ?? false,
+      moduleStatus: o.moduleStatus ?? 'all',
+      modulePrioritet: o.modulePrioritet ?? 'all',
+      moduleVrsta: o.moduleVrsta ?? 'all',
+      moduleProblemOnly: o.moduleProblemOnly ?? false,
+      moduleUnassignedOnly: o.moduleUnassignedOnly ?? false,
       ganttStartDate: o.ganttStartDate ?? null,
     };
   } catch {
@@ -48,15 +53,29 @@ function defaultPbState() {
     activeTab: 'plan',
     moduleSearch: '',
     moduleShowDone: false,
+    moduleStatus: 'all',
+    modulePrioritet: 'all',
+    moduleVrsta: 'all',
+    moduleProblemOnly: false,
+    moduleUnassignedOnly: false,
     ganttStartDate: null,
   };
 }
 
-/** Sinhronizacija Plan / Kanban / Gantt filtera (pretraga + prikaži završene). */
+/** Sinhronizacija Plan / Kanban / Gantt filtera. */
 export function syncPbModuleFilters(patch) {
   const s = loadPbState();
-  if ('moduleSearch' in patch) s.moduleSearch = patch.moduleSearch;
-  if ('moduleShowDone' in patch) s.moduleShowDone = patch.moduleShowDone;
+  for (const k of [
+    'moduleSearch',
+    'moduleShowDone',
+    'moduleStatus',
+    'modulePrioritet',
+    'moduleVrsta',
+    'moduleProblemOnly',
+    'moduleUnassignedOnly',
+  ]) {
+    if (k in patch) s[k] = patch[k];
+  }
   savePbState(s);
 }
 

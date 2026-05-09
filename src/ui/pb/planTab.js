@@ -83,31 +83,32 @@ function filterTasks(tasks, f) {
 
 function sortTasks(list, col, dir) {
   const m = dir === 'desc' ? -1 : 1;
+  const PRIO_ORDER = { Visok: 0, Srednji: 1, Nizak: 2 };
+  const decorated = list.map(t => ({
+    t,
+    workdays: col === 'trajanje'
+      ? (countWorkdaysBetween(t.datum_pocetka_plan, t.datum_zavrsetka_plan) ?? -1)
+      : 0,
+  }));
   const cmp = (a, b) => {
-    if (col === 'naziv') return m * String(a.naziv || '').localeCompare(String(b.naziv || ''), 'sr');
+    const ta = a.t, tb = b.t;
+    if (col === 'naziv') return m * String(ta.naziv || '').localeCompare(String(tb.naziv || ''), 'sr');
     if (col === 'project') {
-      const pa = `${a.project_code || ''} ${a.project_name || ''}`;
-      const pb = `${b.project_code || ''} ${b.project_name || ''}`;
+      const pa = `${ta.project_code || ''} ${ta.project_name || ''}`;
+      const pb = `${tb.project_code || ''} ${tb.project_name || ''}`;
       return m * pa.localeCompare(pb, 'sr');
     }
-    if (col === 'engineer') return m * String(a.engineer_name || '').localeCompare(String(b.engineer_name || ''), 'sr');
-    if (col === 'vrsta') return m * String(a.vrsta || '').localeCompare(String(b.vrsta || ''), 'sr');
-    if (col === 'datumi') return m * (a.datum_zavrsetka_plan || '').localeCompare(b.datum_zavrsetka_plan || '');
-    if (col === 'trajanje') {
-      const ta = countWorkdaysBetween(a.datum_pocetka_plan, a.datum_zavrsetka_plan) ?? -1;
-      const tb = countWorkdaysBetween(b.datum_pocetka_plan, b.datum_zavrsetka_plan) ?? -1;
-      return m * (ta - tb);
-    }
-    if (col === 'status') return m * String(a.status || '').localeCompare(String(b.status || ''), 'sr');
-    if (col === 'pct') return m * ((Number(a.procenat_zavrsenosti) || 0) - (Number(b.procenat_zavrsenosti) || 0));
-    if (col === 'prio') {
-      const order = { Visok: 0, Srednji: 1, Nizak: 2 };
-      return m * ((order[a.prioritet] ?? 9) - (order[b.prioritet] ?? 9));
-    }
-    if (col === 'norma') return m * ((Number(a.norma_sati_dan) || 0) - (Number(b.norma_sati_dan) || 0));
+    if (col === 'engineer') return m * String(ta.engineer_name || '').localeCompare(String(tb.engineer_name || ''), 'sr');
+    if (col === 'vrsta') return m * String(ta.vrsta || '').localeCompare(String(tb.vrsta || ''), 'sr');
+    if (col === 'datumi') return m * (ta.datum_zavrsetka_plan || '').localeCompare(tb.datum_zavrsetka_plan || '');
+    if (col === 'trajanje') return m * (a.workdays - b.workdays);
+    if (col === 'status') return m * String(ta.status || '').localeCompare(String(tb.status || ''), 'sr');
+    if (col === 'pct') return m * ((Number(ta.procenat_zavrsenosti) || 0) - (Number(tb.procenat_zavrsenosti) || 0));
+    if (col === 'prio') return m * ((PRIO_ORDER[ta.prioritet] ?? 9) - (PRIO_ORDER[tb.prioritet] ?? 9));
+    if (col === 'norma') return m * ((Number(ta.norma_sati_dan) || 0) - (Number(tb.norma_sati_dan) || 0));
     return 0;
   };
-  return list.slice().sort(cmp);
+  return decorated.sort(cmp).map(d => d.t);
 }
 
 function buildAlarms(tasks, loadRows) {
@@ -118,26 +119,43 @@ function buildAlarms(tasks, loadRows) {
     const planEnd = parseYmd(t.datum_zavrsetka_plan);
     const planStart = parseYmd(t.datum_pocetka_plan);
     const realEnd = parseYmd(t.datum_zavrsetka_real);
+    const naziv = t.naziv || '(bez naziva)';
+    const noEng = !t.employee_id;
+
+    const reasons = [];
+    let level = null;
+
     if (!done && planEnd) {
       const days = Math.round((startOfDay(planEnd) - today) / 86400000);
-      if (days < 0) alarms.push({ level: 'red', text: `Rok prošao: ${t.naziv || '(bez naziva)'}` });
-      else if (days <= 3) alarms.push({ level: 'yellow', text: `Rok za ≤3 dana: ${t.naziv || ''}` });
+      if (days < 0) {
+        reasons.push('rok prošao');
+        level = 'red';
+      } else if (days <= 3) {
+        reasons.push(`rok za ≤${days}d`);
+        level = level || 'yellow';
+      }
     }
     if (!done && planStart) {
       const ds = Math.round((startOfDay(planStart) - today) / 86400000);
-      if (ds >= 0 && ds <= 3 && !t.employee_id) {
-        alarms.push({ level: 'yellow', text: `Počinje za ≤3 dana, nema inženjera: ${t.naziv || ''}` });
+      if (startOfDay(planStart) < today && noEng) {
+        reasons.push('počelo bez inženjera');
+        level = 'red';
+      } else if (ds >= 0 && ds <= 3 && noEng) {
+        reasons.push('nema inženjera');
+        level = level || 'yellow';
       }
-    }
-    if (!done && planStart && startOfDay(planStart) < today && !t.employee_id) {
-      alarms.push({ level: 'red', text: `Počelo bez inženjera: ${t.naziv || ''}` });
     }
     if (done && realEnd && planEnd) {
       const onTime = startOfDay(realEnd) <= startOfDay(planEnd);
       const sinceFinish = Math.round((today - startOfDay(realEnd)) / 86400000);
       if (onTime && sinceFinish >= 0 && sinceFinish <= 1) {
-        alarms.push({ level: 'green', text: `Završen u roku: ${t.naziv || ''}` });
+        reasons.push('završen u roku');
+        level = 'green';
       }
+    }
+
+    if (reasons.length) {
+      alarms.push({ level, text: `${naziv} — ${reasons.join(', ')}` });
     }
   }
   const seenLoad = new Set();
@@ -159,18 +177,37 @@ export function renderPlanTab(root, ctx) {
   const pbMod = loadPbState();
   let filters = {
     search: pbMod.moduleSearch ?? '',
-    status: 'all',
-    vrsta: 'all',
-    prioritet: 'all',
+    status: pbMod.moduleStatus ?? 'all',
+    vrsta: pbMod.moduleVrsta ?? 'all',
+    prioritet: pbMod.modulePrioritet ?? 'all',
     showDone: pbMod.moduleShowDone ?? false,
-    problemOnly: false,
-    unassignedOnly: false,
+    problemOnly: pbMod.moduleProblemOnly ?? false,
+    unassignedOnly: pbMod.moduleUnassignedOnly ?? false,
   };
   let sortCol = 'datumi';
   let sortDir = 'asc';
+  let _searchDebounceTimer = null;
 
   function filtered() {
     return filterTasks(ctx.tasks || [], filters);
+  }
+
+  /** Sačuvaj focus + cursor pozicija pre re-rendera, vrati posle. */
+  function preserveFocus(renderFn) {
+    const active = document.activeElement;
+    const activeId = active?.id;
+    const cursorPos = active && 'selectionStart' in active ? active.selectionStart : null;
+    const cursorEnd = active && 'selectionEnd' in active ? active.selectionEnd : null;
+    renderFn();
+    if (activeId) {
+      const restored = root.querySelector(`#${activeId}`);
+      if (restored) {
+        restored.focus();
+        if (cursorPos != null && 'setSelectionRange' in restored) {
+          try { restored.setSelectionRange(cursorPos, cursorEnd ?? cursorPos); } catch {}
+        }
+      }
+    }
   }
 
   function paint() {
@@ -375,35 +412,37 @@ export function renderPlanTab(root, ctx) {
       </tr>`;
     }).join('');
 
-    root.innerHTML = `
-      ${statsHtml}
-      ${alarmHtml}
-      ${loadHtml}
-      ${filterHtml}
-      <div class="pb-plan-split">
-        <div class="pb-cards-wrap">${cardsHtml || '<p class="pb-muted">Nema zadataka za filter.</p>'}</div>
-        <div class="pb-table-wrap">
-          <div class="pb-table-container">
-            <table class="pb-table">
-              <thead><tr>
-                <th>#</th>
-                ${th('naziv', 'Naziv zadatka')}
-                ${th('project', 'Projekat')}
-                ${th('engineer', 'Inženjer')}
-                ${th('vrsta', 'Vrsta')}
-                ${th('datumi', 'Datumi')}
-                ${th('trajanje', 'Trajanje', 'dan')}
-                ${th('norma', 'Norma', 'h/dan')}
-                ${th('status', 'Status')}
-                ${th('pct', '%')}
-                ${th('prio', 'Prioritet')}
-                <th></th>
-              </tr></thead>
-              <tbody>${rowsHtml || ''}</tbody>
-            </table>
+    preserveFocus(() => {
+      root.innerHTML = `
+        ${statsHtml}
+        ${alarmHtml}
+        ${loadHtml}
+        ${filterHtml}
+        <div class="pb-plan-split">
+          <div class="pb-cards-wrap">${cardsHtml || '<p class="pb-muted">Nema zadataka za filter.</p>'}</div>
+          <div class="pb-table-wrap">
+            <div class="pb-table-container">
+              <table class="pb-table">
+                <thead><tr>
+                  <th>#</th>
+                  ${th('naziv', 'Naziv zadatka')}
+                  ${th('project', 'Projekat')}
+                  ${th('engineer', 'Inženjer')}
+                  ${th('vrsta', 'Vrsta')}
+                  ${th('datumi', 'Datumi')}
+                  ${th('trajanje', 'Trajanje', 'dan')}
+                  ${th('norma', 'Norma', 'h/dan')}
+                  ${th('status', 'Status')}
+                  ${th('pct', '%')}
+                  ${th('prio', 'Prioritet')}
+                  <th></th>
+                </tr></thead>
+                <tbody>${rowsHtml || ''}</tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </div>`;
+        </div>`;
+    });
 
     /* ── Event listeners ── */
 
@@ -418,21 +457,50 @@ export function renderPlanTab(root, ctx) {
     root.querySelector('#pbSearch')?.addEventListener('input', e => {
       filters.search = e.target.value;
       syncPbModuleFilters({ moduleSearch: filters.search });
+      if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
+      _searchDebounceTimer = setTimeout(() => paint(), 180);
+    });
+    root.querySelector('#pbFStatus')?.addEventListener('change', e => {
+      filters.status = e.target.value;
+      syncPbModuleFilters({ moduleStatus: filters.status });
       paint();
     });
-    root.querySelector('#pbFStatus')?.addEventListener('change', e => { filters.status = e.target.value; paint(); });
-    root.querySelector('#pbFVrsta')?.addEventListener('change', e => { filters.vrsta = e.target.value; paint(); });
-    root.querySelector('#pbFPrio')?.addEventListener('change', e => { filters.prioritet = e.target.value; paint(); });
+    root.querySelector('#pbFVrsta')?.addEventListener('change', e => {
+      filters.vrsta = e.target.value;
+      syncPbModuleFilters({ moduleVrsta: filters.vrsta });
+      paint();
+    });
+    root.querySelector('#pbFPrio')?.addEventListener('change', e => {
+      filters.prioritet = e.target.value;
+      syncPbModuleFilters({ modulePrioritet: filters.prioritet });
+      paint();
+    });
     root.querySelector('#pbFDoneBtn')?.addEventListener('click', () => {
       filters.showDone = !filters.showDone;
       syncPbModuleFilters({ moduleShowDone: filters.showDone });
       paint();
     });
-    root.querySelector('#pbFProb')?.addEventListener('click', () => { filters.problemOnly = !filters.problemOnly; paint(); });
-    root.querySelector('#pbFUnassigned')?.addEventListener('click', () => { filters.unassignedOnly = !filters.unassignedOnly; paint(); });
+    root.querySelector('#pbFProb')?.addEventListener('click', () => {
+      filters.problemOnly = !filters.problemOnly;
+      syncPbModuleFilters({ moduleProblemOnly: filters.problemOnly });
+      paint();
+    });
+    root.querySelector('#pbFUnassigned')?.addEventListener('click', () => {
+      filters.unassignedOnly = !filters.unassignedOnly;
+      syncPbModuleFilters({ moduleUnassignedOnly: filters.unassignedOnly });
+      paint();
+    });
     root.querySelector('#pbFReset')?.addEventListener('click', () => {
       filters = { search: '', status: 'all', vrsta: 'all', prioritet: 'all', showDone: false, problemOnly: false, unassignedOnly: false };
-      syncPbModuleFilters({ moduleSearch: '', moduleShowDone: false });
+      syncPbModuleFilters({
+        moduleSearch: '',
+        moduleShowDone: false,
+        moduleStatus: 'all',
+        modulePrioritet: 'all',
+        moduleVrsta: 'all',
+        moduleProblemOnly: false,
+        moduleUnassignedOnly: false,
+      });
       paint();
     });
     root.querySelector('#pbRefreshBtn')?.addEventListener('click', () => ctx.onRefresh?.());
