@@ -3,7 +3,7 @@
  * Pristup: admin ili menadžment (baza: can_manage_predmet_aktivacija).
  */
 
-import { sbReq } from './supabase.js';
+import { sbReq, sbReqThrow } from './supabase.js';
 import { getIsOnline } from '../state/auth.js';
 
 function assertOnline() {
@@ -30,7 +30,7 @@ export async function listPredmetAktivacijaAdmin() {
  * @param {boolean} aktivan
  * @param {string|null|undefined} napomena null = ne menja postojeću
  * @param {boolean|undefined} projektovanjeMontaza undefined = ne menja flag
- * @returns {Promise<boolean|null>} true uspeh, null greška
+ * @returns {Promise<void>}
  */
 export async function setPredmetAktivacija(itemId, aktivan, napomena = undefined, projektovanjeMontaza = undefined) {
   assertOnline();
@@ -43,7 +43,5 @@ export async function setPredmetAktivacija(itemId, aktivan, napomena = undefined
   if (projektovanjeMontaza !== undefined) {
     body.p_projektovanje_montaza = !!projektovanjeMontaza;
   }
-  const res = await sbReq('rpc/set_predmet_aktivacija', 'POST', body, { upsert: false });
-  if (res == null) return null;
-  return true;
+  await sbReqThrow('rpc/set_predmet_aktivacija', 'POST', body, { upsert: false });
 }

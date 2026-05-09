@@ -7,6 +7,13 @@
  */
 
 import { escHtml, showToast } from '../../../lib/dom.js';
+
+function toastPredmetSaveErr(err) {
+  const raw = err instanceof Error ? err.message : String(err);
+  const msg =
+    raw.length > 180 ? `${raw.slice(0, 180).trim()}…` : raw.trim() || 'Snimanje nije uspelo.';
+  showToast(msg);
+}
 import { setPredmetAktivacija } from '../../../services/predmetAktivacija.js';
 import { openNapomenaModal } from './napomenaModal.js';
 import {
@@ -207,11 +214,12 @@ export function wirePredmetiTable(root, opts = {}) {
       if (!potvrdi) return;
       input.checked = next;
       if (prev) prev.je_aktivan = next;
-      const ok = await setPredmetAktivacija(id, next, null);
-      if (ok == null) {
+      try {
+        await setPredmetAktivacija(id, next, null);
+      } catch (err) {
         if (prev) prev.je_aktivan = oldAkt;
         input.checked = oldAkt;
-        showToast('Snimanje nije uspelo (proveri dozvolu ili mrežu).');
+        toastPredmetSaveErr(err);
         return;
       }
       showToast('Sačuvano');
@@ -240,11 +248,12 @@ export function wirePredmetiTable(root, opts = {}) {
       if (!potvrdi) return;
       input.checked = next;
       if (prev) prev.je_projektovanje_montaza = next;
-      const ok = await setPredmetAktivacija(id, !!prev?.je_aktivan, undefined, next);
-      if (ok == null) {
+      try {
+        await setPredmetAktivacija(id, !!prev?.je_aktivan, undefined, next);
+      } catch (err) {
         if (prev) prev.je_projektovanje_montaza = oldPm;
         input.checked = oldPm;
-        showToast('Snimanje nije uspelo (proveri dozvolu ili mrežu).');
+        toastPredmetSaveErr(err);
         return;
       }
       showToast('Sačuvano');
@@ -262,9 +271,10 @@ export function wirePredmetiTable(root, opts = {}) {
         initial: row?.napomena || '',
         onConfirm: async text => {
           const nextAkt = !!row?.je_aktivan;
-          const ok = await setPredmetAktivacija(id, nextAkt, text);
-          if (ok == null) {
-            showToast('Snimanje napomene nije uspelo.');
+          try {
+            await setPredmetAktivacija(id, nextAkt, text);
+          } catch (err) {
+            toastPredmetSaveErr(err);
             return;
           }
           if (row) row.napomena = text;
