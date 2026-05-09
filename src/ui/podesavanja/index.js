@@ -159,6 +159,12 @@ function _renderShell() {
   _mountEl.innerHTML = `
     <div class="set-shell">
       ${_headerHtml(subtitle)}
+      <div class="set-nav-mobile-wrap">
+        <label class="set-nav-mobile-label" for="setNavSelect">Sekcija</label>
+        <select id="setNavSelect" class="set-nav-select" autocomplete="off">
+          ${_mobileNavSelectHtml()}
+        </select>
+      </div>
       <div class="set-layout">
         <nav class="set-sidebar" role="navigation" aria-label="Podešavanja navigacija">
           <div class="set-sidebar-header">
@@ -300,29 +306,42 @@ function _wireHeader() {
   _mountEl.querySelector('#podBackBtn')?.addEventListener('click', () => _onBackToHubCb?.());
   _mountEl.querySelector('#podLogoutBtn')?.addEventListener('click', () => _onLogoutCb?.());
   _mountEl.querySelector('#podThemeToggle')?.addEventListener('click', () => toggleTheme());
+  _mountEl.querySelector('#setNavSelect')?.addEventListener('change', e => _switchToTab(e.target.value));
+}
+
+/** Mobilni izbor sekcije — isti podaci kao sidebar. */
+function _mobileNavSelectHtml() {
+  return _visibleGroups().map(g => `
+    <optgroup label="${escHtml(g.label)}">
+      ${g.items.map(it => `
+        <option value="${escHtml(it.id)}"${_activeTab === it.id ? ' selected' : ''}>${escHtml(it.label)}</option>
+      `).join('')}
+    </optgroup>
+  `).join('');
+}
+
+function _switchToTab(t) {
+  if (!t || t === _activeTab) return;
+  _activeTab = t;
+  ssSet(SESSION_KEYS.SETTINGS_TAB, t);
+  _renderShell();
+  if (t === 'users') {
+    refreshUsers().then(() => _renderShell()).catch(e => console.warn('[podesavanja] users refresh failed', e));
+  }
+  if (t === 'maint-profiles') {
+    refreshMaintProfiles().then(() => _renderShell()).catch(e => console.warn('[podesavanja] maint profiles refresh failed', e));
+  }
+  if (t === 'predmet-aktivacija') {
+    refreshPredmetAktivacija().then(() => _renderShell()).catch(e => console.warn('[podesavanja] predmet aktivacija refresh failed', e));
+  }
+  if (t === 'organizacija') {
+    refreshOrgStructure().then(() => _renderShell()).catch(e => console.warn('[podesavanja] org structure refresh failed', e));
+  }
 }
 
 function _wireSidebar() {
   _mountEl.querySelectorAll('[data-set-tab]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const t = btn.dataset.setTab;
-      if (!t || t === _activeTab) return;
-      _activeTab = t;
-      ssSet(SESSION_KEYS.SETTINGS_TAB, t);
-      _renderShell();
-      if (t === 'users') {
-        refreshUsers().then(() => _renderShell()).catch(e => console.warn('[podesavanja] users refresh failed', e));
-      }
-      if (t === 'maint-profiles') {
-        refreshMaintProfiles().then(() => _renderShell()).catch(e => console.warn('[podesavanja] maint profiles refresh failed', e));
-      }
-      if (t === 'predmet-aktivacija') {
-        refreshPredmetAktivacija().then(() => _renderShell()).catch(e => console.warn('[podesavanja] predmet aktivacija refresh failed', e));
-      }
-      if (t === 'organizacija') {
-        refreshOrgStructure().then(() => _renderShell()).catch(e => console.warn('[podesavanja] org structure refresh failed', e));
-      }
-    });
+    btn.addEventListener('click', () => _switchToTab(btn.dataset.setTab));
   });
 }
 
