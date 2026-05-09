@@ -54,8 +54,9 @@ export function renderPodesavanjePredmetaPanel() {
     </div>
     <p class="form-hint" style="margin-bottom:10px">
       Kolona <strong>Aktivan</strong> kontroli&#x161;e Plan proizvodnje i Pra&#x107;enje proizvodnje.
-      Kolona <strong>Projektovanje i monta&#x17E;a</strong> &#x107;e kasnije filtrirati iste predmete u modulima projektovanja i plana monta&#x17E;e &mdash; prikazani bi&#x263;e samo predmeti koji su aktivni i ovde uklju&#x10D;eni za projektovanje/monta&#x17E;u.
-      Novi predmeti iz BigTehn cache-a podrazumevano su uklju&#x10D;eni u oba slu&#x10D;aja dok ih ne isklju&#x10D;ite.
+      Kolona <strong>Projektovanje i monta&#x17E;a</strong> filtrira prikaz u modulima projektovanja i plana monta&#x17E;e &mdash; vide se samo predmeti koji su <strong>Aktivan</strong> i ovde ru&#x10D;no uklju&#x10D;eni.
+      Za projektovanje/monta&#x17E;u svi predmeti podrazumevano su <strong>isklju&#x10D;eni</strong>; uklju&#x10D;ite samo one koje &#x17E;elite.
+      Za Plan i Pra&#x107;enje novi predmeti iz BigTehn cache-a i dalje dolaze kao aktivni dok ih ne isklju&#x10D;ite u koloni Aktivan.
     </p>
     <div id="predAktTableHost">${renderPredmetiTable()}</div>`;
 }

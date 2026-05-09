@@ -243,7 +243,7 @@ export function wirePredmetiTable(root, opts = {}) {
       const akcija = next ? 'uključite' : 'isključite';
       const potvrdi = window.confirm(
         `Da li želite da ${akcija} predmet za projektovanje i montažu?\n\n${opis}\n\n` +
-          'U modulima projektovanja i plana montaže videće se samo predmeti koji su aktivni i ovde uključeni (kad ti moduli budu vezani za ovu opciju).\n\nNastaviti?'
+          'Samo ručno uključeni predmeti ulaze u te preglede (uz kolonu Aktivan).\n\nNastaviti?'
       );
       if (!potvrdi) return;
       input.checked = next;
