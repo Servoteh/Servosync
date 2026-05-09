@@ -26,7 +26,7 @@ const SEARCH_DEB_MS = 250;
 const EXPORT_CAP = 12_000;
 
 const KLASE_FILTER = [
-  { id: '', label: 'Sve klase' },
+  { id: '', label: '— Sve klase —' },
   { id: 'glodalo', label: 'Glodalo' },
   { id: 'burgija', label: 'Burgija' },
   { id: 'pločica', label: 'Pločica' },
@@ -113,7 +113,8 @@ function syncPrintBtnLabel() {
   if (!pb) return;
   const n = state.selected.size;
   pb.disabled = n === 0;
-  pb.textContent = n > 0 ? `🏷 Štampa odabranih (${n})` : '🏷 Štampa odabranih';
+  const label = n > 0 ? `Štampa odabranih (${n})` : 'Štampa odabranih';
+  pb.innerHTML = `<span class="rev-btn-ic" aria-hidden="true">🖨</span>${escHtml(label)}`;
 }
 
 async function ensureMachines() {
@@ -194,8 +195,8 @@ function renderToolbar() {
     <div class="rev-rzn-toolbar">
       <div class="rev-rzn-toolbar__row rev-rzn-toolbar__row--filters">
         <div class="rev-field rev-field--grow">
-          <label class="rev-field-label">Pretraga</label>
-          <input type="search" id="revRznSearch" class="rev-input rev-input--search" placeholder="Oznaka, naziv, klasa, barkod…" value="${escHtml(state.search)}"/>
+          <label class="rev-field-label rev-field-label--hidden" for="revRznSearch">Pretraga</label>
+          <input type="search" id="revRznSearch" class="rev-input rev-input--search" placeholder="Pretraga po oznaci, nazivu, klasi ili barkodu…" value="${escHtml(state.search)}"/>
         </div>
         <div class="rev-field">
           <label class="rev-field-label">Klasa</label>
@@ -209,7 +210,7 @@ function renderToolbar() {
         <div class="rev-field">
           <label class="rev-field-label">Mašina</label>
           <select id="revRznMachine" class="rev-select">
-            <option value="" ${state.machine === '' ? 'selected' : ''}>Sve mašine</option>
+            <option value="" ${state.machine === '' ? 'selected' : ''}>— Sve mašine —</option>
             ${state.machines
               .map(
                 (m) =>
@@ -230,13 +231,13 @@ function renderToolbar() {
       <div class="rev-rzn-toolbar__row rev-rzn-toolbar__row--actions">
         ${
           canManageReversi()
-            ? `<button type="button" class="rev-btn rev-btn--secondary" id="revRznPrintSel" ${printDisabled ? 'disabled' : ''}>🏷 ${escHtml(printLabel)}</button>`
+            ? `<button type="button" class="rev-btn rev-btn--secondary" id="revRznPrintSel" ${printDisabled ? 'disabled' : ''}><span class="rev-btn-ic" aria-hidden="true">🖨</span>${escHtml(printLabel)}</button>`
             : ''
         }
-        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revRznScanIssue">📷 Zaduženje (skener)</button>` : ''}
-        <button type="button" class="rev-btn rev-btn--outline-coral" id="revRznScanReturn">↩ Povraćaj (skener)</button>
+        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revRznScanIssue"><span class="rev-btn-ic" aria-hidden="true">📠</span>Zaduženje (skener)</button>` : ''}
+        <button type="button" class="rev-btn rev-btn--outline-coral" id="revRznScanReturn"><span class="rev-btn-ic" aria-hidden="true">↩</span>Povraćaj (skener)</button>
         <span class="rev-rzn-toolbar__spacer"></span>
-        <button type="button" class="rev-btn rev-btn--excel" id="revRznExcel">Excel</button>
+        <button type="button" class="rev-btn rev-btn--excel" id="revRznExcel"><span class="rev-btn-ic" aria-hidden="true">📗</span>Excel</button>
         ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revRznNew">+ Nova šifra</button>` : ''}
       </div>
     </div>`;
@@ -249,49 +250,56 @@ function renderStats() {
   const naM = st?.sumMach ?? '—';
   const uM = st?.sumWh ?? '—';
   const low = st?.low ?? '—';
-  const hint = st?.truncated
-    ? `Procena iz prvih ${st.sampleSize} šifri (ukupno u bazi: ${st.totalSymbols}).`
-    : 'Na osnovu trenutnih filtera.';
+  const katalogHint = st?.truncated
+    ? `Procena: prvih ${st.sampleSize} od ${st.totalSymbols} u katalogu`
+    : 'U katalogu (prema filteru)';
+  const activeHint = st?.truncated
+    ? `U učitanom uzorku (${st.sampleSize} šifri)`
+    : 'Aktivne šifre u prikazu';
 
   return `
     <div class="rev-rzn-stats">
-      <div class="rev-rzn-stat-card">
-        <div class="rev-rzn-stat-card__label">Ukupno šifri</div>
-        <div class="rev-rzn-stat-card__value">${escHtml(String(tot))}</div>
-        <div class="rev-rzn-stat-card__hint">Prema filteru</div>
+      <div class="rev-rzn-stat-card rev-rzn-stat-card--with-icon">
+        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--coral" aria-hidden="true">✂</div>
+        <div class="rev-rzn-stat-card__body">
+          <div class="rev-rzn-stat-card__label">Ukupno šifri</div>
+          <div class="rev-rzn-stat-card__value">${escHtml(String(tot))}</div>
+          <div class="rev-rzn-stat-card__hint">${escHtml(katalogHint)}</div>
+        </div>
       </div>
-      <div class="rev-rzn-stat-card rev-rzn-stat-card--ok">
-        <div class="rev-rzn-stat-card__label">Aktivne (uzorak)</div>
-        <div class="rev-rzn-stat-card__value">${escHtml(String(akt))}</div>
-        <div class="rev-rzn-stat-card__hint">${escHtml(hint)}</div>
+      <div class="rev-rzn-stat-card rev-rzn-stat-card--with-icon rev-rzn-stat-card--ok">
+        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--ok" aria-hidden="true">✓</div>
+        <div class="rev-rzn-stat-card__body">
+          <div class="rev-rzn-stat-card__label">Aktivne</div>
+          <div class="rev-rzn-stat-card__value">${escHtml(String(akt))}</div>
+          <div class="rev-rzn-stat-card__hint">${escHtml(activeHint)}</div>
+        </div>
       </div>
-      <div class="rev-rzn-stat-card">
-        <div class="rev-rzn-stat-card__label">Na mašinama</div>
-        <div class="rev-rzn-stat-card__value">${escHtml(String(naM))}</div>
-        <div class="rev-rzn-stat-card__hint">Kom na ZADU-M-*</div>
+      <div class="rev-rzn-stat-card rev-rzn-stat-card--with-icon">
+        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--coral" aria-hidden="true">⚙</div>
+        <div class="rev-rzn-stat-card__body">
+          <div class="rev-rzn-stat-card__label">Na mašinama</div>
+          <div class="rev-rzn-stat-card__value">${escHtml(String(naM))}</div>
+          <div class="rev-rzn-stat-card__hint">Kom na mašinama (uzorak)</div>
+        </div>
       </div>
-      <div class="rev-rzn-stat-card">
-        <div class="rev-rzn-stat-card__label">U magacinu</div>
-        <div class="rev-rzn-stat-card__value">${escHtml(String(uM))}</div>
-        <div class="rev-rzn-stat-card__hint">Kom u skladištu</div>
+      <div class="rev-rzn-stat-card rev-rzn-stat-card--with-icon">
+        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--coral" aria-hidden="true">🏭</div>
+        <div class="rev-rzn-stat-card__body">
+          <div class="rev-rzn-stat-card__label">U magacinu</div>
+          <div class="rev-rzn-stat-card__value">${escHtml(String(uM))}</div>
+          <div class="rev-rzn-stat-card__hint">Kom u skladištu</div>
+        </div>
       </div>
-      <div class="rev-rzn-stat-card rev-rzn-stat-card--alert">
-        <div class="rev-rzn-stat-card__label">Niska zaliha</div>
-        <div class="rev-rzn-stat-card__value">${escHtml(String(low))}</div>
-        <div class="rev-rzn-stat-card__hint">Ispod min. (uzorak)</div>
+      <div class="rev-rzn-stat-card rev-rzn-stat-card--with-icon rev-rzn-stat-card--alert">
+        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--alert" aria-hidden="true">⚠</div>
+        <div class="rev-rzn-stat-card__body">
+          <div class="rev-rzn-stat-card__label">Niska zaliha</div>
+          <div class="rev-rzn-stat-card__value">${escHtml(String(low))}</div>
+          <div class="rev-rzn-stat-card__hint">Ispod minimuma (uzorak)</div>
+        </div>
       </div>
     </div>`;
-}
-
-function renderPageHeader() {
-  return `
-    <header class="rev-page-header">
-      <div class="rev-page-header__icon" aria-hidden="true">✂</div>
-      <div class="rev-page-header__text">
-        <h2 class="rev-page-header__title">Rezni alat</h2>
-        <p class="rev-page-header__desc">Katalog šifri — zalihe u magacinu i na mašinama. Klik na zbir na mašinama otvara raspored.</p>
-      </div>
-    </header>`;
 }
 
 function colCount() {
@@ -318,10 +326,9 @@ function renderTable() {
 
       const omCell =
         Number(t.on_machines_qty) > 0
-          ? `<button type="button" class="rev-rzn-mach-hit" data-rzn-toggle-m="${escHtml(t.id)}">
-              <span class="rev-td-num__main">${escHtml(String(t.on_machines_qty))}</span>
-              <span class="rev-muted rev-rzn-mach-meta">${escHtml(String(locCount))} lok.</span>
-              <span class="rev-rzn-chevron${exp ? ' is-open' : ''}">›</span>
+          ? `<button type="button" class="rev-rzn-mach-hit rev-rzn-mach-hit--active" data-rzn-toggle-m="${escHtml(t.id)}">
+              <span class="rev-rzn-mach-qty">&gt; <span class="rev-td-num__main">${escHtml(String(t.on_machines_qty))}</span> <span class="rev-rzn-mach-locs">(${escHtml(String(locCount))})</span></span>
+              <span class="rev-rzn-chevron${exp ? ' is-open' : ''}" aria-hidden="true">›</span>
             </button>`
           : `<span class="rev-muted">0</span>`;
 
@@ -382,7 +389,7 @@ function renderTable() {
           <th>Naziv</th>
           <th>Klasa</th>
           <th class="rev-th-num">U magacinu</th>
-          <th class="rev-th-num">Na mašinama</th>
+          <th class="rev-th-num rev-th-num--mach-h">Na mašinama</th>
           <th class="rev-th-num">Ukupno</th>
           <th>Status</th>
           <th class="rev-th-actions">Akcije</th>
@@ -390,8 +397,8 @@ function renderTable() {
         <tbody>${rowsHtml}</tbody>
       </table>
     </div>
-    <div class="rev-pager">
-      <span class="rev-muted">Prikazano ${state.rows.length}${state.total != null ? ` od ${state.total} šifri` : ''}</span>
+    <div class="rev-pager rev-rzn-pager">
+      <span><strong class="rev-rzn-pager-count">${escHtml(String(state.rows.length))}</strong> <span class="rev-rzn-pager-label">šifri prikazano</span>${state.total != null ? ` <span class="rev-muted">· ukupno ${escHtml(String(state.total))}</span>` : ''} <span class="rev-muted">· sortirano po Oznaci</span></span>
       ${state.offset + state.rows.length < (state.total ?? Infinity) ? '<button type="button" class="rev-btn rev-btn--secondary" id="revRznMore">Učitaj još</button>' : ''}
     </div>`;
 }
@@ -621,7 +628,6 @@ async function renderKatalogSubview(body, refreshAll) {
   if (!subHost) return;
   subHost.innerHTML = `
     <div class="rev-print-area rev-rzn-katalog">
-    ${renderPageHeader()}
     ${renderStats()}
     ${renderToolbar()}
     <div id="revRznTableHost">${renderTable()}</div>
@@ -663,7 +669,6 @@ export async function renderReznialatTab(body, opts = {}) {
       return;
     }
     await loadPage();
-    await loadStats();
     await loadStats();
     const subHost = body.querySelector('#revRznSubHost');
     if (!subHost) return;
