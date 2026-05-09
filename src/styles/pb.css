@@ -14,6 +14,10 @@ body.module-projektni-biro {
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 12px 96px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
 @media (min-width: 768px) {
@@ -286,10 +290,12 @@ body.module-projektni-biro {
 .pb-chrome {
   position: sticky;
   top: 0;
-  z-index: 25;
+  z-index: 100;
   background: var(--bg, #f8f9fa);
   flex-shrink: 0;
   will-change: transform;
+  margin: 0;
+  padding: 0;
 }
 
 .pb-tabs {
@@ -345,13 +351,8 @@ body.module-projektni-biro {
   flex: 1 1 auto;
   min-height: 240px;
   padding-top: 16px;
-}
-
-@media (min-width: 768px) {
-  body.desktop-erp-module:not(.hub-active):not(.m-body) .pb-tab-body {
-    overflow-y: auto;
-    min-height: 0;
-  }
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* == STAT CARDS (kompaktne mini kartice) == */
