@@ -634,6 +634,83 @@ export async function fetchMyIssuedCuttingTools() {
 }
 
 /**
+ * Pregled reznog alata po mašini — agregat (machine_code, catalog_id) sa preostalom količinom.
+ * @param {{ search?: string }} [opts]
+ */
+export async function fetchCuttingByMachine(opts = {}) {
+  return wrap(async () => {
+    const parts = ['select=*', 'order=machine_code.asc,oznaka.asc', 'limit=1000'];
+    const s = opts.search && String(opts.search).trim();
+    if (s) {
+      const enc = encodeURIComponent(`*${s}*`);
+      parts.push(`or=(machine_code.ilike.${enc},machine_name.ilike.${enc},oznaka.ilike.${enc},naziv.ilike.${enc},barcode.ilike.${enc})`);
+    }
+    const rows = await sbReq(`v_rev_cts_by_machine?${parts.join('&')}`);
+    return Array.isArray(rows) ? rows : [];
+  })();
+}
+
+/**
+ * Pregled reznog alata po zaposlenom (potpisniku).
+ * @param {{ search?: string, department?: string }} [opts]
+ */
+export async function fetchCuttingByEmployee(opts = {}) {
+  return wrap(async () => {
+    const parts = ['select=*', 'order=employee_name.asc,oznaka.asc', 'limit=1000'];
+    const s = opts.search && String(opts.search).trim();
+    if (s) {
+      const enc = encodeURIComponent(`*${s}*`);
+      parts.push(`or=(employee_name.ilike.${enc},oznaka.ilike.${enc},naziv.ilike.${enc},barcode.ilike.${enc})`);
+    }
+    const dep = opts.department && String(opts.department).trim();
+    if (dep) parts.push(`department=eq.${encodeURIComponent(dep)}`);
+    const rows = await sbReq(`v_rev_cts_by_employee?${parts.join('&')}`);
+    return Array.isArray(rows) ? rows : [];
+  })();
+}
+
+/**
+ * Magacin — UNION rev_tools (HAND) + rev_cutting_tool_catalog (CUTTING).
+ * Vraća samo redove sa qty > 0 osim ako includeZero=true.
+ * @param {{ grupa?: 'HAND'|'CUTTING'|'ALL', search?: string, klasa?: string, includeZero?: boolean }} [opts]
+ */
+export async function fetchUnifiedWarehouse(opts = {}) {
+  return wrap(async () => {
+    const parts = ['select=*', 'order=grupa.asc,oznaka.asc', 'limit=1000'];
+    const grupa = opts.grupa && String(opts.grupa).trim();
+    if (grupa === 'HAND') parts.push('grupa=eq.HAND');
+    else if (grupa === 'CUTTING') parts.push('grupa=eq.CUTTING');
+    if (!opts.includeZero) parts.push('in_warehouse_qty=gt.0');
+    const klasa = opts.klasa && String(opts.klasa).trim();
+    if (klasa) parts.push(`klasa=eq.${encodeURIComponent(klasa)}`);
+    const s = opts.search && String(opts.search).trim();
+    if (s) {
+      const enc = encodeURIComponent(`*${s}*`);
+      parts.push(`or=(oznaka.ilike.${enc},naziv.ilike.${enc},barcode.ilike.${enc},klasa.ilike.${enc})`);
+    }
+    const rows = await sbReq(`v_rev_warehouse_unified?${parts.join('&')}`);
+    return Array.isArray(rows) ? rows : [];
+  })();
+}
+
+/**
+ * Lista odeljenja iz employees tabele (DISTINCT, neprazno).
+ */
+export async function fetchEmployeeDepartments() {
+  return wrap(async () => {
+    const rows = await sbReq(
+      'employees?select=department&is_active=eq.true&department=not.is.null&limit=2000',
+    );
+    const set = new Set();
+    for (const r of Array.isArray(rows) ? rows : []) {
+      const d = String(r.department || '').trim();
+      if (d) set.add(d);
+    }
+    return Array.from(set).sort();
+  })();
+}
+
+/**
  * Self-service: rezni alat na mašinama na kojima operater trenutno radi.
  * Fallback: ako view ne postoji (CI / nema production schema), vraća empty list bez greške.
  */
