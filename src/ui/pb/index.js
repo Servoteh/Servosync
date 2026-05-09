@@ -105,11 +105,11 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     const projFilter = state.activeProject === 'all' ? {} : { projectId: state.activeProject };
     const engFilter = state.activeEngineer === 'all' ? {} : { employeeId: state.activeEngineer };
     try {
-      const [p, e, t, l] = await Promise.all([
+      /* Load meter RPC ne sme da blokira ceo modul (dropdown projekata / zadaci). */
+      const [p, e, t] = await Promise.all([
         getPbProjects(),
         getPbEngineers(),
         getPbTasks({ ...projFilter, ...engFilter }),
-        getPbLoadStats(20),
       ]);
       projects = p;
       engineers = e;
@@ -118,7 +118,12 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         savePbState(state);
       }
       tasks = t;
-      loadStats = l;
+      try {
+        loadStats = await getPbLoadStats(20);
+      } catch (statsErr) {
+        console.error('PB getPbLoadStats failed (Plan i ostalo i dalje rade)', statsErr);
+        loadStats = [];
+      }
       paintChrome();
       if (body) {
         body.classList.remove('pb-tab-body--loading');
