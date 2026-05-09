@@ -2011,14 +2011,51 @@ body.module-settings .set-shell > .set-layout {
   box-shadow:0 0 0 3px var(--accent-dim);
 }
 
-@media (max-width:1024px) {
-  body.module-settings .set-nav-mobile-wrap { display:flex; }
-  body.module-settings .set-sidebar { display:none !important; }
+/* Podešavanja: ispod ove širine skrivamo desktop sidebar (učitava se u DOM i
+   za a11y, ali se ne vidi) i prikazujemo padajući izbor sekcije. 1200px hvata
+   tablete, split-view i iOS „Desktop“ režim gde je širina > 1024 a i dalje
+   treba jedna kolona. */
+@media (max-width:1200px) {
+  body.module-settings .set-nav-mobile-wrap {
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    gap:6px;
+    padding:10px 12px 12px;
+  }
+  body.module-settings .set-sidebar,
+  body.module-settings .set-layout > .set-sidebar {
+    display:none !important;
+    width:0 !important;
+    min-width:0 !important;
+    margin:0 !important;
+    padding:0 !important;
+    overflow:hidden !important;
+    visibility:hidden !important;
+    pointer-events:none !important;
+  }
   body.module-settings .set-shell > .set-layout {
     flex-direction:column !important;
   }
   body.module-settings .set-content {
+    flex:1 1 auto !important;
+    min-width:0 !important;
+    width:100% !important;
+    max-width:100% !important;
     padding:14px 16px 28px;
+  }
+  body.module-settings .set-nav-select {
+    width:100%;
+    min-height:44px;
+    font-size:15px;
+    padding:12px 14px;
+  }
+}
+
+@media (max-width:1024px) {
+  body.module-settings .set-nav-mobile-wrap {
+    padding-left:16px;
+    padding-right:16px;
   }
 }
 
