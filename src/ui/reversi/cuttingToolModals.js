@@ -67,6 +67,7 @@ export function openAddCuttingToolModal(opts = {}) {
       : [],
     unit: opts.tool?.unit || 'kom',
     napomena: opts.tool?.napomena || '',
+    min_stock_qty: opts.tool?.min_stock_qty != null ? String(opts.tool.min_stock_qty) : '0',
     machineSearch: '',
     machines: [],
     /* Inicijalni stock (samo na NEW, ne na edit) */
@@ -162,6 +163,9 @@ export function openAddCuttingToolModal(opts = {}) {
               .join('')}
           </div>
         </fieldset>
+        <label>Minimalna zaliha (upozorenje)
+          <input type="number" id="revCtsMinSt" class="input" min="0" step="1" value="${escHtml(String(state.min_stock_qty))}"/>
+        </label>
         <label>Napomena
           <textarea id="revCtsNote" rows="2" class="input">${escHtml(state.napomena)}</textarea>
         </label>
@@ -218,6 +222,9 @@ export function openAddCuttingToolModal(opts = {}) {
     body.querySelector('#revCtsUnit')?.addEventListener('change', (e) => {
       state.unit = e.target.value;
     });
+    body.querySelector('#revCtsMinSt')?.addEventListener('input', (e) => {
+      state.min_stock_qty = e.target.value;
+    });
     body.querySelector('#revCtsNote')?.addEventListener('input', (e) => {
       state.napomena = e.target.value;
     });
@@ -267,6 +274,7 @@ export function openAddCuttingToolModal(opts = {}) {
         unit: state.unit || 'kom',
         napomena: state.napomena.trim() || null,
         status: opts.tool?.status || 'active',
+        min_stock_qty: Math.max(0, Math.floor(Number(state.min_stock_qty) || 0)),
       };
       const btn = foot.querySelector('#revCtsSave');
       btn.disabled = true;

@@ -1,15 +1,12 @@
 /**
- * Reversi — tab "Rezni alat" (Sprint RZ-2): katalog šifri sa zbirnim stanjem,
- * akcije za nove šifre i štampu nalepnica preko TSC proxy-a.
+ * Reversi — tab "Rezni alat" (redizajn prema docs/CURSOR_REVERSI_REZNI_ALAT.md).
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { canManageReversi } from '../../state/auth.js';
 import { ssGet, ssSet } from '../../lib/storage.js';
-import {
-  fetchCuttingToolCatalog,
-  fetchMachines,
-} from '../../services/reversiService.js';
+import { rowsToCsv, CSV_BOM } from '../../lib/csv.js';
+import { fetchCuttingToolCatalog, fetchMachines } from '../../services/reversiService.js';
 import {
   openAddCuttingToolModal,
   openCuttingToolDetailsModal,
@@ -25,46 +22,118 @@ const SUB_TABS = [
 ];
 
 const PAGE = 25;
+const SEARCH_DEB_MS = 250;
+const EXPORT_CAP = 12_000;
+
+const KLASE_FILTER = [
+  { id: '', label: 'Sve klase' },
+  { id: 'glodalo', label: 'Glodalo' },
+  { id: 'burgija', label: 'Burgija' },
+  { id: 'pločica', label: 'Pločica' },
+  { id: 'držač', label: 'Držač' },
+  { id: 'narez', label: 'Narez' },
+  { id: 'urezna', label: 'Urezna' },
+  { id: 'razvrtač', label: 'Razvrtač' },
+  { id: 'ostalo', label: 'Ostalo' },
+];
 
 const state = {
   search: '',
   status: 'active',
   machine: '',
+  klasa: '',
   offset: 0,
   rows: [],
   total: null,
   machines: [],
   selected: new Set(),
+  expanded: new Set(),
   searchDeb: null,
+  stats: null,
 };
 
 let bodyRoot = null;
 let onIssueScan = null;
 let onReturnScan = null;
 
-function statusPill(s) {
-  if (s === 'scrapped') return '<span class="rev-pill rev-pill--muted rev-pill--sm">Otpisana</span>';
-  return '<span class="rev-pill rev-pill--green rev-pill--sm">Aktivna</span>';
+function normKlasaKey(k) {
+  return String(k || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
-function machineList(arr) {
-  if (!Array.isArray(arr) || arr.length === 0) {
-    return '<span class="rev-muted">— bez ograničenja —</span>';
+function klasaBadgeClass(klasa) {
+  const k = normKlasaKey(klasa);
+  if (k.includes('glodalo')) return 'rev-klasa-badge rev-klasa-badge--glodalo';
+  if (k.includes('burgij')) return 'rev-klasa-badge rev-klasa-badge--burgija';
+  if (k.includes('ploč') || k.includes('ploc')) return 'rev-klasa-badge rev-klasa-badge--plocica';
+  if (k.includes('urez')) return 'rev-klasa-badge rev-klasa-badge--urezivac';
+  if (k.includes('razvrt')) return 'rev-klasa-badge rev-klasa-badge--razvrtac';
+  if (k.includes('narez')) return 'rev-klasa-badge rev-klasa-badge--urezivac';
+  if (k.includes('drž') || k.includes('drz')) return 'rev-klasa-badge rev-klasa-badge--glodalo';
+  return 'rev-klasa-badge rev-klasa-badge--neutral';
+}
+
+function machineBreakdownFromStock(stock) {
+  const m = new Map();
+  for (const s of stock || []) {
+    const loc = Array.isArray(s.loc_locations) ? s.loc_locations[0] : s.loc_locations;
+    const code = loc?.location_code || '';
+    if (!code.startsWith('ZADU-M-')) continue;
+    const mc = code.slice('ZADU-M-'.length);
+    const qty = Number(s.on_hand_qty) || 0;
+    if (qty <= 0) continue;
+    m.set(mc, (m.get(mc) || 0) + qty);
   }
-  return arr.map((m) => `<span class="rev-mchip">${escHtml(m)}</span>`).join(' ');
+  return Array.from(m.entries())
+    .map(([masina, kolicina]) => ({ masina, kolicina }))
+    .sort((a, b) => a.masina.localeCompare(b.masina, 'sr'));
+}
+
+function statusPill(s) {
+  if (s === 'scrapped') {
+    return '<span class="rev-status-pill rev-status-pill--neutral"><span class="rev-status-pill__dot"></span>Povučena</span>';
+  }
+  return '<span class="rev-status-pill rev-status-pill--ok"><span class="rev-status-pill__dot"></span>Aktivna</span>';
+}
+
+function ukupnoClass(ukupno, minQ) {
+  const u = Number(ukupno) || 0;
+  const m = Number(minQ) || 0;
+  if (u === 0) return 'rev-qty-total rev-qty-total--danger';
+  if (m > 0 && u < m) return 'rev-qty-total rev-qty-total--warn';
+  return 'rev-qty-total rev-qty-total--ok';
+}
+
+function syncPrintBtnLabel() {
+  const r = bodyRoot;
+  if (!r) return;
+  const pb = r.querySelector('#revRznPrintSel');
+  if (!pb) return;
+  const n = state.selected.size;
+  pb.disabled = n === 0;
+  pb.textContent = n > 0 ? `🏷 Štampa odabranih (${n})` : '🏷 Štampa odabranih';
 }
 
 async function ensureMachines() {
   if (state.machines.length > 0) return;
-  const r = await fetchMachines();
-  state.machines = r.ok && Array.isArray(r.data) ? r.data : [];
+  const res = await fetchMachines();
+  state.machines = res.ok && Array.isArray(res.data) ? res.data : [];
 }
 
-async function load() {
-  const r = await fetchCuttingToolCatalog({
+function catalogQueryParams() {
+  return {
     search: state.search,
     status: state.status,
     machine: state.machine,
+    klasa: state.klasa,
+  };
+}
+
+async function loadPage() {
+  const r = await fetchCuttingToolCatalog({
+    ...catalogQueryParams(),
     limit: PAGE,
     offset: state.offset,
   });
@@ -79,83 +148,246 @@ async function load() {
   state.total = r.data?.total ?? null;
 }
 
+async function loadStats() {
+  const r = await fetchCuttingToolCatalog({
+    ...catalogQueryParams(),
+    limit: EXPORT_CAP,
+    offset: 0,
+  });
+  if (!r.ok) {
+    state.stats = null;
+    return;
+  }
+  const rows = r.data?.rows || [];
+  const total = r.data?.total ?? rows.length;
+  let sumWh = 0;
+  let sumMach = 0;
+  let low = 0;
+  let activeSyms = 0;
+  for (const row of rows) {
+    if (row.status === 'active') activeSyms += 1;
+    const wh = Number(row.in_warehouse_qty) || 0;
+    const om = Number(row.on_machines_qty) || 0;
+    sumWh += wh;
+    sumMach += om;
+    const uk = wh + om;
+    const minQ = Number(row.min_stock_qty) || 0;
+    if (minQ > 0 && uk < minQ) low += 1;
+  }
+  state.stats = {
+    totalSymbols: total,
+    activeInSample: activeSyms,
+    sampleSize: rows.length,
+    truncated: rows.length < total,
+    sumWh,
+    sumMach,
+    low,
+  };
+}
+
 function renderToolbar() {
+  const nSel = state.selected.size;
+  const printDisabled = !canManageReversi() || nSel === 0;
+  const printLabel = nSel > 0 ? `Štampa odabranih (${nSel})` : 'Štampa odabranih';
+
   return `
-    <div class="rev-panel rev-toolbar-panel">
-      <div class="rev-field rev-field--grow">
-        <label class="rev-field-label">Pretraga (oznaka, naziv, klasa, barkod)</label>
-        <input type="search" id="revRznSearch" class="rev-input rev-input--search" placeholder="npr. glodalo D12 ili RZN-000123…" value="${escHtml(state.search)}"/>
+    <div class="rev-rzn-toolbar">
+      <div class="rev-rzn-toolbar__row rev-rzn-toolbar__row--filters">
+        <div class="rev-field rev-field--grow">
+          <label class="rev-field-label">Pretraga</label>
+          <input type="search" id="revRznSearch" class="rev-input rev-input--search" placeholder="Oznaka, naziv, klasa, barkod…" value="${escHtml(state.search)}"/>
+        </div>
+        <div class="rev-field">
+          <label class="rev-field-label">Klasa</label>
+          <select id="revRznKlasa" class="rev-select">
+            ${KLASE_FILTER.map(
+              (o) =>
+                `<option value="${escHtml(o.id)}" ${state.klasa === o.id ? 'selected' : ''}>${escHtml(o.label)}</option>`,
+            ).join('')}
+          </select>
+        </div>
+        <div class="rev-field">
+          <label class="rev-field-label">Mašina</label>
+          <select id="revRznMachine" class="rev-select">
+            <option value="" ${state.machine === '' ? 'selected' : ''}>Sve mašine</option>
+            ${state.machines
+              .map(
+                (m) =>
+                  `<option value="${escHtml(m.rj_code)}" ${state.machine === m.rj_code ? 'selected' : ''}>${escHtml(m.rj_code)} ${escHtml(m.name || '')}</option>`,
+              )
+              .join('')}
+          </select>
+        </div>
+        <div class="rev-field">
+          <label class="rev-field-label">Status</label>
+          <select id="revRznStatus" class="rev-select">
+            <option value="active" ${state.status === 'active' ? 'selected' : ''}>Aktivne</option>
+            <option value="scrapped" ${state.status === 'scrapped' ? 'selected' : ''}>Povučene</option>
+            <option value="all" ${state.status === 'all' ? 'selected' : ''}>Sve</option>
+          </select>
+        </div>
       </div>
-      <div class="rev-field">
-        <label class="rev-field-label">Mašina</label>
-        <select id="revRznMachine" class="rev-select">
-          <option value="" ${state.machine === '' ? 'selected' : ''}>— sve —</option>
-          ${state.machines
-            .map(
-              (m) =>
-                `<option value="${escHtml(m.rj_code)}" ${state.machine === m.rj_code ? 'selected' : ''}>${escHtml(m.rj_code)} ${escHtml(m.name || '')}</option>`,
-            )
-            .join('')}
-        </select>
-      </div>
-      <div class="rev-field">
-        <label class="rev-field-label">Status</label>
-        <select id="revRznStatus" class="rev-select">
-          <option value="active" ${state.status === 'active' ? 'selected' : ''}>Aktivne</option>
-          <option value="scrapped" ${state.status === 'scrapped' ? 'selected' : ''}>Otpisane</option>
-          <option value="all" ${state.status === 'all' ? 'selected' : ''}>Sve</option>
-        </select>
-      </div>
-      <div class="rev-toolbar-actions">
-        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revRznNew">+ Nova šifra</button>` : ''}
-        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--secondary" id="revRznPrintSel">🏷 Štampa odabranih</button>` : ''}
+      <div class="rev-rzn-toolbar__row rev-rzn-toolbar__row--actions">
+        ${
+          canManageReversi()
+            ? `<button type="button" class="rev-btn rev-btn--secondary" id="revRznPrintSel" ${printDisabled ? 'disabled' : ''}>🏷 ${escHtml(printLabel)}</button>`
+            : ''
+        }
         ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revRznScanIssue">📷 Zaduženje (skener)</button>` : ''}
-        <button type="button" class="rev-btn rev-btn--secondary" id="revRznScanReturn">↩ Povraćaj (skener)</button>
+        <button type="button" class="rev-btn rev-btn--outline-coral" id="revRznScanReturn">↩ Povraćaj (skener)</button>
+        <span class="rev-rzn-toolbar__spacer"></span>
+        <button type="button" class="rev-btn rev-btn--excel" id="revRznExcel">Excel</button>
+        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revRznNew">+ Nova šifra</button>` : ''}
       </div>
     </div>`;
 }
 
+function renderStats() {
+  const st = state.stats;
+  const tot = st?.totalSymbols ?? state.total ?? '—';
+  const akt = st?.activeInSample ?? '—';
+  const naM = st?.sumMach ?? '—';
+  const uM = st?.sumWh ?? '—';
+  const low = st?.low ?? '—';
+  const hint = st?.truncated
+    ? `Procena iz prvih ${st.sampleSize} šifri (ukupno u bazi: ${st.totalSymbols}).`
+    : 'Na osnovu trenutnih filtera.';
+
+  return `
+    <div class="rev-rzn-stats">
+      <div class="rev-rzn-stat-card">
+        <div class="rev-rzn-stat-card__label">Ukupno šifri</div>
+        <div class="rev-rzn-stat-card__value">${escHtml(String(tot))}</div>
+        <div class="rev-rzn-stat-card__hint">Prema filteru</div>
+      </div>
+      <div class="rev-rzn-stat-card rev-rzn-stat-card--ok">
+        <div class="rev-rzn-stat-card__label">Aktivne (uzorak)</div>
+        <div class="rev-rzn-stat-card__value">${escHtml(String(akt))}</div>
+        <div class="rev-rzn-stat-card__hint">${escHtml(hint)}</div>
+      </div>
+      <div class="rev-rzn-stat-card">
+        <div class="rev-rzn-stat-card__label">Na mašinama</div>
+        <div class="rev-rzn-stat-card__value">${escHtml(String(naM))}</div>
+        <div class="rev-rzn-stat-card__hint">Kom na ZADU-M-*</div>
+      </div>
+      <div class="rev-rzn-stat-card">
+        <div class="rev-rzn-stat-card__label">U magacinu</div>
+        <div class="rev-rzn-stat-card__value">${escHtml(String(uM))}</div>
+        <div class="rev-rzn-stat-card__hint">Kom u skladištu</div>
+      </div>
+      <div class="rev-rzn-stat-card rev-rzn-stat-card--alert">
+        <div class="rev-rzn-stat-card__label">Niska zaliha</div>
+        <div class="rev-rzn-stat-card__value">${escHtml(String(low))}</div>
+        <div class="rev-rzn-stat-card__hint">Ispod min. (uzorak)</div>
+      </div>
+    </div>`;
+}
+
+function renderPageHeader() {
+  return `
+    <header class="rev-page-header">
+      <div class="rev-page-header__icon" aria-hidden="true">✂</div>
+      <div class="rev-page-header__text">
+        <h2 class="rev-page-header__title">Rezni alat</h2>
+        <p class="rev-page-header__desc">Katalog šifri — zalihe u magacinu i na mašinama. Klik na zbir na mašinama otvara raspored.</p>
+      </div>
+    </header>`;
+}
+
+function colCount() {
+  return canManageReversi() ? 9 : 8;
+}
+
 function renderTable() {
   if (state.rows.length === 0) {
-    return `<div class="rev-empty-card"><p>Nema šifri reznog alata koje odgovaraju filteru.</p>${canManageReversi() ? '<p><button type="button" class="rev-btn rev-btn--primary" id="revRznEmptyNew">+ Dodaj prvu šifru</button></p>' : ''}</div>`;
+    return `<div class="rev-empty-card"><p>Nema šifri koje odgovaraju filteru.</p>${canManageReversi() ? '<p><button type="button" class="rev-btn rev-btn--primary" id="revRznEmptyNew">+ Dodaj prvu šifru</button></p>' : ''}</div>`;
   }
+
+  const spans = colCount();
+  const rowsHtml = state.rows
+    .map((t) => {
+      const checked = state.selected.has(t.id) ? 'checked' : '';
+      const exp = state.expanded.has(t.id);
+      const br = machineBreakdownFromStock(t.stock);
+      const locCount = br.length;
+      const uk = (Number(t.in_warehouse_qty) || 0) + (Number(t.on_machines_qty) || 0);
+      const minQ = Number(t.min_stock_qty) || 0;
+      const uClass = ukupnoClass(uk, minQ);
+      const kl = escHtml(t.klasa || '—');
+      const klBadge = `<span class="${klasaBadgeClass(t.klasa)}">${kl}</span>`;
+
+      const omCell =
+        Number(t.on_machines_qty) > 0
+          ? `<button type="button" class="rev-rzn-mach-hit" data-rzn-toggle-m="${escHtml(t.id)}">
+              <span class="rev-td-num__main">${escHtml(String(t.on_machines_qty))}</span>
+              <span class="rev-muted rev-rzn-mach-meta">${escHtml(String(locCount))} lok.</span>
+              <span class="rev-rzn-chevron${exp ? ' is-open' : ''}">›</span>
+            </button>`
+          : `<span class="rev-muted">0</span>`;
+
+      const expandRow = exp
+        ? `<tr class="rev-rzn-expand-row" data-rzn-exp-parent="${escHtml(t.id)}">
+            <td colspan="${spans}" class="rev-rzn-expand-cell">
+              <div class="rev-rzn-expand-inner">
+                <span class="rev-muted rev-rzn-expand-label">Raspored po mašinama:</span>
+                ${
+                  br.length === 0
+                    ? '<span class="rev-muted">—</span>'
+                    : br
+                        .map(
+                          (b) =>
+                            `<span class="rev-rzn-mach-pill"><span class="rev-mono">${escHtml(b.masina)}</span> ${escHtml(String(b.kolicina))} kom</span>`,
+                        )
+                        .join('')
+                }
+              </div>
+            </td>
+          </tr>`
+        : '';
+
+      const rowSel = state.selected.has(t.id) ? ' rev-data-row--selected' : '';
+
+      return `<tr class="rev-data-row rev-rzn-data-row${rowSel}" data-rzn-row="${escHtml(t.id)}">
+          ${canManageReversi() ? `<td class="rev-th-cb"><input type="checkbox" class="rev-rzn-cb" data-rzn-cb="${escHtml(t.id)}" ${checked}/></td>` : ''}
+          <td>
+            <div class="rev-rzn-idstack">
+              <span class="rev-mono rev-strong">${escHtml(t.oznaka || '')}</span>
+              <span class="rev-mono rev-rzn-barcode">${escHtml(t.barcode || '')}</span>
+            </div>
+          </td>
+          <td>${escHtml(t.naziv || '')}</td>
+          <td>${klBadge}</td>
+          <td class="rev-td-num">${escHtml(String(Number(t.in_warehouse_qty) || 0))} <span class="rev-unit-muted">${escHtml(t.unit || 'kom')}</span></td>
+          <td class="rev-td-num rev-td-num--mach">${omCell}</td>
+          <td class="rev-td-num">
+            <div class="${uClass}">${escHtml(String(uk))} <span class="rev-unit-muted">${escHtml(t.unit || 'kom')}</span></div>
+            ${minQ > 0 ? `<div class="rev-min-hint">min. ${escHtml(String(minQ))}</div>` : ''}
+          </td>
+          <td>${statusPill(t.status)}</td>
+          <td class="rev-td-actions">
+            <button type="button" class="rev-act-btn" title="Štampaj nalepnicu" data-rzn-print="${escHtml(t.id)}">🏷</button>
+            <button type="button" class="rev-act-btn" title="Pregled" data-rzn-det="${escHtml(t.id)}">👁</button>
+            ${canManageReversi() ? `<button type="button" class="rev-act-btn" title="Izmena" data-rzn-edit="${escHtml(t.id)}">✎</button>` : ''}
+          </td>
+        </tr>${expandRow}`;
+    })
+    .join('');
+
   return `
-    <div class="rev-table-shell">
-      <table class="rev-data-table">
+    <div class="rev-table-shell rev-table-shell--rzn">
+      <table class="rev-data-table rev-data-table--rzn rev-data-table--zebra">
         <thead><tr>
           ${canManageReversi() ? '<th class="rev-th-cb"><input type="checkbox" id="revRznSelAll"/></th>' : ''}
-          <th>Barkod</th>
           <th>Oznaka</th>
           <th>Naziv</th>
           <th>Klasa</th>
-          <th>Mašine</th>
           <th class="rev-th-num">U magacinu</th>
           <th class="rev-th-num">Na mašinama</th>
+          <th class="rev-th-num">Ukupno</th>
           <th>Status</th>
           <th class="rev-th-actions">Akcije</th>
         </tr></thead>
-        <tbody>${state.rows
-          .map((t) => {
-            const checked = state.selected.has(t.id) ? 'checked' : '';
-            return `<tr data-rzn-row="${escHtml(t.id)}">
-              ${canManageReversi() ? `<td><input type="checkbox" class="rev-rzn-cb" data-rzn-cb="${escHtml(t.id)}" ${checked}/></td>` : ''}
-              <td><span class="rev-mono rev-strong">${escHtml(t.barcode || '')}</span></td>
-              <td>${escHtml(t.oznaka || '')}</td>
-              <td>${escHtml(t.naziv || '')}</td>
-              <td>${escHtml(t.klasa || '—')}</td>
-              <td>${machineList(t.compatible_machine_codes)}</td>
-              <td class="rev-td-num">${escHtml(String(Number(t.in_warehouse_qty) || 0))} ${escHtml(t.unit || 'kom')}</td>
-              <td class="rev-td-num">${Number(t.on_machines_qty) > 0 ? `<strong>${escHtml(String(t.on_machines_qty))}</strong>` : '0'}</td>
-              <td>${statusPill(t.status)}</td>
-              <td class="rev-td-actions">
-                <button type="button" class="rev-act-btn" title="Detalji + stanje po lokacijama" data-rzn-det="${escHtml(t.id)}">👁</button>
-                ${canManageReversi() ? `<button type="button" class="rev-act-btn" title="Izmeni" data-rzn-edit="${escHtml(t.id)}">✎</button>` : ''}
-                <button type="button" class="rev-act-btn" title="Štampaj nalepnicu" data-rzn-print="${escHtml(t.id)}">🏷</button>
-              </td>
-            </tr>`;
-          })
-          .join('')}
-        </tbody>
+        <tbody>${rowsHtml}</tbody>
       </table>
     </div>
     <div class="rev-pager">
@@ -164,7 +396,66 @@ function renderTable() {
     </div>`;
 }
 
-function bindEvents(refreshAll) {
+function downloadCsv(filename, csvBody) {
+  const blob = new Blob([CSV_BOM + csvBody], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function exportExcel() {
+  const r = await fetchCuttingToolCatalog({
+    ...catalogQueryParams(),
+    limit: EXPORT_CAP,
+    offset: 0,
+  });
+  if (!r.ok) {
+    showToast(`Greška: ${r.error}`);
+    return;
+  }
+  const rows = r.data?.rows || [];
+  if (rows.length === 0) {
+    showToast('Nema podataka za izvoz');
+    return;
+  }
+  const headers = [
+    'Oznaka',
+    'Barkod',
+    'Naziv',
+    'Klasa',
+    'Min. zaliha',
+    'U magacinu',
+    'Na mašinama',
+    'Ukupno',
+    'JM',
+    'Status',
+    'Mašine (ZADU)',
+  ];
+  const data = rows.map((t) => {
+    const br = machineBreakdownFromStock(t.stock);
+    const uk = (Number(t.in_warehouse_qty) || 0) + (Number(t.on_machines_qty) || 0);
+    const machStr = br.map((b) => `${b.masina}:${b.kolicina}`).join('; ');
+    return [
+      t.oznaka || '',
+      t.barcode || '',
+      t.naziv || '',
+      t.klasa || '',
+      String(Number(t.min_stock_qty) || 0),
+      String(Number(t.in_warehouse_qty) || 0),
+      String(Number(t.on_machines_qty) || 0),
+      String(uk),
+      t.unit || 'kom',
+      t.status === 'scrapped' ? 'povučena' : 'aktivna',
+      machStr,
+    ];
+  });
+  downloadCsv(`rezni-alat-${new Date().toISOString().slice(0, 10)}.csv`, rowsToCsv(headers, data));
+  showToast(`Eksportovano ${rows.length} redova`);
+}
+
+function wireToolbarAndFilters(refreshAll) {
   const r = bodyRoot;
   if (!r) return;
 
@@ -173,19 +464,29 @@ function bindEvents(refreshAll) {
     state.searchDeb = setTimeout(() => {
       state.search = e.target.value;
       state.offset = 0;
+      state.expanded.clear();
       void refreshAll();
-    }, 300);
+    }, SEARCH_DEB_MS);
+  });
+  r.querySelector('#revRznKlasa')?.addEventListener('change', (e) => {
+    state.klasa = e.target.value;
+    state.offset = 0;
+    state.expanded.clear();
+    void refreshAll();
   });
   r.querySelector('#revRznMachine')?.addEventListener('change', (e) => {
     state.machine = e.target.value;
     state.offset = 0;
+    state.expanded.clear();
     void refreshAll();
   });
   r.querySelector('#revRznStatus')?.addEventListener('change', (e) => {
     state.status = e.target.value;
     state.offset = 0;
+    state.expanded.clear();
     void refreshAll();
   });
+
   r.querySelector('#revRznNew')?.addEventListener('click', () => {
     openAddCuttingToolModal({ onSuccess: () => { state.offset = 0; void refreshAll(); } });
   });
@@ -198,23 +499,76 @@ function bindEvents(refreshAll) {
   r.querySelector('#revRznScanReturn')?.addEventListener('click', () => {
     if (typeof onReturnScan === 'function') onReturnScan();
   });
-  r.querySelector('#revRznSelAll')?.addEventListener('change', (e) => {
-    if (e.target.checked) {
-      state.rows.forEach((t) => state.selected.add(t.id));
-    } else {
-      state.selected.clear();
+  r.querySelector('#revRznExcel')?.addEventListener('click', () => {
+    void exportExcel();
+  });
+
+  r.querySelector('#revRznPrintSel')?.addEventListener('click', async () => {
+    if (state.selected.size === 0) {
+      showToast('Nema označenih šifri');
+      return;
     }
+    const items = state.rows.filter((x) => state.selected.has(x.id));
+    const btn = r.querySelector('#revRznPrintSel');
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = `Štampam ${items.length}…`;
+    let ok = 0;
+    let fail = 0;
+    for (const t of items) {
+      const res = await printCuttingToolLabel(t, 1);
+      if (res.ok) ok += 1;
+      else fail += 1;
+    }
+    btn.disabled = false;
+    btn.textContent = prev;
+    syncPrintBtnLabel();
+    showToast(`Štampa: ${ok} uspešno, ${fail} neuspešno`);
+  });
+}
+
+function wireTable(refreshAll) {
+  const r = bodyRoot;
+  if (!r) return;
+
+  r.querySelector('#revRznSelAll')?.addEventListener('change', (e) => {
+    if (e.target.checked) state.rows.forEach((t) => state.selected.add(t.id));
+    else state.selected.clear();
     r.querySelectorAll('[data-rzn-cb]').forEach((cb) => {
       cb.checked = state.selected.has(cb.getAttribute('data-rzn-cb'));
     });
+    r.querySelectorAll('.rev-rzn-data-row').forEach((row) => {
+      const id = row.getAttribute('data-rzn-row');
+      row.classList.toggle('rev-data-row--selected', !!(id && state.selected.has(id)));
+    });
+    syncPrintBtnLabel();
   });
+
   r.querySelectorAll('[data-rzn-cb]').forEach((cb) => {
     cb.addEventListener('change', () => {
       const id = cb.getAttribute('data-rzn-cb');
       if (cb.checked) state.selected.add(id);
       else state.selected.delete(id);
+      const row = r.querySelector(`tr[data-rzn-row="${id}"]`);
+      row?.classList.toggle('rev-data-row--selected', cb.checked);
+      syncPrintBtnLabel();
     });
   });
+
+  r.querySelectorAll('[data-rzn-toggle-m]').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const id = btn.getAttribute('data-rzn-toggle-m');
+      if (state.expanded.has(id)) state.expanded.delete(id);
+      else state.expanded.add(id);
+      const host = r.querySelector('#revRznTableHost');
+      if (host) {
+        host.innerHTML = renderTable();
+        wireTable(refreshAll);
+      }
+    });
+  });
+
   r.querySelectorAll('[data-rzn-det]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-rzn-det');
@@ -244,26 +598,7 @@ function bindEvents(refreshAll) {
       }
     });
   });
-  r.querySelector('#revRznPrintSel')?.addEventListener('click', async () => {
-    if (state.selected.size === 0) {
-      showToast('Nema označenih šifri za štampu');
-      return;
-    }
-    const items = state.rows.filter((x) => state.selected.has(x.id));
-    const btn = r.querySelector('#revRznPrintSel');
-    btn.disabled = true;
-    btn.textContent = `Štampam ${items.length}…`;
-    let ok = 0;
-    let fail = 0;
-    for (const t of items) {
-      const res = await printCuttingToolLabel(t, 1);
-      if (res.ok) ok += 1;
-      else fail += 1;
-    }
-    btn.disabled = false;
-    btn.textContent = '🏷 Štampa odabranih';
-    showToast(`Štampa: ${ok} uspešno, ${fail} neuspešno`);
-  });
+
   r.querySelector('#revRznMore')?.addEventListener('click', () => {
     state.offset += PAGE;
     void refreshAll();
@@ -271,29 +606,33 @@ function bindEvents(refreshAll) {
 }
 
 function subTabStripHtml(active) {
-  return `<nav class="rev-subtab-strip" role="tablist">
+  return `<nav class="rev-subtab-strip rev-subtab-strip--coral" role="tablist" aria-label="Rezni alat pod-tabovi">
     ${SUB_TABS.map(
-      (t) => `<button type="button" role="tab" class="rev-subtab ${t.id === active ? 'is-active' : ''}" data-rzn-sub="${escHtml(t.id)}">${escHtml(t.label)}</button>`,
+      (t) =>
+        `<button type="button" role="tab" class="rev-subtab rev-subtab--sm ${t.id === active ? 'is-active' : ''}" data-rzn-sub="${escHtml(t.id)}">${escHtml(t.label)}</button>`,
     ).join('')}
   </nav>`;
 }
 
 async function renderKatalogSubview(body, refreshAll) {
   await ensureMachines();
-  await load();
+  await Promise.all([loadPage(), loadStats()]);
   const subHost = body.querySelector('#revRznSubHost');
   if (!subHost) return;
   subHost.innerHTML = `
-    <div class="rev-print-area">
-    <p class="rev-module-hint"><strong>Rezni alat — katalog</strong>: jedna šifra → količina po lokaciji. Stanje na mašinama se gomila iz svih aktivnih reversa za tu šifru.</p>
+    <div class="rev-print-area rev-rzn-katalog">
+    ${renderPageHeader()}
+    ${renderStats()}
     ${renderToolbar()}
     <div id="revRznTableHost">${renderTable()}</div>
     </div>`;
-  bindEvents(refreshAll);
+  syncPrintBtnLabel();
+  wireToolbarAndFilters(refreshAll);
+  wireTable(refreshAll);
 }
 
 /**
- * @param {HTMLElement} body Mount tačka (#revTabBody iz reversi/index.js)
+ * @param {HTMLElement} body
  * @param {{ onIssueScan?: () => void, onReturnScan?: () => void }} [opts]
  */
 export async function renderReznialatTab(body, opts = {}) {
@@ -316,18 +655,38 @@ export async function renderReznialatTab(body, opts = {}) {
         void renderActiveSub();
       });
     });
-    /* Sub-host se popunjava asinhrono */
   };
 
   const refreshKatalog = async () => {
-    state.offset = 0;
-    await renderKatalogSubview(body, refreshKatalog);
+    if (state.offset === 0) {
+      await renderKatalogSubview(body, refreshKatalog);
+      return;
+    }
+    await loadPage();
+    await loadStats();
+    await loadStats();
+    const subHost = body.querySelector('#revRznSubHost');
+    if (!subHost) return;
+    const host = subHost.querySelector('#revRznTableHost');
+    const statsEl = subHost.querySelector('.rev-rzn-stats');
+    const toolbarEl = subHost.querySelector('.rev-rzn-toolbar');
+    if (statsEl) statsEl.outerHTML = renderStats();
+    if (toolbarEl) toolbarEl.outerHTML = renderToolbar();
+    if (host) {
+      host.innerHTML = renderTable();
+      syncPrintBtnLabel();
+      wireToolbarAndFilters(refreshKatalog);
+      wireTable(refreshKatalog);
+    }
   };
 
   const renderActiveSub = async () => {
     const subHost = body.querySelector('#revRznSubHost');
     if (!subHost) return;
     subHost.innerHTML = '<div class="rev-loading-card">Učitavanje…</div>';
+    state.offset = 0;
+    state.rows = [];
+    state.expanded.clear();
     if (activeSub === 'masine') {
       await renderByMachineSubview(subHost);
     } else if (activeSub === 'zaposleni') {
@@ -341,13 +700,15 @@ export async function renderReznialatTab(body, opts = {}) {
   await renderActiveSub();
 }
 
-/** Cleanup state when module unmounts. */
 export function teardownReznialatTab() {
   bodyRoot = null;
   onIssueScan = null;
+  onReturnScan = null;
   state.rows = [];
   state.total = null;
   state.offset = 0;
   state.selected.clear();
+  state.expanded.clear();
+  state.stats = null;
   clearTimeout(state.searchDeb);
 }

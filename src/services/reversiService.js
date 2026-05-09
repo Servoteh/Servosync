@@ -482,7 +482,7 @@ export async function uploadReversalPdf(docNumber, pdfBlob) {
  * Lista šifri reznog alata sa zbirnim stanjem na svim lokacijama (sum on_hand_qty)
  * i zbirnim stanjem na recipient (MACHINE) lokacijama (= "trenutno na reversu").
  *
- * @param {{ search?: string, status?: 'active'|'scrapped'|'all', machine?: string, limit?: number, offset?: number }} params
+ * @param {{ search?: string, status?: 'active'|'scrapped'|'all', machine?: string, klasa?: string, limit?: number, offset?: number }} params
  */
 export async function fetchCuttingToolCatalog(params = {}) {
   return wrap(async () => {
@@ -499,6 +499,11 @@ export async function fetchCuttingToolCatalog(params = {}) {
       const enc = encodeURIComponent(`*${search}*`);
       parts.push(`or=(oznaka.ilike.${enc},naziv.ilike.${enc},klasa.ilike.${enc},barcode.ilike.${enc})`);
     }
+    const kl = params.klasa && String(params.klasa).trim();
+    if (kl) {
+      parts.push(`klasa=eq.${encodeURIComponent(kl)}`);
+    }
+
     const m = params.machine && String(params.machine).trim();
     if (m) {
       parts.push(`compatible_machine_codes=cs.{${encodeURIComponent(m)}}`);
