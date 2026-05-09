@@ -1,8 +1,6 @@
--- ═══════════════════════════════════════════════════════════════════════════
--- PB — Fix: Opterećenost = zbir normi PO RADNOM DANU, cap 7h/dan (ne po zadatku).
--- Sinhrono sa supabase/migrations/20260517120000__pb_load_stats_daily_cap.sql
--- Predikat zaposlenih = kao 20260516120000__pb_extend_mechanical_engineers_predicate.sql
--- ═══════════════════════════════════════════════════════════════════════════
+-- PB: pb_get_load_stats — cap 7h po RADNOM DANU (zbir normi po danu), ne po zadatku.
+-- Predikat zaposlenih ostaje kao u 20260516120000__pb_extend_mechanical_engineers_predicate.sql.
+-- window_days = broj radnih dana unapred od CURRENT_DATE (Supabase podrazumevano 30 kao ranije).
 
 CREATE OR REPLACE FUNCTION public.pb_get_load_stats(window_days INTEGER DEFAULT 30)
 RETURNS TABLE (
