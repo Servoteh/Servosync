@@ -2054,7 +2054,9 @@ body.module-settings .set-shell > .set-layout {
 }
 
 /* Podešavanja na telefonu: ERP #app punjenje visine važi samo od 768px naviše.
-   Ispod toga .set-shell/.set-layout gube visinu → .set-content ostaje prazan. */
+   U portretu širina pada ispod 768px → lanac visine puca; .set-shell još uvek ima
+   min-height:0 !important pa iOS Safari često dobija efektivnu visinu 0 (crn ekran).
+   Landscape širi viewport pa ulazi u desktop #app pravila — zato tamo radi. */
 @media (max-width:767px) {
   html:has(body.module-settings.desktop-erp-module:not(.hub-active):not(.m-body)),
   body.module-settings.desktop-erp-module:not(.hub-active):not(.m-body) {
@@ -2065,6 +2067,7 @@ body.module-settings .set-shell > .set-layout {
     display:flex;
     flex-direction:column;
     min-height:100vh;
+    min-height:-webkit-fill-available;
     min-height:100dvh;
   }
   body.module-settings.desktop-erp-module:not(.hub-active):not(.m-body) #app > * {
@@ -2072,6 +2075,12 @@ body.module-settings .set-shell > .set-layout {
     min-height:0;
     display:flex;
     flex-direction:column;
+  }
+  body.module-settings .set-shell {
+    flex:1 1 auto !important;
+    min-height:-webkit-fill-available !important;
+    min-height:100dvh !important;
+    height:auto !important;
   }
 }
 
