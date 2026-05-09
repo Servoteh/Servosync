@@ -136,12 +136,14 @@ function clearMount(leavingScreen) {
     currentMobileTeardown = null;
   }
   if (mountEl) mountEl.innerHTML = '';
+  document.documentElement.classList.remove('settings-html-fill');
   document.body.classList.remove(
     'hub-active',
     'kadrovska-active',
     'desktop-erp-module',
     'module-kadrovska',
     'module-settings',
+    'settings-layout-compact',
     'plan-active',
     'module-plan',
     'module-plan-proizvodnje',

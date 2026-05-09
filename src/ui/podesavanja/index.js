@@ -37,6 +37,10 @@ let _onBackToHubCb = null;
 let _authUnsubscribe = null;
 let _activeTab = 'users';
 
+/** Jedinstven izvor istine za „jednu kolonu“ + padajući izbor (ne samo @media — keš/zoom/Desktop site). */
+const SETTINGS_COMPACT_MQ = '(max-width: 1200px)';
+let _compactMql = null;
+
 /* ── Sidebar struktura ───────────────────────────────────────────────── */
 
 const SIDEBAR_GROUPS = [
@@ -140,6 +144,49 @@ export async function renderPodesavanjaModule(mountEl, options = {}) {
 
 export function teardownPodesavanjaModule() {
   if (_authUnsubscribe) { _authUnsubscribe(); _authUnsubscribe = null; }
+  if (_compactMql) {
+    if (typeof _compactMql.removeEventListener === 'function') {
+      _compactMql.removeEventListener('change', _onCompactMqlChange);
+    } else {
+      _compactMql.removeListener(_onCompactMqlChange);
+    }
+    _compactMql = null;
+  }
+  document.body.classList.remove('settings-layout-compact');
+  document.documentElement.classList.remove('settings-html-fill');
+}
+
+function _onCompactMqlChange() {
+  _syncSettingsCompactLayout();
+}
+
+function _ensureSettingsCompactListener() {
+  if (_compactMql) return;
+  _compactMql = window.matchMedia(SETTINGS_COMPACT_MQ);
+  if (typeof _compactMql.addEventListener === 'function') {
+    _compactMql.addEventListener('change', _onCompactMqlChange);
+  } else {
+    _compactMql.addListener(_onCompactMqlChange);
+  }
+}
+
+/** Sinhronizuje body/html klase sa stvarnom širinom prozora (posle rendera i pri resize/orijentaciji). */
+function _syncSettingsCompactLayout() {
+  if (!_mountEl) return;
+  const shell = _mountEl.querySelector('.set-shell');
+  const compact = typeof window !== 'undefined' && window.matchMedia(SETTINGS_COMPACT_MQ).matches;
+  document.body.classList.toggle('settings-layout-compact', compact);
+  document.documentElement.classList.toggle('settings-html-fill', compact);
+  if (shell) {
+    shell.classList.toggle('set-shell--compact', compact);
+    const sidebar = shell.querySelector('.set-sidebar');
+    if (sidebar) sidebar.setAttribute('aria-hidden', compact ? 'true' : 'false');
+  }
+}
+
+function _clearSettingsCompactClasses() {
+  document.body.classList.remove('settings-layout-compact');
+  document.documentElement.classList.remove('settings-html-fill');
 }
 
 /* ── INTERNAL ─────────────────────────────────────────────────────────── */
@@ -148,6 +195,7 @@ function _renderShell() {
   if (!_mountEl) return;
 
   if (!canAccessPodesavanja()) {
+    _clearSettingsCompactClasses();
     _mountEl.innerHTML = _lockedScreenHtml();
     _mountEl.querySelector('#podBackBtn')?.addEventListener('click', () => _onBackToHubCb?.());
     _mountEl.querySelector('#podLogoutBtn')?.addEventListener('click', () => _onLogoutCb?.());
@@ -186,6 +234,8 @@ function _renderShell() {
   _wireHeader();
   _wireSidebar();
   _wireTabBody();
+  _ensureSettingsCompactListener();
+  _syncSettingsCompactLayout();
 }
 
 function _sidebarGroupsHtml() {
