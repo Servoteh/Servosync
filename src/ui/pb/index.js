@@ -104,39 +104,71 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     }
     const projFilter = state.activeProject === 'all' ? {} : { projectId: state.activeProject };
     const engFilter = state.activeEngineer === 'all' ? {} : { employeeId: state.activeEngineer };
+
+    /**
+     * Jedan REST/RPC poziv ne sme da obrise ceo chrome — hvata grešku i loguje.
+     * @param {string} label
+     * @param {Promise<unknown>} promise
+     */
+    async function pbSafe(label, promise) {
+      try {
+        const data = await promise;
+        return {
+          ok: true,
+          label,
+          data: Array.isArray(data) ? data : [],
+        };
+      } catch (e) {
+        console.error(`PB load failed [${label}]`, e);
+        return { ok: false, label, data: [], err: e };
+      }
+    }
+
     try {
-      /* Load meter RPC ne sme da blokira ceo modul (dropdown projekata / zadaci). */
-      const [p, e, t] = await Promise.all([
-        getPbProjects(),
-        getPbEngineers(),
-        getPbTasks({ ...projFilter, ...engFilter }),
+      const [rProj, rEng, rTasks] = await Promise.all([
+        pbSafe('projects', getPbProjects()),
+        pbSafe('engineers', getPbEngineers()),
+        pbSafe('tasks', getPbTasks({ ...projFilter, ...engFilter })),
       ]);
-      projects = p;
-      engineers = e;
+
+      projects = rProj.data;
+      engineers = rEng.data;
+      tasks = rTasks.data;
+
       if (state.activeEngineer !== 'all' && !engineers.some(en => en.id === state.activeEngineer)) {
         state.activeEngineer = 'all';
         savePbState(state);
       }
-      tasks = t;
+
+      let statsOk = true;
       try {
         loadStats = await getPbLoadStats(20);
       } catch (statsErr) {
-        console.error('PB getPbLoadStats failed (Plan i ostalo i dalje rade)', statsErr);
+        statsOk = false;
+        console.error('PB load failed [loadStats]', statsErr);
         loadStats = [];
       }
-      paintChrome();
-      if (body) {
-        body.classList.remove('pb-tab-body--loading');
-        body.removeAttribute('aria-busy');
+
+      const failedLabels = [rProj, rEng, rTasks].filter(x => !x.ok).map(x => x.label);
+      if (!statsOk) failedLabels.push('loadStats');
+      if (failedLabels.length) {
+        const detail = failedLabels.join(', ');
+        showToast(`Delimično učitano (${detail}). F12 → Console za detalje.`);
       }
+
+      paintChrome();
       void mountActiveTab();
     } catch (err) {
+      console.error('PB loadAll fatal', err);
       const msg = pbErrorMessage(err) || 'Greška pri učitavanju';
+      if (body) {
+        body.innerHTML = `<div class="pb-load-error"><p><strong>Učitavanje nije uspelo</strong></p><p class="pb-muted">${escHtml(msg)}</p><button type="button" class="btn btn-primary" id="pbRetryLoad">Pokušaj ponovo</button></div>`;
+        body.querySelector('#pbRetryLoad')?.addEventListener('click', () => loadAll());
+      }
+    } finally {
       if (body) {
         body.classList.remove('pb-tab-body--loading');
         body.removeAttribute('aria-busy');
-        body.innerHTML = `<div class="pb-load-error"><p><strong>Učitavanje nije uspelo</strong></p><p class="pb-muted">${escHtml(msg)}</p><button type="button" class="btn btn-primary" id="pbRetryLoad">Pokušaj ponovo</button></div>`;
-        body.querySelector('#pbRetryLoad')?.addEventListener('click', () => loadAll());
       }
     }
   }

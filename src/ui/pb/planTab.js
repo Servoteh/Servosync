@@ -21,7 +21,8 @@ import { canEditProjektniBiro } from '../../state/auth.js';
 const IC_CHEVRON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 const IC_REFRESH = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>';
 
-let _loadOpen = false;
+/* Podrazumevano otvoren panel opterećenja — inače je max-height:0 i izgleda kao da „nema statusa“. */
+let _loadOpen = true;
 
 function parseYmd(s) {
   if (!s) return null;
