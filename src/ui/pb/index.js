@@ -184,6 +184,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     if (!hub) return;
     const auth = getAuth();
     hub.innerHTML = `
+      <div class="pb-chrome-pinned">
       <header class="pb-header">
         <div class="pb-header-left">
           <button type="button" class="pb-back-btn" id="pbBackBtn" aria-label="Nazad na module">
@@ -204,6 +205,15 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
           <button type="button" class="pb-logout-btn" id="pbLogoutBtn">Odjavi se</button>
         </div>
       </header>
+      <nav class="pb-tabs" role="tablist" aria-label="Projektni biro tabovi">
+        ${pbTabBtn('plan', 'Plan', state.activeTab === 'plan')}
+        ${pbTabBtn('kanban', 'Kanban', state.activeTab === 'kanban')}
+        ${pbTabBtn('gantt', 'Gantt', state.activeTab === 'gantt')}
+        ${pbTabBtn('izvestaji', 'Izveštaji', state.activeTab === 'izvestaji')}
+        ${pbTabBtn('analiza', 'Analiza', state.activeTab === 'analiza')}
+        ${isAdmin() ? pbTabBtn('podesavanja', 'Podešavanja', state.activeTab === 'podesavanja') : ''}
+      </nav>
+      </div>
       <div class="pb-context-card">
         <div class="pb-context-single">
           <span class="pb-context-label">Projekat</span>
@@ -214,15 +224,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
           <div class="pb-context-vsep"></div>
           <div id="pbChipHost" class="pb-chip-host"></div>
         </div>
-      </div>
-      <nav class="pb-tabs" role="tablist" aria-label="Projektni biro tabovi">
-        ${pbTabBtn('plan', 'Plan', state.activeTab === 'plan')}
-        ${pbTabBtn('kanban', 'Kanban', state.activeTab === 'kanban')}
-        ${pbTabBtn('gantt', 'Gantt', state.activeTab === 'gantt')}
-        ${pbTabBtn('izvestaji', 'Izveštaji', state.activeTab === 'izvestaji')}
-        ${pbTabBtn('analiza', 'Analiza', state.activeTab === 'analiza')}
-        ${isAdmin() ? pbTabBtn('podesavanja', 'Podešavanja', state.activeTab === 'podesavanja') : ''}
-      </nav>`;
+      </div>`;
 
     root.querySelector('#pbBackBtn')?.addEventListener('click', () => onBackToHub?.());
     root.querySelector('#pbThemeBtn')?.addEventListener('click', () => toggleTheme());

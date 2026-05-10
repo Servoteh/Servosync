@@ -42,6 +42,7 @@ body.module-projektni-biro {
   padding: 8px 0 8px;
   gap: 8px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .pb-header-left {
@@ -177,7 +178,9 @@ body.module-projektni-biro {
   background: var(--surface, #fff);
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 10px;
+  margin-top: 10px;
   margin-bottom: 0;
+  flex-shrink: 0;
 }
 
 .pb-context-single {
@@ -298,19 +301,60 @@ body.module-projektni-biro {
   will-change: transform;
   margin: 0;
   padding: 0;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pb-chrome-pinned {
+  flex-shrink: 0;
+  background: var(--bg, #f8f9fa);
+}
+
+@media (min-width: 768px) {
+  body.desktop-erp-module:not(.hub-active):not(.m-body) .pb-context-card {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: min(260px, 44vh);
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (min-width: 768px) and (max-height: 760px) {
+  body.desktop-erp-module:not(.hub-active):not(.m-body) .pb-header {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+  body.desktop-erp-module:not(.hub-active):not(.m-body) .pb-tabs {
+    margin-top: 4px;
+  }
 }
 
 .pb-tabs {
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 0;
-  margin: 4px 0 0;
+  row-gap: 2px;
+  margin: 8px 0 0;
   border-bottom: 1px solid var(--border, #e5e7eb);
   overflow-x: auto;
-  scrollbar-width: none;
+  overflow-y: visible;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pb-tabs::-webkit-scrollbar {
-  display: none;
+  height: 6px;
+}
+
+.pb-tabs::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: var(--border, #d1d5db);
 }
 
 .pb-tab-btn {
@@ -347,6 +391,13 @@ body.module-projektni-biro {
 
 .pb-tab-btn.active svg {
   opacity: 1;
+}
+
+@media (max-width: 1100px) {
+  .pb-tab-btn {
+    padding: 7px 10px;
+    font-size: 0.81rem;
+  }
 }
 
 .pb-tab-body {
