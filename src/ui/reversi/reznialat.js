@@ -12,6 +12,7 @@ import {
   openCuttingToolDetailsModal,
   printCuttingToolLabel,
 } from './cuttingToolModals.js';
+import { ICON_REZNI_MACHINING } from './revMachiningIcon.js';
 import { renderByMachineSubview, renderByEmployeeSubview } from './cuttingByViews.js';
 
 const SUB_TAB_KEY = 'sess:rev_rzn_sub_tab';
@@ -270,7 +271,7 @@ function renderStats() {
   return `
     <div class="rev-rzn-stats">
       <div class="rev-rzn-stat-card rev-rzn-stat-card--with-icon">
-        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--coral" aria-hidden="true">✂</div>
+        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--coral" aria-hidden="true">${ICON_REZNI_MACHINING}</div>
         <div class="rev-rzn-stat-card__body">
           <div class="rev-rzn-stat-card__label">Ukupno šifri</div>
           <div class="rev-rzn-stat-card__value">${escHtml(String(tot))}</div>

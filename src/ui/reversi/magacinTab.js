@@ -11,6 +11,7 @@ import {
   getMagacinLocationId,
   seedCuttingToolStock,
 } from '../../services/reversiService.js';
+import { ICON_REZNI_MACHINING } from './revMachiningIcon.js';
 import { openBulkImportModal, openImportRollbackModal } from './bulkImportModal.js';
 
 const state = {
@@ -80,7 +81,7 @@ function statusStockPill(p) {
 
 function grupaBadge(g) {
   return g === 'CUTTING'
-    ? '<span class="rev-grupa-badge--cut">✂ Rezni</span>'
+    ? `<span class="rev-grupa-badge--cut">${ICON_REZNI_MACHINING} Rezni</span>`
     : '<span class="rev-grupa-badge--hand">🔧 Ručni</span>';
 }
 

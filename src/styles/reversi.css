@@ -1658,6 +1658,11 @@ html[data-theme='light'] .rev-stat-card--teal .rev-stat-value {
   line-height: 1;
 }
 
+.rev-rzn-stat-card__icon .rev-icon--rezni-machining {
+  width: 26px;
+  height: 26px;
+}
+
 .rev-rzn-stat-card__icon--coral {
   background: color-mix(in srgb, var(--rev-primary) 20%, transparent);
   color: var(--rev-primary);
@@ -2044,6 +2049,12 @@ html[data-theme='dark'] .rev-klasa-badge--razvrtac {
   background: color-mix(in srgb, #3b82f6 12%, var(--rev-surface));
   color: #1d4ed8;
   border: 1px solid color-mix(in srgb, #3b82f6 28%, var(--rev-border));
+}
+
+.rev-grupa-badge--cut .rev-icon--rezni-machining {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 
 .rev-grupa-badge--cut {
