@@ -26,6 +26,7 @@ import {
   seedCuttingToolStock,
   fetchActiveLocations,
   fetchEmployees,
+  fetchEmployeesAny,
   fetchMachines,
   fetchCuttingToolByBarcode,
   fetchCuttingToolByOznaka,
@@ -196,47 +197,72 @@ function normalizeName(s) {
 }
 
 /**
- * Pretraži radnika po imenu sa fuzzy match-om (skida dijakritike pre poređenja).
- * Najpre proba sa originalnim imenom (PostgREST ilike); ako ne nadje exact,
- * proba sa stripped verzijom; ako i dalje ne nadje, proba reč-po-reč preklop.
+ * Pretraži radnika po imenu sa fuzzy match-om. Pokriva:
+ *   - dijakritike u CSV vs bez u bazi (i obrnuto)
+ *   - obrnut redosled (CSV: "Petar Petrović" ↔ baza: "Petrović Petar")
+ *   - srednje slovo (CSV: "Petar Petrović" ↔ baza: "Petar M. Petrović")
+ *   - is_active=false (koristi fetchEmployeesAny, bez tog filtera)
  *
  * @param {string} name
- * @returns {Promise<{id: string, full_name: string} | null>}
+ * @returns {Promise<{id: string, full_name: string, is_active?: boolean} | null>}
  */
 async function resolveEmployeeFuzzy(name) {
   const original = String(name || '').trim();
   if (!original) return null;
   const normTarget = normalizeName(original);
+  const targetTokens = normTarget.split(' ').filter(Boolean).sort();
 
-  /* Pokušaj 1: ilike sa originalnim imenom (radi za 95% slučajeva ako nije mojibake) */
-  let r = await fetchEmployees(original);
+  /* Helper: za listu kandidata, vrati onog čija je sortirana lista tokena
+   * (skinut dijakritici, lower-case) ista kao target — pokriva i obrnut redosled
+   * i srednje slovo (ako jedan ima a drugi nema, set jednog je podskup drugog). */
+  const findTokenMatch = (list) => {
+    /* exact: isti broj tokena, isti set */
+    let hit = list.find((e) => {
+      const tokens = normalizeName(e.full_name).split(' ').filter(Boolean).sort();
+      return tokens.length === targetTokens.length && tokens.join(' ') === targetTokens.join(' ');
+    });
+    if (hit) return hit;
+    /* superset/subset: jedan ima srednje slovo, drugi nema */
+    if (targetTokens.length >= 2) {
+      hit = list.find((e) => {
+        const tokens = normalizeName(e.full_name).split(' ').filter(Boolean);
+        const tokenSet = new Set(tokens);
+        return targetTokens.every((t) => tokenSet.has(t));
+      });
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  /* Pokušaj 1: ilike sa originalnim imenom, fuzzy nad rezultatom */
+  let r = await fetchEmployeesAny(original);
   let list = r.ok && Array.isArray(r.data) ? r.data : [];
-  let hit = list.find((e) => normalizeName(e.full_name) === normTarget);
-  if (hit) return { id: hit.id, full_name: hit.full_name };
+  let hit = findTokenMatch(list);
+  if (hit) return { id: hit.id, full_name: hit.full_name, is_active: hit.is_active };
 
-  /* Pokušaj 2: ilike sa stripped verzijom (npr. "Predrag Cirovic") — pokriva slučaj
-   * kad u bazi piše bez dijakritika a u CSV-u sa, ili obrnuto. */
+  /* Pokušaj 2: ilike sa stripped imenom (bez dijakritika) — pokriva slučaj kad
+   * baza ima druge dijakritike (Cirovic vs Ćirović) ili kad PostgREST collation
+   * ne radi pravilno za UTF-8 dijakritike. */
   const stripped = original.normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (stripped !== original) {
-    r = await fetchEmployees(stripped);
+    r = await fetchEmployeesAny(stripped);
     list = r.ok && Array.isArray(r.data) ? r.data : [];
-    hit = list.find((e) => normalizeName(e.full_name) === normTarget);
-    if (hit) return { id: hit.id, full_name: hit.full_name };
+    hit = findTokenMatch(list);
+    if (hit) return { id: hit.id, full_name: hit.full_name, is_active: hit.is_active };
   }
 
-  /* Pokušaj 3: tokenizovan preklop — sve reči iz CSV imena postoje u full_name
-   * iz baze (i obrnuto, isti broj reči). Hvata "Petar Petrović Mladji" ↔ "Petar Petrović". */
-  const tokens = normTarget.split(' ').filter(Boolean);
-  if (tokens.length >= 2) {
-    /* poslednje ime obično je najjedinstveniji token — koristi ga kao seed */
-    r = await fetchEmployees(tokens[tokens.length - 1].normalize('NFD').replace(/[̀-ͯ]/g, ''));
+  /* Pokušaj 3: pretraga po pojedinačnim tokenima — uzmi najduži token (verovatno
+   * prezime), pa traži po njemu. Pokriva slučaj kad u CSV imamo "Petar Petrović"
+   * a u bazi "Petrović Petar" — ilike *Petar Petrović* neće ih naći jer baza
+   * ima reverso reč red. */
+  if (targetTokens.length >= 2) {
+    /* Najduži token je obično prezime — najinformativniji za pretragu. */
+    const longest = [...targetTokens].sort((a, b) => b.length - a.length)[0];
+    const longestStripped = longest.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    r = await fetchEmployeesAny(longestStripped);
     list = r.ok && Array.isArray(r.data) ? r.data : [];
-    hit = list.find((e) => {
-      const dbTokens = normalizeName(e.full_name).split(' ').filter(Boolean);
-      if (dbTokens.length !== tokens.length) return false;
-      return tokens.every((t) => dbTokens.includes(t));
-    });
-    if (hit) return { id: hit.id, full_name: hit.full_name };
+    hit = findTokenMatch(list);
+    if (hit) return { id: hit.id, full_name: hit.full_name, is_active: hit.is_active };
   }
 
   return null;
