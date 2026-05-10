@@ -167,16 +167,34 @@ CUTTING_TOOL,2026-04-05,MACHINE,Marko Marković,8.3,BURG-D6-CO,10,,
 
 ## Globalna pravila (sva tri tipa)
 
-1. **Encoding**: UTF-8 sa BOM. (Excel default kad „Save as CSV UTF-8“ — to je u redu.)
+1. **Encoding**: **UTF-8 sa BOM** (`﻿` kao prvi karakter fajla). NE smeš da output-uješ Windows-1252 ili Latin-1.
+   - Provera: ako u fajlu vidiš `Å¡`, `Ä‡`, `Ã˜` umesto `š`, `ć`, `Ø` — to je dvostruko enkodovan UTF-8 (mojibake) i sistem će morati da ga popravi. **Bolji izlaz: piši pravo UTF-8** (BOM `EF BB BF` na početku, sva slova u njihovim pravim kodnim tačkama).
+   - Ako kao asistent vidiš da je ulazni Excel imao mojibake, **prvo ga popravi** pre transformacije: vrati svaki znak iz cp1252 → UTF-8 dok izgleda smisleno (npr. `Ã˜` → `Ø`, `Å¡` → `š`, `Ä` → `č/đ`).
 2. **Separator**: zarez (`,`). Vrednosti koje sadrže `,` ili `"` ili novi red — citiraj duplim navodnicima i interne `"` udvostruči (`a"b` → `"a""b"`).
 3. **Header je u prvom redu, tačno kako je gore**. Sistem ima alias-e (`oznaka` / `sifra` / `kod` / `code` su sve OK), ali sigurnije je koristiti tačan naziv.
-4. **Datumi**: izlaz uvek `YYYY-MM-DD` (ISO).
+4. **Datumi**: izlaz uvek `YYYY-MM-DD` (ISO). Ako za REVERSI izvor nema datum, ostavi prazno — sistem postavlja današnji datum automatski.
 5. **Brojevi**: tačka kao decimalni separator (`20.5`, ne `20,5`).
 6. **Bool / Aktivan**: ako se traži (tip 1 nema), `true` / `false` (lowercase).
 7. **Prazne ćelije**: ostavi prazno između zareza (npr. `,,` za dve prazne susedne ćelije).
 8. **Ne menjaj redosled kolona** u headeru.
 9. **Bez praznih redova** između stavki.
 10. **Ako neki red nema obavezna polja**, **ne uključuj ga u izlaz** i napomeni korisniku u rekapitulaciji.
+11. **Mašine**: rj_code mora biti tačno onako kako je u Servotehu (npr. `8.3`, `10.1`, `2.60`). Decimal je tačka, ne zarez.
+12. **„Alat (oznaka ili barkod)“ za REVERSI tip**: koristi **OZNAKU** (npr. `GL-D12`, `BURG-D8_5`), ne barkod. Sistem će:
+    - Probati prvo barkod ako počinje sa `RZN-`
+    - Inače prvi pretragom po oznaci (case-insensitive)
+    - Ako šifra ne postoji u katalogu, **auto-kreiraće** je iz Napomene (vidi tačku 13)
+13. **Napomena za REVERSI tip**: kad uvoziš rezni alat koji još nije u katalogu, dodaj polustrukturisanu napomenu sa metapodacima da bi sistem mogao da auto-kreira šifru:
+    ```
+    Naziv: Glodalo Ø 12; Kategorija: GLODALA; Mašina: DMU 50 T - Itnc 1; Izvor: 3.10 - DMU 50 T - Itnc 1, Jovan Peladić.xlsx
+    ```
+    Sistem parsuje:
+    - `Naziv: …` → `naziv` u rev_cutting_tool_catalog
+    - `Kategorija: GLODALA / BURGIJE / UREZNICE / RAZVRTAČI / GLODALO LOPTA / GLODAČKE GLAVE` → mapira u klasu (`glodalo`, `burgija`, `urezna`, `razvrtač`, `glodačka glava`, …)
+    - `Mašina: …` → ide u `compatible_machine_codes`
+    - `Izvor: …` → ostaje u dokumentu kao info
+14. **Operateri**: ime mora postojati u Kadrovskoj (employees.full_name). **Sistem NE auto-kreira radnike** — admin ih pre importa unosi. Ako asistent prepozna da neki operater verovatno nije u Servotehu (npr. tipfeler, neuobičajeno ime), zabeleži u rekapitulaciji „Proveriti: X“ da bi admin to ručno proverio pre uvoza.
+15. **Više operatera u istom redu** (npr. `Luka Stanić, Lazar Jovanović`): ostavi tako, sistem uzima prvog kao potpisnika i drugog automatski stavlja u napomenu dokumenta („Drugi potpisnik: …“).
 
 ## Output format
 

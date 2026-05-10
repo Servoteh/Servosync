@@ -574,6 +574,23 @@ export async function fetchCuttingToolByBarcode(barcode) {
   })();
 }
 
+/**
+ * Pretraži šifru po oznaci (exact match, case-insensitive trim). Za bulk import
+ * gde izvor šalje oznake (npr. "GL-D12") umesto barkoda.
+ * @param {string} oznaka
+ */
+export async function fetchCuttingToolByOznaka(oznaka) {
+  return wrap(async () => {
+    if (!oznaka) return null;
+    const v = String(oznaka).trim();
+    if (!v) return null;
+    const rows = await sbReq(
+      `rev_cutting_tool_catalog?oznaka=eq.${encodeURIComponent(v)}&select=*&limit=2`,
+    );
+    return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  })();
+}
+
 /** @param {object} payload polja za rev_cutting_tool_catalog */
 export async function insertCuttingTool(payload) {
   return wrap(async () => {
