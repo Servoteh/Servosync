@@ -17,7 +17,7 @@ import { escHtml, showToast } from '../../lib/dom.js';
 import {
   fetchCuttingToolByBarcode,
   fetchEmployeeByCardBarcode,
-  fetchEmployees,
+  fetchEmployeesAny,
   fetchMachines,
   issueCuttingReversal,
   fetchMyIssuedCuttingTools,
@@ -67,6 +67,7 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
     employees: [],
     expectedReturnDate: '',
     napomena: '',
+    secondaryIds: [],
     pending: false,
     lastInput: '',
   };
@@ -83,7 +84,7 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
   void preloadDropdowns();
 
   async function preloadDropdowns() {
-    const [m, e] = await Promise.all([fetchMachines(), fetchEmployees()]);
+    const [m, e] = await Promise.all([fetchMachines(), fetchEmployeesAny('')]);
     state.machines = m.ok && Array.isArray(m.data) ? m.data : [];
     state.employees = e.ok && Array.isArray(e.data) ? e.data : [];
     paint();
@@ -186,11 +187,17 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
                   ${employeeOptionsHtml()}
                 </select>
               </label>
-            </div>
-          </details>
-        </div>
-
-        ${compatibleWarning()}
+              <label>Dodatni operateri <span class="rev-muted">(druga smena, opciono)</span>
+                <select id="revRznSecOps" class="rev-select rev-select--multi" multiple size="5">
+                  ${state.employees
+                    .filter((e) => !state.employee?.id || e.id !== state.employee.id)
+                    .map((e) => {
+                      const sel = state.secondaryIds.includes(e.id) ? 'selected' : '';
+                      return `<option value="${escHtml(e.id)}" ${sel}>${escHtml(e.full_name)}</option>`;
+                    })
+                    .join('')}
+                </select>
+              </label>
 
         <div class="rev-scan-lines">
           <h3 class="rev-h3">Stavke za zaduženje</h3>
@@ -244,7 +251,11 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
     overlay.querySelector('#revRznESel')?.addEventListener('change', (ev) => {
       const eid = ev.target.value;
       state.employee = state.employees.find((e) => e.id === eid) || null;
+      state.secondaryIds = state.secondaryIds.filter((id) => id && id !== state.employee?.id);
       paint();
+    });
+    overlay.querySelector('#revRznSecOps')?.addEventListener('change', (ev) => {
+      state.secondaryIds = Array.from(ev.target.selectedOptions).map((o) => o.value);
     });
     overlay.querySelector('#revRznExpRet')?.addEventListener('change', (ev) => {
       state.expectedReturnDate = ev.target.value;
@@ -384,6 +395,14 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
         sort_order: i,
       })),
     };
+    const secRaw = state.secondaryIds.filter((id) => id && id !== state.employee.id);
+    if (secRaw.length > 0) {
+      const assignees = [
+        { employee_id: state.employee.id, role: 'PRIMARY' },
+        ...secRaw.map((id) => ({ employee_id: id, role: 'SECONDARY' })),
+      ];
+      payload.assignees = assignees;
+    }
     const res = await issueCuttingReversal(payload);
     state.pending = false;
     if (!res.ok) {

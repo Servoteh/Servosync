@@ -91,6 +91,15 @@ function machineBreakdownFromStock(stock) {
     .sort((a, b) => a.masina.localeCompare(b.masina, 'sr'));
 }
 
+function machineBreakdownFromRow(t) {
+  if (Array.isArray(t.machine_breakdown) && t.machine_breakdown.length > 0) {
+    return [...t.machine_breakdown].sort((a, b) =>
+      String(a.masina).localeCompare(String(b.masina), 'sr'),
+    );
+  }
+  return machineBreakdownFromStock(t.stock);
+}
+
 function statusPill(s) {
   if (s === 'scrapped') {
     return '<span class="rev-status-pill rev-status-pill--neutral"><span class="rev-status-pill__dot"></span>Povučena</span>';
@@ -98,11 +107,12 @@ function statusPill(s) {
   return '<span class="rev-status-pill rev-status-pill--ok"><span class="rev-status-pill__dot"></span>Aktivna</span>';
 }
 
-function ukupnoClass(ukupno, minQ) {
+function ukupnoClass(ukupno, minQ, warehouseQty) {
   const u = Number(ukupno) || 0;
   const m = Number(minQ) || 0;
+  const w = Number(warehouseQty) || 0;
   if (u === 0) return 'rev-qty-total rev-qty-total--danger';
-  if (m > 0 && u < m) return 'rev-qty-total rev-qty-total--warn';
+  if (m > 0 && w < m) return 'rev-qty-total rev-qty-total--warn';
   return 'rev-qty-total rev-qty-total--ok';
 }
 
@@ -173,7 +183,7 @@ async function loadStats() {
     sumMach += om;
     const uk = wh + om;
     const minQ = Number(row.min_stock_qty) || 0;
-    if (minQ > 0 && uk < minQ) low += 1;
+    if (row.status === 'active' && minQ > 0 && wh < minQ) low += 1;
   }
   state.stats = {
     totalSymbols: total,
@@ -303,7 +313,7 @@ function renderStats() {
 }
 
 function colCount() {
-  return canManageReversi() ? 9 : 8;
+  return canManageReversi() ? 10 : 9;
 }
 
 function renderTable() {
@@ -316,11 +326,12 @@ function renderTable() {
     .map((t) => {
       const checked = state.selected.has(t.id) ? 'checked' : '';
       const exp = state.expanded.has(t.id);
-      const br = machineBreakdownFromStock(t.stock);
+      const br = machineBreakdownFromRow(t);
       const locCount = br.length;
       const uk = (Number(t.in_warehouse_qty) || 0) + (Number(t.on_machines_qty) || 0);
+      const wh = Number(t.in_warehouse_qty) || 0;
       const minQ = Number(t.min_stock_qty) || 0;
-      const uClass = ukupnoClass(uk, minQ);
+      const uClass = ukupnoClass(uk, minQ, wh);
       const kl = escHtml(t.klasa || '—');
       const klBadge = `<span class="${klasaBadgeClass(t.klasa)}">${kl}</span>`;
 
@@ -364,11 +375,11 @@ function renderTable() {
           </td>
           <td>${escHtml(t.naziv || '')}</td>
           <td>${klBadge}</td>
+          <td class="rev-td-num">${escHtml(String(minQ))}</td>
           <td class="rev-td-num">${escHtml(String(Number(t.in_warehouse_qty) || 0))} <span class="rev-unit-muted">${escHtml(t.unit || 'kom')}</span></td>
           <td class="rev-td-num rev-td-num--mach">${omCell}</td>
           <td class="rev-td-num">
             <div class="${uClass}">${escHtml(String(uk))} <span class="rev-unit-muted">${escHtml(t.unit || 'kom')}</span></div>
-            ${minQ > 0 ? `<div class="rev-min-hint">min. ${escHtml(String(minQ))}</div>` : ''}
           </td>
           <td>${statusPill(t.status)}</td>
           <td class="rev-td-actions">
@@ -388,6 +399,7 @@ function renderTable() {
           <th>Oznaka</th>
           <th>Naziv</th>
           <th>Klasa</th>
+          <th class="rev-th-num">Min.</th>
           <th class="rev-th-num">U magacinu</th>
           <th class="rev-th-num rev-th-num--mach-h">Na mašinama</th>
           <th class="rev-th-num">Ukupno</th>
@@ -441,7 +453,7 @@ async function exportExcel() {
     'Mašine (ZADU)',
   ];
   const data = rows.map((t) => {
-    const br = machineBreakdownFromStock(t.stock);
+    const br = machineBreakdownFromRow(t);
     const uk = (Number(t.in_warehouse_qty) || 0) + (Number(t.on_machines_qty) || 0);
     const machStr = br.map((b) => `${b.masina}:${b.kolicina}`).join('; ');
     return [

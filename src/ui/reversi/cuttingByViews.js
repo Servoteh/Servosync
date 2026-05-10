@@ -81,7 +81,7 @@ function openMachineDetailsModal(grp) {
                 <th>Oznaka / Naziv</th>
                 <th>Klasa</th>
                 <th class="rev-th-num">Količina</th>
-                <th>Potpisao</th>
+                <th>Operateri</th>
                 <th>Datum</th>
                 <th class="rev-th-num">Doc</th>
               </tr></thead>
@@ -92,7 +92,7 @@ function openMachineDetailsModal(grp) {
                   <td><strong>${escHtml(it.oznaka || '')}</strong> <span class="rev-muted">${escHtml(it.naziv || '')}</span></td>
                   <td>${escHtml(it.klasa || '—')}</td>
                   <td class="rev-td-num">${escHtml(String(it.remaining_qty || 0))} ${escHtml(it.unit || 'kom')}</td>
-                  <td>${escHtml(it.last_issued_to_name || '—')}</td>
+                  <td>${escHtml(it.operator_names || it.last_issued_to_name || '—')}</td>
                   <td>${escHtml(fmtDate(it.last_issued_at))}</td>
                   <td class="rev-td-num">${escHtml(String(it.doc_count || 0))}</td>
                 </tr>`,

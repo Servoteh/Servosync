@@ -498,14 +498,16 @@ export async function uploadReversalPdf(docNumber, pdfBlob) {
  * ============================================================ */
 
 /**
- * Lista šifri reznog alata sa zbirnim stanjem na svim lokacijama (sum on_hand_qty)
- * i zbirnim stanjem na recipient (MACHINE) lokacijama (= "trenutno na reversu").
+ * Lista šifri reznog alata:
+ *   - U magacinu: suma stock redova gde je lokacija tipa WAREHOUSE
+ *   - Na mašinama: suma otvorenih zaduženja iz v_rev_cts_machine_stock (količina − vraćeno)
+ *   - Ukupno: magacin + na mašinama
  *
  * @param {{ search?: string, status?: 'active'|'scrapped'|'all', machine?: string, klasa?: string, limit?: number, offset?: number }} params
  */
 export async function fetchCuttingToolCatalog(params = {}) {
   return wrap(async () => {
-    const limit = Math.max(1, Math.min(Number(params.limit) || 25, 100));
+    const limit = Math.max(1, Math.min(Number(params.limit) || 25, 15_000));
     const offset = Math.max(0, Number(params.offset) || 0);
     const parts = ['select=*', 'order=oznaka.asc', `limit=${limit}`, `offset=${offset}`];
 
@@ -545,19 +547,57 @@ export async function fetchCuttingToolCatalog(params = {}) {
       stockByCatalog.get(k).push(s);
     }
 
+    let msRows = [];
+    try {
+      msRows = await sbReq(
+        `v_rev_cts_machine_stock?catalog_id=in.(${inList})&select=catalog_id,machine_code,outstanding_qty&limit=20000`,
+      );
+    } catch {
+      msRows = [];
+    }
+    const machByCatalog = new Map();
+    for (const row of Array.isArray(msRows) ? msRows : []) {
+      const cid = row.catalog_id;
+      if (!cid) continue;
+      const mq = Number(row.outstanding_qty) || 0;
+      if (!machByCatalog.has(cid)) {
+        machByCatalog.set(cid, { total: 0, breakdown: [] });
+      }
+      const o = machByCatalog.get(cid);
+      if (mq > 0) {
+        o.total += mq;
+        o.breakdown.push({ masina: row.machine_code || '', kolicina: mq });
+      }
+    }
+
     const enriched = rows.map((r) => {
       const stock = stockByCatalog.get(r.id) || [];
-      let totalOnHand = 0;
-      let onMachines = 0;
+      let inWarehouse = 0;
+      let stockWarehouseSum = 0;
       for (const s of stock) {
         const qty = Number(s.on_hand_qty) || 0;
-        totalOnHand += qty;
         const loc = Array.isArray(s.loc_locations) ? s.loc_locations[0] : s.loc_locations;
-        const code = loc?.location_code || '';
-        if (code.startsWith('ZADU-M-')) onMachines += qty;
+        const lt = String(loc?.location_type || '').toUpperCase();
+        if (lt === 'WAREHOUSE') {
+          inWarehouse += qty;
+          stockWarehouseSum += qty;
+        }
       }
-      const inWarehouse = totalOnHand - onMachines;
-      return { ...r, total_on_hand: totalOnHand, on_machines_qty: onMachines, in_warehouse_qty: inWarehouse, stock };
+      const mach = machByCatalog.get(r.id) || { total: 0, breakdown: [] };
+      const onMachines = mach.total;
+      const machineBreakdown = [...mach.breakdown].sort((a, b) =>
+        String(a.masina).localeCompare(String(b.masina), 'sr'),
+      );
+      const totalOnHand = inWarehouse + onMachines;
+      return {
+        ...r,
+        total_on_hand: totalOnHand,
+        on_machines_qty: onMachines,
+        in_warehouse_qty: inWarehouse,
+        stock,
+        machine_breakdown: machineBreakdown,
+        stock_warehouse_qty: stockWarehouseSum,
+      };
     });
 
     return { rows: enriched, total: res?.total ?? null };

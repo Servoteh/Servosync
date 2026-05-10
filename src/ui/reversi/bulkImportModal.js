@@ -67,6 +67,8 @@ const CUTTING_COLS = [
     aliases: ['masine', 'mašine', 'machines', 'kompatibilne masine', 'kompatibilne mašine'] },
   { key: 'pocetna_kolicina', label: 'Početna količina', type: 'number',
     aliases: ['kolicina', 'količina', 'qty', 'pocetna', 'pocetno stanje', 'početno stanje', 'stanje'] },
+  { key: 'minimalna_zaliha', label: 'Minimalna zaliha', type: 'number',
+    aliases: ['minimalna zaliha', 'min zaliha', 'minimalna količina', 'minimum', 'min', 'reorder level'] },
   { key: 'napomena', label: 'Napomena',
     aliases: ['napomena', 'note', 'opis dodatni', 'notes'] },
 ];
@@ -197,6 +199,16 @@ function normalizeName(s) {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, ' ');
+}
+
+/** Lista primalaca iz CSV (zarez), trim, dedupe. */
+function parseRecipientList(raw) {
+  return [...new Set(String(raw || '').split(/\s*,\s*/).map((x) => x.trim()).filter(Boolean))];
+}
+
+async function sha256HexUtf8(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -395,6 +407,7 @@ function downloadTemplate(typeDef) {
       if (c.key === 'jedinica') return 'kom';
       if (c.key === 'kompatibilne_masine') return '8.3, 10.1';
       if (c.key === 'pocetna_kolicina') return '20';
+      if (c.key === 'minimalna_zaliha') return '0';
       if (c.key === 'napomena') return '';
     } else if (typeDef.id === 'revers') {
       if (c.key === 'tip') return 'TOOL';
@@ -433,6 +446,7 @@ export function openBulkImportModal(opts = {}) {
     /* Reversi pre-pass rezultat: šta će biti kreirano (catalog) i šta nedostaje (employees) */
     analysis: null, // { newCatalog: [...], existingCatalog: [...], missingEmployees: [...], resolvedEmployees: Map, machineCodes: Set, docCount, lineCount }
     analyzing: false,
+    sourceFileName: '',
   };
   const overlay = modalShell(
     '📥 Bulk import iz Excel/CSV',
@@ -523,7 +537,6 @@ export function openBulkImportModal(opts = {}) {
       (state.analyzing ||
         (state.analysis &&
           (state.analysis.missingEmployees.length > 0 ||
-            !state.analysis.magacinExists ||
             (state.analysis.duplicateDocs.length > 0 && !state.analysis.forceImportConfirmed))));
     const canRun = state.rows.length > 0 && validRowsCount > 0 && !state.importing && !blockedByAnalysis;
     foot.innerHTML = `
@@ -560,6 +573,12 @@ export function openBulkImportModal(opts = {}) {
     if (typeDef.id === 'cutting' && r.pocetna_kolicina && Number(r.pocetna_kolicina) < 0) {
       errs.push('početna količina ne može biti negativna');
     }
+    if (typeDef.id === 'cutting' && r.minimalna_zaliha !== '' && r.minimalna_zaliha != null) {
+      const raw = String(r.minimalna_zaliha).replace(/\s/g, '').replace(',', '.');
+      const mx = Number(raw);
+      if (!Number.isFinite(mx) || mx < 0) errs.push('minimalna zaliha mora biti broj ≥ 0');
+      else if (Math.floor(mx) !== mx) errs.push('minimalna zaliha mora biti ceo broj (kom)');
+    }
     return errs;
   }
 
@@ -572,13 +591,10 @@ export function openBulkImportModal(opts = {}) {
     if (!state.analysis) return '';
     const a = state.analysis;
     const hasDup = a.duplicateDocs.length > 0;
-    const blocking = a.missingEmployees.length > 0 || !a.magacinExists || (hasDup && !a.forceImportConfirmed);
+    const blocking = a.missingEmployees.length > 0 || (hasDup && !a.forceImportConfirmed);
     const blockReasons = [];
     if (a.missingEmployees.length > 0) {
       blockReasons.push(`${a.missingEmployees.length} radnika nedostaje u Kadrovskoj`);
-    }
-    if (!a.magacinExists) {
-      blockReasons.push('Magacin lokacija „ALAT-MAG-01" ne postoji u Lokacije modulu');
     }
     if (hasDup && !a.forceImportConfirmed) {
       blockReasons.push(`${a.duplicateDocs.length} mašina već ima aktivan revers — verovatno duplikat importa`);
@@ -688,6 +704,7 @@ export function openBulkImportModal(opts = {}) {
       }
       state.rows = mapRow(raw, typeDef.cols);
       state.analysis = null;
+      state.sourceFileName = file.name || '';
       showToast(`✔ Učitano ${state.rows.length} redova`);
       paint();
 
@@ -732,12 +749,6 @@ export function openBulkImportModal(opts = {}) {
         }
         if (state.analysis.missingEmployees.length > 0) {
           showToast(`Import blokiran: ${state.analysis.missingEmployees.length} radnika nedostaje u Kadrovskoj.`);
-          state.importing = false;
-          paint();
-          return;
-        }
-        if (!state.analysis.magacinExists) {
-          showToast('Import blokiran: ALAT-MAG-01 lokacija ne postoji u Lokacije modulu.');
           state.importing = false;
           paint();
           return;
@@ -796,6 +807,9 @@ export function openBulkImportModal(opts = {}) {
         .split(/[,;]/)
         .map((s) => s.trim())
         .filter(Boolean);
+      const minRaw = r.minimalna_zaliha !== '' && r.minimalna_zaliha != null
+        ? Math.max(0, Math.floor(Number(String(r.minimalna_zaliha).replace(/\s/g, '').replace(',', '.')) || 0))
+        : 0;
       const payload = {
         oznaka: r.oznaka,
         naziv: r.naziv,
@@ -804,6 +818,7 @@ export function openBulkImportModal(opts = {}) {
         unit: r.jedinica || 'kom',
         napomena: r.napomena || null,
         status: 'active',
+        min_stock_qty: minRaw,
       };
       const ins = await insertCuttingTool(payload);
       if (!ins.ok) { state.progress.fail += 1; paint(); continue; }
@@ -894,15 +909,17 @@ export function openBulkImportModal(opts = {}) {
       if (m) result.machineCodes.add(m);
     }
 
-    /* 4. Skupi unique primaoce (samo MACHINE i EMPLOYEE primaoci se moraju resolve-ovati strogo) */
+    /* 4. Skupi primalce koje treba resolve-ovati (zarez = više operatera) */
     const namesNeedingResolve = new Set();
     for (const r of rows) {
       const tip = (r.tip || 'TOOL').toUpperCase();
       const primTip = (r.primalac_tip || 'EMPLOYEE').toUpperCase();
+      let names = [];
       if (tip === 'CUTTING_TOOL' || primTip === 'EMPLOYEE' || primTip === 'MACHINE') {
-        /* Za "Luka Stanić, Lazar Jovanović" — uzmi prvog kao potpisnika */
-        const primary = String(r.primalac || '').split(/\s*,\s*/)[0].trim();
-        if (primary) namesNeedingResolve.add(primary);
+        names = parseRecipientList(r.primalac);
+      }
+      for (const nm of names) {
+        if (nm) namesNeedingResolve.add(nm);
       }
     }
 
@@ -911,17 +928,23 @@ export function openBulkImportModal(opts = {}) {
       if (found) {
         result.resolvedEmployees.set(name, { id: found.id, full_name: found.full_name });
       } else {
-        result.missingEmployees.push(name);
+        result.missingEmployees.push(`Radnik ne postoji u Kadrovskoj: ${name}`);
       }
     }
 
-    /* 5. Broj dokumenata = unique (tip, primalac, mašina, datum) */
+    /* 5. Broj dokumenata = unique (tip, lista primalaca sortirana, mašina, datum) */
     const docKeys = new Set();
     for (const r of rows) {
       const tip = (r.tip || 'TOOL').toUpperCase();
       const primTip = (r.primalac_tip || 'EMPLOYEE').toUpperCase();
-      const primary = String(r.primalac || '').split(/\s*,\s*/)[0].trim();
-      docKeys.add([tip, primTip, primary, r.masina || '', r.datum || ''].join('|'));
+      let primKey = String(r.primalac || '').split(/\s*,\s*/)[0].trim();
+      if (tip === 'CUTTING_TOOL') {
+        primKey = parseRecipientList(r.primalac)
+          .slice()
+          .sort((a, b) => normalizeName(a).localeCompare(normalizeName(b)))
+          .join('|');
+      }
+      docKeys.add([tip, primTip, primKey, r.masina || '', r.datum || ''].join('|'));
     }
     result.docCount = docKeys.size;
 
@@ -970,15 +993,7 @@ export function openBulkImportModal(opts = {}) {
       docIds: [],
       newCatalogIds: [],
     };
-    const magId = await getMagacinLocationId();
-    idbg('start', { magId, newCatalog: analysis.newCatalog.length, rows: rows.length });
-    if (!magId) {
-      console.error('[reversi/import] magId je null — ALAT-MAG-01 ne postoji ili cache zastareo');
-      showToast('Magacin lokacija nije pronađena. Hard refresh (Ctrl+Shift+R) pa probaj opet.');
-      state.progress.fail = rows.length;
-      paint();
-      return;
-    }
+    idbg('start', { newCatalog: analysis.newCatalog.length, rows: rows.length });
     for (const nc of analysis.newCatalog) {
       const payload = {
         oznaka: nc.oznaka,
@@ -1000,14 +1015,35 @@ export function openBulkImportModal(opts = {}) {
        * recipient location dobija qty (uradi se kroz issueCuttingReversal). */
     }
 
-    /* Grupiši po (tip, primalac_primary, masina, datum) → 1 dokument */
+    /* Grupiši po (tip, primalci, mašina, datum) → 1 dokument */
     const byDoc = new Map();
     for (const r of rows) {
       const tip = (r.tip || 'TOOL').toUpperCase();
-      const primary = String(r.primalac || '').split(/\s*,\s*/)[0].trim();
       const datum = r.datum || todayIso();
-      const key = [tip, r.primalac_tip, primary, r.masina || '', datum].join('|');
-      if (!byDoc.has(key)) byDoc.set(key, { meta: { ...r, datum, primalac: primary }, lines: [], primalacRaw: r.primalac });
+      let key;
+      if (tip === 'CUTTING_TOOL') {
+        const ppl = parseRecipientList(r.primalac)
+          .slice()
+          .sort((a, b) => normalizeName(a).localeCompare(normalizeName(b)));
+        const pk = ppl.join('|');
+        key = [tip, r.primalac_tip, pk, r.masina || '', datum].join('|');
+      } else {
+        const primary = String(r.primalac || '').split(/\s*,\s*/)[0].trim();
+        key = [tip, r.primalac_tip, primary, r.masina || '', datum].join('|');
+      }
+      if (!byDoc.has(key)) {
+        const people = tip === 'CUTTING_TOOL'
+          ? parseRecipientList(r.primalac)
+          : [String(r.primalac || '').split(/\s*,\s*/)[0].trim()].filter(Boolean);
+        const primaryOne = tip === 'CUTTING_TOOL'
+          ? (people[0] || '')
+          : String(r.primalac || '').split(/\s*,\s*/)[0].trim();
+        byDoc.set(key, {
+          meta: { ...r, datum, primalacList: people, primalac: primaryOne },
+          lines: [],
+          primalacRaw: r.primalac,
+        });
+      }
       byDoc.get(key).lines.push(r);
     }
 
@@ -1019,63 +1055,64 @@ export function openBulkImportModal(opts = {}) {
       try {
         if (tip === 'CUTTING_TOOL') {
           if (!m.masina) { state.progress.fail += grp.lines.length; paint(); continue; }
-          const emp = analysis.resolvedEmployees.get(m.primalac);
-          if (!emp) { state.progress.fail += grp.lines.length; paint(); continue; }
+          const people = Array.isArray(m.primalacList) && m.primalacList.length > 0
+            ? m.primalacList
+            : parseRecipientList(grp.primalacRaw || '');
+          const primaryName = people[0];
+          const primaryEmp = analysis.resolvedEmployees.get(primaryName);
+          if (!primaryName || !primaryEmp) { state.progress.fail += grp.lines.length; paint(); continue; }
+
+          const assigneesPayload = [];
+          for (let pi = 0; pi < people.length; pi += 1) {
+            const pnm = people[pi];
+            const e = analysis.resolvedEmployees.get(pnm);
+            if (!e) continue;
+            assigneesPayload.push({ employee_id: e.id, role: pi === 0 ? 'PRIMARY' : 'SECONDARY' });
+          }
+          if (assigneesPayload.length === 0 || !assigneesPayload.some((a) => a.role === 'PRIMARY')) {
+            state.progress.fail += grp.lines.length;
+            paint();
+            continue;
+          }
 
           const lines = [];
-          const qtyByCat = new Map(); /* catalog_id -> total qty u ovoj grupi */
           for (const ln of grp.lines) {
             const oznaka = String(ln.alat_oznaka_ili_barkod || '').trim();
             const catId = analysis.catalogByOznaka.get(oznaka);
             if (!catId) continue;
             const qty = Number(ln.kolicina) || 1;
             lines.push({ catalog_id: catId, quantity: qty });
-            qtyByCat.set(catId, (qtyByCat.get(catId) || 0) + qty);
           }
           if (lines.length === 0) { state.progress.fail += grp.lines.length; paint(); continue; }
 
-          /* Pre-seed magacin sa potrebnom količinom (RPC issueCuttingReversal će
-           * dekrementovati magacin za qty; ako magacin nema balance, CHECK puca).
-           * Virtuelni put: nabavljen → magacin → odmah izdat na mašinu. */
-          idbg(`pre-seed grupe ${m.masina}`, { catCount: qtyByCat.size, totalQty: Array.from(qtyByCat.values()).reduce((a, b) => a + b, 0) });
-          let seedFail = false;
-          let seedFailReason = '';
-          let seedCount = 0;
-          for (const [catId, qty] of qtyByCat.entries()) {
-            const seed = await seedCuttingToolStock(catId, magId, qty);
-            if (!seed.ok) {
-              seedFailReason = `cat=${catId} qty=${qty} → ${seed.error}`;
-              console.error('[reversi/import] seed pao', { catId, qty, magId, err: seed.error });
-              seedFail = true;
-              break;
-            }
-            seedCount += 1;
-          }
-          idbg(`seed gotov ${m.masina}`, { ok: seedCount, fail: seedFail ? 1 : 0, reason: seedFailReason });
-          if (seedFail) {
-            showToast(`Seed magacina pao: ${seedFailReason}`);
-            state.progress.fail += grp.lines.length;
-            paint();
-            continue;
-          }
-
-          /* Ako su bile dve osobe u koloni primaoca, dodaj drugu u napomenu */
           let napomena = m.napomena || null;
-          const allNames = String(grp.primalacRaw || '').split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
-          if (allNames.length > 1) {
-            const second = allNames.slice(1).join(', ');
-            napomena = `${napomena ? napomena + ' | ' : ''}Drugi potpisnik(i): ${second}`;
+          if (people.length > 1) {
+            napomena = `${napomena ? `${napomena} | ` : ''}Drugi potpisnik(i): ${people.slice(1).join(', ')}`;
           }
 
-          idbg(`issueCuttingReversal call ${m.masina}`, { lines: lines.length, emp: emp.full_name });
-          const res = await issueCuttingReversal({
+          const lineSig = grp.lines
+            .map((ln) => `${String(ln.alat_oznaka_ili_barkod || '').trim()}:${Number(ln.kolicina) || 1}`)
+            .sort()
+            .join(';');
+          const legacyKey = await sha256HexUtf8(
+            `REVERSI|${state.sourceFileName || 'na'}|${m.masina}|${m.datum || ''}|${people.join('>')}|${lineSig}`,
+          );
+
+          idbg(`issueCuttingReversal call ${m.masina}`, { lines: lines.length, primary: primaryEmp.full_name });
+          const issuePayload = {
             recipient_machine_code: m.masina,
-            issued_to_employee_id: emp.id,
-            issued_to_employee_name: emp.full_name,
+            issued_to_employee_id: primaryEmp.id,
+            issued_to_employee_name: primaryEmp.full_name,
             expected_return_date: m.rok_povracaja || null,
             napomena,
             lines,
-          });
+            legacy_skip_source_decrement: true,
+            bulk_import_legacy_key: legacyKey,
+          };
+          if (assigneesPayload.length > 1) {
+            issuePayload.assignees = assigneesPayload;
+          }
+          const res = await issueCuttingReversal(issuePayload);
           idbg(`issueCuttingReversal result ${m.masina}`, { ok: res.ok, error: res.error, doc_number: res.data?.doc_number });
           if (res.ok) {
             state.progress.ok += grp.lines.length;
