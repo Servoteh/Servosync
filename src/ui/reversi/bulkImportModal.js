@@ -931,13 +931,30 @@ export function openBulkImportModal(opts = {}) {
           if (!emp) { state.progress.fail += grp.lines.length; paint(); continue; }
 
           const lines = [];
+          const qtyByCat = new Map(); /* catalog_id -> total qty u ovoj grupi */
           for (const ln of grp.lines) {
             const oznaka = String(ln.alat_oznaka_ili_barkod || '').trim();
             const catId = analysis.catalogByOznaka.get(oznaka);
             if (!catId) continue;
-            lines.push({ catalog_id: catId, quantity: Number(ln.kolicina) || 1 });
+            const qty = Number(ln.kolicina) || 1;
+            lines.push({ catalog_id: catId, quantity: qty });
+            qtyByCat.set(catId, (qtyByCat.get(catId) || 0) + qty);
           }
           if (lines.length === 0) { state.progress.fail += grp.lines.length; paint(); continue; }
+
+          /* Pre-seed magacin sa potrebnom količinom (RPC issueCuttingReversal će
+           * dekrementovati magacin za qty; ako magacin nema balance, CHECK puca).
+           * Virtuelni put: nabavljen → magacin → odmah izdat na mašinu. */
+          let seedFail = false;
+          for (const [catId, qty] of qtyByCat.entries()) {
+            const seed = await seedCuttingToolStock(catId, magId, qty);
+            if (!seed.ok) {
+              console.error('[bulkImport/revers] seed magacina pao', { catId, qty, err: seed.error });
+              seedFail = true;
+              break;
+            }
+          }
+          if (seedFail) { state.progress.fail += grp.lines.length; paint(); continue; }
 
           /* Ako su bile dve osobe u koloni primaoca, dodaj drugu u napomenu */
           let napomena = m.napomena || null;
