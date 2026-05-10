@@ -59,25 +59,67 @@ export async function dispatchOptionalNetworkLabelPrint(args) {
   }
 }
 
-function labelHtml(loc) {
+/**
+ * Format opcije za nalepnicu police:
+ *   - 'tsc'       — TSC ML340P 80×40mm (TSPL2 push, paralelni preview u browser-u)
+ *   - 'a4-large'  — A4, 80×80mm po nalepnici, 4 po stranici (2×2)
+ *   - 'a4-grid'   — A4, kompaktni 3-kolona ~60mm raster (legacy, do 2026-05)
+ *
+ * @typedef {'tsc'|'a4-large'|'a4-grid'} ShelfLabelFormat
+ * @typedef {'barcode'|'qr'} ShelfCodeType
+ */
+
+const FORMAT_DIMS = {
+  tsc:        { w: '80mm',  h: '40mm',  cols: 1, name: 'TSC 80×40mm' },
+  'a4-large': { w: '80mm',  h: '80mm',  cols: 2, name: 'A4 80×80mm (2×2)' },
+  'a4-grid':  { w: '60mm',  h: '40mm',  cols: 3, name: 'A4 kompakt (3 kol)' },
+};
+
+function shelfLabelHtml(loc, codeType, format) {
   const code = escHtml(loc.location_code || '');
   const name = escHtml(loc.name || '');
+  const cls = `label fmt-${format}`;
+  const codeBox =
+    codeType === 'qr'
+      ? `<canvas id="qr_${escHtml(String(loc.id))}" class="label-qr"></canvas>`
+      : `<svg id="bc_${escHtml(String(loc.id))}" class="label-barcode"></svg>`;
   return `
-    <div class="label">
-      <div class="label-code">${code}</div>
-      <svg id="bc_${escHtml(String(loc.id))}" class="label-barcode"></svg>
-      <div class="label-name">${name}</div>
+    <div class="${cls}">
+      <div class="label-codebox">${codeBox}</div>
+      <div class="label-text">
+        <div class="label-code">${code}</div>
+        ${name ? `<div class="label-name">${name}</div>` : ''}
+      </div>
     </div>`;
 }
 
-function labelsHtmlShell(count) {
+function shelfLabelsHtmlShell(count, codeType, format) {
+  const dims = FORMAT_DIMS[format] || FORMAT_DIMS['a4-large'];
+  const codeLabel = codeType === 'qr' ? 'QR kod' : 'Barkod';
+  const isCompact = format === 'a4-grid';
+  const isLarge = format === 'a4-large';
+  const isTsc = format === 'tsc';
+
+  /* TSC put zapravo ide preko TSPL2 mreže — browser je samo backup preview.
+   * A4 put = stvarna fizička štampa preko Chrome dijaloga. */
+  const pageRule = isTsc
+    ? `@page { size: ${dims.w} ${dims.h}; margin: 0; }`
+    : `@page { size: A4; margin: 8mm; }`;
+
+  /* 80×80mm large: tekst 14mm + gap + kod 60mm + 2mm pad budžet → kod ~58mm h.
+   * 60×40mm grid: tekst ~12mm + kod ~26mm.
+   * 80×40mm tsc:  tekst ~12mm + kod ~26mm. */
+  const codeBoxH = isLarge ? '52mm' : '24mm';
+  const codeFont = isLarge ? '24pt' : '16pt';
+  const nameFont = isLarge ? '11pt' : '8pt';
+
   return `<!DOCTYPE html>
 <html lang="sr-Latn">
 <head>
   <meta charset="UTF-8">
   <title>Nalepnice polica (${count})</title>
   <style>
-    @page { size: A4; margin: 8mm; }
+    ${pageRule}
     * { box-sizing: border-box; }
     html, body {
       margin: 0; padding: 0;
@@ -96,68 +138,100 @@ function labelsHtmlShell(count) {
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 4mm;
+      grid-template-columns: repeat(${dims.cols}, ${dims.w});
+      gap: ${isLarge ? '5mm' : '4mm'};
       padding: 10px 16px 24px;
+      justify-content: center;
     }
     .label {
+      width: ${dims.w};
+      height: ${dims.h};
       border: 1px dashed #666;
       border-radius: 2mm;
-      padding: 4mm 4mm 3mm;
+      padding: 3mm;
       text-align: center;
-      min-height: 35mm;
       page-break-inside: avoid;
       break-inside: avoid;
-      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      display: flex; flex-direction: column; justify-content: space-between; align-items: center;
       gap: 2mm;
+      overflow: hidden;
+    }
+    .label-codebox {
+      flex: 0 0 ${codeBoxH};
+      width: 100%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .label-barcode {
+      width: 100%;
+      height: ${codeBoxH};
+      display: block;
+    }
+    .label-qr {
+      max-width: 100%;
+      max-height: ${codeBoxH};
+      width: auto; height: auto;
+      image-rendering: pixelated;
+    }
+    .label-text {
+      flex: 0 0 auto;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 1mm;
     }
     .label-code {
-      font-size: 20pt; font-weight: 800; letter-spacing: 1px;
+      font-size: ${codeFont}; font-weight: 800; letter-spacing: 1px;
       font-family: 'Courier New', monospace;
       line-height: 1;
     }
-    .label-barcode { display: block; width: 100%; height: auto; max-height: 20mm; }
     .label-name {
-      font-size: 9pt; color: #333; line-height: 1.2;
+      font-size: ${nameFont}; color: #333; line-height: 1.2;
       text-transform: uppercase;
       word-break: break-word;
     }
     @media print {
       .toolbar { display: none; }
-      .grid { padding: 0; gap: 3mm; }
+      .grid { padding: 0; gap: ${isCompact ? '3mm' : isLarge ? '5mm' : '0'}; }
       .label { border: 1px solid #000; }
+      ${isTsc ? '.label { border: 0; }' : ''}
     }
   </style>
 </head>
 <body>
   <div class="toolbar">
-    Nalepnice polica: <strong>${count}</strong>.
+    Nalepnice polica: <strong>${count}</strong> · format <strong>${escHtml(dims.name)}</strong> · <strong>${escHtml(codeLabel)}</strong>.
     Pritisni <strong>Ctrl + P</strong> za štampu.
     <button onclick="window.print()">Štampaj</button>
     <button onclick="window.close()">Zatvori</button>
   </div>
-  <div id="labelGrid" class="grid">
-    ${Array.from({ length: count })
-      .map(() => '<div class="label"><svg class="label-barcode"></svg></div>')
-      .join('')}
-  </div>
+  <div id="labelGrid" class="grid"></div>
 </body>
 </html>`;
 }
 
 /**
- * Otvara novi prozor sa jednom ili više nalepnica polica (Code128 = location_code).
+ * Otvara novi prozor sa jednom ili više nalepnica polica.
  *
  * @param {object[]} locs
+ * @param {{ codeType?: ShelfCodeType, format?: ShelfLabelFormat, copies?: number }} [opts]
  */
-export async function printShelfLabelsToBrowserWindow(locs) {
+export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
   if (!Array.isArray(locs) || !locs.length) {
     showToast('⚠ Nema lokacija za štampu');
     return;
   }
 
-  const mod = await import('jsbarcode');
-  const JsBarcode = mod.default || mod;
+  const codeType = opts.codeType === 'qr' ? 'qr' : 'barcode';
+  const format = FORMAT_DIMS[opts.format] ? opts.format : 'a4-large';
+  const copies = Math.max(1, Math.floor(Number(opts.copies) || 1));
+
+  /* Razvi `copies` u flat listu — N kopija po polici izlazi N puta. */
+  const flat = [];
+  for (const l of locs) for (let i = 0; i < copies; i++) flat.push(l);
+
+  const [{ default: JsBarcode }, qrcodeMod] = await Promise.all([
+    import('jsbarcode'),
+    codeType === 'qr' ? import('qrcode') : Promise.resolve(null),
+  ]);
+  const QRCode = qrcodeMod ? (qrcodeMod.default || qrcodeMod) : null;
 
   const w = window.open('', '_blank');
   if (!w) {
@@ -165,54 +239,93 @@ export async function printShelfLabelsToBrowserWindow(locs) {
     return;
   }
 
-  w.document.write(labelsHtmlShell(locs.length));
+  w.document.write(shelfLabelsHtmlShell(flat.length, codeType, format));
   w.document.close();
 
-  const runWhenReady = () => {
+  const runWhenReady = async () => {
     try {
       const host = w.document.getElementById('labelGrid');
-      host.innerHTML = locs.map(labelHtml).join('');
-      locs.forEach(loc => {
-        const svg = w.document.getElementById(`bc_${loc.id}`);
-        if (!svg) return;
-        JsBarcode(svg, String(loc.location_code || '').trim(), {
-          format: 'CODE128',
-          displayValue: false,
-          margin: 0,
-          height: 50,
-          width: 2,
-          background: '#ffffff',
-          lineColor: '#000000',
-        });
-      });
+      /* Mali per-render uniqueness suffix da multi-copies imaju jedinstven id u DOM-u. */
+      host.innerHTML = flat
+        .map((loc, i) => shelfLabelHtml({ ...loc, id: `${loc.id}_${i}` }, codeType, format))
+        .join('');
+      for (let i = 0; i < flat.length; i++) {
+        const loc = flat[i];
+        const code = String(loc.location_code || '').trim();
+        if (!code) continue;
+        if (codeType === 'qr') {
+          const canvas = w.document.getElementById(`qr_${loc.id}_${i}`);
+          if (canvas && QRCode) {
+            await QRCode.toCanvas(canvas, code, {
+              errorCorrectionLevel: 'M',
+              margin: 1,
+              scale: format === 'a4-large' ? 8 : 4,
+              color: { dark: '#000000', light: '#ffffff' },
+            });
+          }
+        } else {
+          const svg = w.document.getElementById(`bc_${loc.id}_${i}`);
+          if (svg) {
+            JsBarcode(svg, code, {
+              format: 'CODE128',
+              displayValue: false,
+              margin: 0,
+              height: format === 'a4-large' ? 100 : 50,
+              width: 2,
+              background: '#ffffff',
+              lineColor: '#000000',
+            });
+          }
+        }
+      }
     } catch (e) {
       console.error('[labels] render failed', e);
       w.document.body.innerHTML = `<p style="padding:20px;color:#c00">Greška: ${String(e?.message || e)}</p>`;
     }
   };
 
-  if (w.document.readyState === 'complete') runWhenReady();
-  else w.addEventListener('load', runWhenReady, { once: true });
+  if (w.document.readyState === 'complete') void runWhenReady();
+  else w.addEventListener('load', () => void runWhenReady(), { once: true });
 
-  let tspl2 = '';
-  try {
-    tspl2 = locs
-      .map(l => buildTspShelfLabelProgram({ location_code: l.location_code, name: l.name, copies: 1 }))
-      .join('');
-  } catch (e) {
-    console.warn('[labels/shelf] TSPL2 build failed:', e);
+  /* TSPL2 paralelno SAMO za TSC format — A4 putevi idu samo kroz browser. */
+  if (format === 'tsc') {
+    let tspl2 = '';
+    try {
+      tspl2 = locs
+        .map(l =>
+          buildTspShelfLabelProgram({
+            location_code: l.location_code,
+            name: l.name,
+            copies,
+            codeType,
+          }),
+        )
+        .join('');
+    } catch (e) {
+      console.warn('[labels/shelf] TSPL2 build failed:', e);
+    }
+    void dispatchOptionalNetworkLabelPrint({
+      mode: 'shelf',
+      payload: {
+        locations: locs.map(l => ({ id: l.id, code: l.location_code, name: l.name })),
+        codeType,
+        copies,
+        tspl2,
+      },
+    });
   }
-  void dispatchOptionalNetworkLabelPrint({
-    mode: 'shelf',
-    payload: {
-      locations: locs.map(l => ({ id: l.id, code: l.location_code, name: l.name })),
-      tspl2,
-    },
-  });
 }
 
 /**
- * Modal: pretraga → izbor police → štampa.
+ * Modal: pretraga → izbor jedne ili više polica → izbor formata/koda → štampa.
+ *
+ * Funkcionalnost (2026-05):
+ *   - Multi-select (čekboks) — operater bira N polica → 1 batch otisak
+ *   - Tip koda: Barkod (CODE128) ili QR
+ *   - Format: TSC 80×40mm | A4 80×80mm (2×2) | A4 kompakt 3-kolona (legacy)
+ *   - Kopije po polici (1+)
+ *   - Pretraga po šifri / nazivu / path-u
+ *   - "Označi sve prikazane" / "Očisti izbor"
  */
 export async function openShelfLabelsPrintPicker() {
   const locs = await fetchLocations();
@@ -236,17 +349,46 @@ export async function openShelfLabelsPrintPicker() {
   const wrap = document.createElement('div');
   wrap.innerHTML = `
     <div class="kadr-modal-overlay" id="${id}" role="dialog" aria-modal="true">
-      <div class="kadr-modal" style="max-width:520px">
-        <div class="kadr-modal-title">Štampa nalepnice police</div>
-        <div class="kadr-modal-subtitle">Izaberi konkretnu policu. Barkod = šifra police (Code128).</div>
+      <div class="kadr-modal" style="max-width:640px">
+        <div class="kadr-modal-title">Štampa nalepnica polica</div>
+        <div class="kadr-modal-subtitle">Označi jednu ili više polica. Kod = šifra police.</div>
         <div class="kadr-modal-body">
           <label class="loc-filter-field" style="display:block;margin-bottom:10px">
             <span>Pretraga police</span>
-            <input type="search" class="loc-search-input" id="locShelfPickQ" autocomplete="off" placeholder="Šifra ili naziv…" />
+            <input type="search" class="loc-search-input" id="locShelfPickQ" autocomplete="off" placeholder="Šifra, naziv ili putanja…" />
           </label>
-          <div id="locShelfPickList" class="loc-list" style="max-height:220px"></div>
-          <div id="locShelfPickPreview" class="loc-muted" style="margin-top:12px;min-height:48px"></div>
-          <div class="kadr-modal-actions" style="margin-top:16px">
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <button type="button" class="btn btn-xs" id="locShelfPickAllVisible">Označi sve prikazane</button>
+            <button type="button" class="btn btn-xs" id="locShelfPickClearSel">Očisti izbor</button>
+            <span class="loc-muted" id="locShelfPickCount" style="margin-left:auto;align-self:center;font-size:12px">0 izabrano</span>
+          </div>
+
+          <div id="locShelfPickList" class="loc-list" style="max-height:240px;overflow:auto;border:1px solid var(--border2,#ddd);border-radius:6px;padding:4px"></div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+            <label class="loc-filter-field" style="display:block">
+              <span>Tip koda</span>
+              <select id="locShelfPickCodeType" class="loc-search-input">
+                <option value="barcode">Barkod (CODE128)</option>
+                <option value="qr">QR kod</option>
+              </select>
+            </label>
+            <label class="loc-filter-field" style="display:block">
+              <span>Format</span>
+              <select id="locShelfPickFormat" class="loc-search-input">
+                <option value="tsc">TSC 80×40mm (termalni)</option>
+                <option value="a4-large" selected>A4 80×80mm (2×2 po strani)</option>
+                <option value="a4-grid">A4 kompakt 3-kolona</option>
+              </select>
+            </label>
+          </div>
+          <label class="loc-filter-field" style="display:block;margin-top:10px;max-width:160px">
+            <span>Kopija po polici</span>
+            <input type="number" id="locShelfPickCopies" class="loc-search-input" min="1" max="50" value="1" inputmode="numeric" />
+          </label>
+
+          <div class="kadr-modal-actions" style="margin-top:18px">
             <button type="button" class="btn btn-primary" id="locShelfPickDoPrint" disabled>Štampaj</button>
             <button type="button" class="btn" id="locShelfPickCancel">Otkaži</button>
           </div>
@@ -257,12 +399,19 @@ export async function openShelfLabelsPrintPicker() {
   const overlay = document.getElementById(id);
   const listEl = overlay.querySelector('#locShelfPickList');
   const qEl = overlay.querySelector('#locShelfPickQ');
-  const prevEl = overlay.querySelector('#locShelfPickPreview');
+  const countEl = overlay.querySelector('#locShelfPickCount');
   const btnPrint = overlay.querySelector('#locShelfPickDoPrint');
   const btnCancel = overlay.querySelector('#locShelfPickCancel');
+  const btnAllVisible = overlay.querySelector('#locShelfPickAllVisible');
+  const btnClearSel = overlay.querySelector('#locShelfPickClearSel');
+  const codeTypeEl = overlay.querySelector('#locShelfPickCodeType');
+  const formatEl = overlay.querySelector('#locShelfPickFormat');
+  const copiesEl = overlay.querySelector('#locShelfPickCopies');
 
-  let selected = null;
+  /** @type {Set<string>} */
+  const selectedIds = new Set();
   let search = '';
+  let visibleRows = candidates.slice();
 
   const close = () => {
     unesc();
@@ -270,53 +419,73 @@ export async function openShelfLabelsPrintPicker() {
   };
   const unesc = bindEsc(close);
 
-  const filterList = () => {
+  const updateCount = () => {
+    const n = selectedIds.size;
+    const copies = Math.max(1, Math.floor(Number(copiesEl.value) || 1));
+    const total = n * copies;
+    countEl.textContent = n
+      ? `${n} izabrano · ${total} otisak${total === 1 ? '' : total < 5 ? 'a' : 'a'}`
+      : '0 izabrano';
+    btnPrint.disabled = n === 0;
+    btnPrint.textContent = n
+      ? `Štampaj ${total} nalepnic${total === 1 ? 'u' : total < 5 ? 'e' : 'a'}`
+      : 'Štampaj';
+  };
+
+  const renderRows = () => {
     const q = search.trim().toLowerCase();
-    const rows = !q
+    visibleRows = !q
       ? candidates
       : candidates.filter(
           l =>
-            String(l.location_code || '')
-              .toLowerCase()
-              .includes(q) ||
-            String(l.name || '')
-              .toLowerCase()
-              .includes(q) ||
-            String(l.path_cached || '')
-              .toLowerCase()
-              .includes(q),
+            String(l.location_code || '').toLowerCase().includes(q) ||
+            String(l.name || '').toLowerCase().includes(q) ||
+            String(l.path_cached || '').toLowerCase().includes(q),
         );
-    listEl.innerHTML = rows.length
-      ? rows
-          .map(
-            l => `<button type="button" class="btn loc-row-click" style="width:100%;text-align:left;margin:2px 0"
-              data-loc-id="${escHtml(String(l.id))}">
-              <strong>${escHtml(l.location_code || '')}</strong>
-              <span class="loc-muted"> · ${escHtml(l.name || '')}</span>
-            </button>`,
-          )
-          .join('')
-      : '<p class="loc-muted">Nema pogodaka.</p>';
 
-    listEl.querySelectorAll('[data-loc-id]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const lid = btn.getAttribute('data-loc-id');
-        selected = candidates.find(x => String(x.id) === lid) || null;
-        listEl.querySelectorAll('[data-loc-id]').forEach(b => b.classList.remove('is-active'));
-        btn.classList.add('is-active');
-        btnPrint.disabled = !selected;
-        if (selected) {
-          prevEl.innerHTML = `<strong>${escHtml(selected.location_code || '')}</strong><br/>
-            <span class="loc-muted">${escHtml(selected.name || '')}</span><br/>
-            <span class="loc-muted">${escHtml((selected.path_cached || '').slice(0, 120))}</span>`;
-        }
+    listEl.innerHTML = visibleRows.length
+      ? visibleRows
+          .map(l => {
+            const lid = String(l.id);
+            const checked = selectedIds.has(lid) ? ' checked' : '';
+            return `<label class="loc-row-click" style="display:flex;align-items:center;gap:10px;padding:6px 8px;cursor:pointer;border-radius:4px"
+              data-loc-id="${escHtml(lid)}">
+              <input type="checkbox" data-loc-cb="${escHtml(lid)}"${checked} />
+              <span style="flex:1;min-width:0">
+                <strong>${escHtml(l.location_code || '')}</strong>
+                <span class="loc-muted"> · ${escHtml(l.name || '')}</span>
+                ${l.path_cached ? `<div class="loc-muted" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(l.path_cached)}</div>` : ''}
+              </span>
+            </label>`;
+          })
+          .join('')
+      : '<p class="loc-muted" style="padding:10px">Nema pogodaka.</p>';
+
+    listEl.querySelectorAll('[data-loc-cb]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const lid = cb.getAttribute('data-loc-cb');
+        if (cb.checked) selectedIds.add(lid);
+        else selectedIds.delete(lid);
+        updateCount();
       });
     });
   };
 
   qEl.addEventListener('input', () => {
     search = qEl.value;
-    filterList();
+    renderRows();
+  });
+  copiesEl.addEventListener('input', updateCount);
+
+  btnAllVisible.addEventListener('click', () => {
+    for (const l of visibleRows) selectedIds.add(String(l.id));
+    renderRows();
+    updateCount();
+  });
+  btnClearSel.addEventListener('click', () => {
+    selectedIds.clear();
+    renderRows();
+    updateCount();
   });
 
   btnCancel.addEventListener('click', close);
@@ -325,12 +494,18 @@ export async function openShelfLabelsPrintPicker() {
   });
 
   btnPrint.addEventListener('click', async () => {
-    if (!selected) return;
-    await printShelfLabelsToBrowserWindow([selected]);
+    if (!selectedIds.size) return;
+    const picked = candidates.filter(l => selectedIds.has(String(l.id)));
+    if (!picked.length) return;
+    const codeType = codeTypeEl.value === 'qr' ? 'qr' : 'barcode';
+    const format = ['tsc', 'a4-large', 'a4-grid'].includes(formatEl.value) ? formatEl.value : 'a4-large';
+    const copies = Math.max(1, Math.floor(Number(copiesEl.value) || 1));
+    await printShelfLabelsToBrowserWindow(picked, { codeType, format, copies });
     close();
   });
 
-  filterList();
+  renderRows();
+  updateCount();
 }
 
 /**
