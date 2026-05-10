@@ -211,6 +211,9 @@ async function resolveEmployeeFuzzy(name) {
   if (!original) return null;
   const normTarget = normalizeName(original);
   const targetTokens = normTarget.split(' ').filter(Boolean).sort();
+  /* eslint-disable no-console */
+  const dbg = (msg, data) => console.log(`[reversi/import/empResolve] ${msg}`, data);
+  dbg('start', { name: original, normTarget, targetTokens });
 
   /* Helper: za listu kandidata, vrati onog čija je sortirana lista tokena
    * (skinut dijakritici, lower-case) ista kao target — pokriva i obrnut redosled
@@ -237,8 +240,9 @@ async function resolveEmployeeFuzzy(name) {
   /* Pokušaj 1: ilike sa originalnim imenom, fuzzy nad rezultatom */
   let r = await fetchEmployeesAny(original);
   let list = r.ok && Array.isArray(r.data) ? r.data : [];
+  dbg(`pass1: ilike *${original}*`, { count: list.length, sample: list.slice(0, 3).map((e) => e.full_name) });
   let hit = findTokenMatch(list);
-  if (hit) return { id: hit.id, full_name: hit.full_name, is_active: hit.is_active };
+  if (hit) { dbg('pass1 HIT', hit.full_name); return { id: hit.id, full_name: hit.full_name, is_active: hit.is_active }; }
 
   /* Pokušaj 2: ilike sa stripped imenom (bez dijakritika) — pokriva slučaj kad
    * baza ima druge dijakritike (Cirovic vs Ćirović) ili kad PostgREST collation
@@ -247,24 +251,34 @@ async function resolveEmployeeFuzzy(name) {
   if (stripped !== original) {
     r = await fetchEmployeesAny(stripped);
     list = r.ok && Array.isArray(r.data) ? r.data : [];
+    dbg(`pass2: ilike *${stripped}*`, { count: list.length, sample: list.slice(0, 3).map((e) => e.full_name) });
     hit = findTokenMatch(list);
-    if (hit) return { id: hit.id, full_name: hit.full_name, is_active: hit.is_active };
+    if (hit) { dbg('pass2 HIT', hit.full_name); return { id: hit.id, full_name: hit.full_name, is_active: hit.is_active }; }
   }
 
-  /* Pokušaj 3: pretraga po pojedinačnim tokenima — uzmi najduži token (verovatno
-   * prezime), pa traži po njemu. Pokriva slučaj kad u CSV imamo "Petar Petrović"
-   * a u bazi "Petrović Petar" — ilike *Petar Petrović* neće ih naći jer baza
-   * ima reverso reč red. */
+  /* Pokušaj 3: pretraga po SVAKOM tokenu (skinut dijakritik). Spaja sve
+   * kandidate iz svih pojedinačnih ilike upita pa pravi token-match.
+   * Hvata "Petar Petrović" ↔ "Petrović Petar" (svaki token zasebno tražen). */
   if (targetTokens.length >= 2) {
-    /* Najduži token je obično prezime — najinformativniji za pretragu. */
-    const longest = [...targetTokens].sort((a, b) => b.length - a.length)[0];
-    const longestStripped = longest.normalize('NFD').replace(/[̀-ͯ]/g, '');
-    r = await fetchEmployeesAny(longestStripped);
-    list = r.ok && Array.isArray(r.data) ? r.data : [];
-    hit = findTokenMatch(list);
-    if (hit) return { id: hit.id, full_name: hit.full_name, is_active: hit.is_active };
+    const candidates = new Map(); // id → row
+    for (const tok of targetTokens) {
+      if (tok.length < 3) continue; /* preskoči inicijale / kratke reči */
+      const tokStripped = tok.normalize('NFD').replace(/[̀-ͯ]/g, '');
+      r = await fetchEmployeesAny(tokStripped);
+      const tList = r.ok && Array.isArray(r.data) ? r.data : [];
+      dbg(`pass3: ilike *${tokStripped}*`, { count: tList.length });
+      for (const row of tList) {
+        if (!candidates.has(row.id)) candidates.set(row.id, row);
+      }
+    }
+    const merged = Array.from(candidates.values());
+    dbg('pass3 merged', { count: merged.length, sample: merged.slice(0, 5).map((e) => e.full_name) });
+    hit = findTokenMatch(merged);
+    if (hit) { dbg('pass3 HIT', hit.full_name); return { id: hit.id, full_name: hit.full_name, is_active: hit.is_active }; }
   }
 
+  dbg('NO MATCH', { name: original });
+  /* eslint-enable no-console */
   return null;
 }
 
