@@ -17,6 +17,7 @@ import {
   fetchItemMovements,
   fetchItemPlacements,
   fetchLocations,
+  formatLocationDisplay,
   locCreateMovement,
   updateLocation,
 } from '../../services/lokacije.js';
@@ -1327,7 +1328,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
         if (drawing_no && order_no && item_ref_id) {
           qmSetDrawingCache(order_no, item_ref_id, drawing_no);
         }
-        showToast('✓ Premeštanje zabeleženo');
+        showToast(`✓ Deo uspešno premešten na lokaciju: ${formatLocationDisplay(locById.get(to_location_id))}`);
         close();
         onSuccess?.();
       } catch (e) {

@@ -19,7 +19,7 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { isAndroidWebCameraTorchZoomHidden } from '../../services/barcode.js';
-import { fetchLocations, locCreateMovement } from '../../services/lokacije.js';
+import { fetchLocations, formatLocationDisplay, locCreateMovement } from '../../services/lokacije.js';
 import { enqueueMovement } from '../../services/offlineQueue.js';
 
 let _barcodeModPromise = null;
@@ -280,7 +280,8 @@ export async function renderMobileBatch(mountEl, ctx) {
 
     submitBtn.disabled = false;
 
-    const lines = [`✓ Poslano: ${ok}`];
+    const destLabel = formatLocationDisplay(activeLocs.find(l => l.id === toId));
+    const lines = [`✓ Delovi premešteni na lokaciju: ${destLabel}`, `Poslato: ${ok}`];
     if (queued) lines.push(`⏳ Queue: ${queued}`);
     if (failed) lines.push(`⚠ Greške: ${failed}`);
     showToast(lines.join(' · '));

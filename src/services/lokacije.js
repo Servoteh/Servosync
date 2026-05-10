@@ -396,6 +396,17 @@ export async function fetchSyncOutboundEvents(limit = 80) {
   );
 }
 
+/** @param {{ location_code?: string, name?: string }|null|undefined} loc */
+export function formatLocationDisplay(loc) {
+  if (!loc || typeof loc !== 'object') return 'nepoznata lokacija';
+  const code = String(loc.location_code ?? '').trim();
+  const name = String(loc.name ?? '').trim();
+  if (code && name) return `${code} — ${name}`;
+  if (code) return code;
+  if (name) return name;
+  return 'nepoznata lokacija';
+}
+
 /**
  * @param {object} payload — item_ref_table, item_ref_id, to_location_id, movement_type, opciono from_location_id, note, movement_reason
  * @returns {Promise<{ ok?: boolean, id?: string, error?: string }|null>}

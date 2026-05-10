@@ -14,6 +14,7 @@ import { getLocationKind } from '../../lib/lokacijeTypes.js';
 import {
   fetchItemPlacements,
   fetchLocations,
+  formatLocationDisplay,
   locCreateMovement,
 } from '../../services/lokacije.js';
 import { fetchBigtehnOpSnapshotByRnAndTp } from '../../services/planProizvodnje.js';
@@ -1649,7 +1650,9 @@ export async function openScanMoveModal({
         try {
           enqueueMovement(payload);
           if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
-          showToast('📥 Offline — zapis sačuvan i poslaće se kad se vrati signal');
+          showToast(
+            `📥 Offline — zapis za lokaciju ${formatLocationDisplay(state.locById.get(to_location_id))} čeka slanje`,
+          );
           close({ bySuccess: true });
           onSuccess?.();
         } catch (e) {
@@ -1666,7 +1669,9 @@ export async function openScanMoveModal({
          * o mogućem duplikatu). */
         enqueueMovement(payload);
         if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
-        showToast('📥 Mreža pala — zapis sačuvan u queue');
+        showToast(
+          `📥 Mreža pala — zapis za lokaciju ${formatLocationDisplay(state.locById.get(to_location_id))} u queue-u`,
+        );
         close({ bySuccess: true });
         onSuccess?.();
         return;
@@ -1681,7 +1686,7 @@ export async function openScanMoveModal({
         return;
       }
 
-      showToast('✓ Premeštanje zabeleženo');
+      showToast(`✓ Deo uspešno premešten na lokaciju: ${formatLocationDisplay(state.locById.get(to_location_id))}`);
       if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
       close({ bySuccess: true });
       onSuccess?.();
