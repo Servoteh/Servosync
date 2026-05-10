@@ -176,7 +176,7 @@ body.module-projektni-biro {
   background: var(--surface3, #f3f4f6);
 }
 
-/* == CONTEXT CARD (Projekat + Inženjer — jedan red) == */
+/* == CONTEXT: tabovi → Projekat → Inženjeri (wrap, bez horizontalnog skrola) == */
 
 .pb-context-card {
   background: var(--surface, #fff);
@@ -187,40 +187,21 @@ body.module-projektni-biro {
   flex-shrink: 0;
 }
 
-.pb-context-single {
+.pb-context-project-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
-  min-height: 44px;
-  overflow-x: auto;
-  overflow-y: visible;
-  scrollbar-width: thin;
+  padding: 8px 12px;
+  flex-wrap: wrap;
 }
 
-.pb-context-single::-webkit-scrollbar {
-  height: 6px;
-}
-
-.pb-context-single::-webkit-scrollbar-thumb {
-  border-radius: 3px;
-  background: var(--border, #d1d5db);
-}
-
-.pb-context-vsep {
-  width: 1px;
-  height: 22px;
-  background: var(--border, #e5e7eb);
-  flex-shrink: 0;
-}
-
-.pb-chip-host {
+.pb-context-engineers-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
+  gap: 6px 10px;
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--border, #e5e7eb);
 }
 
 .pb-context-label {
@@ -244,41 +225,27 @@ body.module-projektni-biro {
   font-size: 0.85rem;
 }
 
-/* == ENGINEER CHIPS == */
+.pb-context-select.pb-context-select--grow {
+  flex: 1 1 240px;
+  min-width: 160px;
+  max-width: min(100%, 720px);
+}
 
-.pb-chip-scroll {
+.pb-chip-list.pb-chip-list--wrap {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0 10px;
-}
-
-.pb-eng-search-wrap {
-  flex-shrink: 0;
-}
-
-.pb-eng-search {
-  width: 100px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border, #e5e7eb);
-  background: var(--surface, #fff);
-  color: inherit;
-  font-size: 0.82rem;
-}
-
-.pb-chip-list {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 2px;
-  flex: 1;
+  gap: 4px 6px;
+  flex: 1 1 200px;
   min-width: 0;
+  overflow: visible;
 }
 
-.pb-chip-list::-webkit-scrollbar {
-  display: none;
+.pb-context-engineers-row .pb-chip {
+  padding: 2px 7px;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .pb-chip {

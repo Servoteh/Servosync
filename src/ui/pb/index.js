@@ -215,14 +215,16 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       </nav>
       </div>
       <div class="pb-context-card">
-        <div class="pb-context-single">
+        <div class="pb-context-project-row">
           <span class="pb-context-label">Projekat</span>
-          <select id="pbProjectSel" class="pb-context-select">
+          <select id="pbProjectSel" class="pb-context-select pb-context-select--grow">
             <option value="all">Svi projekti</option>
             ${projects.map(p => `<option value="${escHtml(p.id)}" ${state.activeProject === p.id ? 'selected' : ''}>${escHtml(p.project_code)} — ${escHtml(p.project_name)}</option>`).join('')}
           </select>
-          <div class="pb-context-vsep"></div>
-          <div id="pbChipHost" class="pb-chip-host"></div>
+        </div>
+        <div class="pb-context-engineers-row">
+          <span class="pb-context-label">Inženjer</span>
+          <div id="pbChipHost" class="pb-chip-list pb-chip-list--wrap"></div>
         </div>
       </div>`;
 
@@ -260,26 +262,12 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
 
   function renderEngineerChips(host, st) {
     if (!host) return;
-    const searchVal = host._engSearch || '';
-    const filtered = searchVal
-      ? engineers.filter(en => en.full_name.toLowerCase().includes(searchVal.toLowerCase()))
-      : engineers;
 
     host.innerHTML = `
-      <span class="pb-context-label">Inženjer</span>
-      <div class="pb-eng-search-wrap">
-        <input type="search" class="pb-eng-search" placeholder="Filter..." id="pbEngSearch" value="${escHtml(searchVal)}" />
-      </div>
-      <div class="pb-chip-list">
         <button type="button" class="pb-chip ${st.activeEngineer === 'all' ? 'active' : ''}" data-eng="all">Svi</button>
-        ${filtered.map(en => `<button type="button" class="pb-chip ${st.activeEngineer === en.id ? 'active' : ''}" data-eng="${escHtml(en.id)}">${escHtml(en.full_name)}</button>`).join('')}
-      </div>
+        ${engineers.map(en => `<button type="button" class="pb-chip ${st.activeEngineer === en.id ? 'active' : ''}" data-eng="${escHtml(en.id)}">${escHtml(en.full_name)}</button>`).join('')}
     `;
 
-    host.querySelector('#pbEngSearch')?.addEventListener('input', e => {
-      host._engSearch = e.target.value;
-      renderEngineerChips(host, st);
-    });
     host.querySelectorAll('[data-eng]').forEach(btn => {
       btn.addEventListener('click', () => {
         st.activeEngineer = btn.getAttribute('data-eng') || 'all';
