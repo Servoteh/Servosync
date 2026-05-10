@@ -10,13 +10,21 @@
 --
 -- Svi view-ovi su security_invoker = true (RLS poštovan).
 -- Idempotentno — bezbedno za re-run.
+--
+-- NAPOMENA: koristi DROP VIEW IF EXISTS pre CREATE jer CREATE OR REPLACE VIEW
+-- ne podnosi promenu kolona (Postgres greška 42P16). Tako se može menjati
+-- definicija u sledećim iteracijama bez ručnih DROP poziva.
 -- ============================================================================
+
+DROP VIEW IF EXISTS public.v_rev_cts_by_machine;
+DROP VIEW IF EXISTS public.v_rev_cts_by_employee;
+DROP VIEW IF EXISTS public.v_rev_warehouse_unified;
 
 -- ------------------------------------------------------------
 -- 1. v_rev_cts_by_machine — rezni alat po mašini
 -- ------------------------------------------------------------
 
-CREATE OR REPLACE VIEW public.v_rev_cts_by_machine
+CREATE VIEW public.v_rev_cts_by_machine
 WITH (security_invoker = true)
 AS
 SELECT
@@ -55,7 +63,7 @@ COMMENT ON VIEW public.v_rev_cts_by_machine IS
 -- 2. v_rev_cts_by_employee — rezni alat po zaposlenom (potpisniku)
 -- ------------------------------------------------------------
 
-CREATE OR REPLACE VIEW public.v_rev_cts_by_employee
+CREATE VIEW public.v_rev_cts_by_employee
 WITH (security_invoker = true)
 AS
 SELECT
@@ -96,7 +104,7 @@ COMMENT ON VIEW public.v_rev_cts_by_employee IS
 --    Stanje u magacinu (WAREHOUSE lokacijama) za oba tipa alata.
 -- ------------------------------------------------------------
 
-CREATE OR REPLACE VIEW public.v_rev_warehouse_unified
+CREATE VIEW public.v_rev_warehouse_unified
 WITH (security_invoker = true)
 AS
 -- HAND tools (rev_tools): jedinična jedinica = 1 komad
