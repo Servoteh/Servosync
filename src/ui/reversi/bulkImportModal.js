@@ -519,7 +519,9 @@ export function openBulkImportModal(opts = {}) {
       state.type === 'revers' &&
       (state.analyzing ||
         (state.analysis &&
-          (state.analysis.missingEmployees.length > 0 || !state.analysis.magacinExists)));
+          (state.analysis.missingEmployees.length > 0 ||
+            !state.analysis.magacinExists ||
+            (state.analysis.duplicateDocs.length > 0 && !state.analysis.forceImportConfirmed))));
     const canRun = state.rows.length > 0 && validRowsCount > 0 && !state.importing && !blockedByAnalysis;
     foot.innerHTML = `
       <button type="button" class="rev-btn" data-imp-close>Otkaži</button>
@@ -566,13 +568,17 @@ export function openBulkImportModal(opts = {}) {
     }
     if (!state.analysis) return '';
     const a = state.analysis;
-    const blocking = a.missingEmployees.length > 0 || !a.magacinExists;
+    const hasDup = a.duplicateDocs.length > 0;
+    const blocking = a.missingEmployees.length > 0 || !a.magacinExists || (hasDup && !a.forceImportConfirmed);
     const blockReasons = [];
     if (a.missingEmployees.length > 0) {
       blockReasons.push(`${a.missingEmployees.length} radnika nedostaje u Kadrovskoj`);
     }
     if (!a.magacinExists) {
       blockReasons.push('Magacin lokacija „ALAT-MAG-01" ne postoji u Lokacije modulu');
+    }
+    if (hasDup && !a.forceImportConfirmed) {
+      blockReasons.push(`${a.duplicateDocs.length} mašina već ima aktivan revers — verovatno duplikat importa`);
     }
     return `
       <div class="rev-imp-analysis ${blocking ? 'is-blocking' : 'is-ready'}">
@@ -589,11 +595,27 @@ export function openBulkImportModal(opts = {}) {
               ? `<li class="rev-warn"><strong>NEDOSTAJU U BAZI</strong>: ${a.missingEmployees.length} radnika — admin mora ručno da ih kreira pre importa:<br/><span class="rev-muted">${a.missingEmployees.slice(0, 20).map(escHtml).join(', ')}${a.missingEmployees.length > 20 ? '…' : ''}</span></li>`
               : ''
           }
+          ${
+            hasDup
+              ? `<li class="rev-warn"><strong>⚠ DUPLIKAT IMPORTA</strong>: ${a.duplicateDocs.length} aktivan(ih) reverz dokument(a) već postoji za ove mašine:<br/>${a.duplicateDocs
+                  .slice(0, 10)
+                  .map((d) => `<span class="rev-muted">• ${escHtml(d.machine)} — ${escHtml(d.doc_number)} (${escHtml(String(d.issued_at).slice(0, 10))}, ${escHtml(d.employee || '?')})</span>`)
+                  .join('<br/>')}${a.duplicateDocs.length > 10 ? `<br/><span class="rev-muted">…i još ${a.duplicateDocs.length - 10}</span>` : ''}</li>`
+              : ''
+          }
         </ul>
         ${blocking ? `<p class="rev-warn">Import je <strong>blokiran</strong>: ${escHtml(blockReasons.join('; '))}.</p>` : ''}
         ${
           !a.magacinExists
             ? `<p class="rev-muted" style="font-size:12px">Otvori Lokacije modul i kreiraj <code>ALAT-MAG-01</code> sa tipom <code>WAREHOUSE</code>, ili pokreni SQL u Supabase:<br/><code>INSERT INTO loc_locations(location_code, name, location_type, is_active) VALUES('ALAT-MAG-01', 'Centralna alatnica — magacin', 'WAREHOUSE', true);</code></p>`
+            : ''
+        }
+        ${
+          hasDup && !a.forceImportConfirmed
+            ? `<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+                <button type="button" class="rev-btn rev-btn--secondary" id="revImpForceImport">⚠ Ipak nastavi (kreiraj duplikat reversa)</button>
+                <span class="rev-muted" style="font-size:12px;align-self:center">Ovo će napraviti DRUGI revers dokument za ista zaduženja. Ako je prvi import napravljen greškom, prvo ga storniraj iz tab-a „Zaduženja".</span>
+              </div>`
             : ''
         }
       </div>`;
@@ -638,6 +660,12 @@ export function openBulkImportModal(opts = {}) {
       });
     }
     overlay.querySelector('#revImpRun')?.addEventListener('click', runImport);
+    overlay.querySelector('#revImpForceImport')?.addEventListener('click', () => {
+      if (state.analysis) {
+        state.analysis.forceImportConfirmed = true;
+        paint();
+      }
+    });
   }
 
   async function handleFile(file) {
@@ -707,6 +735,12 @@ export function openBulkImportModal(opts = {}) {
         }
         if (!state.analysis.magacinExists) {
           showToast('Import blokiran: ALAT-MAG-01 lokacija ne postoji u Lokacije modulu.');
+          state.importing = false;
+          paint();
+          return;
+        }
+        if (state.analysis.duplicateDocs.length > 0 && !state.analysis.forceImportConfirmed) {
+          showToast(`Import blokiran: ${state.analysis.duplicateDocs.length} mašina već ima aktivan revers (verovatno duplikat).`);
           state.importing = false;
           paint();
           return;
@@ -799,6 +833,8 @@ export function openBulkImportModal(opts = {}) {
       lineCount: rows.length,
       catalogByOznaka: new Map(), // oznaka -> { id (ako postoji) | placeholder za novi }
       magacinExists: false,    // ALAT-MAG-01 — blokira CUTTING_TOOL import ako fali
+      duplicateDocs: [],       // [{ machine, doc_number, issued_at, employee }] — već postoji aktivan revers za istu mašinu
+      forceImportConfirmed: false, // user je eksplicitno potvrdio override duplikata
     };
 
     /* 0. Provera magacin lokacije (ALAT-MAG-01) — RPC rev_issue_cutting_reversal
@@ -885,6 +921,32 @@ export function openBulkImportModal(opts = {}) {
       docKeys.add([tip, primTip, primary, r.masina || '', r.datum || ''].join('|'));
     }
     result.docCount = docKeys.size;
+
+    /* 6. Detekcija duplikat-importa: za svaku mašinu iz CSV-a, proveri da li
+     * postoji aktivan CUTTING_TOOL revers (OPEN ili PARTIALLY_RETURNED).
+     * Sprečava nehotice dupli import koji pravi 2 dokumenta za istu mašinu
+     * sa istim alatom — što je greška u 99% slučajeva i razbija stock balans. */
+    if (result.machineCodes.size > 0) {
+      const machineList = Array.from(result.machineCodes).map((m) => encodeURIComponent(m)).join(',');
+      const url = `rev_documents?select=id,doc_number,recipient_machine_code,issued_at,issued_to_employee_name,status&doc_type=eq.CUTTING_TOOL&status=in.(OPEN,PARTIALLY_RETURNED)&recipient_machine_code=in.(${machineList})&order=issued_at.desc`;
+      try {
+        const sb = await import('../../services/supabase.js');
+        const dupRows = await sb.sbReq(url);
+        if (Array.isArray(dupRows)) {
+          for (const d of dupRows) {
+            result.duplicateDocs.push({
+              machine: d.recipient_machine_code,
+              doc_number: d.doc_number,
+              issued_at: d.issued_at,
+              employee: d.issued_to_employee_name,
+              status: d.status,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[reversi/import] duplicate check failed (non-fatal)', e);
+      }
+    }
 
     return result;
   }
