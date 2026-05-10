@@ -68,7 +68,11 @@ export default defineConfig({
             src: '/icons/servoteh-lokacije.svg',
             sizes: 'any',
             type: 'image/svg+xml',
-            purpose: 'any maskable',
+            /* Samo 'any' — Chrome ne podržava SVG kao maskable (maskable
+             * zahteva raster PNG sa 10% safe-zone padding-om). Sa
+             * 'any maskable' Chrome odbija SVG kao maskable i baca
+             * "Download error or resource isn't a valid image" u konzoli. */
+            purpose: 'any',
           },
         ],
       },
