@@ -319,6 +319,25 @@ export async function fetchEmployees(search) {
   })();
 }
 
+/**
+ * Pretraži radnika BEZ is_active filtera i sa većim limit-om — za bulk import
+ * gde nam smeta da neaktivan radnik blokira import. Vraća do 200 redova.
+ *
+ * @param {string} search
+ */
+export async function fetchEmployeesAny(search) {
+  return wrap(async () => {
+    const s = typeof search === 'string' ? search.trim() : '';
+    let q = 'employees?select=id,full_name,email,is_active,department&order=full_name.asc&limit=200';
+    if (s) {
+      const enc = encodeURIComponent(`*${s}*`);
+      q += `&full_name=ilike.${enc}`;
+    }
+    const rows = await sbReq(q);
+    return Array.isArray(rows) ? rows : [];
+  })();
+}
+
 export async function issueReversal(payload) {
   return wrap(async () => {
     const raw = await sbReqThrow('rpc/rev_issue_reversal', 'POST', { p_payload: payload }, { upsert: false });
