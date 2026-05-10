@@ -28,6 +28,7 @@ import {
   fetchEmployees,
   fetchMachines,
   fetchCuttingToolByBarcode,
+  fetchCuttingToolByOznaka,
   issueReversal,
   issueCuttingReversal,
 } from '../../services/reversiService.js';
@@ -104,6 +105,95 @@ function normHeader(s) {
     .replace(/\s+/g, ' ');
 }
 
+/**
+ * Detektuj i popravi mojibake (UTF-8 bajtovi pročitani kao Windows-1252).
+ * Tipičan obrazac: `š` → `Å¡`, `č` → `Ä`, `Ø` → `Ã˜`. Ako string sadrži >=2
+ * takva pattern-a, primeni reverse: encode kao Latin-1, decode kao UTF-8.
+ *
+ * @param {string} s
+ * @returns {string}
+ */
+function fixMojibake(s) {
+  if (typeof s !== 'string' || s.length < 2) return s;
+  /* Brzo odbijanje: ako nema kombinacija koje su tipične za double-encoded UTF-8, vrati. */
+  if (!/Ã|Å|Â/.test(s)) return s;
+  /* Test patterni — trebamo bar 1 jasan CCE+TILDE / CCE+RING pattern */
+  const patterns = [
+    /Ä‡/, /Ä/, /Ä/, /Å¡/, /Å¾/, /Å /, /Å½/,
+    /Ä‘/, /Ä/, /Ã/, /Ã‚/, /Ã/, /Ã©/, /Ã«/, /Â°/, /Ã˜/, /Â­/,
+  ];
+  let hits = 0;
+  for (const p of patterns) {
+    if (p.test(s)) hits += 1;
+    if (hits >= 2) break;
+  }
+  if (hits < 2) return s;
+  try {
+    /* "Latin-1 round-trip": svaki char je <= 0xFF zato što je iz cp1252,
+     * pa charCodeAt vraća vrednost koja odgovara originalnom UTF-8 bajtu. */
+    const bytes = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i += 1) {
+      const c = s.charCodeAt(i);
+      if (c > 0xff) return s; /* nije čisti cp1252 — odustani */
+      bytes[i] = c;
+    }
+    const fixed = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    /* Sanity: ako je fixed isti ili kraći — vrati ga; ako je duzi (replacement chars) — original. */
+    if (fixed && fixed !== s && !fixed.includes('�')) return fixed;
+    return s;
+  } catch {
+    return s;
+  }
+}
+
+/**
+ * Mapiraj kategoriju iz Excel-a (GLODALA / BURGIJE / UREZNICE / RAZVRTAČI / GLODALO LOPTA / GLODAČKE GLAVE / GLODAČKE GLAVE I NOSAČI / ostalo) na rev_cutting_tool_catalog.klasa.
+ * @param {string} kat
+ * @returns {string}
+ */
+function mapKategorijaToKlasa(kat) {
+  const k = String(kat || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (!k) return '';
+  if (k.includes('glodalo lopta') || k.includes('glodalo - lopta')) return 'glodalo';
+  if (k.includes('glod')) return 'glodalo';
+  if (k.includes('glava')) return 'glodačka glava';
+  if (k.includes('nosac') || k.includes('nosač')) return 'glodačka glava';
+  if (k.includes('burg')) return 'burgija';
+  if (k.includes('urez')) return 'urezna';
+  if (k.includes('razvrt')) return 'razvrtač';
+  if (k.includes('ploc') || k.includes('ploč')) return 'pločica';
+  if (k.includes('drzac') || k.includes('držač') || k.includes('holder')) return 'držač';
+  if (k.includes('narez')) return 'narez';
+  return 'ostalo';
+}
+
+/**
+ * Iz napomene oblika "Naziv: Glodalo Ø 12; Kategorija: GLODALA; Mašina: …"
+ * izvuci strukturisana polja.
+ *
+ * @param {string} note
+ * @returns {{ naziv: string, kategorija: string, masinaText: string, izvor: string, raw: string }}
+ */
+function parseCuttingMetaFromNote(note) {
+  const out = { naziv: '', kategorija: '', masinaText: '', izvor: '', raw: '' };
+  if (!note) return out;
+  const raw = fixMojibake(String(note).trim());
+  out.raw = raw;
+  const parts = raw.split(/\s*;\s*/);
+  for (const p of parts) {
+    const m = p.match(/^([^:]+)\s*:\s*(.+)$/);
+    if (!m) continue;
+    const key = m[1].trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const val = m[2].trim();
+    if (key === 'naziv') out.naziv = val;
+    else if (key === 'kategorija') out.kategorija = val;
+    else if (key === 'masina' || key === 'masine') out.masinaText = val;
+    else if (key === 'izvor') out.izvor = val;
+  }
+  return out;
+}
+
 function normalizeDate(v) {
   if (!v) return '';
   if (v instanceof Date) {
@@ -128,7 +218,9 @@ function mapRow(raw, cols) {
   const headerMap = new Map();
   const firstKeys = Object.keys(raw[0] || {});
   for (const hk of firstKeys) {
-    const n = normHeader(hk);
+    /* Header može biti dvostruko-enkodovan kao i vrednosti — popravi pre normalizacije */
+    const fixed = fixMojibake(hk);
+    const n = normHeader(fixed);
     const col = cols.find(c =>
       normHeader(c.label) === n ||
       (c.aliases || []).some(a => normHeader(a) === n)
@@ -145,7 +237,7 @@ function mapRow(raw, cols) {
         const n = Number(String(v).replace(',', '.').replace(/\s/g, ''));
         v = Number.isFinite(n) ? n : 0;
       } else {
-        v = String(v).trim();
+        v = fixMojibake(String(v).trim());
       }
       r[col.key] = v;
     }
@@ -221,6 +313,9 @@ export function openBulkImportModal(opts = {}) {
     rows: [],
     importing: false,
     progress: { ok: 0, fail: 0, total: 0 },
+    /* Reversi pre-pass rezultat: šta će biti kreirano (catalog) i šta nedostaje (employees) */
+    analysis: null, // { newCatalog: [...], existingCatalog: [...], missingEmployees: [...], resolvedEmployees: Map, machineCodes: Set, docCount, lineCount }
+    analyzing: false,
   };
   const overlay = modalShell(
     '📥 Bulk import iz Excel/CSV',
@@ -264,6 +359,8 @@ export function openBulkImportModal(opts = {}) {
           <button type="button" class="rev-btn" id="revImpBrowse">Izaberi fajl…</button>
         </div>
 
+        ${analysisSummaryHtml()}
+
         ${
           state.rows.length === 0
             ? ''
@@ -296,10 +393,14 @@ export function openBulkImportModal(opts = {}) {
       </div>`;
 
     const validRowsCount = state.rows.filter((r) => validateRow(r, typeDef).length === 0).length;
+    const blockedByAnalysis =
+      state.type === 'revers' &&
+      (state.analyzing || (state.analysis && state.analysis.missingEmployees.length > 0));
+    const canRun = state.rows.length > 0 && validRowsCount > 0 && !state.importing && !blockedByAnalysis;
     foot.innerHTML = `
       <button type="button" class="rev-btn" data-imp-close>Otkaži</button>
-      <button type="button" class="rev-btn rev-btn--primary" id="revImpRun" ${state.rows.length > 0 && validRowsCount > 0 && !state.importing ? '' : 'disabled'}>
-        ${state.importing ? 'Uvozim…' : `Uvezi ${validRowsCount} redova`}
+      <button type="button" class="rev-btn rev-btn--primary" id="revImpRun" ${canRun ? '' : 'disabled'}>
+        ${state.importing ? 'Uvozim…' : state.analyzing ? 'Analiziram…' : `Uvezi ${validRowsCount} redova`}
       </button>`;
 
     bindEvents();
@@ -308,6 +409,7 @@ export function openBulkImportModal(opts = {}) {
   function validateRow(r, typeDef) {
     const errs = [];
     for (const c of typeDef.cols) {
+      /* Datum izdavanja nije obavezan — prazan se popunjava današnjim datumom u importu */
       if (c.required && !r[c.key]) errs.push(`${c.label} obavezno`);
     }
     if (typeDef.id === 'revers') {
@@ -317,8 +419,13 @@ export function openBulkImportModal(opts = {}) {
       if (r.primalac_tip && !['EMPLOYEE', 'DEPARTMENT', 'EXTERNAL_COMPANY', 'MACHINE'].includes(r.primalac_tip.toUpperCase())) {
         errs.push(`primalac_tip mora biti EMPLOYEE/DEPARTMENT/EXTERNAL_COMPANY/MACHINE`);
       }
-      if ((r.primalac_tip || '').toUpperCase() === 'MACHINE' && !r.masina) {
+      const primTip = (r.primalac_tip || '').toUpperCase();
+      if (primTip === 'MACHINE' && !r.masina) {
         errs.push(`masina obavezno za MACHINE primaoca`);
+      }
+      const tip = (r.tip || '').toUpperCase();
+      if (tip === 'CUTTING_TOOL' && !r.masina) {
+        errs.push(`mašina obavezna za CUTTING_TOOL`);
       }
     }
     if (typeDef.id === 'cutting' && r.pocetna_kolicina && Number(r.pocetna_kolicina) < 0) {
@@ -327,11 +434,41 @@ export function openBulkImportModal(opts = {}) {
     return errs;
   }
 
+  /** Sažetak preanalize za revers tip — prikaz pre import-a. */
+  function analysisSummaryHtml() {
+    if (state.type !== 'revers') return '';
+    if (state.analyzing) {
+      return `<div class="rev-imp-analysis is-loading"><strong>Analiza u toku…</strong> Resolve-ujemo radnike i šifre alata, ne stiskaj „Uvezi“ još.</div>`;
+    }
+    if (!state.analysis) return '';
+    const a = state.analysis;
+    const blocking = a.missingEmployees.length > 0;
+    return `
+      <div class="rev-imp-analysis ${blocking ? 'is-blocking' : 'is-ready'}">
+        <strong>Pre-import analiza:</strong>
+        <ul class="rev-imp-analysis-list">
+          <li>Reversi dokumenata: <strong>${escHtml(String(a.docCount))}</strong> (${escHtml(String(a.lineCount))} stavki)</li>
+          <li>Mašine prepoznate: ${a.machineCodes.size}</li>
+          <li>Šifre reznog alata postojeće: ${a.existingCatalog.length}</li>
+          <li>Šifre koje će biti <strong>auto-kreirane</strong>: ${a.newCatalog.length}${a.newCatalog.length > 0 ? ` <span class="rev-muted">(${a.newCatalog.slice(0, 6).map((x) => escHtml(x.oznaka)).join(', ')}${a.newCatalog.length > 6 ? '…' : ''})</span>` : ''}</li>
+          <li>Radnici resolve-ovani: ${a.resolvedEmployees.size}</li>
+          ${
+            blocking
+              ? `<li class="rev-warn"><strong>NEDOSTAJU U BAZI</strong>: ${a.missingEmployees.length} radnika — admin mora ručno da ih kreira pre importa:<br/><span class="rev-muted">${a.missingEmployees.slice(0, 20).map(escHtml).join(', ')}${a.missingEmployees.length > 20 ? '…' : ''}</span></li>`
+              : ''
+          }
+        </ul>
+        ${blocking ? '<p class="rev-warn">Import je <strong>blokiran</strong> dok se ne kreiraju nedostajući radnici u Kadrovskoj.</p>' : ''}
+      </div>`;
+  }
+
   function bindEvents() {
     overlay.querySelectorAll('[data-imp-type]').forEach((b) => {
       b.addEventListener('click', () => {
         state.type = b.getAttribute('data-imp-type');
         state.rows = [];
+        state.analysis = null;
+        state.analyzing = false;
         paint();
       });
     });
@@ -343,6 +480,8 @@ export function openBulkImportModal(opts = {}) {
     overlay.querySelector('#revImpBrowse')?.addEventListener('click', () => fileInput?.click());
     overlay.querySelector('#revImpClear')?.addEventListener('click', () => {
       state.rows = [];
+      state.analysis = null;
+      state.analyzing = false;
       paint();
     });
     fileInput?.addEventListener('change', async () => {
@@ -380,8 +519,25 @@ export function openBulkImportModal(opts = {}) {
         raw = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false, dateNF: 'yyyy-mm-dd' });
       }
       state.rows = mapRow(raw, typeDef.cols);
+      state.analysis = null;
       showToast(`✔ Učitano ${state.rows.length} redova`);
       paint();
+
+      /* Pre-pass analiza za revers tip — pokreni asinhrono */
+      if (state.type === 'revers' && state.rows.length > 0) {
+        state.analyzing = true;
+        paint();
+        try {
+          const valid = state.rows.filter((r) => validateRow(r, typeDef).length === 0);
+          state.analysis = await analyzeRevers(valid);
+        } catch (e) {
+          console.error('[bulkImport] analyze fail', e);
+          showToast(`Greška pri analizi: ${e?.message || e}`);
+        } finally {
+          state.analyzing = false;
+          paint();
+        }
+      }
     } catch (e) {
       console.error('[bulkImport] parse fail', e);
       showToast(`Greška pri čitanju fajla: ${e?.message || e}`);
@@ -399,7 +555,21 @@ export function openBulkImportModal(opts = {}) {
     try {
       if (typeDef.id === 'hand') await importHand(valid);
       else if (typeDef.id === 'cutting') await importCutting(valid);
-      else if (typeDef.id === 'revers') await importRevers(valid);
+      else if (typeDef.id === 'revers') {
+        if (!state.analysis) {
+          showToast('Analiza nije gotova — sačekaj par sekundi pa pokušaj opet.');
+          state.importing = false;
+          paint();
+          return;
+        }
+        if (state.analysis.missingEmployees.length > 0) {
+          showToast(`Import blokiran: ${state.analysis.missingEmployees.length} radnika nedostaje u Kadrovskoj.`);
+          state.importing = false;
+          paint();
+          return;
+        }
+        await importRevers(valid, state.analysis);
+      }
     } catch (e) {
       console.error('[bulkImport] run fail', e);
       showToast(`Greška: ${e?.message || e}`);
@@ -467,16 +637,146 @@ export function openBulkImportModal(opts = {}) {
     }
   }
 
-  async function importRevers(rows) {
-    /* Cache za lookup-ove */
-    const empCache = new Map();
-    const machineCache = new Map();
-    const cuttingCache = new Map();
-    /* Grupiši po (datum, primalac, tip) → 1 dokument; svaki red = 1 stavka */
+  /* ─── REVERS pre-import analiza ───────────────────────────────────
+   * Pre nego što kreiramo dokumente:
+   *   1. resolve employee imena (strict — admin ne dozvoljava auto-create)
+   *   2. resolve postojeće šifre reznog alata po oznaci/barkodu
+   *   3. za nepoznate oznake — pripremi auto-create podatke iz Napomene
+   * Vraća objekat sa listama: missingEmployees (blokira import), newCatalog (kreiraće se),
+   * existingCatalog, machineCodes, docCount, lineCount.
+   */
+  async function analyzeRevers(rows) {
+    const result = {
+      newCatalog: [],          // [{ oznaka, naziv, klasa, masine: Set }]
+      existingCatalog: [],     // [{ oznaka, id }]
+      missingEmployees: [],    // [name, ...] — strict, blokira import
+      resolvedEmployees: new Map(), // name -> { id, full_name }
+      machineCodes: new Set(),
+      docCount: 0,
+      lineCount: rows.length,
+      catalogByOznaka: new Map(), // oznaka -> { id (ako postoji) | placeholder za novi }
+    };
+
+    /* 1. Skupi unique oznake alata sa metapodacima iz Napomene */
+    const oznakaToMeta = new Map(); // oznaka -> { naziv, klasa, masine: Set }
+    for (const r of rows) {
+      const oznaka = String(r.alat_oznaka_ili_barkod || '').trim();
+      if (!oznaka) continue;
+      if (!oznakaToMeta.has(oznaka)) {
+        const meta = parseCuttingMetaFromNote(r.napomena);
+        oznakaToMeta.set(oznaka, {
+          naziv: meta.naziv || oznaka,
+          klasa: mapKategorijaToKlasa(meta.kategorija),
+          masine: new Set(),
+        });
+      }
+      const masina = String(r.masina || '').trim();
+      if (masina) oznakaToMeta.get(oznaka).masine.add(masina);
+    }
+
+    /* 2. Resolve catalog po oznaci (ili barkodu ako počinje sa RZN-) */
+    for (const [oznaka, meta] of oznakaToMeta.entries()) {
+      let found = null;
+      if (/^RZN-/i.test(oznaka)) {
+        const r = await fetchCuttingToolByBarcode(oznaka);
+        if (r.ok && r.data?.id) found = r.data;
+      }
+      if (!found) {
+        const r = await fetchCuttingToolByOznaka(oznaka);
+        if (r.ok && r.data?.id) found = r.data;
+      }
+      if (found) {
+        result.existingCatalog.push({ oznaka, id: found.id, naziv: found.naziv });
+        result.catalogByOznaka.set(oznaka, found.id);
+      } else {
+        result.newCatalog.push({
+          oznaka,
+          naziv: meta.naziv,
+          klasa: meta.klasa,
+          masine: Array.from(meta.masine),
+        });
+        /* placeholder za auto-create — id će biti popunjen u runImport */
+        result.catalogByOznaka.set(oznaka, null);
+      }
+    }
+
+    /* 3. Skupi unique mašine */
+    for (const r of rows) {
+      const m = String(r.masina || '').trim();
+      if (m) result.machineCodes.add(m);
+    }
+
+    /* 4. Skupi unique primaoce (samo MACHINE i EMPLOYEE primaoci se moraju resolve-ovati strogo) */
+    const namesNeedingResolve = new Set();
+    for (const r of rows) {
+      const tip = (r.tip || 'TOOL').toUpperCase();
+      const primTip = (r.primalac_tip || 'EMPLOYEE').toUpperCase();
+      if (tip === 'CUTTING_TOOL' || primTip === 'EMPLOYEE' || primTip === 'MACHINE') {
+        /* Za "Luka Stanić, Lazar Jovanović" — uzmi prvog kao potpisnika */
+        const primary = String(r.primalac || '').split(/\s*,\s*/)[0].trim();
+        if (primary) namesNeedingResolve.add(primary);
+      }
+    }
+
+    for (const name of namesNeedingResolve) {
+      const r = await fetchEmployees(name);
+      const list = r.ok && Array.isArray(r.data) ? r.data : [];
+      const exact = list.find((e) => e.full_name?.toLowerCase() === name.toLowerCase());
+      if (exact) {
+        result.resolvedEmployees.set(name, { id: exact.id, full_name: exact.full_name });
+      } else {
+        result.missingEmployees.push(name);
+      }
+    }
+
+    /* 5. Broj dokumenata = unique (tip, primalac, mašina, datum) */
+    const docKeys = new Set();
+    for (const r of rows) {
+      const tip = (r.tip || 'TOOL').toUpperCase();
+      const primTip = (r.primalac_tip || 'EMPLOYEE').toUpperCase();
+      const primary = String(r.primalac || '').split(/\s*,\s*/)[0].trim();
+      docKeys.add([tip, primTip, primary, r.masina || '', r.datum || ''].join('|'));
+    }
+    result.docCount = docKeys.size;
+
+    return result;
+  }
+
+  function todayIso() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  async function importRevers(rows, analysis) {
+    /* Auto-create catalog za nove oznake — koristi analysis.newCatalog */
+    const magId = await getMagacinLocationId();
+    for (const nc of analysis.newCatalog) {
+      const payload = {
+        oznaka: nc.oznaka,
+        naziv: nc.naziv,
+        klasa: nc.klasa || null,
+        compatible_machine_codes: nc.masine,
+        unit: 'kom',
+        status: 'active',
+      };
+      const ins = await insertCuttingTool(payload);
+      if (!ins.ok) {
+        /* Catalog auto-create fail — sve linije sa tom oznakom će biti skipped */
+        analysis.catalogByOznaka.set(nc.oznaka, null);
+        continue;
+      }
+      analysis.catalogByOznaka.set(nc.oznaka, ins.data.id);
+      /* Bez seed stocka — alat je odmah „izdat na mašinu“; magacin balance ostaje 0,
+       * recipient location dobija qty (uradi se kroz issueCuttingReversal). */
+    }
+
+    /* Grupiši po (tip, primalac_primary, masina, datum) → 1 dokument */
     const byDoc = new Map();
     for (const r of rows) {
-      const key = [r.tip || 'TOOL', r.primalac_tip, r.primalac, r.masina, r.datum].join('|');
-      if (!byDoc.has(key)) byDoc.set(key, { meta: r, lines: [] });
+      const tip = (r.tip || 'TOOL').toUpperCase();
+      const primary = String(r.primalac || '').split(/\s*,\s*/)[0].trim();
+      const datum = r.datum || todayIso();
+      const key = [tip, r.primalac_tip, primary, r.masina || '', datum].join('|');
+      if (!byDoc.has(key)) byDoc.set(key, { meta: { ...r, datum, primalac: primary }, lines: [], primalacRaw: r.primalac });
       byDoc.get(key).lines.push(r);
     }
 
@@ -487,29 +787,33 @@ export function openBulkImportModal(opts = {}) {
 
       try {
         if (tip === 'CUTTING_TOOL') {
-          /* MACHINE recipient za CUTTING_TOOL */
           if (!m.masina) { state.progress.fail += grp.lines.length; paint(); continue; }
-          let empId = null;
-          if (m.primalac) {
-            const e = await resolveEmployee(m.primalac, empCache);
-            empId = e?.id || null;
-          }
-          if (!empId) { state.progress.fail += grp.lines.length; paint(); continue; }
+          const emp = analysis.resolvedEmployees.get(m.primalac);
+          if (!emp) { state.progress.fail += grp.lines.length; paint(); continue; }
 
           const lines = [];
           for (const ln of grp.lines) {
-            const cat = await resolveCuttingByOznakaOrBarcode(ln.alat_oznaka_ili_barkod, cuttingCache);
-            if (!cat) continue;
-            lines.push({ catalog_id: cat.id, quantity: Number(ln.kolicina) || 1 });
+            const oznaka = String(ln.alat_oznaka_ili_barkod || '').trim();
+            const catId = analysis.catalogByOznaka.get(oznaka);
+            if (!catId) continue;
+            lines.push({ catalog_id: catId, quantity: Number(ln.kolicina) || 1 });
           }
           if (lines.length === 0) { state.progress.fail += grp.lines.length; paint(); continue; }
 
+          /* Ako su bile dve osobe u koloni primaoca, dodaj drugu u napomenu */
+          let napomena = m.napomena || null;
+          const allNames = String(grp.primalacRaw || '').split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
+          if (allNames.length > 1) {
+            const second = allNames.slice(1).join(', ');
+            napomena = `${napomena ? napomena + ' | ' : ''}Drugi potpisnik(i): ${second}`;
+          }
+
           const res = await issueCuttingReversal({
             recipient_machine_code: m.masina,
-            issued_to_employee_id: empId,
-            issued_to_employee_name: m.primalac,
+            issued_to_employee_id: emp.id,
+            issued_to_employee_name: emp.full_name,
             expected_return_date: m.rok_povracaja || null,
-            napomena: m.napomena || null,
+            napomena,
             lines,
           });
           if (res.ok) state.progress.ok += grp.lines.length;
@@ -528,12 +832,15 @@ export function openBulkImportModal(opts = {}) {
             lines: [],
           };
           if (primTip === 'EMPLOYEE') {
-            const e = await resolveEmployee(m.primalac, empCache);
+            const e = analysis.resolvedEmployees.get(m.primalac);
             if (e) {
               payload.recipient_employee_id = e.id;
               payload.recipient_employee_name = e.full_name;
             } else {
-              payload.recipient_employee_name = m.primalac;
+              /* missingEmployees za EMPLOYEE smo već blokirali u UI-u, ne bi smelo doći ovde */
+              state.progress.fail += grp.lines.length;
+              paint();
+              continue;
             }
           } else if (primTip === 'DEPARTMENT') {
             payload.recipient_department = m.primalac;
@@ -543,7 +850,7 @@ export function openBulkImportModal(opts = {}) {
           for (const ln of grp.lines) {
             payload.lines.push({
               line_type: 'TOOL',
-              tool_id: null /* tool_id resolve preko oznake bi tražio dodatnu logiku — preskačemo, koristimo PRODUCTION_PART fallback ako nema match-a */,
+              tool_id: null,
               part_name: ln.alat_oznaka_ili_barkod,
               drawing_no: '',
               quantity: Number(ln.kolicina) || 1,
@@ -561,28 +868,6 @@ export function openBulkImportModal(opts = {}) {
       }
       paint();
     }
-  }
-
-  async function resolveEmployee(name, cache) {
-    if (!name) return null;
-    if (cache.has(name)) return cache.get(name);
-    const r = await fetchEmployees(name);
-    const list = r.ok && Array.isArray(r.data) ? r.data : [];
-    const exact = list.find((e) => e.full_name?.toLowerCase() === name.toLowerCase()) || list[0] || null;
-    cache.set(name, exact);
-    return exact;
-  }
-
-  async function resolveCuttingByOznakaOrBarcode(value, cache) {
-    if (!value) return null;
-    if (cache.has(value)) return cache.get(value);
-    const byBarcode = await fetchCuttingToolByBarcode(value);
-    if (byBarcode.ok && byBarcode.data?.id) {
-      cache.set(value, byBarcode.data);
-      return byBarcode.data;
-    }
-    cache.set(value, null);
-    return null;
   }
 
   paint();
