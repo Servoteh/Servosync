@@ -2,12 +2,19 @@
  * Projektni biro — Supabase servis (pb_tasks, pb_work_reports, load stats).
  */
 
-import { sbReqThrow } from './supabase.js';
+import {
+  sbReqThrow,
+  sbReq,
+  getSupabaseUrl,
+  getSupabaseAnonKey,
+} from './supabase.js';
 import { ensureSessionFresh, refreshSessionNow } from './auth.js';
 import { SUPABASE_CONFIG, hasSupabaseConfig } from '../lib/constants.js';
 import { getCurrentUser, getIsOnline } from '../state/auth.js';
 import { ensurePrioritetHydrated } from '../ui/podesavanja/podesavanjePredmeta/prioritetService.js';
 import { sortProjectsForPredmetPrioritet } from './projects.js';
+
+const PB_FILES_BUCKET = 'pb-task-files';
 
 /** @returns {string|null} */
 function actorEmail() {
@@ -252,11 +259,64 @@ export async function softDeletePbTask(id) {
   );
 }
 
+/**
+ * Batch PATCH preko PostgREST `id=in.(...)` filtera. Vraća broj zaista
+ * izmenjenih redova (RLS može filtrirati neki).
+ * @param {string[]} ids
+ * @param {object} data
+ */
+export async function bulkUpdatePbTasks(ids, data) {
+  if (!Array.isArray(ids) || ids.length === 0) return { ok: 0, requested: 0 };
+  const sanitized = sanitizeTaskPayload(data);
+  assertValidTaskInput(sanitized, true);
+  const payload = { ...sanitized, updated_by: actorEmail() };
+  const inList = ids.map(encodeURIComponent).join(',');
+  const res = await sbReqThrow(
+    `pb_tasks?id=in.(${inList})&deleted_at=is.null`,
+    'PATCH',
+    payload,
+  );
+  const count = Array.isArray(res) ? res.length : 0;
+  return { ok: count, requested: ids.length };
+}
+
+/**
+ * Batch soft delete. Vraća broj zaista obrisanih redova.
+ * @param {string[]} ids
+ */
+export async function bulkSoftDeletePbTasks(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return { ok: 0, requested: 0 };
+  const payload = {
+    deleted_at: new Date().toISOString(),
+    updated_by: actorEmail(),
+  };
+  const inList = ids.map(encodeURIComponent).join(',');
+  const res = await sbReqThrow(
+    `pb_tasks?id=in.(${inList})&deleted_at=is.null`,
+    'PATCH',
+    payload,
+  );
+  const count = Array.isArray(res) ? res.length : 0;
+  return { ok: count, requested: ids.length };
+}
+
 export async function getPbLoadStats(windowDays = 20) {
   if (!getIsOnline()) return [];
   const body = { window_days: windowDays };
   const data = await sbReqThrow('rpc/pb_get_load_stats', 'POST', body);
   return Array.isArray(data) ? data : [];
+}
+
+export async function getPbTeamLoadStats(windowDays = 20) {
+  if (!getIsOnline()) return [];
+  const body = { window_days: windowDays };
+  try {
+    const data = await sbReqThrow('rpc/pb_get_team_load_stats', 'POST', body);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    /* RPC možda nije migriran — vrati prazan niz umesto bacanja. */
+    return [];
+  }
 }
 
 /**
@@ -381,4 +441,292 @@ export async function updatePbNotifConfig(patch) {
     payload,
   );
   return Array.isArray(res) && res[0] ? res[0] : null;
+}
+
+/* ── Komentari na zadacima (pb_task_comments) ───────────────────────── */
+
+const PB_COMMENT_COLS = [
+  'id', 'task_id', 'body', 'mentions',
+  'created_at', 'updated_at', 'created_by', 'created_by_user_id', 'edited_at',
+].join(',');
+
+/**
+ * Vraća komentare za zadat task — najnoviji prvi.
+ * @param {string} taskId
+ */
+export async function getPbTaskComments(taskId) {
+  if (!taskId || !getIsOnline()) return [];
+  const url =
+    `pb_task_comments?select=${PB_COMMENT_COLS}`
+    + `&task_id=eq.${encodeURIComponent(taskId)}`
+    + '&order=created_at.desc&limit=200';
+  const rows = await sbReq(url);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/** Izvuče @-mentions iz teksta. Konvencija: @ime ili @email. */
+export function parseMentions(text) {
+  const matches = String(text || '').match(/@[\w.\-+]+/g) || [];
+  return [...new Set(matches.map(m => m.slice(1)))];
+}
+
+export async function createPbTaskComment(taskId, body) {
+  if (!taskId || !body) return { ok: false, error: 'Prazan komentar.' };
+  if (!getIsOnline()) return { ok: false, error: 'Offline.' };
+  const user = getCurrentUser();
+  const payload = {
+    task_id: taskId,
+    body: String(body).slice(0, 4000),
+    mentions: parseMentions(body),
+    created_by: actorEmail(),
+    created_by_user_id: user?.id || null,
+  };
+  const res = await sbReq('pb_task_comments', 'POST', payload, { upsert: false });
+  const row = Array.isArray(res) ? (res[0] || null) : (res || null);
+  return row ? { ok: true, row } : { ok: false, error: 'Insert nije uspeo (RLS?).' };
+}
+
+export async function updatePbTaskComment(id, body) {
+  if (!id || !getIsOnline()) return false;
+  const payload = {
+    body: String(body || '').slice(0, 4000),
+    mentions: parseMentions(body),
+    edited_at: new Date().toISOString(),
+  };
+  const res = await sbReq(
+    `pb_task_comments?id=eq.${encodeURIComponent(id)}`,
+    'PATCH',
+    payload,
+  );
+  return !!(res && (Array.isArray(res) ? res.length : true));
+}
+
+export async function deletePbTaskComment(id) {
+  if (!id || !getIsOnline()) return false;
+  await sbReqThrow(`pb_task_comments?id=eq.${encodeURIComponent(id)}`, 'DELETE');
+  return true;
+}
+
+/* ── Zavisnosti između zadataka (pb_task_deps) ─────────────────────────── */
+
+/**
+ * Vraća listu zavisnosti za zadat task — sa nazivima ciljnih zadataka.
+ * Format: [{ id, task_id, depends_on_task_id, depends_on: { id, naziv, status } }]
+ * @param {string} taskId
+ */
+export async function getPbTaskDeps(taskId) {
+  if (!taskId || !getIsOnline()) return [];
+  const url =
+    'pb_task_deps?select=id,task_id,depends_on_task_id,'
+    + 'depends_on:pb_tasks!pb_task_deps_depends_on_task_id_fkey(id,naziv,status)'
+    + `&task_id=eq.${encodeURIComponent(taskId)}`
+    + '&order=created_at.asc';
+  const rows = await sbReq(url);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * Dodaje zavisnost (task_id čeka depends_on_task_id).
+ * Vraća { ok, row?, error? } — error može biti "ciklus" (Postgres exception).
+ */
+export async function addPbTaskDep(taskId, dependsOnId) {
+  if (!taskId || !dependsOnId || taskId === dependsOnId) {
+    return { ok: false, error: 'Neispravni ID-evi.' };
+  }
+  if (!getIsOnline()) return { ok: false, error: 'Offline.' };
+  try {
+    const payload = {
+      task_id: taskId,
+      depends_on_task_id: dependsOnId,
+      created_by: actorEmail(),
+    };
+    const res = await sbReqThrow('pb_task_deps', 'POST', payload, { upsert: false });
+    const row = Array.isArray(res) && res[0] ? res[0] : null;
+    return row ? { ok: true, row } : { ok: false, error: 'Insert nije uspeo.' };
+  } catch (e) {
+    const msg = e?.message || '';
+    /* Tolerantna provera: hvata "Ciklicna", "Ciklična", legacy "Cikličnа" (Cyrillic а), "cycle". */
+    if (/iklic|cycle/i.test(msg)) {
+      return { ok: false, error: 'Ciklicna zavisnost nije dozvoljena.' };
+    }
+    if (msg.includes('duplicate') || msg.includes('unique')) {
+      return { ok: false, error: 'Ta zavisnost već postoji.' };
+    }
+    return { ok: false, error: msg || 'Greška.' };
+  }
+}
+
+/** @param {string} depId */
+export async function deletePbTaskDep(depId) {
+  if (!depId || !getIsOnline()) return false;
+  await sbReqThrow(`pb_task_deps?id=eq.${encodeURIComponent(depId)}`, 'DELETE');
+  return true;
+}
+
+/* ── Prilozi uz zadatak (pb_task_files + Storage bucket pb-task-files) ───── */
+
+const PB_FILE_COLS = [
+  'id', 'task_id', 'file_name', 'storage_path',
+  'mime_type', 'size_bytes', 'category', 'description',
+  'uploaded_at', 'uploaded_by', 'uploaded_by_email', 'deleted_at',
+].join(',');
+
+/**
+ * Listaj priloge za zadat task. Vraća prazan niz ako nema fajlova ili offline.
+ * @param {string} taskId
+ */
+export async function fetchPbTaskFiles(taskId) {
+  if (!taskId || !getIsOnline()) return [];
+  const url =
+    `pb_task_files?select=${PB_FILE_COLS}`
+    + `&task_id=eq.${encodeURIComponent(taskId)}`
+    + '&deleted_at=is.null'
+    + '&order=uploaded_at.desc&limit=200';
+  const rows = await sbReq(url);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * Upload-uje fajl u Storage bucket i kreira metapodatak.
+ * @param {{ taskId: string, file: File|Blob, category?: string, description?: string }} opts
+ * @returns {Promise<{ ok: boolean, row?: object, error?: string }>}
+ */
+export async function uploadPbTaskFile(opts) {
+  const { taskId, file, category, description } = opts || {};
+  if (!taskId || !file) return { ok: false, error: 'Nedostaje task ili fajl.' };
+  if (!getIsOnline()) return { ok: false, error: 'Offline.' };
+
+  const origName = file.name || 'file';
+  const safeName = String(origName)
+    .normalize('NFKD')
+    .replace(/[^\w.\-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80) || 'file';
+
+  const uuid = (crypto?.randomUUID?.() || String(Date.now())).replace(/-/g, '').slice(0, 12);
+  const storagePath = `${taskId}/${uuid}_${safeName}`;
+
+  const user = getCurrentUser();
+  const token = user?._token || getSupabaseAnonKey();
+  const apiKey = getSupabaseAnonKey();
+  const baseUrl = getSupabaseUrl();
+
+  /* 1) PUT u Storage */
+  try {
+    const r = await fetch(
+      `${baseUrl}/storage/v1/object/${PB_FILES_BUCKET}/${encodeURI(storagePath)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'apikey': apiKey,
+          'Content-Type': file.type || 'application/octet-stream',
+          'x-upsert': 'false',
+          'cache-control': '3600',
+        },
+        body: file,
+      },
+    );
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      console.error('[uploadPbTaskFile] storage failed', r.status, txt);
+      return { ok: false, error: `Storage upload (${r.status}): ${txt || 'fail'}` };
+    }
+  } catch (e) {
+    console.error('[uploadPbTaskFile] storage exception', e);
+    return { ok: false, error: 'Mreža/Storage greška.' };
+  }
+
+  /* 2) INSERT metadata */
+  const payload = {
+    task_id: taskId,
+    file_name: origName,
+    storage_path: storagePath,
+    mime_type: file.type || null,
+    size_bytes: file.size || null,
+    category: category ? String(category).slice(0, 40) : null,
+    description: description ? String(description).slice(0, 500) : null,
+    uploaded_by: user?.id || null,
+    uploaded_by_email: actorEmail(),
+  };
+  const res = await sbReq('pb_task_files', 'POST', payload, { upsert: false });
+  const row = Array.isArray(res) ? (res[0] || null) : (res || null);
+  if (!row) {
+    /* Best-effort cleanup: obriši uploadovani blob da ne ostane „siroče". */
+    try {
+      await fetch(
+        `${baseUrl}/storage/v1/object/${PB_FILES_BUCKET}/${encodeURI(storagePath)}`,
+        { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token, 'apikey': apiKey } },
+      );
+    } catch { /* ignore */ }
+    return { ok: false, error: 'Metadata upis u bazu nije uspeo (RLS?).' };
+  }
+  return { ok: true, row };
+}
+
+/**
+ * Signed URL za preview/download (default 5 min).
+ * @param {string} storagePath
+ * @param {number} [expiresSec]
+ */
+export async function getPbTaskFileSignedUrl(storagePath, expiresSec = 300) {
+  if (!storagePath) return null;
+  const user = getCurrentUser();
+  const token = user?._token || getSupabaseAnonKey();
+  const apiKey = getSupabaseAnonKey();
+  const baseUrl = getSupabaseUrl();
+  try {
+    const r = await fetch(
+      `${baseUrl}/storage/v1/object/sign/${PB_FILES_BUCKET}/${encodeURI(storagePath)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'apikey': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ expiresIn: expiresSec }),
+      },
+    );
+    if (!r.ok) return null;
+    const j = await r.json();
+    const signed = j?.signedURL || j?.signedUrl;
+    return signed ? `${baseUrl}/storage/v1${signed}` : null;
+  } catch (e) {
+    console.error('[getPbTaskFileSignedUrl] err', e);
+    return null;
+  }
+}
+
+/**
+ * Soft delete (metadata) + best-effort delete iz Storage-a.
+ * @param {{ id: string, storage_path?: string }} file
+ */
+export async function deletePbTaskFile(file) {
+  if (!file?.id || !getIsOnline()) return { ok: false };
+  /* 1) Soft delete metadata */
+  const payload = { deleted_at: new Date().toISOString() };
+  const res = await sbReq(
+    `pb_task_files?id=eq.${encodeURIComponent(file.id)}`,
+    'PATCH',
+    payload,
+  );
+  if (!res || (Array.isArray(res) && res.length === 0)) {
+    return { ok: false, error: 'Brisanje metapodatka nije uspelo (RLS?).' };
+  }
+  /* 2) Best-effort obriši fajl iz Storage-a (ne baca grešku ako fail). */
+  if (file.storage_path) {
+    const user = getCurrentUser();
+    const token = user?._token || getSupabaseAnonKey();
+    const apiKey = getSupabaseAnonKey();
+    const baseUrl = getSupabaseUrl();
+    try {
+      await fetch(
+        `${baseUrl}/storage/v1/object/${PB_FILES_BUCKET}/${encodeURI(file.storage_path)}`,
+        { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token, 'apikey': apiKey } },
+      );
+    } catch { /* ignore */ }
+  }
+  return { ok: true };
 }

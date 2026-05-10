@@ -7,6 +7,7 @@ import {
   PB_TASK_STATUS,
   PB_TASK_VRSTA,
   PB_PRIORITET,
+  PB_BUILTIN_VIEWS,
   statusBadgeClass,
   prioClass,
   openTaskEditorModal,
@@ -14,8 +15,17 @@ import {
   confirmDeletePbTask,
   loadPbState,
   syncPbModuleFilters,
+  loadPbViews,
+  savePbView,
+  deletePbView,
+  pbErrorMessage,
 } from './shared.js';
-import { updatePbTask } from '../../services/pb.js';
+import {
+  updatePbTask,
+  bulkUpdatePbTasks,
+  bulkSoftDeletePbTasks,
+} from '../../services/pb.js';
+import { downloadCsv } from '../../lib/csv.js';
 import { canEditProjektniBiro } from '../../state/auth.js';
 
 const IC_CHEVRON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
@@ -174,7 +184,7 @@ function buildAlarms(tasks, loadRows) {
 
 /**
  * @param {HTMLElement} root
- * @param {{ tasks, projects, engineers, loadStats, onRefresh }} ctx
+ * @param {{ tasks, projects, engineers, loadStats, teamLoadStats?, onRefresh }} ctx
  */
 export function renderPlanTab(root, ctx) {
   const canEdit = canEditProjektniBiro();
@@ -193,6 +203,12 @@ export function renderPlanTab(root, ctx) {
   let _searchDebounceTimer = null;
   let _statsScope = pbMod.moduleStatsScope || 'global'; // 'global' | 'filtered'
   let _delegationAttached = false;
+  /** @type {Set<string>} Selektovani task ID-evi za bulk operacije. */
+  const _selectedIds = new Set();
+  /** @type {null|'status'|'prio'|'engineer'} Otvoreni bulk-action menu. */
+  let _bulkMenu = null;
+  /** True kad je "Pregledi" dropdown otvoren. */
+  let _viewsOpen = false;
   const _mqMobile = window.matchMedia('(max-width: 767px)');
   let _isMobile = _mqMobile.matches;
   const _mqListener = e => {
@@ -268,9 +284,12 @@ export function renderPlanTab(root, ctx) {
       const projLabel = [t.project_code, t.project_name].filter(Boolean).join(' — ');
       const wd = countWorkdaysBetween(t.datum_pocetka_plan, t.datum_zavrsetka_plan);
       const delay = delayRealEnd(t);
+      const checked = _selectedIds.has(t.id) ? ' checked' : '';
+      const cardSelCls = _selectedIds.has(t.id) ? ' pb-card--selected' : '';
       return `
-        <article class="pb-card">
+        <article class="pb-card${cardSelCls}">
           <div class="pb-card-head">
+            ${canEdit ? `<input type="checkbox" class="pb-sel" data-id="${escHtml(t.id)}"${checked} aria-label="Selektuj" />` : ''}
             <h3 class="pb-card-title"${strike}>${escHtml(t.naziv || '')}</h3>
             <span class="${statusBadgeClass(t.status)}">${escHtml(t.status || '')}</span>
           </div>
@@ -311,11 +330,17 @@ export function renderPlanTab(root, ctx) {
     const rowsHtml = _isMobile ? '' : sorted.map((t, i) => {
       const wd = countWorkdaysBetween(t.datum_pocetka_plan, t.datum_zavrsetka_plan);
       const proj = [t.project_code, t.project_name].filter(Boolean).join(' ');
-      const strike = t.status === 'Završeno' ? ' class="pb-done"' : '';
+      const isSel = _selectedIds.has(t.id);
+      const trCls = (t.status === 'Završeno' ? 'pb-done' : '') + (isSel ? ' pb-row--selected' : '');
+      const trAttr = trCls.trim() ? ` class="${trCls.trim()}"` : '';
       const hasReal = t.datum_pocetka_real || t.datum_zavrsetka_real;
       const pct = Math.min(100, Number(t.procenat_zavrsenosti) || 0);
       const pctFillCls = t.status === 'Završeno' ? 'pb-pct-fill pb-pct-fill--done' : 'pb-pct-fill';
-      return `<tr${strike}>
+      const selCell = canEdit
+        ? `<td class="pb-td-sel"><input type="checkbox" class="pb-sel" data-id="${escHtml(t.id)}"${isSel ? ' checked' : ''} aria-label="Selektuj" /></td>`
+        : '';
+      return `<tr${trAttr}>
+        ${selCell}
         <td>${i + 1}</td>
         <td>${escHtml(t.naziv || '')}</td>
         <td>${escHtml(proj)}</td>
@@ -347,11 +372,23 @@ export function renderPlanTab(root, ctx) {
     const mobileBody = _isMobile
       ? `<div class="pb-cards-wrap">${cardsHtml || '<p class="pb-muted">Nema zadataka za filter.</p>'}</div>`
       : '';
+    const visibleIds = sorted.map(t => t.id);
+    const allVisibleSelected = visibleIds.length > 0
+      && visibleIds.every(id => _selectedIds.has(id));
+    const someVisibleSelected = !allVisibleSelected
+      && visibleIds.some(id => _selectedIds.has(id));
+    const masterAttr = allVisibleSelected ? ' checked'
+      : (someVisibleSelected ? ' data-indeterminate="1"' : '');
+    const masterHeader = canEdit
+      ? `<th class="pb-th-sel"><input type="checkbox" id="pbSelAll" aria-label="Selektuj sve"${masterAttr} /></th>`
+      : '';
+    const colCount = canEdit ? 13 : 12;
     const desktopBody = !_isMobile
       ? `<div class="pb-table-wrap">
           <div class="pb-table-container">
             <table class="pb-table">
               <thead><tr>
+                ${masterHeader}
                 <th>#</th>
                 ${th('naziv', 'Naziv zadatka')}
                 ${th('project', 'Projekat')}
@@ -365,7 +402,7 @@ export function renderPlanTab(root, ctx) {
                 ${th('prio', 'Prioritet')}
                 <th></th>
               </tr></thead>
-              <tbody>${rowsHtml || `<tr><td colspan="12" class="pb-muted" style="text-align:center;padding:20px">Nema zadataka za filter.</td></tr>`}</tbody>
+              <tbody>${rowsHtml || `<tr><td colspan="${colCount}" class="pb-muted" style="text-align:center;padding:20px">Nema zadataka za filter.</td></tr>`}</tbody>
             </table>
           </div>
         </div>`
@@ -385,8 +422,138 @@ export function renderPlanTab(root, ctx) {
       const grid = root.querySelector('.pb-stats-grid');
       if (grid) grid.innerHTML = buildStatsCardsHtml(tasks);
     }
+    refreshBulkBar();
     // Re-attach sort listenere (jer su .pb-th elementi novi posle innerHTML zamene).
     attachSortListeners();
+  }
+
+  /** Bulk action bar — prikazuje se kad je _selectedIds.size > 0. */
+  function buildBulkBarHtml() {
+    const n = _selectedIds.size;
+    if (!canEdit || n === 0) return '<div class="pb-bulk-bar" hidden></div>';
+    const statusMenu = _bulkMenu === 'status'
+      ? `<div class="pb-bulk-menu" id="pbBulkMenuStatus">
+          ${PB_TASK_STATUS.map(s => `<button type="button" class="pb-bulk-menu-item" data-bulk-status="${escHtml(s)}">${escHtml(s)}</button>`).join('')}
+        </div>` : '';
+    const prioMenu = _bulkMenu === 'prio'
+      ? `<div class="pb-bulk-menu" id="pbBulkMenuPrio">
+          ${PB_PRIORITET.map(p => `<button type="button" class="pb-bulk-menu-item" data-bulk-prio="${escHtml(p)}">${escHtml(p)}</button>`).join('')}
+        </div>` : '';
+    const engMenu = _bulkMenu === 'engineer'
+      ? `<div class="pb-bulk-menu pb-bulk-menu--wide" id="pbBulkMenuEng">
+          <button type="button" class="pb-bulk-menu-item" data-bulk-eng="">— ukloni inženjera —</button>
+          ${(ctx.engineers || []).map(e => `<button type="button" class="pb-bulk-menu-item" data-bulk-eng="${escHtml(e.id)}">${escHtml(e.full_name || '')}</button>`).join('')}
+        </div>` : '';
+    return `
+      <div class="pb-bulk-bar" role="region" aria-label="Bulk akcije">
+        <span class="pb-bulk-count"><strong>${n}</strong> selektovano</span>
+        <div class="pb-bulk-actions">
+          <div class="pb-bulk-action">
+            <button type="button" class="btn btn-sm pb-bulk-btn" id="pbBulkStatus">Status ▾</button>
+            ${statusMenu}
+          </div>
+          <div class="pb-bulk-action">
+            <button type="button" class="btn btn-sm pb-bulk-btn" id="pbBulkPrio">Prioritet ▾</button>
+            ${prioMenu}
+          </div>
+          <div class="pb-bulk-action">
+            <button type="button" class="btn btn-sm pb-bulk-btn" id="pbBulkEng">Inženjer ▾</button>
+            ${engMenu}
+          </div>
+          <button type="button" class="btn btn-sm pb-bulk-btn pb-bulk-btn--danger" id="pbBulkDel">✕ Briši</button>
+          <button type="button" class="btn btn-sm pb-bulk-btn pb-bulk-btn--ghost" id="pbBulkClear">Otkaži</button>
+        </div>
+      </div>`;
+  }
+
+  /** Replace bulk bar in-place bez full paint-a. */
+  function refreshBulkBar() {
+    const old = root.querySelector('.pb-bulk-bar');
+    if (!old) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = buildBulkBarHtml();
+    const fresh = wrap.firstElementChild;
+    if (fresh) {
+      old.replaceWith(fresh);
+      attachBulkBarListeners();
+    }
+    applyMasterIndeterminate();
+  }
+
+  function applyMasterIndeterminate() {
+    const m = /** @type {HTMLInputElement|null} */ (root.querySelector('#pbSelAll'));
+    if (!m) return;
+    m.indeterminate = m.getAttribute('data-indeterminate') === '1';
+  }
+
+  async function runBulkUpdate(patch, successMsg) {
+    if (!canEdit || _selectedIds.size === 0) return;
+    const ids = Array.from(_selectedIds);
+    try {
+      const r = await bulkUpdatePbTasks(ids, patch);
+      if (r.ok === r.requested) {
+        showToast(`${successMsg} (${r.ok})`);
+      } else {
+        showToast(`Izmenjeno ${r.ok}/${r.requested} — proveri dozvole`);
+      }
+      _selectedIds.clear();
+      _bulkMenu = null;
+      ctx.onRefresh?.();
+    } catch (e) {
+      showToast(pbErrorMessage(e) || 'Greška pri bulk izmeni');
+    }
+  }
+
+  async function runBulkDelete() {
+    if (!canEdit || _selectedIds.size === 0) return;
+    const n = _selectedIds.size;
+    if (!confirm(`Obrisati ${n} ${n === 1 ? 'zadatak' : 'zadatka'} (soft delete)?`)) return;
+    const ids = Array.from(_selectedIds);
+    try {
+      const r = await bulkSoftDeletePbTasks(ids);
+      if (r.ok === r.requested) {
+        showToast(`Obrisano ${r.ok}`);
+      } else {
+        showToast(`Obrisano ${r.ok}/${r.requested} — proveri dozvole`);
+      }
+      _selectedIds.clear();
+      _bulkMenu = null;
+      ctx.onRefresh?.();
+    } catch (e) {
+      showToast(pbErrorMessage(e) || 'Brisanje nije uspelo');
+    }
+  }
+
+  function attachBulkBarListeners() {
+    const toggleMenu = (name) => {
+      _bulkMenu = _bulkMenu === name ? null : name;
+      refreshBulkBar();
+    };
+    root.querySelector('#pbBulkStatus')?.addEventListener('click', () => toggleMenu('status'));
+    root.querySelector('#pbBulkPrio')?.addEventListener('click', () => toggleMenu('prio'));
+    root.querySelector('#pbBulkEng')?.addEventListener('click', () => toggleMenu('engineer'));
+    root.querySelector('#pbBulkDel')?.addEventListener('click', runBulkDelete);
+    root.querySelector('#pbBulkClear')?.addEventListener('click', () => {
+      _selectedIds.clear();
+      _bulkMenu = null;
+      paintBody();
+    });
+    root.querySelectorAll('[data-bulk-status]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        runBulkUpdate({ status: btn.getAttribute('data-bulk-status') }, 'Status izmenjen');
+      });
+    });
+    root.querySelectorAll('[data-bulk-prio]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        runBulkUpdate({ prioritet: btn.getAttribute('data-bulk-prio') }, 'Prioritet izmenjen');
+      });
+    });
+    root.querySelectorAll('[data-bulk-eng]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const v = btn.getAttribute('data-bulk-eng') || null;
+        runBulkUpdate({ employee_id: v }, v ? 'Inženjer dodeljen' : 'Inženjer uklonjen');
+      });
+    });
   }
 
   function attachSortListeners() {
@@ -436,6 +603,29 @@ export function renderPlanTab(root, ctx) {
       </div>`;
     }).join('');
 
+    /* Team load — agregat po pod-odeljenju (kad postoji RPC). */
+    const teamRowsHtml = (ctx.teamLoadStats || []).map(r => {
+      const p = Number(r.avg_load_pct) || 0;
+      let barCls = 'pb-load-bar__fill';
+      if (p > 100) barCls += ' pb-load-bar__fill--danger';
+      else if (p >= 80) barCls += ' pb-load-bar__fill--warn';
+      else barCls += ' pb-load-bar__fill--ok';
+      const label = `${r.sub_department_name || '—'}`
+        + (r.member_count ? ` <small style="opacity:.7">(${r.member_count})</small>` : '');
+      return `<div class="pb-load-row">
+        <span class="pb-load-name">${label}</span>
+        <div class="pb-load-bar" aria-hidden="true"><div class="${barCls}" style="width:${Math.min(p, 150)}%"></div></div>
+        <span class="pb-load-pct">${p}% <small style="opacity:.6">max ${Number(r.max_load_pct) || 0}%</small></span>
+      </div>`;
+    }).join('');
+
+    const teamSection = (ctx.teamLoadStats || []).length
+      ? `<div class="pb-load-team">
+          <div class="pb-load-team-title">Po timu</div>
+          <div class="pb-load-grid">${teamRowsHtml}</div>
+        </div>`
+      : '';
+
     const loadHtml = `
       <section class="pb-load-section" aria-label="Opterećenost inženjera">
         <button type="button" class="pb-load-header" id="pbLoadToggle">
@@ -445,6 +635,7 @@ export function renderPlanTab(root, ctx) {
         <div class="pb-load-content ${_loadOpen ? 'open' : ''}">
           <div class="pb-load-inner">
             <div class="pb-load-grid">${loadRowsHtml || '<p class="pb-muted">Nema podataka</p>'}</div>
+            ${teamSection}
           </div>
         </div>
       </section>`;
@@ -489,9 +680,17 @@ export function renderPlanTab(root, ctx) {
             <button type="button" class="pb-ft-toggle ${filters.showDone ? 'active' : ''}" id="pbFDoneBtn">☐ Završeni</button>
           </div>
         </div>
+        <div class="pb-ft-field pb-ft-views">
+          <span class="pb-ft-label">&nbsp;</span>
+          <button type="button" class="pb-ft-toggle" id="pbViewsBtn" aria-haspopup="true" aria-expanded="${_viewsOpen ? 'true' : 'false'}">⭐ Pregledi ▾</button>
+          ${_viewsOpen ? buildViewsMenuHtml() : ''}
+        </div>
         <div class="pb-ft-field">
           <span class="pb-ft-label">&nbsp;</span>
-          <button type="button" class="pb-ft-refresh" id="pbRefreshBtn" title="Osveži">${IC_REFRESH}</button>
+          <div class="pb-ft-icons">
+            <button type="button" class="pb-ft-refresh" id="pbRefreshBtn" title="Osveži">${IC_REFRESH}</button>
+            <button type="button" class="pb-ft-refresh" id="pbExportBtn" title="Izvoz u CSV (Excel)">⤓</button>
+          </div>
         </div>
         ${hasActiveFilter ? '<button type="button" class="pb-ft-reset" id="pbFReset">✕ Reset</button>' : ''}
       </div>`;
@@ -502,8 +701,11 @@ export function renderPlanTab(root, ctx) {
         ${alarmHtml}
         ${loadHtml}
         ${filterHtml}
+        ${buildBulkBarHtml()}
         <div class="pb-plan-split">${buildBodyHtml(sorted)}</div>`;
     });
+
+    applyMasterIndeterminate();
 
     /* ── Event listeners ── */
 
@@ -571,8 +773,11 @@ export function renderPlanTab(root, ctx) {
       paint();
     });
     root.querySelector('#pbRefreshBtn')?.addEventListener('click', () => ctx.onRefresh?.());
+    root.querySelector('#pbExportBtn')?.addEventListener('click', () => exportCurrentViewToCsv());
 
     attachSortListeners();
+    attachBulkBarListeners();
+    attachViewsListeners();
 
     if (!_delegationAttached) {
       attachRootDelegation();
@@ -580,9 +785,209 @@ export function renderPlanTab(root, ctx) {
     }
   }
 
+  const _emptyFilters = {
+    search: '', status: 'all', vrsta: 'all', prioritet: 'all',
+    showDone: false, problemOnly: false, unassignedOnly: false,
+  };
+
+  /** Vraća filter snapshot bez sessionStorage-only polja. */
+  function currentFilterSnapshot() {
+    return {
+      search: filters.search,
+      status: filters.status,
+      vrsta: filters.vrsta,
+      prioritet: filters.prioritet,
+      showDone: filters.showDone,
+      problemOnly: filters.problemOnly,
+      unassignedOnly: filters.unassignedOnly,
+    };
+  }
+
+  /** Primeni filter snapshot — kreće od pravog default-a, prekrij sa snapshot-om. */
+  function applyView(viewFilters) {
+    filters = { ..._emptyFilters, ...viewFilters };
+    syncPbModuleFilters({
+      moduleSearch: filters.search,
+      moduleStatus: filters.status,
+      moduleVrsta: filters.vrsta,
+      modulePrioritet: filters.prioritet,
+      moduleShowDone: filters.showDone,
+      moduleProblemOnly: filters.problemOnly,
+      moduleUnassignedOnly: filters.unassignedOnly,
+    });
+    _viewsOpen = false;
+    paint();
+  }
+
+  function saveCurrentView() {
+    const name = prompt('Naziv pregleda:');
+    if (!name) return;
+    const ok = savePbView(name, currentFilterSnapshot());
+    if (ok) {
+      showToast(`Pregled "${name}" sačuvan`);
+      _viewsOpen = false;
+      paint();
+    } else {
+      showToast('Greška pri čuvanju pregleda');
+    }
+  }
+
+  function buildViewsMenuHtml() {
+    const userViews = loadPbViews();
+    const builtinHtml = PB_BUILTIN_VIEWS.map((v, i) => `
+      <button type="button" class="pb-views-item" data-view-builtin="${i}">
+        <span class="pb-views-item-icon">★</span>
+        <span class="pb-views-item-name">${escHtml(v.name)}</span>
+      </button>`).join('');
+    const userHtml = userViews.length
+      ? userViews.map((v, i) => `
+          <div class="pb-views-item-row">
+            <button type="button" class="pb-views-item" data-view-user="${i}">
+              <span class="pb-views-item-icon">◆</span>
+              <span class="pb-views-item-name">${escHtml(v.name)}</span>
+            </button>
+            <button type="button" class="pb-views-del" data-view-del="${escHtml(v.name)}" title="Obriši pregled" aria-label="Obriši">✕</button>
+          </div>`).join('')
+      : '<div class="pb-views-empty">Nema sačuvanih pregleda</div>';
+    return `
+      <div class="pb-views-menu" role="menu">
+        <div class="pb-views-section-label">Pripremljeni</div>
+        ${builtinHtml}
+        <div class="pb-views-divider"></div>
+        <div class="pb-views-section-label">Moji pregledi</div>
+        ${userHtml}
+        <div class="pb-views-divider"></div>
+        <button type="button" class="pb-views-save" id="pbViewsSave">＋ Sačuvaj trenutni pregled…</button>
+      </div>`;
+  }
+
+  function attachViewsListeners() {
+    root.querySelector('#pbViewsBtn')?.addEventListener('click', e => {
+      e.stopPropagation();
+      _viewsOpen = !_viewsOpen;
+      paint();
+    });
+    root.querySelector('#pbViewsSave')?.addEventListener('click', saveCurrentView);
+    root.querySelectorAll('[data-view-builtin]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.getAttribute('data-view-builtin'));
+        const v = PB_BUILTIN_VIEWS[i];
+        if (v) applyView(v.filters);
+      });
+    });
+    root.querySelectorAll('[data-view-user]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.getAttribute('data-view-user'));
+        const v = loadPbViews()[i];
+        if (v) applyView(v.filters);
+      });
+    });
+    root.querySelectorAll('[data-view-del]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const name = btn.getAttribute('data-view-del');
+        if (!name) return;
+        if (!confirm(`Obrisati pregled "${name}"?`)) return;
+        deletePbView(name);
+        paint();
+      });
+    });
+  }
+
+  /** Izvoz trenutno filtriranih+sortiranih taskova u CSV (otvoreno u Excel-u). */
+  function exportCurrentViewToCsv() {
+    const tasks = filtered();
+    const sorted = sortTasks(tasks, sortCol, sortDir);
+    const headers = [
+      '#', 'Naziv', 'Projekat (šifra)', 'Projekat (naziv)', 'Inženjer',
+      'Vrsta', 'Prioritet', 'Status',
+      'Plan početak', 'Plan rok', 'Ostvaren početak', 'Ostvaren završetak',
+      'Trajanje (rd)', 'Norma (h/dan)', 'Završenost %',
+      'Kašnjenje (d)', 'Problem',
+    ];
+    const rows = sorted.map((t, i) => {
+      const wd = countWorkdaysBetween(t.datum_pocetka_plan, t.datum_zavrsetka_plan);
+      const delay = delayRealEnd(t);
+      return [
+        i + 1,
+        t.naziv || '',
+        t.project_code || '',
+        t.project_name || '',
+        t.engineer_name || '',
+        t.vrsta || '',
+        t.prioritet || '',
+        t.status || '',
+        (t.datum_pocetka_plan || '').slice(0, 10),
+        (t.datum_zavrsetka_plan || '').slice(0, 10),
+        (t.datum_pocetka_real || '').slice(0, 10),
+        (t.datum_zavrsetka_real || '').slice(0, 10),
+        wd ?? '',
+        Number(t.norma_sati_dan) || 0,
+        Number(t.procenat_zavrsenosti) || 0,
+        delay ?? '',
+        (t.problem || '').replace(/\s+/g, ' ').slice(0, 500),
+      ];
+    });
+    const today = new Date().toISOString().slice(0, 10);
+    downloadCsv(`pb-plan-${today}.csv`, headers, rows);
+    showToast(`Izvezeno ${rows.length} ${rows.length === 1 ? 'red' : 'redova'}`);
+  }
+
   /** Event delegation za sve dugmad u tabeli/karticama — postavlja se jednom. */
   function attachRootDelegation() {
     const findTask = id => (ctx.tasks || []).find(x => x.id === id);
+
+    // Click izvan views menija ga zatvara (dokument-level, jednom).
+    document.addEventListener('click', e => {
+      if (!_viewsOpen || !root.isConnected) return;
+      if (e.target.closest('.pb-views-menu') || e.target.closest('#pbViewsBtn')) return;
+      _viewsOpen = false;
+      paint();
+    });
+
+    root.addEventListener('change', e => {
+      const cb = e.target.closest('input.pb-sel');
+      if (cb && root.contains(cb)) {
+        const id = cb.getAttribute('data-id');
+        if (!id) return;
+        if (cb.checked) _selectedIds.add(id);
+        else _selectedIds.delete(id);
+        // Mark row/card vizuelno + ažuriraj master + bulk bar.
+        const tr = cb.closest('tr');
+        if (tr) tr.classList.toggle('pb-row--selected', cb.checked);
+        const card = cb.closest('.pb-card');
+        if (card) card.classList.toggle('pb-card--selected', cb.checked);
+        refreshBulkBar();
+        // Ažuriraj master da odražava stanje.
+        const master = /** @type {HTMLInputElement|null} */ (root.querySelector('#pbSelAll'));
+        if (master) {
+          const all = root.querySelectorAll('input.pb-sel');
+          let n = 0, sel = 0;
+          all.forEach(x => { n += 1; if (/** @type {HTMLInputElement} */(x).checked) sel += 1; });
+          master.checked = n > 0 && sel === n;
+          master.indeterminate = sel > 0 && sel < n;
+        }
+        return;
+      }
+      const m = e.target.closest('#pbSelAll');
+      if (m && root.contains(m)) {
+        const want = /** @type {HTMLInputElement} */ (m).checked;
+        root.querySelectorAll('input.pb-sel').forEach(x => {
+          const inp = /** @type {HTMLInputElement} */ (x);
+          inp.checked = want;
+          const id = inp.getAttribute('data-id');
+          if (!id) return;
+          if (want) _selectedIds.add(id);
+          else _selectedIds.delete(id);
+          const tr = inp.closest('tr');
+          if (tr) tr.classList.toggle('pb-row--selected', want);
+          const card = inp.closest('.pb-card');
+          if (card) card.classList.toggle('pb-card--selected', want);
+        });
+        /** @type {HTMLInputElement} */ (m).indeterminate = false;
+        refreshBulkBar();
+      }
+    });
 
     root.addEventListener('click', e => {
       const btn = e.target.closest('button[data-id]');

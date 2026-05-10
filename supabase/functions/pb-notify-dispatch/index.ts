@@ -90,32 +90,41 @@ serve(async (req) => {
   }
 
   try {
+    /* Provera digest_mode iz config tabele — ako je TRUE, grupišemo email-ove
+       istog primaoca u jedan kombinovani mejl. */
+    const cfgRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/pb_notification_config?id=eq.1&select=digest_mode`,
+      {
+        headers: {
+          apikey: SERVICE_ROLE,
+          Authorization: `Bearer ${SERVICE_ROLE}`,
+        },
+      },
+    );
+    let digest = false;
+    if (cfgRes.ok) {
+      const cfgArr = await cfgRes.json().catch(() => null);
+      digest = Boolean(cfgArr?.[0]?.digest_mode);
+    }
+
     const batch = await rpc<PbRow[]>('pb_dispatch_dequeue', { batch_size: BATCH });
     const rows = Array.isArray(batch) ? batch : [];
     let sent = 0;
     let failed = 0;
     let skipped = 0;
 
+    /* Non-email kanali idu redom (whatsapp itd.). */
+    const emailRows: PbRow[] = [];
     for (const row of rows) {
+      if (row.channel === 'email') {
+        emailRows.push(row);
+        continue;
+      }
       try {
         if (row.channel === 'whatsapp') {
           console.warn('[pb-dispatch] WhatsApp not configured for PB — marking sent');
           await rpc('pb_dispatch_mark_sent', { p_id: row.id });
           skipped++;
-          continue;
-        }
-        if (row.channel === 'email') {
-          const r = await sendEmail(row);
-          if (r.ok) {
-            await rpc('pb_dispatch_mark_sent', { p_id: row.id });
-            sent++;
-          } else {
-            await rpc('pb_dispatch_mark_failed', {
-              p_id: row.id,
-              p_error: 'error' in r ? r.error : 'send failed',
-            });
-            failed++;
-          }
           continue;
         }
         await rpc('pb_dispatch_mark_sent', { p_id: row.id });
@@ -129,7 +138,79 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, sent, failed, skipped, processed: rows.length }), {
+    /* Email-ovi: pojedinačno ili digest po primaocu. */
+    if (digest && emailRows.length > 1) {
+      const groups = new Map<string, PbRow[]>();
+      for (const r of emailRows) {
+        const list = groups.get(r.recipient) ?? [];
+        list.push(r);
+        groups.set(r.recipient, list);
+      }
+      for (const [recipient, items] of groups) {
+        if (items.length === 1) {
+          const r = items[0];
+          const sendRes = await sendEmail(r);
+          if (sendRes.ok) {
+            await rpc('pb_dispatch_mark_sent', { p_id: r.id });
+            sent++;
+          } else {
+            await rpc('pb_dispatch_mark_failed', { p_id: r.id, p_error: 'error' in sendRes ? sendRes.error : 'fail' });
+            failed++;
+          }
+          continue;
+        }
+        /* Spoji više poruka u jedan mejl. */
+        const combined: PbRow = {
+          id: items[0].id, /* za log; ostale markiraj individualno */
+          channel: 'email',
+          recipient,
+          subject: `Projektni biro — ${items.length} obaveštenja`,
+          body: items
+            .map((it) => `• ${it.subject || '(bez naslova)'}\n${it.body}`)
+            .join('\n\n———\n\n'),
+          attempts: items[0].attempts,
+        };
+        const r = await sendEmail(combined);
+        if (r.ok) {
+          for (const it of items) {
+            await rpc('pb_dispatch_mark_sent', { p_id: it.id });
+            sent++;
+          }
+        } else {
+          for (const it of items) {
+            await rpc('pb_dispatch_mark_failed', {
+              p_id: it.id,
+              p_error: 'error' in r ? r.error : 'digest fail',
+            });
+            failed++;
+          }
+        }
+      }
+    } else {
+      for (const row of emailRows) {
+        try {
+          const r = await sendEmail(row);
+          if (r.ok) {
+            await rpc('pb_dispatch_mark_sent', { p_id: row.id });
+            sent++;
+          } else {
+            await rpc('pb_dispatch_mark_failed', {
+              p_id: row.id,
+              p_error: 'error' in r ? r.error : 'send failed',
+            });
+            failed++;
+          }
+        } catch (e) {
+          failed++;
+          await rpc('pb_dispatch_mark_failed', {
+            p_id: row.id,
+            p_error: String(e).slice(0, 900),
+          });
+        }
+      }
+    }
+
+    return new Response(JSON.stringify({ ok: true, sent, failed, skipped, processed: rows.length, digest }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });

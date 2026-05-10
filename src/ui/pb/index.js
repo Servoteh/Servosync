@@ -11,6 +11,7 @@ import {
   getPbEngineers,
   getPbTasks,
   getPbLoadStats,
+  getPbTeamLoadStats,
   getPbWorkReports,
 } from '../../services/pb.js';
 import {
@@ -65,6 +66,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
   let engineers = [];
   let tasks = [];
   let loadStats = [];
+  let teamLoadStats = [];
   let workReports = [];
 
   function mergeStoredState() {
@@ -82,6 +84,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     get engineers() { return engineers; },
     get tasks() { return tasks; },
     get loadStats() { return loadStats; },
+    get teamLoadStats() { return teamLoadStats; },
     get moduleSearch() { return state.moduleSearch ?? ''; },
     get moduleShowDone() { return state.moduleShowDone ?? false; },
     onRefresh: () => loadAll(),
@@ -153,6 +156,14 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         statsOk = false;
         console.error('PB load failed [loadStats]', statsErr);
         loadStats = [];
+      }
+
+      /* Team load — opcionalan, RPC možda nije migriran u staroj bazi. */
+      try {
+        teamLoadStats = await getPbTeamLoadStats(20);
+      } catch (e) {
+        console.error('PB load failed [teamLoadStats]', e);
+        teamLoadStats = [];
       }
 
       const failedLabels = [rProj, rEng, rTasks].filter(x => !x.ok).map(x => x.label);
@@ -316,17 +327,24 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       let viewMonth = state.ganttStartDate ? new Date(state.ganttStartDate) : new Date();
       if (Number.isNaN(viewMonth.getTime())) viewMonth = new Date();
       viewMonth.setDate(1);
+      const viewZoom = loadPbState().ganttZoom || 'day';
       renderGanttTab(body, {
         tasks,
         projects,
         engineers,
         search: state.moduleSearch ?? '',
         viewMonth,
+        viewZoom,
         onViewMonthChange: d => {
           const x = new Date(d);
           x.setDate(1);
           x.setHours(0, 0, 0, 0);
           savePbGanttMonth(x.toISOString());
+          mergeStoredState();
+          void mountActiveTab();
+        },
+        onViewZoomChange: () => {
+          /* savePbGanttZoom je već pozvan u ganttTab; samo re-mount taba. */
           mergeStoredState();
           void mountActiveTab();
         },

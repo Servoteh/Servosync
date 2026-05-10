@@ -3,9 +3,25 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { openTaskEditorModal } from './shared.js';
+import { openTaskEditorModal, savePbGanttZoom } from './shared.js';
 import { canEditProjektniBiro } from '../../state/auth.js';
 import { updatePbTask } from '../../services/pb.js';
+
+/** Zoom konfiguracija: koliko meseci da prikažemo, širina ćelije dana, tip zaglavlja. */
+const ZOOM_CONFIG = {
+  day:     { months: 2,  dayWDesktop: 28, dayWMobile: 20, header: 'days' },
+  week:    { months: 4,  dayWDesktop: 12, dayWMobile: 10, header: 'weeks' },
+  month:   { months: 12, dayWDesktop: 5,  dayWMobile: 4,  header: 'months' },
+  quarter: { months: 24, dayWDesktop: 2,  dayWMobile: 2,  header: 'quarters' },
+};
+
+function isoWeekNumber(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dow = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - dow);
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - yearStart) / 86400000 + 1) / 7);
+}
 
 /**
  * @param {object} task
@@ -138,6 +154,7 @@ function monthSpans(days) {
  *   engineers: object[],
  *   search: string,
  *   viewMonth: Date,
+ *   viewZoom?: 'day'|'week'|'month'|'quarter',
  *   onViewMonthChange: (d: Date) => void,
  *   onRefresh: () => void,
  * }} ctx
@@ -150,15 +167,21 @@ export function renderGanttTab(root, ctx) {
 
   const canEdit = canEditProjektniBiro();
   const mobile = window.matchMedia('(max-width: 767px)').matches;
-  const dayW = mobile ? 20 : 28;
+  const zoom = ZOOM_CONFIG[ctx.viewZoom] ? ctx.viewZoom : 'day';
+  const zCfg = ZOOM_CONFIG[zoom];
+  const dayW = mobile ? zCfg.dayWMobile : zCfg.dayWDesktop;
   const leftColW = mobile ? 130 : 180;
+  const monthsToShow = zCfg.months;
+  /* Drag radi pouzdano samo na "day" zumu (cell = jedan dan).
+     Na ostalim zumovima, drag = read-only (otvori editor da menjaš datume). */
+  const dragEnabled = canEdit && !mobile && zoom === 'day';
 
   const baseMonth = ctx.viewMonth ? new Date(ctx.viewMonth) : firstOfMonth();
   baseMonth.setDate(1);
   baseMonth.setHours(0, 0, 0, 0);
 
   const rangeStart = firstOfMonth(baseMonth);
-  const rangeEnd = lastDayOfMonth(baseMonth, 1);
+  const rangeEnd = lastDayOfMonth(baseMonth, monthsToShow - 1);
   const days = eachDay(rangeStart, rangeEnd);
   const totalW = days.length * dayW;
   const nDays = days.length;
@@ -246,23 +269,109 @@ export function renderGanttTab(root, ctx) {
   }
 
   const spans = monthSpans(days);
-  const monthRow = spans.map(s =>
-    `<th class="pb-gantt-th-month" colspan="${s.len}" style="min-width:${s.len * dayW}px">${escHtml(s.label)}</th>`,
-  ).join('');
-
   const today = new Date();
-  const dayRow = days.map((d, idx) => {
-    const dow = d.getDay();
-    const isW = dow === 0 || dow === 6;
-    const isToday =
-      d.getDate() === today.getDate()
-      && d.getMonth() === today.getMonth()
-      && d.getFullYear() === today.getFullYear();
-    let cls = 'pb-gantt-daycell';
-    if (isW) cls += ' pb-gantt-daycell--wknd';
-    if (isToday) cls += ' pb-gantt-daycell--today';
-    return `<th class="${cls}" style="width:${dayW}px;min-width:${dayW}px" data-day-idx="${idx}" title="${d.toLocaleDateString('sr-Latn')}">${escHtml(String(d.getDate()).padStart(2, '0'))}</th>`;
-  }).join('');
+
+  /** Top header row (month/year/quarter spans). */
+  function buildTopHeaderRow() {
+    if (zCfg.header === 'days' || zCfg.header === 'weeks') {
+      return spans.map(s =>
+        `<th class="pb-gantt-th-month" colspan="${s.len}" style="min-width:${s.len * dayW}px">${escHtml(s.label)}</th>`,
+      ).join('');
+    }
+    if (zCfg.header === 'months') {
+      /* godine kao top spans */
+      const yearSpans = [];
+      let i = 0;
+      while (i < days.length) {
+        const y = days[i].getFullYear();
+        let len = 0;
+        while (i + len < days.length && days[i + len].getFullYear() === y) len += 1;
+        yearSpans.push({ label: String(y), len });
+        i += len;
+      }
+      return yearSpans.map(s =>
+        `<th class="pb-gantt-th-month" colspan="${s.len}" style="min-width:${s.len * dayW}px">${escHtml(s.label)}</th>`,
+      ).join('');
+    }
+    /* quarters: top = year */
+    const yearSpans = [];
+    let i = 0;
+    while (i < days.length) {
+      const y = days[i].getFullYear();
+      let len = 0;
+      while (i + len < days.length && days[i + len].getFullYear() === y) len += 1;
+      yearSpans.push({ label: String(y), len });
+      i += len;
+    }
+    return yearSpans.map(s =>
+      `<th class="pb-gantt-th-month" colspan="${s.len}" style="min-width:${s.len * dayW}px">${escHtml(s.label)}</th>`,
+    ).join('');
+  }
+
+  /** Bottom header row — granularnost ćelija prema zoom-u (ali ćelije ostaju 1 dan širine za bar geometriju). */
+  function buildBottomHeaderRow() {
+    if (zCfg.header === 'days') {
+      return days.map((d, idx) => {
+        const dow = d.getDay();
+        const isW = dow === 0 || dow === 6;
+        const isToday = d.getDate() === today.getDate()
+          && d.getMonth() === today.getMonth()
+          && d.getFullYear() === today.getFullYear();
+        let cls = 'pb-gantt-daycell';
+        if (isW) cls += ' pb-gantt-daycell--wknd';
+        if (isToday) cls += ' pb-gantt-daycell--today';
+        return `<th class="${cls}" style="width:${dayW}px;min-width:${dayW}px" data-day-idx="${idx}" title="${d.toLocaleDateString('sr-Latn')}">${escHtml(String(d.getDate()).padStart(2, '0'))}</th>`;
+      }).join('');
+    }
+    if (zCfg.header === 'weeks') {
+      /* Prikaži broj nedelje samo ponedeljkom (ili na prvom danu ako mesec ne počinje pon.). */
+      return days.map((d, idx) => {
+        const dow = d.getDay();
+        const isMon = dow === 1;
+        const isFirst = idx === 0;
+        const isW = dow === 0 || dow === 6;
+        const isToday = d.getDate() === today.getDate()
+          && d.getMonth() === today.getMonth()
+          && d.getFullYear() === today.getFullYear();
+        let cls = 'pb-gantt-daycell pb-gantt-daycell--wk';
+        if (isW) cls += ' pb-gantt-daycell--wknd';
+        if (isToday) cls += ' pb-gantt-daycell--today';
+        const label = (isMon || isFirst) ? `W${isoWeekNumber(d)}` : '';
+        return `<th class="${cls}" style="width:${dayW}px;min-width:${dayW}px" data-day-idx="${idx}">${escHtml(label)}</th>`;
+      }).join('');
+    }
+    if (zCfg.header === 'months') {
+      /* Mesečna oznaka na 1. u mesecu. */
+      return days.map((d, idx) => {
+        const isFirstOfMonth = d.getDate() === 1;
+        const isToday = d.getDate() === today.getDate()
+          && d.getMonth() === today.getMonth()
+          && d.getFullYear() === today.getFullYear();
+        let cls = 'pb-gantt-daycell pb-gantt-daycell--mo';
+        if (isToday) cls += ' pb-gantt-daycell--today';
+        if (isFirstOfMonth) cls += ' pb-gantt-daycell--month-start';
+        const label = isFirstOfMonth ? d.toLocaleString('sr-Latn', { month: 'short' }) : '';
+        return `<th class="${cls}" style="width:${dayW}px;min-width:${dayW}px" data-day-idx="${idx}">${escHtml(label)}</th>`;
+      }).join('');
+    }
+    /* quarters: oznaka na 1. dana kvartala (jan/apr/jul/okt). */
+    return days.map((d, idx) => {
+      const isFirstOfMonth = d.getDate() === 1;
+      const monthsInQuarter = [0, 3, 6, 9];
+      const isQuarterStart = isFirstOfMonth && monthsInQuarter.includes(d.getMonth());
+      const isToday = d.getDate() === today.getDate()
+        && d.getMonth() === today.getMonth()
+        && d.getFullYear() === today.getFullYear();
+      let cls = 'pb-gantt-daycell pb-gantt-daycell--qr';
+      if (isToday) cls += ' pb-gantt-daycell--today';
+      if (isQuarterStart) cls += ' pb-gantt-daycell--month-start';
+      const label = isQuarterStart ? `Q${Math.floor(d.getMonth() / 3) + 1}` : '';
+      return `<th class="${cls}" style="width:${dayW}px;min-width:${dayW}px" data-day-idx="${idx}">${escHtml(label)}</th>`;
+    }).join('');
+  }
+
+  const monthRow = buildTopHeaderRow();
+  const dayRow = buildBottomHeaderRow();
 
   let todayIdx = -1;
   days.forEach((d, i) => {
@@ -303,6 +412,53 @@ export function renderGanttTab(root, ctx) {
     }
   }
 
+  /** Mobile card render — list grupisana po inženjeru, svaki task = mini bar + datumi. */
+  function buildMobileBlock() {
+    if (!list.length) return '';
+    function taskCardHtml(task) {
+      const geo = ganttBarGeometry(task, rangeStart, dayW);
+      const pct = Math.min(100, Number(task.procenat_zavrsenosti) || 0);
+      const cls = statusBarClass(task.status);
+      const planLabel = (task.datum_pocetka_plan || '').slice(5, 10).replace('-', '.')
+        + ' → '
+        + (task.datum_zavrsetka_plan || '').slice(5, 10).replace('-', '.');
+      const realLabel = (task.datum_pocetka_real || task.datum_zavrsetka_real)
+        ? `Ostvaren: ${(task.datum_pocetka_real || '').slice(5, 10).replace('-', '.')} → ${(task.datum_zavrsetka_real || '').slice(5, 10).replace('-', '.')}`
+        : '';
+      const barInner = geo
+        ? `<div class="pb-gantt-mb-bar ${cls}" style="left:${(geo.left / totalW) * 100}%;width:${Math.max(2, (geo.width / totalW) * 100)}%">
+            <div class="pb-gantt-bar__prog" style="width:${pct}%"></div>
+          </div>`
+        : '<span class="pb-muted" style="font-size:.78rem">bez datuma</span>';
+      return `<div class="pb-gantt-mcard" data-task-id="${escHtml(task.id)}">
+        <div class="pb-gantt-mcard-head">
+          <strong>${escHtml(task.naziv || '')}</strong>
+          <span class="pb-gantt-mcard-pct">${pct}%</span>
+        </div>
+        <div class="pb-gantt-mcard-meta">${escHtml(planLabel)}</div>
+        ${realLabel ? `<div class="pb-gantt-mcard-meta pb-gantt-mcard-meta--real">${escHtml(realLabel)}</div>` : ''}
+        <div class="pb-gantt-mcard-bar-host">${barInner}</div>
+      </div>`;
+    }
+
+    const groups = [];
+    for (const eid of engIds) {
+      const ts = byEng.get(eid);
+      const name = ts[0]?.engineer_name || '—';
+      groups.push(`<section class="pb-gantt-mgroup">
+        <h4 class="pb-gantt-mgroup-head">${escHtml(name)}</h4>
+        ${ts.map(taskCardHtml).join('')}
+      </section>`);
+    }
+    if (unassigned.length) {
+      groups.push(`<section class="pb-gantt-mgroup">
+        <h4 class="pb-gantt-mgroup-head">Bez inženjera</h4>
+        ${unassigned.map(taskCardHtml).join('')}
+      </section>`);
+    }
+    return groups.join('');
+  }
+
   const navLabel = baseMonth.toLocaleString('sr-Latn', { month: 'long', year: 'numeric' });
 
   const legend = list.length ? `
@@ -324,27 +480,36 @@ export function renderGanttTab(root, ctx) {
       ${canEdit ? '<button type="button" class="btn btn-primary" id="pbGanttNew">+ Novi zadatak</button>' : ''}
     </div>` : '';
 
+  const zoomLabel = { day: 'Dan', week: 'Nedelja', month: 'Mesec', quarter: 'Kvartal' };
+  const zoomBtn = (key) => `
+    <button type="button" class="btn btn-sm pb-gantt-zoom-btn${zoom === key ? ' active' : ''}"
+      data-gantt-zoom="${key}" title="${escHtml(zoomLabel[key])}">${escHtml(zoomLabel[key])}</button>`;
+
   const scrollBlock = list.length ? `
     ${legend}
     <div class="pb-gantt-toolbar">
-      <button type="button" class="btn btn-sm" id="pbGanttPrev">← Prethodni mesec</button>
+      <button type="button" class="btn btn-sm" id="pbGanttPrev">←</button>
       <strong id="pbGanttMonthLabel">${escHtml(navLabel)}</strong>
-      <button type="button" class="btn btn-sm" id="pbGanttNext">Sledeći mesec →</button>
+      <button type="button" class="btn btn-sm" id="pbGanttNext">→</button>
       <button type="button" class="btn btn-sm" id="pbGanttToday">Danas</button>
+      <div class="pb-gantt-zoom" role="group" aria-label="Zoom">
+        ${zoomBtn('day')}${zoomBtn('week')}${zoomBtn('month')}${zoomBtn('quarter')}
+      </div>
     </div>
-    <div class="pb-gantt-scroll" style="--pb-gantt-left:${leftColW}px">
-      <table class="pb-gantt-table">
-        <thead>
-          <tr>
-            <th class="pb-gantt-corner pb-gantt-sticky-col" rowspan="2">Inženjer / Zadatak</th>
-            ${monthRow}
-          </tr>
-          <tr>${dayRow}</tr>
-        </thead>
-        <tbody>${tbodyRows.join('')}</tbody>
-      </table>
-      ${todayIdx >= 0 ? `<div class="pb-gantt-today-line" style="left:calc(var(--pb-gantt-left) + ${todayIdx * dayW + dayW / 2}px)"></div>` : ''}
-    </div>` : '';
+    ${mobile ? `<div class="pb-gantt-mobile">${buildMobileBlock()}</div>` : `
+      <div class="pb-gantt-scroll" style="--pb-gantt-left:${leftColW}px">
+        <table class="pb-gantt-table">
+          <thead>
+            <tr>
+              <th class="pb-gantt-corner pb-gantt-sticky-col" rowspan="2">Inženjer / Zadatak</th>
+              ${monthRow}
+            </tr>
+            <tr>${dayRow}</tr>
+          </thead>
+          <tbody>${tbodyRows.join('')}</tbody>
+        </table>
+        ${todayIdx >= 0 ? `<div class="pb-gantt-today-line" style="left:calc(var(--pb-gantt-left) + ${todayIdx * dayW + dayW / 2}px)"></div>` : ''}
+      </div>`}` : '';
 
   root.innerHTML = empty || scrollBlock;
 
@@ -396,8 +561,19 @@ export function renderGanttTab(root, ctx) {
     }, { signal: sig });
   });
 
-  // --- Drag to change dates ---
-  if (canEdit && !mobile) {
+  // --- Zoom buttons ---
+  root.querySelectorAll('.pb-gantt-zoom-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const z = btn.getAttribute('data-gantt-zoom');
+      if (z && z !== zoom) {
+        savePbGanttZoom(z);
+        ctx.onViewZoomChange?.(z);
+      }
+    }, { signal: sig });
+  });
+
+  // --- Drag to change dates (samo na 'day' zoom-u) ---
+  if (dragEnabled) {
     let dragState = null;
 
     function startDrag(e, taskId, dragType) {
@@ -535,6 +711,13 @@ export function renderGanttTab(root, ctx) {
   // --- Click to open editor ---
   root.addEventListener('click', e => {
     if (e.target.closest('.pb-gantt-drag-l, .pb-gantt-drag-r')) return;
+    const mcard = e.target.closest('.pb-gantt-mcard');
+    if (mcard) {
+      const tid = mcard.getAttribute('data-task-id');
+      const task = tid ? taskById(tid) : null;
+      if (task) { hideTip(); openTaskEditor(task); }
+      return;
+    }
     const bar = e.target.closest('.pb-gantt-bar');
     const nameCell = e.target.closest('.pb-gantt-name');
     if (bar && !e.target.closest('.pb-gantt-drag-l, .pb-gantt-drag-r')) {

@@ -7,9 +7,21 @@ import {
   createPbTask,
   updatePbTask,
   softDeletePbTask,
+  fetchPbTaskFiles,
+  uploadPbTaskFile,
+  deletePbTaskFile,
+  getPbTaskFileSignedUrl,
+  getPbTaskDeps,
+  addPbTaskDep,
+  deletePbTaskDep,
+  getPbTasks,
+  getPbTaskComments,
+  createPbTaskComment,
+  deletePbTaskComment,
 } from '../../services/pb.js';
 
 export const PB_STATE_KEY = 'pb_state_v1';
+export const PB_VIEWS_KEY = 'pb_views_v1';
 
 export const PB_TASK_STATUS = [
   'Nije počelo', 'U toku', 'Pregled', 'Završeno', 'Blokirano',
@@ -19,9 +31,33 @@ export const PB_TASK_VRSTA = [
 ];
 export const PB_PRIORITET = ['Visok', 'Srednji', 'Nizak'];
 
+/** Built-in presets (read-only — ne mogu se brisati). */
+export const PB_BUILTIN_VIEWS = [
+  { name: 'Visok prioritet', filters: { prioritet: 'Visok' } },
+  { name: 'U toku', filters: { status: 'U toku' } },
+  { name: 'Bez inženjera', filters: { unassignedOnly: true } },
+  { name: 'Sa problemom', filters: { problemOnly: true } },
+  { name: 'Blokirano', filters: { status: 'Blokirano' } },
+];
+
+/** Jednokratna migracija sa sessionStorage → localStorage (ako postoji stara sesija). */
+function migrateSessionToLocal() {
+  try {
+    if (localStorage.getItem(PB_STATE_KEY)) return;
+    const old = sessionStorage.getItem(PB_STATE_KEY);
+    if (old) {
+      localStorage.setItem(PB_STATE_KEY, old);
+      sessionStorage.removeItem(PB_STATE_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export function loadPbState() {
   try {
-    const raw = sessionStorage.getItem(PB_STATE_KEY);
+    migrateSessionToLocal();
+    const raw = localStorage.getItem(PB_STATE_KEY);
     if (!raw) return defaultPbState();
     const o = JSON.parse(raw);
     return {
@@ -37,6 +73,7 @@ export function loadPbState() {
       moduleUnassignedOnly: o.moduleUnassignedOnly ?? false,
       moduleStatsScope: o.moduleStatsScope ?? 'global',
       ganttStartDate: o.ganttStartDate ?? null,
+      ganttZoom: o.ganttZoom ?? 'day',
     };
   } catch {
     return defaultPbState();
@@ -44,7 +81,50 @@ export function loadPbState() {
 }
 
 export function savePbState(st) {
-  sessionStorage.setItem(PB_STATE_KEY, JSON.stringify(st));
+  try {
+    localStorage.setItem(PB_STATE_KEY, JSON.stringify(st));
+  } catch {
+    /* quota / privacy mode — silent */
+  }
+}
+
+/** @returns {Array<{ name: string, filters: object }>} */
+export function loadPbViews() {
+  try {
+    const raw = localStorage.getItem(PB_VIEWS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter(v => v && typeof v.name === 'string' && v.filters && typeof v.filters === 'object')
+      .map(v => ({ name: v.name, filters: { ...v.filters } }));
+  } catch {
+    return [];
+  }
+}
+
+/** Dodaj ili prepiši (po imenu). */
+export function savePbView(name, filters) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return false;
+  const all = loadPbViews().filter(v => v.name !== trimmed);
+  all.push({ name: trimmed, filters: { ...filters } });
+  try {
+    localStorage.setItem(PB_VIEWS_KEY, JSON.stringify(all));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function deletePbView(name) {
+  const all = loadPbViews().filter(v => v.name !== name);
+  try {
+    localStorage.setItem(PB_VIEWS_KEY, JSON.stringify(all));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function defaultPbState() {
@@ -61,6 +141,7 @@ function defaultPbState() {
     moduleUnassignedOnly: false,
     moduleStatsScope: 'global',
     ganttStartDate: null,
+    ganttZoom: 'day',
   };
 }
 
@@ -89,6 +170,14 @@ export function savePbGanttMonth(isoDateString) {
   savePbState(s);
 }
 
+/** Čuva Gantt zoom level: 'day' | 'week' | 'month' | 'quarter'. */
+export function savePbGanttZoom(zoom) {
+  const valid = ['day', 'week', 'month', 'quarter'].includes(zoom) ? zoom : 'day';
+  const s = loadPbState();
+  s.ganttZoom = valid;
+  savePbState(s);
+}
+
 export function statusBadgeClass(status) {
   const s = String(status || '');
   if (s === 'Završeno') return 'pb-badge pb-badge--ok';
@@ -107,6 +196,42 @@ export function prioClass(p) {
 export function isPbMobile(root) {
   return root?.closest('.pb-module')?.classList.contains('pb-module--mobile')
     ?? window.matchMedia('(max-width: 767px)').matches;
+}
+
+function fmtBytes(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x) || x <= 0) return '';
+  if (x < 1024) return `${x} B`;
+  if (x < 1024 * 1024) return `${(x / 1024).toFixed(1)} KB`;
+  return `${(x / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fmtUploadDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+}
+
+function buildFilesListHtml(files, canEdit) {
+  if (!files || !files.length) {
+    return '<div class="pb-files-empty">Nema priloga.</div>';
+  }
+  return files.map(f => `
+    <div class="pb-file-row" data-file-id="${escHtml(f.id)}" data-storage="${escHtml(f.storage_path || '')}">
+      <button type="button" class="pb-file-open" title="Otvori">
+        <span class="pb-file-icon">📎</span>
+        <span class="pb-file-name">${escHtml(f.file_name || '')}</span>
+      </button>
+      <span class="pb-file-meta">
+        ${f.category ? `<span class="pb-file-cat">${escHtml(f.category)}</span>` : ''}
+        ${escHtml(fmtBytes(f.size_bytes))}
+        · ${escHtml(fmtUploadDate(f.uploaded_at))}
+        ${f.uploaded_by_email ? ` · ${escHtml(f.uploaded_by_email)}` : ''}
+      </span>
+      ${canEdit ? '<button type="button" class="pb-file-del" title="Obriši" aria-label="Obriši">✕</button>' : ''}
+    </div>`).join('');
 }
 
 /**
@@ -186,6 +311,42 @@ export function openTaskEditorModal(opts) {
         <label class="pb-field"><span>Završenost %</span>
           <input type="number" id="pbTfPct" min="0" max="100" value="${Number(t.procenat_zavrsenosti) || 0}" ${canEdit ? '' : 'disabled'} />
         </label>
+        ${isNew ? '' : `
+          <div class="pb-comments-section" id="pbTfCommentsSection">
+            <div class="pb-files-head">
+              <span class="pb-files-title">💬 Komentari</span>
+            </div>
+            <div class="pb-comments-list" id="pbTfCommentsList">
+              <div class="pb-files-loading">Učitavanje…</div>
+            </div>
+            ${canEdit ? `
+              <div class="pb-comment-input-row">
+                <textarea id="pbTfCommentInput" class="pb-textarea-lg" rows="2" placeholder="Dodaj komentar… (@email za mention)"></textarea>
+                <button type="button" class="btn btn-sm btn-primary" id="pbTfCommentSend">Pošalji</button>
+              </div>` : ''}
+          </div>
+          <div class="pb-deps-section" id="pbTfDepsSection">
+            <div class="pb-files-head">
+              <span class="pb-files-title">🔗 Zavisi od</span>
+              ${canEdit ? '<button type="button" class="pb-files-upload-btn" id="pbTfDepAddBtn"><span>＋ Dodaj zavisnost</span></button>' : ''}
+            </div>
+            <div class="pb-deps-list" id="pbTfDepsList">
+              <div class="pb-files-loading">Učitavanje…</div>
+            </div>
+          </div>
+          <div class="pb-files-section" id="pbTfFilesSection">
+            <div class="pb-files-head">
+              <span class="pb-files-title">📎 Prilozi</span>
+              ${canEdit ? `
+                <label class="pb-files-upload-btn" for="pbTfFileInput">
+                  <span>＋ Dodaj fajl</span>
+                  <input type="file" id="pbTfFileInput" multiple style="display:none" />
+                </label>` : ''}
+            </div>
+            <div class="pb-files-list" id="pbTfFilesList">
+              <div class="pb-files-loading">Učitavanje…</div>
+            </div>
+          </div>`}
         <div class="pb-modal-actions">
           ${canEdit ? `<button type="button" class="btn btn-primary" id="pbTfSave">Sačuvaj</button>` : ''}
           <button type="button" class="btn" id="pbTfCancel">Otkaži</button>
@@ -207,6 +368,270 @@ export function openTaskEditorModal(opts) {
   const normN = wrap.querySelector('#pbTfNormN');
   normR?.addEventListener('input', () => { if (normN) normN.value = normR.value; });
   normN?.addEventListener('input', () => { if (normR) normR.value = normN.value; });
+
+  /* ── Komentari (samo za postojeći task) ───────────────────────────── */
+  if (!isNew) {
+    const cListEl = wrap.querySelector('#pbTfCommentsList');
+    const cInputEl = /** @type {HTMLTextAreaElement|null} */ (wrap.querySelector('#pbTfCommentInput'));
+    const cSendBtn = wrap.querySelector('#pbTfCommentSend');
+    let _comments = [];
+
+    function fmtDateTime(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function renderBody(body) {
+      /* Highlight @mentions u rich tekstu. */
+      return escHtml(body || '')
+        .replace(/@[\w.\-+]+/g, m => `<span class="pb-mention">${m}</span>`)
+        .replace(/\n/g, '<br/>');
+    }
+
+    function commentRowHtml(c) {
+      const author = c.created_by || '?';
+      return `<div class="pb-comment-row" data-comment-id="${escHtml(c.id)}">
+        <div class="pb-comment-head">
+          <span class="pb-comment-author">${escHtml(author)}</span>
+          <span class="pb-comment-date">${escHtml(fmtDateTime(c.created_at))}${c.edited_at ? ' · izmenjeno' : ''}</span>
+          ${canEdit ? '<button type="button" class="pb-comment-del" title="Obriši" aria-label="Obriši">✕</button>' : ''}
+        </div>
+        <div class="pb-comment-body">${renderBody(c.body)}</div>
+      </div>`;
+    }
+
+    function renderComments() {
+      if (!cListEl) return;
+      cListEl.innerHTML = _comments.length
+        ? _comments.map(commentRowHtml).join('')
+        : '<div class="pb-files-empty">Nema komentara.</div>';
+      cListEl.querySelectorAll('.pb-comment-del').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const row = btn.closest('.pb-comment-row');
+          const id = row?.getAttribute('data-comment-id');
+          if (!id) return;
+          if (!confirm('Obrisati komentar?')) return;
+          btn.disabled = true;
+          try {
+            await deletePbTaskComment(id);
+            _comments = _comments.filter(x => x.id !== id);
+            renderComments();
+          } catch {
+            btn.disabled = false;
+            showToast('Brisanje nije uspelo (možda je istekao 60-minut window)');
+          }
+        });
+      });
+    }
+
+    async function loadComments() {
+      _comments = await getPbTaskComments(t.id);
+      renderComments();
+    }
+
+    cSendBtn?.addEventListener('click', async () => {
+      const body = (cInputEl?.value || '').trim();
+      if (!body) return;
+      cSendBtn.disabled = true;
+      const r = await createPbTaskComment(t.id, body);
+      cSendBtn.disabled = false;
+      if (r.ok && r.row) {
+        _comments = [r.row, ..._comments];
+        if (cInputEl) cInputEl.value = '';
+        renderComments();
+      } else {
+        showToast(r.error || 'Slanje nije uspelo');
+      }
+    });
+
+    loadComments();
+  }
+
+  /* ── Zavisnosti (samo za postojeći task) ──────────────────────────── */
+  if (!isNew) {
+    const depsListEl = wrap.querySelector('#pbTfDepsList');
+    let _deps = [];
+    let _allTasks = null; /* Cache svih taskova za picker. */
+
+    function depRowHtml(d) {
+      const target = d.depends_on || {};
+      const statusBadge = target.status
+        ? `<span class="${statusBadgeClass(target.status)}">${escHtml(target.status)}</span>`
+        : '';
+      return `<div class="pb-dep-row" data-dep-id="${escHtml(d.id)}">
+        <span class="pb-dep-name">${escHtml(target.naziv || '(nepoznat zadatak)')}</span>
+        ${statusBadge}
+        ${canEdit ? '<button type="button" class="pb-file-del" title="Ukloni" aria-label="Ukloni">✕</button>' : ''}
+      </div>`;
+    }
+
+    function renderDeps() {
+      if (!depsListEl) return;
+      depsListEl.innerHTML = _deps.length
+        ? _deps.map(depRowHtml).join('')
+        : '<div class="pb-files-empty">Nema zavisnosti — zadatak ne čeka nikoga.</div>';
+      depsListEl.querySelectorAll('.pb-file-del').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const row = btn.closest('.pb-dep-row');
+          const id = row?.getAttribute('data-dep-id');
+          if (!id) return;
+          btn.disabled = true;
+          try {
+            await deletePbTaskDep(id);
+            _deps = _deps.filter(x => x.id !== id);
+            renderDeps();
+            showToast('Zavisnost uklonjena');
+          } catch (e) {
+            btn.disabled = false;
+            showToast('Brisanje nije uspelo');
+          }
+        });
+      });
+    }
+
+    async function loadDeps() {
+      _deps = await getPbTaskDeps(t.id);
+      renderDeps();
+    }
+
+    function openDepPicker() {
+      if (!canEdit) return;
+      const dlg = document.createElement('div');
+      dlg.className = 'modal-overlay open pb-modal pb-modal--picker';
+      dlg.innerHTML = `
+        <div class="modal-panel pb-text-panel" role="dialog" aria-label="Izaberi zadatak">
+          <div class="pb-modal-head">
+            <h2>Dodaj zavisnost</h2>
+            <button type="button" class="btn btn-ghost pb-close-picker">✕</button>
+          </div>
+          <input type="search" class="pb-ft-search" id="pbDepPickSearch" placeholder="Pretraži zadatke..." />
+          <div class="pb-dep-picker-list" id="pbDepPickList"><div class="pb-files-loading">Učitavanje…</div></div>
+        </div>`;
+      document.body.appendChild(dlg);
+      const close = () => dlg.remove();
+      dlg.querySelector('.pb-close-picker')?.addEventListener('click', close);
+      dlg.addEventListener('click', e => { if (e.target === dlg) close(); });
+
+      const search = dlg.querySelector('#pbDepPickSearch');
+      const list = dlg.querySelector('#pbDepPickList');
+
+      function renderList(items, q) {
+        const ql = String(q || '').trim().toLowerCase();
+        const excluded = new Set([t.id, ..._deps.map(d => d.depends_on_task_id)]);
+        const filtered = items
+          .filter(x => !excluded.has(x.id))
+          .filter(x => !ql || String(x.naziv || '').toLowerCase().includes(ql))
+          .slice(0, 50);
+        if (!filtered.length) {
+          list.innerHTML = '<div class="pb-files-empty">Nema rezultata.</div>';
+          return;
+        }
+        list.innerHTML = filtered.map(x => `
+          <button type="button" class="pb-dep-pick-item" data-task-id="${escHtml(x.id)}">
+            <span class="pb-dep-name">${escHtml(x.naziv || '')}</span>
+            <span class="pb-file-meta">${escHtml(x.project_code || '')} · ${escHtml(x.status || '')}</span>
+          </button>`).join('');
+        list.querySelectorAll('.pb-dep-pick-item').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const tid = btn.getAttribute('data-task-id');
+            if (!tid) return;
+            btn.disabled = true;
+            const r = await addPbTaskDep(t.id, tid);
+            if (r.ok) {
+              showToast('Zavisnost dodata');
+              close();
+              loadDeps();
+            } else {
+              btn.disabled = false;
+              showToast(r.error || 'Greška');
+            }
+          });
+        });
+      }
+
+      (async () => {
+        if (!_allTasks) {
+          _allTasks = await getPbTasks();
+        }
+        renderList(_allTasks, '');
+        search?.addEventListener('input', () => renderList(_allTasks, search.value));
+        setTimeout(() => search?.focus(), 50);
+      })();
+    }
+
+    wrap.querySelector('#pbTfDepAddBtn')?.addEventListener('click', openDepPicker);
+    loadDeps();
+  }
+
+  /* ── Prilozi (samo za postojeći task) ─────────────────────────────── */
+  if (!isNew) {
+    const listEl = wrap.querySelector('#pbTfFilesList');
+    let _files = [];
+
+    function renderList() {
+      if (!listEl) return;
+      listEl.innerHTML = buildFilesListHtml(_files, canEdit);
+      listEl.querySelectorAll('.pb-file-open').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const row = btn.closest('.pb-file-row');
+          const sp = row?.getAttribute('data-storage');
+          if (!sp) return;
+          const url = await getPbTaskFileSignedUrl(sp, 300);
+          if (url) window.open(url, '_blank', 'noopener');
+          else showToast('Ne mogu da otvorim fajl');
+        });
+      });
+      listEl.querySelectorAll('.pb-file-del').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const row = btn.closest('.pb-file-row');
+          const id = row?.getAttribute('data-file-id');
+          const sp = row?.getAttribute('data-storage');
+          if (!id) return;
+          if (!confirm('Obrisati prilog?')) return;
+          btn.disabled = true;
+          const r = await deletePbTaskFile({ id, storage_path: sp || undefined });
+          if (r.ok) {
+            _files = _files.filter(f => f.id !== id);
+            renderList();
+            showToast('Prilog obrisan');
+          } else {
+            btn.disabled = false;
+            showToast(r.error || 'Brisanje nije uspelo');
+          }
+        });
+      });
+    }
+
+    async function loadFiles() {
+      _files = await fetchPbTaskFiles(t.id);
+      renderList();
+    }
+
+    const fileInput = wrap.querySelector('#pbTfFileInput');
+    fileInput?.addEventListener('change', async () => {
+      const files = Array.from(fileInput.files || []);
+      if (!files.length) return;
+      const label = wrap.querySelector('.pb-files-upload-btn span');
+      const origText = label?.textContent;
+      for (let i = 0; i < files.length; i++) {
+        if (label) label.textContent = `Šaljem ${i + 1}/${files.length}…`;
+        const r = await uploadPbTaskFile({ taskId: t.id, file: files[i] });
+        if (r.ok && r.row) {
+          _files = [r.row, ..._files];
+          renderList();
+        } else {
+          showToast(r.error || `Greška: ${files[i].name}`);
+        }
+      }
+      if (label && origText) label.textContent = origText;
+      fileInput.value = '';
+    });
+
+    loadFiles();
+  }
 
   wrap.querySelector('#pbTfSave')?.addEventListener('click', async () => {
     const naziv = wrap.querySelector('#pbTfNaziv')?.value?.trim();
