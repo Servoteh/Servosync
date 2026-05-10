@@ -509,7 +509,9 @@ export function openBulkImportModal(opts = {}) {
     const validRowsCount = state.rows.filter((r) => validateRow(r, typeDef).length === 0).length;
     const blockedByAnalysis =
       state.type === 'revers' &&
-      (state.analyzing || (state.analysis && state.analysis.missingEmployees.length > 0));
+      (state.analyzing ||
+        (state.analysis &&
+          (state.analysis.missingEmployees.length > 0 || !state.analysis.magacinExists)));
     const canRun = state.rows.length > 0 && validRowsCount > 0 && !state.importing && !blockedByAnalysis;
     foot.innerHTML = `
       <button type="button" class="rev-btn" data-imp-close>Otkaži</button>
@@ -556,7 +558,14 @@ export function openBulkImportModal(opts = {}) {
     }
     if (!state.analysis) return '';
     const a = state.analysis;
-    const blocking = a.missingEmployees.length > 0;
+    const blocking = a.missingEmployees.length > 0 || !a.magacinExists;
+    const blockReasons = [];
+    if (a.missingEmployees.length > 0) {
+      blockReasons.push(`${a.missingEmployees.length} radnika nedostaje u Kadrovskoj`);
+    }
+    if (!a.magacinExists) {
+      blockReasons.push('Magacin lokacija „ALAT-MAG-01" ne postoji u Lokacije modulu');
+    }
     return `
       <div class="rev-imp-analysis ${blocking ? 'is-blocking' : 'is-ready'}">
         <strong>Pre-import analiza:</strong>
@@ -566,13 +575,19 @@ export function openBulkImportModal(opts = {}) {
           <li>Šifre reznog alata postojeće: ${a.existingCatalog.length}</li>
           <li>Šifre koje će biti <strong>auto-kreirane</strong>: ${a.newCatalog.length}${a.newCatalog.length > 0 ? ` <span class="rev-muted">(${a.newCatalog.slice(0, 6).map((x) => escHtml(x.oznaka)).join(', ')}${a.newCatalog.length > 6 ? '…' : ''})</span>` : ''}</li>
           <li>Radnici resolve-ovani: ${a.resolvedEmployees.size}</li>
+          <li>Magacin lokacija (ALAT-MAG-01): ${a.magacinExists ? '<span style="color:#2a8c4a">✓ postoji</span>' : '<span class="rev-warn">⚠ NE POSTOJI</span>'}</li>
           ${
-            blocking
+            a.missingEmployees.length > 0
               ? `<li class="rev-warn"><strong>NEDOSTAJU U BAZI</strong>: ${a.missingEmployees.length} radnika — admin mora ručno da ih kreira pre importa:<br/><span class="rev-muted">${a.missingEmployees.slice(0, 20).map(escHtml).join(', ')}${a.missingEmployees.length > 20 ? '…' : ''}</span></li>`
               : ''
           }
         </ul>
-        ${blocking ? '<p class="rev-warn">Import je <strong>blokiran</strong> dok se ne kreiraju nedostajući radnici u Kadrovskoj.</p>' : ''}
+        ${blocking ? `<p class="rev-warn">Import je <strong>blokiran</strong>: ${escHtml(blockReasons.join('; '))}.</p>` : ''}
+        ${
+          !a.magacinExists
+            ? `<p class="rev-muted" style="font-size:12px">Otvori Lokacije modul i kreiraj <code>ALAT-MAG-01</code> sa tipom <code>WAREHOUSE</code>, ili pokreni SQL u Supabase:<br/><code>INSERT INTO loc_locations(location_code, name, location_type, is_active) VALUES('ALAT-MAG-01', 'Centralna alatnica — magacin', 'WAREHOUSE', true);</code></p>`
+            : ''
+        }
       </div>`;
   }
 
@@ -682,6 +697,12 @@ export function openBulkImportModal(opts = {}) {
           paint();
           return;
         }
+        if (!state.analysis.magacinExists) {
+          showToast('Import blokiran: ALAT-MAG-01 lokacija ne postoji u Lokacije modulu.');
+          state.importing = false;
+          paint();
+          return;
+        }
         await importRevers(valid, state.analysis);
       }
     } catch (e) {
@@ -769,7 +790,13 @@ export function openBulkImportModal(opts = {}) {
       docCount: 0,
       lineCount: rows.length,
       catalogByOznaka: new Map(), // oznaka -> { id (ako postoji) | placeholder za novi }
+      magacinExists: false,    // ALAT-MAG-01 — blokira CUTTING_TOOL import ako fali
     };
+
+    /* 0. Provera magacin lokacije (ALAT-MAG-01) — RPC rev_issue_cutting_reversal
+     * je zahteva kao default izvorište. Ako fali, CUTTING_TOOL import će pasti. */
+    const magId = await getMagacinLocationId();
+    result.magacinExists = !!magId;
 
     /* 1. Skupi unique oznake alata sa metapodacima iz Napomene */
     const oznakaToMeta = new Map(); // oznaka -> { naziv, klasa, masine: Set }
