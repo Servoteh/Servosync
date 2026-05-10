@@ -32,7 +32,10 @@ import {
   fetchCuttingToolByOznaka,
   issueReversal,
   issueCuttingReversal,
+  confirmCuttingReturn,
+  confirmReturn,
 } from '../../services/reversiService.js';
+import { sbReq } from '../../services/supabase.js';
 
 /* ─── Definicije kolona po tipu ─────────────────────────────────────── */
 
@@ -959,6 +962,14 @@ export function openBulkImportModal(opts = {}) {
     /* Auto-create catalog za nove oznake — koristi analysis.newCatalog */
     /* eslint-disable no-console */
     const idbg = (msg, data) => console.log(`[reversi/import] ${msg}`, data);
+    /* Rollback: pamtimo sve uspešno kreirane doc_id-jeve i auto-kreirane catalog
+     * id-jeve — ako user želi da poništi, koristi se za batch storno. */
+    const importSession = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      startedAt: new Date().toISOString(),
+      docIds: [],
+      newCatalogIds: [],
+    };
     const magId = await getMagacinLocationId();
     idbg('start', { magId, newCatalog: analysis.newCatalog.length, rows: rows.length });
     if (!magId) {
@@ -984,6 +995,7 @@ export function openBulkImportModal(opts = {}) {
         continue;
       }
       analysis.catalogByOznaka.set(nc.oznaka, ins.data.id);
+      importSession.newCatalogIds.push(ins.data.id);
       /* Bez seed stocka — alat je odmah „izdat na mašinu“; magacin balance ostaje 0,
        * recipient location dobija qty (uradi se kroz issueCuttingReversal). */
     }
@@ -1067,6 +1079,7 @@ export function openBulkImportModal(opts = {}) {
           idbg(`issueCuttingReversal result ${m.masina}`, { ok: res.ok, error: res.error, doc_number: res.data?.doc_number });
           if (res.ok) {
             state.progress.ok += grp.lines.length;
+            if (res.data?.doc_id) importSession.docIds.push(res.data.doc_id);
           } else {
             state.progress.fail += grp.lines.length;
             showToast(`Reverz pao za mašinu ${m.masina}: ${res.error}`);
@@ -1112,8 +1125,12 @@ export function openBulkImportModal(opts = {}) {
             });
           }
           const res = await issueReversal(payload);
-          if (res.ok) state.progress.ok += grp.lines.length;
-          else state.progress.fail += grp.lines.length;
+          if (res.ok) {
+            state.progress.ok += grp.lines.length;
+            if (res.data?.doc_id) importSession.docIds.push(res.data.doc_id);
+          } else {
+            state.progress.fail += grp.lines.length;
+          }
         }
       } catch (e) {
         console.error('[bulkImport/revers] grp fail', e);
@@ -1121,6 +1138,168 @@ export function openBulkImportModal(opts = {}) {
       }
       paint();
     }
+
+    /* Snimi session u localStorage za rollback. Čuva se poslednje 5 sesija. */
+    if (importSession.docIds.length > 0) {
+      try {
+        const key = 'reversi:importSessions';
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        existing.unshift({
+          ...importSession,
+          finishedAt: new Date().toISOString(),
+          ok: state.progress.ok,
+          fail: state.progress.fail,
+        });
+        localStorage.setItem(key, JSON.stringify(existing.slice(0, 5)));
+        idbg('session saved', { id: importSession.id, docs: importSession.docIds.length, newCatalog: importSession.newCatalogIds.length });
+      } catch (e) {
+        console.warn('[reversi/import] session save failed (non-fatal)', e);
+      }
+    }
+  }
+
+  paint();
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Rollback bulk importa
+ *
+ * Otvara modal sa listom poslednjih sesija (čuvanih u localStorage).
+ * Klik na „Storniraj sesiju" →
+ *   1. Za svaki doc_id iz sesije, pozovi rev_confirm_cutting_return
+ *      sa svim qty po liniji → status = RETURNED, stock se vrati u magacin.
+ *   2. Sesija se ukloni iz localStorage.
+ *
+ * NAPOMENA: ne BRIŠE auto-kreirane catalog redove (RZN-…). Ako želiš da
+ * se i oni obrišu, otvori Reversi → Rezni alat → izbriši pojedinačno.
+ * ────────────────────────────────────────────────────────────────── */
+
+function loadImportSessions() {
+  try {
+    return JSON.parse(localStorage.getItem('reversi:importSessions') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveImportSessions(arr) {
+  try {
+    localStorage.setItem('reversi:importSessions', JSON.stringify(arr));
+  } catch {
+    /* localStorage full — ignoriši */
+  }
+}
+
+export function openImportRollbackModal(opts = {}) {
+  const id = `revImpRollback_${Date.now()}`;
+  const overlay = document.createElement('div');
+  overlay.innerHTML = `
+    <div class="kadr-modal-overlay rev-modal-overlay" id="${id}" role="dialog" aria-modal="true">
+      <div class="kadr-modal rev-modal" style="max-width:720px">
+        <div class="kadr-modal-header">
+          <h2>🔄 Storno bulk importa</h2>
+          <button type="button" class="kadr-modal-close" data-imp-rb-close>×</button>
+        </div>
+        <div class="kadr-modal-body rev-modal-body" id="revImpRbBody"></div>
+        <div class="kadr-modal-footer rev-modal-footer">
+          <button type="button" class="rev-btn" data-imp-rb-close>Zatvori</button>
+        </div>
+      </div>
+    </div>`;
+  const root = overlay.firstElementChild;
+  document.body.appendChild(root);
+
+  root.addEventListener('click', (e) => {
+    if (e.target === root) root.remove();
+    else if (e.target.closest('[data-imp-rb-close]')) root.remove();
+  });
+
+  const body = root.querySelector('#revImpRbBody');
+
+  function paint() {
+    const sessions = loadImportSessions();
+    if (sessions.length === 0) {
+      body.innerHTML = `<p class="rev-muted">Nema poslednjih bulk importa za storno. Sesije se pamte u browser localStorage-u (samo za ovog korisnika, na ovoj mašini).</p>`;
+      return;
+    }
+    body.innerHTML = `
+      <p class="rev-muted">Poslednjih ${sessions.length} bulk importa. „Storniraj" će <strong>vratiti sve stavke u magacin</strong> i markirati dokumente kao RETURNED. Auto-kreirane šifre (RZN-…) ostaju u katalogu.</p>
+      <div class="rev-imp-rb-list">
+        ${sessions
+          .map(
+            (s, idx) => `
+          <div class="rev-imp-rb-card" data-imp-rb-idx="${idx}">
+            <div>
+              <strong>${escHtml(new Date(s.finishedAt || s.startedAt).toLocaleString('sr-Latn-RS'))}</strong>
+              <div class="rev-muted" style="font-size:12px">
+                ${escHtml(String(s.docIds?.length || 0))} dokumenata, ${escHtml(String(s.newCatalogIds?.length || 0))} novih šifri ·
+                ✓ ${escHtml(String(s.ok || 0))} / ⚠ ${escHtml(String(s.fail || 0))}
+              </div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button type="button" class="rev-btn rev-btn--secondary" data-imp-rb-forget="${idx}" title="Ukloni sesiju iz liste (bez stornijanja u bazi)">Zaboravi</button>
+              <button type="button" class="rev-btn" style="background:#c46e1f;color:#fff" data-imp-rb-cancel="${idx}">🔄 Storniraj</button>
+            </div>
+          </div>`,
+          )
+          .join('')}
+      </div>`;
+
+    body.querySelectorAll('[data-imp-rb-forget]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.getAttribute('data-imp-rb-forget'));
+        const arr = loadImportSessions();
+        arr.splice(idx, 1);
+        saveImportSessions(arr);
+        paint();
+      });
+    });
+
+    body.querySelectorAll('[data-imp-rb-cancel]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const idx = Number(btn.getAttribute('data-imp-rb-cancel'));
+        const sessions2 = loadImportSessions();
+        const sess = sessions2[idx];
+        if (!sess) return;
+        // eslint-disable-next-line no-alert
+        if (!confirm(`Storniraj ${sess.docIds.length} reverz dokumenta? Sve stavke će biti vraćene u magacin (RETURNED).`)) return;
+        btn.disabled = true;
+        btn.textContent = 'Storniram…';
+        let ok = 0;
+        let fail = 0;
+        for (const docId of sess.docIds) {
+          try {
+            /* Dovuci linije dokumenta */
+            const lines = await sbReq(`rev_document_lines?document_id=eq.${encodeURIComponent(docId)}&select=id,quantity,returned_quantity,line_type`);
+            const linesArr = Array.isArray(lines) ? lines : [];
+            const returnedLines = linesArr
+              .filter((l) => Number(l.quantity) > Number(l.returned_quantity || 0))
+              .map((l) => ({ line_id: l.id, returned_quantity: Number(l.quantity) - Number(l.returned_quantity || 0) }));
+            if (returnedLines.length === 0) { ok += 1; continue; }
+            /* Cutting tools koriste rev_confirm_cutting_return; ostale rev_confirm_return */
+            const isCutting = linesArr.some((l) => l.line_type === 'CUTTING_TOOL');
+            const fn = isCutting ? confirmCuttingReturn : confirmReturn;
+            const res = await fn({ doc_id: docId, returned_lines: returnedLines });
+            if (res.ok) ok += 1;
+            else fail += 1;
+          } catch (e) {
+            console.error('[reversi/rollback] doc fail', { docId, e });
+            fail += 1;
+          }
+        }
+        if (fail === 0) {
+          /* Sve uspelo — ukloni sesiju iz liste */
+          const arr = loadImportSessions();
+          arr.splice(idx, 1);
+          saveImportSessions(arr);
+          showToast(`✓ Stornirano ${ok} dokumenata. Stock vraćen u magacin.`);
+        } else {
+          showToast(`Storno: ${ok} uspešno, ${fail} neuspešno. Sesija ostaje u listi.`);
+        }
+        paint();
+        opts.onSuccess?.();
+      });
+    });
   }
 
   paint();
