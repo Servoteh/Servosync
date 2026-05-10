@@ -9,7 +9,16 @@
 -- WHERE full_name ILIKE '%predrag%' OR full_name ILIKE '%cirov%' OR full_name ILIKE '%ćirov%';
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- KORAK 2: prilagodi filter u v_targets (npr. samo jedan dan, ili IN (...)).
+-- KORAK 2 — obavezna dijagnostika PRE skripte (kopiraj u Editor, vidi broj/redove):
+--
+-- SELECT id, doc_number, status, recipient_machine_code,
+--        bulk_import_legacy_key IS NOT NULL AS ima_bulk_kljuc,
+--        left(bulk_import_legacy_key, 8) AS bulk_pref
+-- FROM public.rev_documents
+-- WHERE doc_type = 'CUTTING_TOOL' AND status IN ('OPEN', 'PARTIALLY_RETURNED');
+--
+-- Ako sve kolone ima_bulk_kljuc = false, skripta sa podrazumevanim filtrom NIŠTA ne menja —
+-- postavi v_only_documents_with_bulk_key := false ispod (oprez: hvata sve otvorene CUTTING).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -18,6 +27,8 @@ DO $$
 DECLARE
   v_machine       text := '2.60';
   v_divisor       numeric := 3;
+  -- true = samo bulk (bulk_import_legacy_key Popunjen); false = svi CUTTING OPEN/PARTIAL (oprez)
+  v_only_documents_with_bulk_key boolean := true;
   v_employee_id   uuid := NULL;   -- opciono; ako NULL → auto-upit ispod
   v_employee_name text;
   v_new_loc       uuid;
@@ -51,6 +62,9 @@ BEGIN
       'zatim u skripti postavi v_employee_id := ''<uuid>''::uuid.';
   END IF;
 
+  RAISE NOTICE '[repair_cutting_bulk] masina=% delilac=% only_bulk_legacy=%',
+    v_machine, v_divisor, v_only_documents_with_bulk_key;
+
   v_new_loc := public.rev_get_or_create_recipient_location(
     'MACHINE',
     nullif(btrim(v_machine), ''),
@@ -62,14 +76,29 @@ BEGIN
     FROM public.rev_documents d
     WHERE d.doc_type = 'CUTTING_TOOL'
       AND d.status IN ('OPEN', 'PARTIALLY_RETURNED')
-      AND d.bulk_import_legacy_key IS NOT NULL
-      AND btrim(d.bulk_import_legacy_key) <> ''
+      AND (
+        NOT v_only_documents_with_bulk_key
+        OR (
+          d.bulk_import_legacy_key IS NOT NULL
+          AND btrim(d.bulk_import_legacy_key) <> ''
+        )
+      )
       -- AND d.issued_at::date = '2026-05-10'::date
       -- AND d.id = ANY (ARRAY['...']::uuid[])
   );
 
+  RAISE WARNING '[repair_cutting_bulk] broj dokumenta za obradu: % (ukupno CUTTING OPEN/PARTIAL u bazi: %)',
+    cardinality(v_targets),
+    (
+      SELECT count(*) FROM public.rev_documents d2
+      WHERE d2.doc_type = 'CUTTING_TOOL'
+        AND d2.status IN ('OPEN', 'PARTIALLY_RETURNED')
+    );
+
   IF cardinality(v_targets) = 0 THEN
-    RAISE NOTICE 'Nema dokumenata koji zadovoljavaju filter.';
+    RAISE WARNING '[repair_cutting_bulk] NIŠTA nije menjano: niko ne prolazi filter. '
+      'Ako dokumenti postoje ali nemaju bulk_import_legacy_key, u skripti postavi '
+      'v_only_documents_with_bulk_key := false i ponovo pokreni (sa suženjem po datumu/ID ako treba).';
     RETURN;
   END IF;
 
