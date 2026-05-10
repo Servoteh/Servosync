@@ -31,6 +31,10 @@ body.module-projektni-biro {
     min-height: 0;
     overflow: hidden;
   }
+
+  body.desktop-erp-module:not(.hub-active):not(.m-body) .pb-module > .pb-chrome {
+    flex: 0 0 auto;
+  }
 }
 
 /* == HEADER == */
@@ -188,7 +192,19 @@ body.module-projektni-biro {
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  overflow: hidden;
+  min-height: 44px;
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: thin;
+}
+
+.pb-context-single::-webkit-scrollbar {
+  height: 6px;
+}
+
+.pb-context-single::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: var(--border, #d1d5db);
 }
 
 .pb-context-vsep {
@@ -304,7 +320,6 @@ body.module-projektni-biro {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
 
 .pb-chrome-pinned {
@@ -314,10 +329,9 @@ body.module-projektni-biro {
 
 @media (min-width: 768px) {
   body.desktop-erp-module:not(.hub-active):not(.m-body) .pb-context-card {
-    flex: 0 1 auto;
-    min-height: 0;
-    max-height: min(260px, 44vh);
-    overflow-x: hidden;
+    flex: 0 0 auto;
+    max-height: min(300px, 50vh);
+    overflow-x: visible;
     overflow-y: auto;
     scrollbar-width: thin;
     -webkit-overflow-scrolling: touch;
