@@ -688,9 +688,9 @@ export async function searchBigtehnWorkOrdersForItem(itemId, opts = {}) {
  * redova. Po default-u skriva TP-ove čiji su SVI placement-i na lokaciji
  * tipa `ASSEMBLY`/`SCRAPPED` (ugrađeno/otpisano) jer ti više nisu u radu.
  *
- * Server-side filteri (v2):
- *   - `tpNo`           → ILIKE na drugi deo `ident_broj`-a (npr. "1088")
- *   - `drawingNo`      → ILIKE na `wo_broj_crteza`
+ * Server-side filteri (RPC v3 — prefiks od početka stringa):
+ *   - `tpNo`           → drugi segment `ident_broj` matchuje `LIKE '<tp>%'` (case-insensitive)
+ *   - `drawingNo`      → `wo_broj_crteza` isto prefiks match
  *   - `locationFilter` → 'with' = samo TP sa placement-om, 'without' = bez,
  *                        'all'/undefined = svi
  *

@@ -510,6 +510,20 @@ html[data-theme='dark'] .module-lokacije {
   gap: 8px;
 }
 
+.lp-filter-footnote {
+  margin: 0;
+  padding: 0 20px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--lp-text2);
+  font-family: var(--lp-font);
+}
+
+.lp-filter-footnote strong {
+  color: color-mix(in srgb, var(--lp-text) 75%, var(--lp-text2));
+  font-weight: 600;
+}
+
 .lp-field {
   display: flex;
   flex-direction: column;
@@ -531,23 +545,10 @@ html[data-theme='dark'] .module-lokacije {
   font-family: var(--lp-font);
 }
 
-.lp-input-wrap {
-  position: relative;
-}
-
-.lp-input-icon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--lp-text2);
-  pointer-events: none;
-}
-
 .lp-input,
 .lp-select {
   width: 100%;
-  padding: 8px 10px 8px 32px;
+  padding: 8px 10px;
   font-size: 13px;
   border: 1px solid var(--lp-border);
   border-radius: var(--lp-radius-sm);
@@ -563,11 +564,6 @@ html[data-theme='dark'] .module-lokacije {
 .lp-select:focus {
   border-color: var(--lp-primary);
   box-shadow: 0 0 0 2px var(--lp-primary-light);
-}
-
-.lp-input--no-icon,
-.lp-select--no-icon {
-  padding-left: 10px;
 }
 
 .lp-check-row {

@@ -397,40 +397,34 @@ function renderFilterCardHtml(f) {
       <div class="lp-filter-row">
         <div class="lp-field lp-field--grow">
           <label class="lp-field-label" for="lpFiltTp">Broj TP</label>
-          <div class="lp-input-wrap">
-            <span class="lp-input-icon">${ICO.hash}</span>
-            <input type="text" id="lpFiltTp" class="lp-input" value="${escHtml(f.tpNo)}" maxlength="12" inputmode="numeric"
-              placeholder="npr. 10, 100, 101..." />
-          </div>
+          <input type="text" id="lpFiltTp" class="lp-input" value="${escHtml(f.tpNo)}" maxlength="12" inputmode="numeric"
+            placeholder="Prefiks ili ceo TP (npr. 20 ili 568)…"
+            title="Prefiks pretraga: unos „20“ uključuje sve TP koji počinju sa 20 (20, 200, 201…). Za jedan konkretan TP unesi ceo broj (npr. 568)." />
         </div>
         <div class="lp-field lp-field--grow">
           <label class="lp-field-label" for="lpFiltDr">Broj crteža</label>
-          <div class="lp-input-wrap">
-            <span class="lp-input-icon">${ICO.file}</span>
-            <input type="text" id="lpFiltDr" class="lp-input" value="${escHtml(f.drawingNo)}" maxlength="40"
-              placeholder="npr. 1084924, 1084925..." />
-          </div>
+          <input type="text" id="lpFiltDr" class="lp-input" value="${escHtml(f.drawingNo)}" maxlength="40"
+            placeholder="Prefiks broja crteža…"
+            title="Prefiks pretraga: sve crteže čiji broj počinje unetim tekstom." />
         </div>
         <div class="lp-field lp-field--grow">
           <label class="lp-field-label" for="lpFiltLoc">Lokacija</label>
-          <div class="lp-input-wrap">
-            <span class="lp-input-icon">${ICO.mapPin}</span>
-            <select id="lpFiltLoc" class="lp-select">
-              <option value="all"${lf === 'all' ? ' selected' : ''}>Svi (sa i bez lokacije)</option>
-              <option value="with"${lf === 'with' ? ' selected' : ''}>Samo sa lokacijom</option>
-              <option value="without"${lf === 'without' ? ' selected' : ''}>Samo BEZ lokacije</option>
-            </select>
-          </div>
+          <select id="lpFiltLoc" class="lp-select">
+            <option value="all"${lf === 'all' ? ' selected' : ''}>Svi (sa i bez lokacije)</option>
+            <option value="with"${lf === 'with' ? ' selected' : ''}>Samo sa lokacijom</option>
+            <option value="without"${lf === 'without' ? ' selected' : ''}>Samo BEZ lokacije</option>
+          </select>
         </div>
         <label class="lp-check-row">
           <input type="checkbox" id="lpFiltAssembled" ${f.includeAssembled ? 'checked' : ''}>
           <span>Prikaži ugrađene / otpisane</span>
         </label>
-        <div class="lp-check-row" style="color:var(--lp-text2);opacity:0.7;cursor:default" title="Pregled uvek koristi ručnu MES listu aktivnih RN-ova.">
+        <div class="lp-check-row" style="color:var(--lp-text2);opacity:0.7;cursor:default" title="Prikazuju se samo radni nalozi koje je MES označio kao aktivne (nije ceo spisak RN iz BigTehn-a).">
           <input type="checkbox" checked disabled style="accent-color:var(--lp-primary)">
           <span>Samo aktivni RN</span>
         </div>
       </div>
+      <p class="lp-filter-footnote">TP i crtež se filtriraju od <strong>početka</strong> broja (prefiks). Lista ispod koristi RN iz MES aktivne liste — ako u BigTehn-u postoje dodatni RN, moraju biti aktivirani u MES-u da bi se pojavili ovde.</p>
       <div class="lp-filter-actions">
         <div class="lp-filter-actions-left">
           <button type="button" class="lp-btn lp-btn--primary" id="lpApply">${ICO.filter} Primeni filtere</button>
