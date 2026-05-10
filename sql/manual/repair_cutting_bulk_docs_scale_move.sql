@@ -1,0 +1,106 @@
+-- Jednokratna korekcija: CUTTING_TOOL reverz dokumenti iz bulk uvoza — deljenje količina na
+-- stavkama (podrazumevano /3), premeštaj zaliha na lokaciju mašine 2.60, PRIMARY operater.
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- KORAK 1: nadji UUID za Predrag Čirović — upiši u v_employee_id ispod.
+-- ═══════════════════════════════════════════════════════════════════════════
+-- SELECT id, full_name, email FROM public.employees
+-- WHERE is_active IS NOT DISTINCT FROM true AND full_name ILIKE '%predrag%cirovic%';
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- KORAK 2: prilagodi filter u v_targets (npr. samo jedan dan, ili IN (...)).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+BEGIN;
+
+DO $$
+DECLARE
+  v_machine       text := '2.60';
+  v_divisor       numeric := 3;
+  v_employee_id   uuid := NULL;  -- <<< OBAVEZNO
+  v_employee_name text;
+  v_new_loc       uuid;
+  v_doc           record;
+  v_line          record;
+  v_old_loc       uuid;
+  v_old           numeric;
+  v_new           numeric;
+  v_targets       uuid[];
+BEGIN
+  IF v_employee_id IS NULL THEN
+    RAISE EXCEPTION 'Postavi v_employee_id (employees.id) za Predrag Čirović';
+  END IF;
+
+  SELECT full_name INTO v_employee_name FROM public.employees WHERE id = v_employee_id;
+  IF v_employee_name IS NULL THEN
+    RAISE EXCEPTION 'employees.id % nije pronađen', v_employee_id;
+  END IF;
+
+  v_new_loc := public.rev_get_or_create_recipient_location(
+    'MACHINE',
+    nullif(btrim(v_machine), ''),
+    'Mašina ' || v_machine
+  );
+
+  v_targets := ARRAY(
+    SELECT d.id
+    FROM public.rev_documents d
+    WHERE d.doc_type = 'CUTTING_TOOL'
+      AND d.status IN ('OPEN', 'PARTIALLY_RETURNED')
+      AND d.bulk_import_legacy_key IS NOT NULL
+      AND btrim(d.bulk_import_legacy_key) <> ''
+      -- AND d.issued_at::date = '2026-05-10'::date
+      -- AND d.id = ANY (ARRAY['...']::uuid[])
+  );
+
+  IF cardinality(v_targets) = 0 THEN
+    RAISE NOTICE 'Nema dokumenata koji zadovoljavaju filter.';
+    RETURN;
+  END IF;
+
+  FOR v_doc IN
+    SELECT id, recipient_loc_id, doc_number
+    FROM public.rev_documents
+    WHERE id = ANY (v_targets)
+  LOOP
+    v_old_loc := v_doc.recipient_loc_id;
+
+    FOR v_line IN
+      SELECT id, cutting_tool_catalog_id, quantity
+      FROM public.rev_document_lines
+      WHERE document_id = v_doc.id AND line_type = 'CUTTING_TOOL'
+    LOOP
+      v_old := COALESCE(v_line.quantity, 0);
+      IF v_old <= 0 THEN
+        CONTINUE;
+      END IF;
+
+      v_new := round(v_old::numeric / v_divisor, 0);
+      IF v_new < 1 THEN
+        v_new := 1;
+      END IF;
+
+      PERFORM public.rev_cts_apply_delta(v_line.cutting_tool_catalog_id, v_old_loc, -v_old);
+      PERFORM public.rev_cts_apply_delta(v_line.cutting_tool_catalog_id, v_new_loc, v_new);
+
+      UPDATE public.rev_document_lines SET quantity = v_new WHERE id = v_line.id;
+    END LOOP;
+
+    UPDATE public.rev_documents
+    SET
+      recipient_machine_code = v_machine,
+      recipient_loc_id = v_new_loc,
+      issued_to_employee_id = v_employee_id,
+      issued_to_employee_name = v_employee_name
+    WHERE id = v_doc.id;
+
+    DELETE FROM public.rev_document_cutting_assignees WHERE document_id = v_doc.id;
+    INSERT INTO public.rev_document_cutting_assignees (document_id, employee_id, role)
+    VALUES (v_doc.id, v_employee_id, 'PRIMARY');
+
+    RAISE NOTICE 'OK doc % (%) → mašina %, operater %',
+      v_doc.doc_number, v_doc.id, v_machine, v_employee_name;
+  END LOOP;
+END $$;
+
+COMMIT;

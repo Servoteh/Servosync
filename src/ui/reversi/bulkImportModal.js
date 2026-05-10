@@ -442,7 +442,7 @@ export function openBulkImportModal(opts = {}) {
     type: 'hand',
     rows: [],
     importing: false,
-    progress: { ok: 0, fail: 0, total: 0 },
+    progress: { ok: 0, fail: 0, skipped: 0, total: 0 },
     /* Reversi pre-pass rezultat: šta će biti kreirano (catalog) i šta nedostaje (employees) */
     analysis: null, // { newCatalog: [...], existingCatalog: [...], missingEmployees: [...], resolvedEmployees: Map, machineCodes: Set, docCount, lineCount }
     analyzing: false,
@@ -528,7 +528,7 @@ export function openBulkImportModal(opts = {}) {
           </div>`
         }
 
-        ${state.importing ? `<div class="rev-loading-card">Uvozim ${state.progress.ok + state.progress.fail} / ${state.progress.total}…</div>` : ''}
+        ${state.importing ? `<div class="rev-loading-card">Uvozim ${state.progress.ok + state.progress.fail + (state.progress.skipped || 0)} / ${state.progress.total}…</div>` : ''}
       </div>`;
 
     const validRowsCount = state.rows.filter((r) => validateRow(r, typeDef).length === 0).length;
@@ -633,7 +633,7 @@ export function openBulkImportModal(opts = {}) {
           hasDup && !a.forceImportConfirmed
             ? `<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
                 <button type="button" class="rev-btn rev-btn--secondary" id="revImpForceImport">⚠ Ipak nastavi (kreiraj duplikat reversa)</button>
-                <span class="rev-muted" style="font-size:12px;align-self:center">Ovo će napraviti DRUGI revers dokument za ista zaduženja. Ako je prvi import napravljen greškom, prvo ga storniraj iz tab-a „Zaduženja".</span>
+                <span class="rev-muted" style="font-size:12px;align-self:center">Ovo dodaje još jedan dokument; dupli obrt u magacin/mašinu. Za ispravku količine ili mašine na postojećem dokumentu koristi ručnu korekciju u bazi ili storno pa ponovo import bez istog uvoznog hasha.</span>
               </div>`
             : ''
         }
@@ -734,7 +734,7 @@ export function openBulkImportModal(opts = {}) {
     const valid = state.rows.filter((r) => validateRow(r, typeDef).length === 0);
     if (valid.length === 0) return;
     state.importing = true;
-    state.progress = { ok: 0, fail: 0, total: valid.length };
+    state.progress = { ok: 0, fail: 0, skipped: 0, total: valid.length };
     paint();
 
     try {
@@ -766,7 +766,12 @@ export function openBulkImportModal(opts = {}) {
       showToast(`Greška: ${e?.message || e}`);
     }
     state.importing = false;
-    showToast(`✓ Uvezeno: ${state.progress.ok}, neuspešno: ${state.progress.fail}`);
+    const sk = state.progress.skipped || 0;
+    showToast(
+      sk > 0
+        ? `✓ Uvezeno: ${state.progress.ok}, preskočeno (već postoji isti uvoz): ${sk}, neuspešno: ${state.progress.fail}`
+        : `✓ Uvezeno: ${state.progress.ok}, neuspešno: ${state.progress.fail}`,
+    );
     if (state.progress.ok > 0) {
       opts.onSuccess?.();
     }
@@ -1113,10 +1118,22 @@ export function openBulkImportModal(opts = {}) {
             issuePayload.assignees = assigneesPayload;
           }
           const res = await issueCuttingReversal(issuePayload);
-          idbg(`issueCuttingReversal result ${m.masina}`, { ok: res.ok, error: res.error, doc_number: res.data?.doc_number });
+          idbg(`issueCuttingReversal result ${m.masina}`, {
+            ok: res.ok,
+            error: res.error,
+            doc_number: res.data?.doc_number,
+            idempotent: res.data?.idempotent,
+          });
           if (res.ok) {
-            state.progress.ok += grp.lines.length;
-            if (res.data?.doc_id) importSession.docIds.push(res.data.doc_id);
+            if (res.data?.idempotent) {
+              state.progress.skipped = (state.progress.skipped || 0) + grp.lines.length;
+              showToast(
+                `Preskočeno — isti bulk ključ (dokument već postoji): ${String(res.data?.doc_number || res.data?.doc_id || '')}`,
+              );
+            } else {
+              state.progress.ok += grp.lines.length;
+              if (res.data?.doc_id) importSession.docIds.push(res.data.doc_id);
+            }
           } else {
             state.progress.fail += grp.lines.length;
             showToast(`Reverz pao za mašinu ${m.masina}: ${res.error}`);
