@@ -439,10 +439,18 @@ export function openBulkImportModal(opts = {}) {
   );
   document.body.appendChild(overlay);
 
-  overlay.querySelectorAll('[data-imp-close]').forEach((b) =>
-    b.addEventListener('click', () => overlay.remove()),
-  );
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  /* Delegated handler: footer se rebuild-uje u paint() pa direktan listener na
+   * Otkaži dugme bi bio izgubljen. Slušamo ceo overlay i checkiramo target. */
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.remove();
+      return;
+    }
+    const closeBtn = e.target.closest('[data-imp-close]');
+    if (closeBtn && overlay.contains(closeBtn)) {
+      overlay.remove();
+    }
+  });
 
   function paint() {
     const typeDef = TYPES.find((t) => t.id === state.type);
@@ -887,7 +895,17 @@ export function openBulkImportModal(opts = {}) {
 
   async function importRevers(rows, analysis) {
     /* Auto-create catalog za nove oznake — koristi analysis.newCatalog */
+    /* eslint-disable no-console */
+    const idbg = (msg, data) => console.log(`[reversi/import] ${msg}`, data);
     const magId = await getMagacinLocationId();
+    idbg('start', { magId, newCatalog: analysis.newCatalog.length, rows: rows.length });
+    if (!magId) {
+      console.error('[reversi/import] magId je null — ALAT-MAG-01 ne postoji ili cache zastareo');
+      showToast('Magacin lokacija nije pronađena. Hard refresh (Ctrl+Shift+R) pa probaj opet.');
+      state.progress.fail = rows.length;
+      paint();
+      return;
+    }
     for (const nc of analysis.newCatalog) {
       const payload = {
         oznaka: nc.oznaka,
@@ -945,16 +963,27 @@ export function openBulkImportModal(opts = {}) {
           /* Pre-seed magacin sa potrebnom količinom (RPC issueCuttingReversal će
            * dekrementovati magacin za qty; ako magacin nema balance, CHECK puca).
            * Virtuelni put: nabavljen → magacin → odmah izdat na mašinu. */
+          idbg(`pre-seed grupe ${m.masina}`, { catCount: qtyByCat.size, totalQty: Array.from(qtyByCat.values()).reduce((a, b) => a + b, 0) });
           let seedFail = false;
+          let seedFailReason = '';
+          let seedCount = 0;
           for (const [catId, qty] of qtyByCat.entries()) {
             const seed = await seedCuttingToolStock(catId, magId, qty);
             if (!seed.ok) {
-              console.error('[bulkImport/revers] seed magacina pao', { catId, qty, err: seed.error });
+              seedFailReason = `cat=${catId} qty=${qty} → ${seed.error}`;
+              console.error('[reversi/import] seed pao', { catId, qty, magId, err: seed.error });
               seedFail = true;
               break;
             }
+            seedCount += 1;
           }
-          if (seedFail) { state.progress.fail += grp.lines.length; paint(); continue; }
+          idbg(`seed gotov ${m.masina}`, { ok: seedCount, fail: seedFail ? 1 : 0, reason: seedFailReason });
+          if (seedFail) {
+            showToast(`Seed magacina pao: ${seedFailReason}`);
+            state.progress.fail += grp.lines.length;
+            paint();
+            continue;
+          }
 
           /* Ako su bile dve osobe u koloni primaoca, dodaj drugu u napomenu */
           let napomena = m.napomena || null;
@@ -964,6 +993,7 @@ export function openBulkImportModal(opts = {}) {
             napomena = `${napomena ? napomena + ' | ' : ''}Drugi potpisnik(i): ${second}`;
           }
 
+          idbg(`issueCuttingReversal call ${m.masina}`, { lines: lines.length, emp: emp.full_name });
           const res = await issueCuttingReversal({
             recipient_machine_code: m.masina,
             issued_to_employee_id: emp.id,
@@ -972,8 +1002,13 @@ export function openBulkImportModal(opts = {}) {
             napomena,
             lines,
           });
-          if (res.ok) state.progress.ok += grp.lines.length;
-          else state.progress.fail += grp.lines.length;
+          idbg(`issueCuttingReversal result ${m.masina}`, { ok: res.ok, error: res.error, doc_number: res.data?.doc_number });
+          if (res.ok) {
+            state.progress.ok += grp.lines.length;
+          } else {
+            state.progress.fail += grp.lines.length;
+            showToast(`Reverz pao za mašinu ${m.masina}: ${res.error}`);
+          }
         } else {
           /* TOOL ili COOPERATION_GOODS — koristi postojeći issueReversal */
           const payload = {
