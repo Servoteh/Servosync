@@ -11,7 +11,7 @@ import {
   getMagacinLocationId,
   seedCuttingToolStock,
 } from '../../services/reversiService.js';
-import { openBulkImportModal } from './bulkImportModal.js';
+import { openBulkImportModal, openImportRollbackModal } from './bulkImportModal.js';
 
 const state = {
   rows: [],
@@ -175,6 +175,7 @@ function renderToolbar() {
       <div class="rev-rzn-toolbar__row rev-rzn-toolbar__row--actions">
         <button type="button" class="rev-btn rev-btn--excel" id="revMagExcel">Excel</button>
         ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--secondary" id="revMagBulkImport">📥 Bulk import</button>` : ''}
+        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--secondary" id="revMagImportRollback" title="Storniraj poslednji bulk import">🔄 Storno importa</button>` : ''}
         ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revMagNewHand">+ Novi ručni artikal</button>` : ''}
         <span class="rev-rzn-toolbar__spacer"></span>
         <span class="rev-muted" style="font-size:12px">Novi rezni unos: tab Rezni alat → Nova šifra</span>
@@ -314,6 +315,9 @@ function bindEvents(refreshAll) {
   r.querySelector('#revMagExcel')?.addEventListener('click', () => exportMagacin());
   r.querySelector('#revMagBulkImport')?.addEventListener('click', () => {
     openBulkImportModal({ onSuccess: () => void refreshAll() });
+  });
+  r.querySelector('#revMagImportRollback')?.addEventListener('click', () => {
+    openImportRollbackModal({ onSuccess: () => void refreshAll() });
   });
   r.querySelector('#revMagNewHand')?.addEventListener('click', () => {
     showToast('Koristi tab „Inventar alata i opreme“ → Nova jedinica');

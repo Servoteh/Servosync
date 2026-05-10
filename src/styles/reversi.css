@@ -2155,3 +2155,21 @@ html[data-theme='dark'] .rev-klasa-badge--razvrtac {
 .rev-imp-analysis-list li {
   margin-bottom: 2px;
 }
+
+.rev-imp-rb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rev-imp-rb-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--rev-border, #ccc);
+  border-radius: 6px;
+  background: var(--rev-card-bg, #fff);
+}
