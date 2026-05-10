@@ -2,10 +2,11 @@
 -- stavkama (podrazumevano /3), premeštaj zaliha na lokaciju mašine 2.60, PRIMARY operater.
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- KORAK 1: nadji UUID za Predrag Čirović — upiši u v_employee_id ispod.
+-- Opciono: fiksiran UUID operatera. Ostavi NULL — skripta pokušava Predraga Ćirovića
+-- iz employees (Čirović/Cirovic + Predrag).
 -- ═══════════════════════════════════════════════════════════════════════════
--- SELECT id, full_name, email FROM public.employees
--- WHERE is_active IS NOT DISTINCT FROM true AND full_name ILIKE '%predrag%cirovic%';
+-- SELECT id, full_name FROM public.employees
+-- WHERE full_name ILIKE '%predrag%' OR full_name ILIKE '%cirov%' OR full_name ILIKE '%ćirov%';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- KORAK 2: prilagodi filter u v_targets (npr. samo jedan dan, ili IN (...)).
@@ -17,7 +18,7 @@ DO $$
 DECLARE
   v_machine       text := '2.60';
   v_divisor       numeric := 3;
-  v_employee_id   uuid := NULL;  -- <<< OBAVEZNO
+  v_employee_id   uuid := NULL;   -- opciono; ako NULL → auto-upit ispod
   v_employee_name text;
   v_new_loc       uuid;
   v_doc           record;
@@ -27,13 +28,27 @@ DECLARE
   v_new           numeric;
   v_targets       uuid[];
 BEGIN
-  IF v_employee_id IS NULL THEN
-    RAISE EXCEPTION 'Postavi v_employee_id (employees.id) za Predrag Čirović';
+  IF v_employee_id IS NOT NULL THEN
+    SELECT full_name INTO v_employee_name FROM public.employees WHERE id = v_employee_id;
+  ELSE
+    SELECT e.id, e.full_name INTO v_employee_id, v_employee_name
+    FROM public.employees e
+    WHERE COALESCE(e.is_active, true)
+      AND e.full_name ILIKE '%predrag%'
+      AND (
+        e.full_name ILIKE '%irović%'
+        OR e.full_name ILIKE '%irovic%'
+        OR e.full_name ILIKE '%Ćirović%'
+      )
+    ORDER BY e.full_name
+    LIMIT 1;
   END IF;
 
-  SELECT full_name INTO v_employee_name FROM public.employees WHERE id = v_employee_id;
-  IF v_employee_name IS NULL THEN
-    RAISE EXCEPTION 'employees.id % nije pronađen', v_employee_id;
+  IF v_employee_id IS NULL OR v_employee_name IS NULL THEN
+    RAISE EXCEPTION 'Nije pronađen zaposleni (Predrag Ćirović). Izvrši u Editoru: '
+      'SELECT id, full_name FROM public.employees WHERE full_name ILIKE ''%%predrag%%'' '
+      'AND (full_name ILIKE ''%%irovi%%'' OR full_name ILIKE ''%%ćirovi%%''); '
+      'zatim u skripti postavi v_employee_id := ''<uuid>''::uuid.';
   END IF;
 
   v_new_loc := public.rev_get_or_create_recipient_location(
