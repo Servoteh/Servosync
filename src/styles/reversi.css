@@ -2070,3 +2070,55 @@ html[data-theme='dark'] .rev-klasa-badge--razvrtac {
   font-size: 12px;
   color: var(--rev-text2);
 }
+
+/* ─── Bulk import modal (Sprint RZ-6) ──────────────────────────────── */
+
+.rev-imp-template {
+  padding: 8px 12px;
+  background: rgba(74, 143, 199, 0.06);
+  border-radius: 6px;
+  border-left: 3px solid var(--rev-accent, #4a8fc7);
+  font-size: 13px;
+}
+
+.rev-imp-template .rev-imp-cols {
+  margin: 6px 0 8px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.rev-imp-drop {
+  border: 2px dashed var(--rev-border, #ccc);
+  border-radius: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  background: var(--rev-card-bg, #fff);
+  transition: background .15s, border-color .15s;
+}
+
+.rev-imp-drop p {
+  margin: 4px 0;
+}
+
+.rev-imp-drop.is-dragging {
+  border-color: var(--rev-accent, #4a8fc7);
+  background: rgba(74, 143, 199, 0.08);
+}
+
+.rev-imp-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rev-imp-preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.rev-data-table tr.is-invalid td {
+  background: rgba(255, 165, 0, 0.06);
+}

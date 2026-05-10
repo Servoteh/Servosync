@@ -41,6 +41,9 @@ sql/migrations/add_reversi_cutting_tools.sql
 # pa mora posle add_reversi_cutting_tools.sql.
 sql/migrations/add_bigtehn_artikli_cache.sql
 
+# Reversi — kategorija na rev_tools (alat/odelo/oprema/zaštitna), za bulk import iz Excel-a
+sql/migrations/add_reversi_tool_categories.sql
+
 # Sastanci — baza + RLS hardening + prefs/draft/lock/RPC koje pokrivaju pgTAP testovi
 sql/migrations/add_sastanci_module.sql
 sql/migrations/harden_sastanci_rls_phase2.sql

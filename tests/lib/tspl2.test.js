@@ -132,4 +132,39 @@ describe('buildTspShelfLabelProgram', () => {
     const out = buildTspShelfLabelProgram({ location_code: 'X1', copies: 3 });
     expect(out).toContain('PRINT 3,1');
   });
+
+  it('places code element ABOVE the shelf code text (reverse layout 2026-05)', () => {
+    const out = buildTspShelfLabelProgram({ location_code: 'R-A-001', name: 'Magacin' });
+    /* Barkod y mora biti manji od y oba TEXT reda (kod police gore, šifra dole). */
+    const bcM = out.match(/BARCODE \d+,(\d+),"128M"/);
+    const textMs = [...out.matchAll(/TEXT \d+,(\d+),"\d"/g)];
+    expect(bcM).not.toBeNull();
+    expect(textMs.length).toBeGreaterThanOrEqual(2);
+    const bcY = Number(bcM[1]);
+    for (const m of textMs) {
+      expect(bcY).toBeLessThan(Number(m[1]));
+    }
+  });
+
+  it('emits QRCODE command instead of BARCODE when codeType=qr', () => {
+    const out = buildTspShelfLabelProgram({
+      location_code: 'R-A-001',
+      name: 'Magacin',
+      codeType: 'qr',
+    });
+    expect(out).toMatch(/QRCODE \d+,\d+,M,\d+,A,0,M2,"R-A-001"/);
+    /* QR mode = bez 128M barkoda; jedini ostatak su TEXT redovi za šifru/naziv. */
+    expect(out).not.toMatch(/BARCODE [\d]+,[\d]+,"128M"/);
+    expect(out).toContain('CLS');
+    expect(out).toContain('PRINT 1,1');
+  });
+
+  it('defaults to barcode mode when codeType omitted or unknown', () => {
+    const a = buildTspShelfLabelProgram({ location_code: 'X1' });
+    const b = buildTspShelfLabelProgram({ location_code: 'X1', codeType: 'wat' });
+    expect(a).toMatch(/BARCODE [\d]+,[\d]+,"128M"/);
+    expect(b).toMatch(/BARCODE [\d]+,[\d]+,"128M"/);
+    expect(a).not.toContain('QRCODE ');
+    expect(b).not.toContain('QRCODE ');
+  });
 });

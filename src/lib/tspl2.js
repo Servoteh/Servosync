@@ -204,28 +204,48 @@ export function buildTspLabelProgram(spec) {
 }
 
 /**
- * Generiše TSPL2 program za nalepnicu police (CODE128 = `location_code`).
+ * Generiše TSPL2 program za nalepnicu police.
  * **NE šalje SIZE/GAP/DENSITY** — koristi konfiguraciju štampača.
- * Layout: veliki tekst sa kodom + barkod ispod, sve unutar 40.3mm visine.
  *
- * @param {{ location_code: string, name?: string, copies?: number }} loc
+ * Layout (kod GORE, šifra DOLE — operater traženo 2026-05):
+ *   ┌───────── 80.34mm ─────────┐
+ *   │  ║║│║║║│║│║║║│ ili [QR]    │  y=1.5mm  h=22mm  (kod)
+ *   │                            │
+ *   │       R-A-001              │  y=27mm   font "5" (krupno)
+ *   │   Magacin · Polica         │  y=33mm   font "2" (sitno)
+ *   └────────────────────────────┘
+ *               40.3mm
+ *
+ * @param {{ location_code: string, name?: string, copies?: number, codeType?: 'barcode'|'qr' }} loc
  * @returns {string}
  */
 export function buildTspShelfLabelProgram(loc) {
   const code = String(loc?.location_code || '').trim();
   const name = String(loc?.name || '').trim();
   const copies = Math.max(1, Math.floor(Number(loc?.copies) || 1));
+  const codeType = loc?.codeType === 'qr' ? 'qr' : 'barcode';
   if (!code) throw new Error('buildTspShelfLabelProgram: location_code obavezan');
 
   const lines = [];
   lines.push('CLS');
-  /* Veliki tekst sa kodom — operater vidi i golim okom */
-  lines.push(`TEXT ${mm(2)},${mm(1.5)},"5",0,1,1,${tsplStr(truncFit(code, 22))}`);
-  if (name) {
-    lines.push(`TEXT ${mm(2)},${mm(10)},"2",0,1,1,${tsplStr(truncFit(name, 60))}`);
+
+  /* Kod GORE: barkod (full-width 76mm × 22mm) ili QR (~22×22mm centriran). */
+  if (codeType === 'qr') {
+    /* QRCODE x,y,ECC,cell_width,mode,rotation,model,mask,"data"
+     *   ECC=M (~15% recovery), cell_width=8 dots (~0.7mm) → ~22×22mm za "R-A-001" length
+     *   Centriraj horizontalno: x = (80 - 22) / 2 = 29mm */
+    lines.push(`QRCODE ${mm(29)},${mm(1.5)},M,8,A,0,M2,${tsplStr(code)}`);
+  } else {
+    /* Barkod horizontalan, full width minus 2mm svake strane, h=22mm */
+    lines.push(`BARCODE ${mm(2)},${mm(1.5)},"128M",${mm(22)},0,0,3,5,${tsplStr(code)}`);
   }
-  /* Barkod horizontalan ispod, full width minus 2mm svake strane */
-  lines.push(`BARCODE ${mm(2)},${mm(15)},"128M",${mm(22)},2,0,3,5,${tsplStr(code)}`);
+
+  /* Šifra police DOLE — krupno (font "5" ≈ 16pt) */
+  lines.push(`TEXT ${mm(2)},${mm(27)},"5",0,1,1,${tsplStr(truncFit(code, 22))}`);
+  if (name) {
+    lines.push(`TEXT ${mm(2)},${mm(33)},"2",0,1,1,${tsplStr(truncFit(name, 60))}`);
+  }
+
   lines.push(`PRINT ${copies},1`);
   return lines.join('\r\n') + '\r\n';
 }
