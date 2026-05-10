@@ -227,12 +227,9 @@ export function renderPlanTab(root, ctx) {
     }
   }
 
-  function paint() {
-    const tasks = filtered();
-    const sorted = sortTasks(tasks, sortCol, sortDir);
-    const alarms = buildAlarms(ctx.tasks || [], ctx.loadStats || []);
-
-    const statsBase = _statsScope === 'filtered' ? tasks : (ctx.tasks || []);
+  /** Stat cards HTML (samo .pb-stats-grid sadržaj — bez header-a). */
+  function buildStatsCardsHtml(tasksFiltered) {
+    const statsBase = _statsScope === 'filtered' ? tasksFiltered : (ctx.tasks || []);
     const total = statsBase.length;
     const doneN = statsBase.filter(t => t.status === 'Završeno').length;
     const pctDone = total ? Math.round((doneN / total) * 100) : 0;
@@ -241,6 +238,172 @@ export function renderPlanTab(root, ctx) {
     const normSum = statsBase
       .filter(t => t.status !== 'Završeno')
       .reduce((s, t) => s + (Number(t.norma_sati_dan) || 0), 0);
+    return `
+      <div class="pb-stat-card">
+        <span>Zadaci</span>
+        <strong>${total}</strong>
+        <small class="pb-stat-sub">u toku: ${inProgN}</small>
+      </div>
+      <div class="pb-stat-card">
+        <span>Završeno</span>
+        <strong>${pctDone}%</strong>
+        <small class="pb-stat-sub">${doneN} / ${total}</small>
+      </div>
+      <div class="pb-stat-card">
+        <span>Norma Σ (h/dan)</span>
+        <strong>${normSum}</strong>
+        <small class="pb-stat-sub">h dnevni prosek</small>
+      </div>
+      <div class="pb-stat-card pb-stat-card--alert">
+        <span>Blokirano</span>
+        <strong style="color:${blockedN > 0 ? 'var(--risk-high,#EB5757)' : 'inherit'}">${blockedN}</strong>
+        <small class="pb-stat-sub">Akcije</small>
+      </div>`;
+  }
+
+  /** Body HTML (mobile cards ILI desktop table sadržaj .pb-plan-split). */
+  function buildBodyHtml(sorted) {
+    const cardsHtml = !_isMobile ? '' : sorted.map(t => {
+      const strike = t.status === 'Završeno' ? ' style="text-decoration:line-through;opacity:.85"' : '';
+      const projLabel = [t.project_code, t.project_name].filter(Boolean).join(' — ');
+      const wd = countWorkdaysBetween(t.datum_pocetka_plan, t.datum_zavrsetka_plan);
+      const delay = delayRealEnd(t);
+      return `
+        <article class="pb-card">
+          <div class="pb-card-head">
+            <h3 class="pb-card-title"${strike}>${escHtml(t.naziv || '')}</h3>
+            <span class="${statusBadgeClass(t.status)}">${escHtml(t.status || '')}</span>
+          </div>
+          <div class="pb-card-meta">${escHtml(projLabel)} · ${escHtml(t.vrsta || '')}</div>
+          ${String(t.problem || '').trim() ? '<div class="pb-problem-badge">⚠ problem</div>' : ''}
+          <div class="pb-card-engineer">
+            <span class="pb-avatar">${escHtml((t.engineer_name || '?').slice(0, 1))}</span>
+            <span>${escHtml(t.engineer_name || '—')}</span>
+          </div>
+          <div class="pb-card-dates">
+            <span>Plan poč.</span><span>${escHtml(fmtDate(t.datum_pocetka_plan))}</span>
+            <span>Plan rok</span><span>${escHtml(fmtDate(t.datum_zavrsetka_plan))}</span>
+            <span>Ostvaren poč.</span><span>${escHtml(fmtDate(t.datum_pocetka_real))}</span>
+            <span>Ostvaren zavr.</span><span>${escHtml(fmtDate(t.datum_zavrsetka_real))} ${delay ? `<em>+${delay}d</em>` : ''}</span>
+          </div>
+          <div class="pb-card-metrics">
+            <span>Trajanje</span><strong>${wd != null ? wd + ' rd' : '—'}</strong>
+            <span>Norma</span><strong>${Number(t.norma_sati_dan) || 0} h/d</strong>
+            <span class="${prioClass(t.prioritet)}">${escHtml(t.prioritet || '')}</span>
+          </div>
+          <div class="pb-progress"><div class="pb-progress-fill" style="width:${Math.min(100, Number(t.procenat_zavrsenosti) || 0)}%"></div></div>
+          <div class="pb-card-actions">
+            ${canEdit ? `<button type="button" class="btn btn-sm pb-act-edit" data-id="${escHtml(t.id)}">✏ Izmeni</button>` : ''}
+            <button type="button" class="btn btn-sm pb-act-desc" data-id="${escHtml(t.id)}">📄 Opis</button>
+            ${canEdit ? `<button type="button" class="btn btn-sm pb-act-prob ${String(t.problem || '').trim() ? 'pb-act-prob--active' : ''}" data-id="${escHtml(t.id)}">⚠ Problem</button>` : ''}
+            ${canEdit ? `<button type="button" class="btn btn-sm pb-act-del" data-id="${escHtml(t.id)}">✕ Briši</button>` : ''}
+          </div>
+        </article>`;
+    }).join('');
+
+    const th = (col, label, unit) => {
+      const active = sortCol === col;
+      const arrow = active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+      const unitHtml = unit ? `<small class="pb-th-unit">${escHtml(unit)}</small>` : '';
+      return `<th scope="col"><button type="button" class="pb-th" data-sort="${escHtml(col)}"><span class="pb-th-label">${escHtml(label)}${arrow}</span>${unitHtml}</button></th>`;
+    };
+
+    const rowsHtml = _isMobile ? '' : sorted.map((t, i) => {
+      const wd = countWorkdaysBetween(t.datum_pocetka_plan, t.datum_zavrsetka_plan);
+      const proj = [t.project_code, t.project_name].filter(Boolean).join(' ');
+      const strike = t.status === 'Završeno' ? ' class="pb-done"' : '';
+      const hasReal = t.datum_pocetka_real || t.datum_zavrsetka_real;
+      const pct = Math.min(100, Number(t.procenat_zavrsenosti) || 0);
+      const pctFillCls = t.status === 'Završeno' ? 'pb-pct-fill pb-pct-fill--done' : 'pb-pct-fill';
+      return `<tr${strike}>
+        <td>${i + 1}</td>
+        <td>${escHtml(t.naziv || '')}</td>
+        <td>${escHtml(proj)}</td>
+        <td>${escHtml(t.engineer_name || '—')}</td>
+        <td>${escHtml(t.vrsta || '')}</td>
+        <td class="pb-td-dates">
+          <div class="pb-td-dates-plan"><span class="pb-date-lbl">PLAN</span> ${escHtml(fmtDate(t.datum_pocetka_plan))} <span class="pb-date-sep">→</span> ${escHtml(fmtDate(t.datum_zavrsetka_plan))}</div>
+          ${hasReal ? `<div class="pb-td-dates-real"><span class="pb-date-lbl pb-date-lbl--real">OSTVAREN</span> ${escHtml(fmtDate(t.datum_pocetka_real))} <span class="pb-date-sep">→</span> ${escHtml(fmtDate(t.datum_zavrsetka_real))}</div>` : ''}
+        </td>
+        <td>${wd != null ? wd : '—'}</td>
+        <td>${Number(t.norma_sati_dan) || 0}</td>
+        <td><span class="${statusBadgeClass(t.status)}">${escHtml(t.status || '')}</span></td>
+        <td class="pb-td-pct">
+          <div class="pb-pct-wrap">
+            <div class="pb-pct-bar"><div class="${pctFillCls}" style="width:${pct}%"></div></div>
+            <span class="pb-pct-num">${pct}%</span>
+          </div>
+        </td>
+        <td><span class="${prioClass(t.prioritet)}">${escHtml(t.prioritet || '')}</span></td>
+        <td class="pb-row-actions">
+          ${canEdit ? `<button type="button" class="pb-icon-btn pb-act-edit" data-id="${escHtml(t.id)}" title="Izmeni">✏</button>` : ''}
+          <button type="button" class="pb-icon-btn pb-act-desc" data-id="${escHtml(t.id)}" title="Opis">📄</button>
+          ${canEdit ? `<button type="button" class="pb-icon-btn pb-act-prob ${String(t.problem || '').trim() ? 'pb-act-prob--active' : ''}" data-id="${escHtml(t.id)}" title="${String(t.problem || '').trim() ? 'Problem aktivan' : 'Problem'}">⚠</button>` : ''}
+          ${canEdit ? `<button type="button" class="pb-icon-btn pb-icon-btn--danger pb-act-del" data-id="${escHtml(t.id)}" title="Briši">✕</button>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+
+    const mobileBody = _isMobile
+      ? `<div class="pb-cards-wrap">${cardsHtml || '<p class="pb-muted">Nema zadataka za filter.</p>'}</div>`
+      : '';
+    const desktopBody = !_isMobile
+      ? `<div class="pb-table-wrap">
+          <div class="pb-table-container">
+            <table class="pb-table">
+              <thead><tr>
+                <th>#</th>
+                ${th('naziv', 'Naziv zadatka')}
+                ${th('project', 'Projekat')}
+                ${th('engineer', 'Inženjer')}
+                ${th('vrsta', 'Vrsta')}
+                ${th('datumi', 'Datumi')}
+                ${th('trajanje', 'Trajanje', 'dan')}
+                ${th('norma', 'Norma', 'h/dan')}
+                ${th('status', 'Status')}
+                ${th('pct', '%')}
+                ${th('prio', 'Prioritet')}
+                <th></th>
+              </tr></thead>
+              <tbody>${rowsHtml || `<tr><td colspan="12" class="pb-muted" style="text-align:center;padding:20px">Nema zadataka za filter.</td></tr>`}</tbody>
+            </table>
+          </div>
+        </div>`
+      : '';
+    return mobileBody + desktopBody;
+  }
+
+  /** Targeted update — samo body i (po potrebi) stats. Ne menja filter toolbar. */
+  function paintBody() {
+    const split = root.querySelector('.pb-plan-split');
+    if (!split) { paint(); return; }
+    const tasks = filtered();
+    const sorted = sortTasks(tasks, sortCol, sortDir);
+    split.innerHTML = buildBodyHtml(sorted);
+    // Update stats samo ako scope = filtered (inače globalno se ne menja sa filter-om).
+    if (_statsScope === 'filtered') {
+      const grid = root.querySelector('.pb-stats-grid');
+      if (grid) grid.innerHTML = buildStatsCardsHtml(tasks);
+    }
+    // Re-attach sort listenere (jer su .pb-th elementi novi posle innerHTML zamene).
+    attachSortListeners();
+  }
+
+  function attachSortListeners() {
+    root.querySelectorAll('.pb-th').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const col = btn.getAttribute('data-sort');
+        if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+        else { sortCol = col; sortDir = 'asc'; }
+        paintBody();
+      });
+    });
+  }
+
+  function paint() {
+    const tasks = filtered();
+    const sorted = sortTasks(tasks, sortCol, sortDir);
+    const alarms = buildAlarms(ctx.tasks || [], ctx.loadStats || []);
 
     /* ── Stat cards ── */
     const scopeLabel = _statsScope === 'filtered' ? 'filtrirano' : 'globalno';
@@ -250,28 +413,7 @@ export function renderPlanTab(root, ctx) {
           ${escHtml(scopeLabel)} ⇄
         </button>
       </div>
-      <div class="pb-stats-grid">
-        <div class="pb-stat-card">
-          <span>Zadaci</span>
-          <strong>${total}</strong>
-          <small class="pb-stat-sub">u toku: ${inProgN}</small>
-        </div>
-        <div class="pb-stat-card">
-          <span>Završeno</span>
-          <strong>${pctDone}%</strong>
-          <small class="pb-stat-sub">${doneN} / ${total}</small>
-        </div>
-        <div class="pb-stat-card">
-          <span>Norma Σ (h/dan)</span>
-          <strong>${normSum}</strong>
-          <small class="pb-stat-sub">h dnevni prosek</small>
-        </div>
-        <div class="pb-stat-card pb-stat-card--alert">
-          <span>Blokirano</span>
-          <strong style="color:${blockedN > 0 ? 'var(--risk-high,#EB5757)' : 'inherit'}">${blockedN}</strong>
-          <small class="pb-stat-sub">Akcije</small>
-        </div>
-      </div>`;
+      <div class="pb-stats-grid">${buildStatsCardsHtml(tasks)}</div>`;
 
     /* ── Alarms ── */
     const alarmHtml = alarms.length
@@ -354,125 +496,13 @@ export function renderPlanTab(root, ctx) {
         ${hasActiveFilter ? '<button type="button" class="pb-ft-reset" id="pbFReset">✕ Reset</button>' : ''}
       </div>`;
 
-    /* ── Mobile cards ── */
-    const cardsHtml = !_isMobile ? '' : sorted.map(t => {
-      const strike = t.status === 'Završeno' ? ' style="text-decoration:line-through;opacity:.85"' : '';
-      const projLabel = [t.project_code, t.project_name].filter(Boolean).join(' — ');
-      const wd = countWorkdaysBetween(t.datum_pocetka_plan, t.datum_zavrsetka_plan);
-      const delay = delayRealEnd(t);
-      return `
-        <article class="pb-card">
-          <div class="pb-card-head">
-            <h3 class="pb-card-title"${strike}>${escHtml(t.naziv || '')}</h3>
-            <span class="${statusBadgeClass(t.status)}">${escHtml(t.status || '')}</span>
-          </div>
-          <div class="pb-card-meta">${escHtml(projLabel)} · ${escHtml(t.vrsta || '')}</div>
-          ${String(t.problem || '').trim() ? '<div class="pb-problem-badge">⚠ problem</div>' : ''}
-          <div class="pb-card-engineer">
-            <span class="pb-avatar">${escHtml((t.engineer_name || '?').slice(0, 1))}</span>
-            <span>${escHtml(t.engineer_name || '—')}</span>
-          </div>
-          <div class="pb-card-dates">
-            <span>Plan poč.</span><span>${escHtml(fmtDate(t.datum_pocetka_plan))}</span>
-            <span>Plan rok</span><span>${escHtml(fmtDate(t.datum_zavrsetka_plan))}</span>
-            <span>Ostvaren poč.</span><span>${escHtml(fmtDate(t.datum_pocetka_real))}</span>
-            <span>Ostvaren zavr.</span><span>${escHtml(fmtDate(t.datum_zavrsetka_real))} ${delay ? `<em>+${delay}d</em>` : ''}</span>
-          </div>
-          <div class="pb-card-metrics">
-            <span>Trajanje</span><strong>${wd != null ? wd + ' rd' : '—'}</strong>
-            <span>Norma</span><strong>${Number(t.norma_sati_dan) || 0} h/d</strong>
-            <span class="${prioClass(t.prioritet)}">${escHtml(t.prioritet || '')}</span>
-          </div>
-          <div class="pb-progress"><div class="pb-progress-fill" style="width:${Math.min(100, Number(t.procenat_zavrsenosti) || 0)}%"></div></div>
-          <div class="pb-card-actions">
-            ${canEdit ? `<button type="button" class="btn btn-sm pb-act-edit" data-id="${escHtml(t.id)}">✏ Izmeni</button>` : ''}
-            <button type="button" class="btn btn-sm pb-act-desc" data-id="${escHtml(t.id)}">📄 Opis</button>
-            ${canEdit ? `<button type="button" class="btn btn-sm pb-act-prob ${String(t.problem || '').trim() ? 'pb-act-prob--active' : ''}" data-id="${escHtml(t.id)}">⚠ Problem</button>` : ''}
-            ${canEdit ? `<button type="button" class="btn btn-sm pb-act-del" data-id="${escHtml(t.id)}">✕ Briši</button>` : ''}
-          </div>
-        </article>`;
-    }).join('');
-
-    /* ── Desktop table ── */
-    const th = (col, label, unit) => {
-      const active = sortCol === col;
-      const arrow = active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
-      const unitHtml = unit ? `<small class="pb-th-unit">${escHtml(unit)}</small>` : '';
-      return `<th scope="col"><button type="button" class="pb-th" data-sort="${escHtml(col)}"><span class="pb-th-label">${escHtml(label)}${arrow}</span>${unitHtml}</button></th>`;
-    };
-
-    const rowsHtml = _isMobile ? '' : sorted.map((t, i) => {
-      const wd = countWorkdaysBetween(t.datum_pocetka_plan, t.datum_zavrsetka_plan);
-      const proj = [t.project_code, t.project_name].filter(Boolean).join(' ');
-      const strike = t.status === 'Završeno' ? ' class="pb-done"' : '';
-      const hasReal = t.datum_pocetka_real || t.datum_zavrsetka_real;
-      const pct = Math.min(100, Number(t.procenat_zavrsenosti) || 0);
-      const pctFillCls = t.status === 'Završeno' ? 'pb-pct-fill pb-pct-fill--done' : 'pb-pct-fill';
-      return `<tr${strike}>
-        <td>${i + 1}</td>
-        <td>${escHtml(t.naziv || '')}</td>
-        <td>${escHtml(proj)}</td>
-        <td>${escHtml(t.engineer_name || '—')}</td>
-        <td>${escHtml(t.vrsta || '')}</td>
-        <td class="pb-td-dates">
-          <div class="pb-td-dates-plan"><span class="pb-date-lbl">PLAN</span> ${escHtml(fmtDate(t.datum_pocetka_plan))} <span class="pb-date-sep">→</span> ${escHtml(fmtDate(t.datum_zavrsetka_plan))}</div>
-          ${hasReal ? `<div class="pb-td-dates-real"><span class="pb-date-lbl pb-date-lbl--real">OSTVAREN</span> ${escHtml(fmtDate(t.datum_pocetka_real))} <span class="pb-date-sep">→</span> ${escHtml(fmtDate(t.datum_zavrsetka_real))}</div>` : ''}
-        </td>
-        <td>${wd != null ? wd : '—'}</td>
-        <td>${Number(t.norma_sati_dan) || 0}</td>
-        <td><span class="${statusBadgeClass(t.status)}">${escHtml(t.status || '')}</span></td>
-        <td class="pb-td-pct">
-          <div class="pb-pct-wrap">
-            <div class="pb-pct-bar"><div class="${pctFillCls}" style="width:${pct}%"></div></div>
-            <span class="pb-pct-num">${pct}%</span>
-          </div>
-        </td>
-        <td><span class="${prioClass(t.prioritet)}">${escHtml(t.prioritet || '')}</span></td>
-        <td class="pb-row-actions">
-          ${canEdit ? `<button type="button" class="pb-icon-btn pb-act-edit" data-id="${escHtml(t.id)}" title="Izmeni">✏</button>` : ''}
-          <button type="button" class="pb-icon-btn pb-act-desc" data-id="${escHtml(t.id)}" title="Opis">📄</button>
-          ${canEdit ? `<button type="button" class="pb-icon-btn pb-act-prob ${String(t.problem || '').trim() ? 'pb-act-prob--active' : ''}" data-id="${escHtml(t.id)}" title="${String(t.problem || '').trim() ? 'Problem aktivan' : 'Problem'}">⚠</button>` : ''}
-          ${canEdit ? `<button type="button" class="pb-icon-btn pb-icon-btn--danger pb-act-del" data-id="${escHtml(t.id)}" title="Briši">✕</button>` : ''}
-        </td>
-      </tr>`;
-    }).join('');
-
-    const mobileBody = _isMobile
-      ? `<div class="pb-cards-wrap">${cardsHtml || '<p class="pb-muted">Nema zadataka za filter.</p>'}</div>`
-      : '';
-    const desktopBody = !_isMobile
-      ? `<div class="pb-table-wrap">
-          <div class="pb-table-container">
-            <table class="pb-table">
-              <thead><tr>
-                <th>#</th>
-                ${th('naziv', 'Naziv zadatka')}
-                ${th('project', 'Projekat')}
-                ${th('engineer', 'Inženjer')}
-                ${th('vrsta', 'Vrsta')}
-                ${th('datumi', 'Datumi')}
-                ${th('trajanje', 'Trajanje', 'dan')}
-                ${th('norma', 'Norma', 'h/dan')}
-                ${th('status', 'Status')}
-                ${th('pct', '%')}
-                ${th('prio', 'Prioritet')}
-                <th></th>
-              </tr></thead>
-              <tbody>${rowsHtml || `<tr><td colspan="12" class="pb-muted" style="text-align:center;padding:20px">Nema zadataka za filter.</td></tr>`}</tbody>
-            </table>
-          </div>
-        </div>`
-      : '';
     preserveFocus(() => {
       root.innerHTML = `
         ${statsHtml}
         ${alarmHtml}
         ${loadHtml}
         ${filterHtml}
-        <div class="pb-plan-split">
-          ${mobileBody}
-          ${desktopBody}
-        </div>`;
+        <div class="pb-plan-split">${buildBodyHtml(sorted)}</div>`;
     });
 
     /* ── Event listeners ── */
@@ -495,7 +525,7 @@ export function renderPlanTab(root, ctx) {
       filters.search = e.target.value;
       syncPbModuleFilters({ moduleSearch: filters.search });
       if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
-      _searchDebounceTimer = setTimeout(() => paint(), 180);
+      _searchDebounceTimer = setTimeout(() => paintBody(), 180);
     });
     root.querySelector('#pbFStatus')?.addEventListener('change', e => {
       filters.status = e.target.value;
@@ -542,14 +572,7 @@ export function renderPlanTab(root, ctx) {
     });
     root.querySelector('#pbRefreshBtn')?.addEventListener('click', () => ctx.onRefresh?.());
 
-    root.querySelectorAll('.pb-th').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const col = btn.getAttribute('data-sort');
-        if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-        else { sortCol = col; sortDir = 'asc'; }
-        paint();
-      });
-    });
+    attachSortListeners();
 
     if (!_delegationAttached) {
       attachRootDelegation();
