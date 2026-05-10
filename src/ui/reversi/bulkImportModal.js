@@ -115,16 +115,27 @@ function normHeader(s) {
  */
 function fixMojibake(s) {
   if (typeof s !== 'string' || s.length < 2) return s;
-  /* Brzo odbijanje: ako nema kombinacija koje su tipične za double-encoded UTF-8, vrati. */
-  if (!/Ã|Å|Â/.test(s)) return s;
-  /* Test patterni — trebamo bar 1 jasan CCE+TILDE / CCE+RING pattern */
+  /* Brzo odbijanje: ako nema 1-bajt-iznad-127 karaktera koji se pojavljuju u
+   * UTF-8 → cp1252 dvostrukom enkodiranju, vrati. Ä je ključan jer Ä‡/Ä, Ä‘
+   * pokrivaju ć/đ (najčešće u srpskom imenu).
+   */
+  if (!/[ÃÅÂÄ]/.test(s)) return s;
+  /* Test patterni — primeri stvarnih sekvenci iz UTF-8→cp1252 misread-a.
+   * Treba bar 2 različita pattern-a (broj hits-a) da bi fix bio aktiviran;
+   * kratko ime kao "Predrag ÄiroviÄ" ima Ä dva puta — broji ih kao 2.
+   */
   const patterns = [
-    /Ä‡/, /Ä/, /Ä/, /Å¡/, /Å¾/, /Å /, /Å½/,
-    /Ä‘/, /Ä/, /Ã/, /Ã‚/, /Ã/, /Ã©/, /Ã«/, /Â°/, /Ã˜/, /Â­/,
+    /Ä‡/, /Ä‘/, /Ä/g, /Å¡/, /Å¾/, /Å /, /Å½/,
+    /Ã/g, /Ã‚/, /Ã©/, /Ã«/, /Â°/, /Ã˜/, /Â­/,
   ];
   let hits = 0;
   for (const p of patterns) {
-    if (p.test(s)) hits += 1;
+    if (p.global) {
+      const m = s.match(p);
+      if (m) hits += m.length;
+    } else if (p.test(s)) {
+      hits += 1;
+    }
     if (hits >= 2) break;
   }
   if (hits < 2) return s;
@@ -138,7 +149,7 @@ function fixMojibake(s) {
       bytes[i] = c;
     }
     const fixed = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-    /* Sanity: ako je fixed isti ili kraći — vrati ga; ako je duzi (replacement chars) — original. */
+    /* Sanity: ako je fixed isti — vrati ga; ako sadrži replacement chars — original. */
     if (fixed && fixed !== s && !fixed.includes('�')) return fixed;
     return s;
   } catch {
@@ -166,6 +177,69 @@ function mapKategorijaToKlasa(kat) {
   if (k.includes('drzac') || k.includes('držač') || k.includes('holder')) return 'držač';
   if (k.includes('narez')) return 'narez';
   return 'ostalo';
+}
+
+/**
+ * Skini dijakritike i lowercase + trim — za poređenje imena radnika
+ * koja u izvoru mogu imati / ne imati ć/č/š/đ/ž zbog typing/encoding razlike.
+ *
+ * @param {string} s
+ * @returns {string}
+ */
+function normalizeName(s) {
+  return String(s || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * Pretraži radnika po imenu sa fuzzy match-om (skida dijakritike pre poređenja).
+ * Najpre proba sa originalnim imenom (PostgREST ilike); ako ne nadje exact,
+ * proba sa stripped verzijom; ako i dalje ne nadje, proba reč-po-reč preklop.
+ *
+ * @param {string} name
+ * @returns {Promise<{id: string, full_name: string} | null>}
+ */
+async function resolveEmployeeFuzzy(name) {
+  const original = String(name || '').trim();
+  if (!original) return null;
+  const normTarget = normalizeName(original);
+
+  /* Pokušaj 1: ilike sa originalnim imenom (radi za 95% slučajeva ako nije mojibake) */
+  let r = await fetchEmployees(original);
+  let list = r.ok && Array.isArray(r.data) ? r.data : [];
+  let hit = list.find((e) => normalizeName(e.full_name) === normTarget);
+  if (hit) return { id: hit.id, full_name: hit.full_name };
+
+  /* Pokušaj 2: ilike sa stripped verzijom (npr. "Predrag Cirovic") — pokriva slučaj
+   * kad u bazi piše bez dijakritika a u CSV-u sa, ili obrnuto. */
+  const stripped = original.normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (stripped !== original) {
+    r = await fetchEmployees(stripped);
+    list = r.ok && Array.isArray(r.data) ? r.data : [];
+    hit = list.find((e) => normalizeName(e.full_name) === normTarget);
+    if (hit) return { id: hit.id, full_name: hit.full_name };
+  }
+
+  /* Pokušaj 3: tokenizovan preklop — sve reči iz CSV imena postoje u full_name
+   * iz baze (i obrnuto, isti broj reči). Hvata "Petar Petrović Mladji" ↔ "Petar Petrović". */
+  const tokens = normTarget.split(' ').filter(Boolean);
+  if (tokens.length >= 2) {
+    /* poslednje ime obično je najjedinstveniji token — koristi ga kao seed */
+    r = await fetchEmployees(tokens[tokens.length - 1].normalize('NFD').replace(/[̀-ͯ]/g, ''));
+    list = r.ok && Array.isArray(r.data) ? r.data : [];
+    hit = list.find((e) => {
+      const dbTokens = normalizeName(e.full_name).split(' ').filter(Boolean);
+      if (dbTokens.length !== tokens.length) return false;
+      return tokens.every((t) => dbTokens.includes(t));
+    });
+    if (hit) return { id: hit.id, full_name: hit.full_name };
+  }
+
+  return null;
 }
 
 /**
@@ -719,11 +793,9 @@ export function openBulkImportModal(opts = {}) {
     }
 
     for (const name of namesNeedingResolve) {
-      const r = await fetchEmployees(name);
-      const list = r.ok && Array.isArray(r.data) ? r.data : [];
-      const exact = list.find((e) => e.full_name?.toLowerCase() === name.toLowerCase());
-      if (exact) {
-        result.resolvedEmployees.set(name, { id: exact.id, full_name: exact.full_name });
+      const found = await resolveEmployeeFuzzy(name);
+      if (found) {
+        result.resolvedEmployees.set(name, { id: found.id, full_name: found.full_name });
       } else {
         result.missingEmployees.push(name);
       }
