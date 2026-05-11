@@ -78,6 +78,8 @@ export const SESSION_KEYS = Object.freeze({
   SAST_DETALJ_TAB: 'sastanci:detalj_tab',
   /** Lista / Kanban u Akcionom planu ('lista'|'kanban') */
   SAST_AKCIONI_VIEW: 'sastanci:akcioni_view',
+  /** Poslednji aktivni glavni tab modula Sastanci (npr. dashboard, sastanci) */
+  SAST_MODULE_TAB: 'sastanci:module_active_tab_v1',
   /** Moj profil — aktivni sub-tab ('zahtevi'|'odsustva') */
   MOJ_PROFIL_TAB: 'plan_montaze_moj_profil_tab_v1',
 });

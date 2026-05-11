@@ -52,6 +52,10 @@ function render(host, prefs) {
         <p class="sast-txt2">
           Izaberi koje notifikacije želiš da primaš putem email-a.
         </p>
+        <div class="sast-prefs-intro" role="note">
+          <p><strong>Akcije</strong> — dešavanja na akcionom planu: nova dodela tebi, promena roka ili statusa tvoje akcije, podsetnik za istekle/tekuće rokove.</p>
+          <p><strong>Sastanci</strong> — poziv na sastanak kada te neko doda kao učesnika, podsetnik jedan dan pre termina, obaveštenje kad je sastanak zaključen i zapisnik dostupan.</p>
+        </div>
       </div>
 
       <div class="sast-prefs-email-row">

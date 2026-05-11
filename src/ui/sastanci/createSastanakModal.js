@@ -35,19 +35,30 @@ export function openCreateSastanakModal({ projekti = [], onCreated } = {}) {
 
   function renderStepTip(host) {
     host.innerHTML = `
-      <p style="margin:0 0 16px;color:var(--text2)">Izaberi tip sastanka:</p>
+      <p style="margin:0 0 12px;color:var(--text2)">Izaberi tip sastanka:</p>
+      <details class="sast-tip-help">
+        <summary>Kada koji tip?</summary>
+        <ul class="sast-tip-help-list">
+          <li><strong>Sedmični</strong> — redovan cross-project sastanak (PM teme, akcioni plan).</li>
+          <li><strong>Projektni</strong> — jedan projekat: presek stanja, hijerarhija radova, slike.</li>
+          <li><strong>Tematski</strong> — jedna jasna tema između birova/sektora (isti tok kao sedmični).</li>
+        </ul>
+      </details>
       <div class="sast-tip-choice">
-        <button type="button" class="sast-tip-card" data-tip="sedmicni">
+        <button type="button" class="sast-tip-card" data-tip="sedmicni"
+          title="Redovan sedmični tok: dnevni red iz PM tema i akcioni plan.">
           <div class="sast-tip-icon">📅</div>
           <div class="sast-tip-name">Sedmični sastanak</div>
           <div class="sast-tip-desc">Standardni cross-project. PM teme, akcioni plan. Ide jednom nedeljno.</div>
         </button>
-        <button type="button" class="sast-tip-card" data-tip="projektni">
+        <button type="button" class="sast-tip-card" data-tip="projektni"
+          title="Za jedan projekat: presek stanja sa tekstom po aktivnostima i slikama sa terena.">
           <div class="sast-tip-icon">🏗</div>
           <div class="sast-tip-name">Projektni sastanak</div>
           <div class="sast-tip-desc">Per-projekat presek stanja. Hijerarhijski opis radova + slike sa terena.</div>
         </button>
-        <button type="button" class="sast-tip-card" data-tip="tematski">
+        <button type="button" class="sast-tip-card" data-tip="tematski"
+          title="Cross-sektor po jednoj temi (npr. projektovanje i tehnologija); dnevni red i akcioni plan kao kod sedmičnog.">
           <div class="sast-tip-icon">🎯</div>
           <div class="sast-tip-name">Tematski sastanak</div>
           <div class="sast-tip-desc">Usklađivanje specifičnih aktivnosti između različitih biroa i sektora. Jedna glavna tema (npr. projektovanje i tehnologija).</div>
@@ -78,6 +89,11 @@ export function openCreateSastanakModal({ projekti = [], onCreated } = {}) {
           <span>Naslov *</span>
           <input type="text" name="naslov" required maxlength="200" value="${escHtml(defNaslov)}">
         </label>
+        ${tip === 'tematski'
+    ? `<p class="sast-field-hint">Unesi konkretnu temu u naslov (npr. „Usklađivanje aktivnosti projektovanja i tehnologije”).</p>`
+    : tip === 'sedmicni'
+      ? `<p class="sast-field-hint">Naslov može da sadrži fokus sedmice ako želiš (npr. naglašena oblast).</p>`
+      : ''}
         ${tip === 'projektni' ? `
           <label class="sast-form-row">
             <span>Projekat *</span>

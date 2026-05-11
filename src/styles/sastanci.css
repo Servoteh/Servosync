@@ -579,6 +579,61 @@
   color: var(--text2, #888);
   line-height: 1.4;
 }
+
+/* UX pomoć — izbor tipa, tok statusa, hints */
+.sast-tip-help {
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  background: var(--surface2, #f6f9ff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.sast-tip-help summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text, #111);
+}
+.sast-tip-help-list {
+  margin: 10px 0 4px 18px;
+  padding: 0;
+  color: var(--text2, #444);
+  line-height: 1.45;
+}
+.sast-field-hint {
+  margin: -4px 0 12px;
+  font-size: 12px;
+  color: var(--text2, #666);
+  font-style: italic;
+}
+.sast-flow-hint {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  background: var(--surface2, #f9fafb);
+  border-radius: 8px;
+  border: 1px dashed var(--border, #d4d4d4);
+  font-size: 12px;
+}
+.sast-flow-hint summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text2, #374151);
+}
+.sast-flow-steps {
+  margin: 8px 0 4px 18px;
+  padding: 0;
+  color: var(--text2, #555);
+  line-height: 1.45;
+}
+body.dark .sast-tip-help,
+body.dark .sast-flow-hint {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+body.dark .sast-prefs-intro {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .sast-step-header {
   display: flex;
   justify-content: space-between;
@@ -1596,6 +1651,18 @@ body.dark .sast-projekat-item.is-active {
 .sast-prefs-wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
 .sast-prefs-header { margin-bottom: 20px; }
 .sast-prefs-title { font-size: 20px; font-weight: 700; margin: 0 0 4px; color: var(--text1, #111); }
+.sast-prefs-intro {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--surface2, #f6f6f6);
+  border-radius: 8px;
+  border-left: 3px solid var(--primary, #2563eb);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text, #1a1a1a);
+}
+.sast-prefs-intro p { margin: 0 0 8px; }
+.sast-prefs-intro p:last-child { margin-bottom: 0; }
 
 /* Email info row */
 .sast-prefs-email-row {
