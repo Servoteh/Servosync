@@ -106,6 +106,7 @@ function normHeader(s) {
   return String(s || '')
     .trim()
     .toLowerCase()
+    .replace(/_/g, ' ')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, ' ');
@@ -352,6 +353,7 @@ function mapRow(raw, cols) {
     const n = normHeader(fixed);
     const col = cols.find(c =>
       normHeader(c.label) === n ||
+      normHeader(c.key) === n ||
       (c.aliases || []).some(a => normHeader(a) === n)
     );
     if (col) headerMap.set(hk, col);
