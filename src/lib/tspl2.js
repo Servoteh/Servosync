@@ -132,12 +132,13 @@ export function buildTspLabelProgram(spec) {
    * Koordinate u dots; rotation 0=normalno, 90/180/270 za rotaciju.
    */
 
-  /* PAD_LEFT je IDENTICAN sa BC_X (2mm) tako da levi rub teksta i barkoda
-   * budu poravnati. RIGHT_HALF_X = 41mm (centar nalepnice).
+  /* PAD_LEFT (7mm) = 2mm baseline + 5mm operaterski shift udesno (zahtev:
+   * pomeri sav sadrzaj 5mm udesno na TL340P bez diranja driver-a).
+   * RIGHT_HALF_X = 41 + 5 = 46mm zadrzava odnos leve i desne polovine.
    * TSPL2 path ne ide kroz Chrome i ne pati od istog kalibracionog
-   * offseta kao browser print, pa koristimo prave 80mm reference. */
-  const PAD_LEFT = mm(2);
-  const RIGHT_HALF_X = mm(41);
+   * offseta kao browser print. */
+  const PAD_LEFT = mm(7);
+  const RIGHT_HALF_X = mm(46);
 
   /* ─ Visina budžeta (40.30mm fizički):
    *   y=0.5mm pad
@@ -184,15 +185,16 @@ export function buildTspLabelProgram(spec) {
     lines.push(`TEXT ${RIGHT_HALF_X},${mm(12)},"2",0,1,1,${tsplStr(f.datum)}`);
   }
 
-  /* ─ Barkod (dole, full-width minus 2mm quiet zone svake strane) ─
+  /* ─ Barkod (dole, ofsetovan 5mm udesno isto kao tekst — vidi PAD_LEFT) ─
    * BARCODE x,y,"128M",height,human_readable,rotation,narrow,wide,content
    *   - height = 15mm → 177 dots (smanjeno sa 20mm da apsolutno stane)
    *   - human_readable=0 = bez teksta ispod (RN je gore u Redu 1)
    *   - narrow=2 dots (~0.17mm) → modul width za 300 DPI
    *
-   * Quiet zone: leva 2mm + barkod ~76mm + desno ~2mm = OK.
+   * Quiet zone: leva 7mm + barkod ~71mm + desna ~2mm = OK (CODE128 minimum
+   * je 10× narrow-modul width = ~1.7mm, a 2mm prelazi taj limit).
    */
-  const BC_X = mm(2);
+  const BC_X = mm(7);
   const BC_Y = mm(14.8);
   const BC_H = mm(15);
   lines.push(`BARCODE ${BC_X},${BC_Y},"128M",${BC_H},0,0,2,4,${tsplStr(bc)}`);

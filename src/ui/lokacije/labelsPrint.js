@@ -581,11 +581,13 @@ const TECH_LABEL_CSS = `
   .toolbar .hint { color:#444; margin-left:12px; }
   /* Total budget na 38mm: 0.4mm pad + 14mm text zone + 0.3mm gap + 17mm barkod + 0.4mm pad = 32.1mm
    * Padding gore/dole = 0.4mm = 0.0157" — ispod operaterskog limita 0.03" (0.762mm).
-   * Padding levo/desno = 2mm — IDENTICNO sa barkod quiet zone-om, tako da
-   * tekst NIKAD ne moze da bude siri od barkoda (poravnati levi i desni rub). */
+   * Padding levo = 7mm (2mm baseline + 5mm operaterski shift udesno — fizicki
+   * ofset nalepnice u TL340P-u; ne diramo driver). Desno ostaje 2mm quiet zone.
+   * Korisna sirina barkoda: 80 - 7 - 2 = 71mm (sa 76mm pre shift-a; CODE128
+   * i dalje cita pouzdano). */
   .label {
     width: 80mm; height: 38mm; max-height: 38mm;
-    padding: 0.4mm 2mm; /* top/bottom 0.4mm = 0.0157", left/right 2mm = align sa barkodom */
+    padding: 0.4mm 2mm 0.4mm 7mm; /* gore/dole 0.4mm; levo 7mm (5mm shift), desno 2mm */
     display: flex; flex-direction: column;
     gap: 0.2mm;
     page-break-after: always;

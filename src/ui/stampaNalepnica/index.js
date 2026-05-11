@@ -10,7 +10,7 @@ import {
   searchBigtehnItems,
   searchBigtehnWorkOrdersForItem,
 } from '../../services/lokacije.js';
-import { formatBigTehnRnzBarcode } from '../../lib/barcodeParse.js';
+import { formatBigTehnRnzBarcode, parseBigTehnBarcode } from '../../lib/barcodeParse.js';
 import {
   buildTechLabelHtmlBlock,
   printTechProcessLabelsBatch,
@@ -232,15 +232,13 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   }
 
   function getKomadaPrikaz() {
-    const u = getKomadaUkupno();
-    return Math.max(1, Math.min(u, Math.floor(Number(komadaEl.value) || 1)));
+    return Math.max(1, Math.min(MAX_QTY, Math.floor(Number(komadaEl.value) || 1)));
   }
 
   function setKomadaPrikaz(n) {
-    const u = getKomadaUkupno();
-    const v = Math.max(1, Math.min(u, Math.floor(Number(n) || 1)));
+    const v = Math.max(1, Math.min(MAX_QTY, Math.floor(Number(n) || 1)));
     komadaEl.value = String(v);
-    komadaEl.max = String(u);
+    komadaEl.max = String(MAX_QTY);
     refreshPreview();
   }
 
@@ -258,7 +256,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   function paintKomadaHint() {
     if (!selectedTp) return;
     const u = getKomadaUkupno();
-    komadaHint.textContent = `Ukupno po RN u BigTehnu: ${u} kom. Prvi broj u polju „Komada" na nalepnici (možete ga smanjiti za parcijalnu serializaciju).`;
+    komadaHint.textContent = `Ukupno po RN u BigTehnu: ${u} kom. Prvi broj u polju „Komada" na nalepnici — možete uneti i veći (npr. dodatne komade van plana).`;
   }
 
   function printLabelWord(n) {
@@ -478,6 +476,74 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     qEl.focus();
   }
 
+  /**
+   * Auto-popuni Predmet + TP iz RNZ barkoda (skener u polju „Pretraži predmet").
+   *
+   * Format barkoda: `RNZ:idrn:orderNo/tpRef:var:field4` (npr. `RNZ:8693:7351/1088:0:39757`)
+   * Mapiranje: orderNo → broj_predmeta predmeta; tpRef → poslednji deo ident_broj-a TP-a.
+   *
+   * Tok:
+   *   1. `searchBigtehnItems(orderNo)` → pronaći predmet sa egzaktnim broj_predmeta
+   *   2. Postaviti selectedPredmet (preskačemo `pickPredmet` da izbegnemo paralelni load TP-ova)
+   *   3. `searchBigtehnWorkOrdersForItem(item.id)` → pronaći TP sa `ident_broj === orderNo/tpRef`
+   *   4. `selectTp(matchedWo)` → koraci 1–3 popunjeni; operater samo pritisne „Štampaj"
+   *
+   * @param {{ orderNo: string, itemRefId: string }} parsed
+   * @returns {Promise<boolean>} true ako su predmet i TP uspešno učitani
+   */
+  async function autoLoadFromRnz(parsed) {
+    const orderNo = String(parsed?.orderNo || '').trim();
+    const tpRef = String(parsed?.itemRefId || '').trim();
+    if (!orderNo || !tpRef) return false;
+    const needle = `${orderNo}/${tpRef}`;
+    showToast(`🔎 Učitavam RNZ ${needle}…`);
+    try {
+      const items = await searchBigtehnItems(orderNo, 50);
+      const item =
+        (Array.isArray(items) ? items : []).find(
+          r => String(r.broj_predmeta || '').trim() === orderNo,
+        ) || (Array.isArray(items) && items.length === 1 ? items[0] : null);
+      if (!item) {
+        showToast(`⚠ Predmet ${orderNo} nije pronađen`);
+        return false;
+      }
+
+      /* Direktno postavi state — `pickPredmet` bi triger-ovao paralelni
+       * load TP-ova koji bismo i mi pokrenuli ispod. */
+      selectedPredmet = item;
+      selectedTp = null;
+      tpsCache = [];
+      qEl.value = '';
+      chipRow.hidden = false;
+      chipRow.innerHTML = `<span class="sn-chip"><span>${escHtml(item.broj_predmeta || '')} · ${escHtml(String(item.naziv_predmeta || '').slice(0, 42))}</span><button type="button" class="sn-chip-remove" data-x-chip aria-label="Ukloni">×</button></span>`;
+      chipRow.querySelector('[data-x-chip]')?.addEventListener('click', () => clearPredmet());
+      inputWrap.style.display = 'none';
+      closeDrop();
+      card2.classList.add('sn-step-animate-in');
+      syncStepCards();
+      paintProgress();
+
+      tpListEl.innerHTML = '<p class="sn-placeholder-muted">Učitavam tehnološke postupke…</p>';
+      tpsCache = await searchBigtehnWorkOrdersForItem(item.id, { onlyOpen: true, limit: 1000 });
+      const matchedWo = (tpsCache || []).find(
+        w => String(w.ident_broj || '').trim() === needle,
+      );
+      await renderTpList('');
+      if (!matchedWo) {
+        showToast(`⚠ TP ${needle} nije pronađen — odaberi ručno`);
+        refreshPreview();
+        return false;
+      }
+      selectTp(matchedWo);
+      showToast(`✓ Učitano iz barkoda: ${needle}`);
+      return true;
+    } catch (e) {
+      console.error('[sn/rnz auto-load]', e);
+      showToast('⚠ Greška pri auto-učitavanju RNZ');
+      return false;
+    }
+  }
+
   async function loadTpsForPredmet() {
     if (!selectedPredmet) return;
     tpListEl.innerHTML = '<p class="sn-placeholder-muted">Učitavam tehnološke postupke…</p>';
@@ -695,6 +761,12 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
 
   qEl.addEventListener('input', () => {
     pendingSearch = qEl.value;
+    /* Skener u toku — ne pretražuj predmete dok cifre RNZ:… ulaze. */
+    if (/^RNZ\b/i.test(pendingSearch)) {
+      debouncedPred.cancel();
+      closeDrop();
+      return;
+    }
     debouncedPred();
   });
   qEl.addEventListener('focus', () => {
@@ -705,6 +777,17 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   });
 
   qEl.addEventListener('keydown', ev => {
+    /* Skener šalje ceo RNZ string + Enter — pokušaj auto-load Predmet+TP. */
+    if (ev.key === 'Enter' && /^RNZ\s*[:|]/i.test(qEl.value)) {
+      const parsed = parseBigTehnBarcode(qEl.value);
+      if (parsed && parsed.format === 'rnz' && parsed.orderNo && parsed.itemRefId) {
+        ev.preventDefault();
+        debouncedPred.cancel();
+        closeDrop();
+        void autoLoadFromRnz(parsed);
+        return;
+      }
+    }
     if (!dropOpen && (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') && !selectedPredmet) {
       void runPredSearch(qEl.value);
     }
