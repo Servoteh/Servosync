@@ -537,6 +537,7 @@ export function openBulkImportModal(opts = {}) {
       (state.analyzing ||
         (state.analysis &&
           (state.analysis.missingEmployees.length > 0 ||
+            (state.analysis.missingToolOznaka && state.analysis.missingToolOznaka.length > 0) ||
             (state.analysis.duplicateDocs.length > 0 && !state.analysis.forceImportConfirmed))));
     const canRun = state.rows.length > 0 && validRowsCount > 0 && !state.importing && !blockedByAnalysis;
     foot.innerHTML = `
@@ -591,10 +592,14 @@ export function openBulkImportModal(opts = {}) {
     if (!state.analysis) return '';
     const a = state.analysis;
     const hasDup = a.duplicateDocs.length > 0;
-    const blocking = a.missingEmployees.length > 0 || (hasDup && !a.forceImportConfirmed);
+    const missTools = (a.missingToolOznaka && a.missingToolOznaka.length > 0);
+    const blocking = a.missingEmployees.length > 0 || missTools || (hasDup && !a.forceImportConfirmed);
     const blockReasons = [];
     if (a.missingEmployees.length > 0) {
       blockReasons.push(`${a.missingEmployees.length} radnika nedostaje u Kadrovskoj`);
+    }
+    if (missTools) {
+      blockReasons.push(`${a.missingToolOznaka.length} oznaka ručnog alata nije u bazi (aktivno)`);
     }
     if (hasDup && !a.forceImportConfirmed) {
       blockReasons.push(`${a.duplicateDocs.length} mašina već ima aktivan revers — verovatno duplikat importa`);
@@ -609,6 +614,11 @@ export function openBulkImportModal(opts = {}) {
           <li>Šifre koje će biti <strong>auto-kreirane</strong>: ${a.newCatalog.length}${a.newCatalog.length > 0 ? ` <span class="rev-muted">(${a.newCatalog.slice(0, 6).map((x) => escHtml(x.oznaka)).join(', ')}${a.newCatalog.length > 6 ? '…' : ''})</span>` : ''}</li>
           <li>Radnici resolve-ovani: ${a.resolvedEmployees.size}</li>
           <li>Magacin lokacija (ALAT-MAG-01): ${a.magacinExists ? '<span style="color:#2a8c4a">✓ postoji</span>' : '<span class="rev-warn">⚠ NE POSTOJI</span>'}</li>
+          ${
+            missTools
+              ? `<li class="rev-warn"><strong>NEMA RUČNOG ALATA</strong> (${a.missingToolOznaka.length}): prvo uvezite „Ručni alat“ ili proverite oznake · <span class="rev-muted">${a.missingToolOznaka.slice(0, 24).map(escHtml).join(', ')}${a.missingToolOznaka.length > 24 ? '…' : ''}</span></li>`
+              : ''
+          }
           ${
             a.missingEmployees.length > 0
               ? `<li class="rev-warn"><strong>NEDOSTAJU U BAZI</strong>: ${a.missingEmployees.length} radnika — admin mora ručno da ih kreira pre importa:<br/><span class="rev-muted">${a.missingEmployees.slice(0, 20).map(escHtml).join(', ')}${a.missingEmployees.length > 20 ? '…' : ''}</span></li>`
@@ -753,6 +763,12 @@ export function openBulkImportModal(opts = {}) {
           paint();
           return;
         }
+        if ((state.analysis.missingToolOznaka?.length ?? 0) > 0) {
+          showToast(`Import blokiran: nema aktivnog ručnog alata za ${state.analysis.missingToolOznaka.length} oznaka(a) — prvo „Ručni alat“.`);
+          state.importing = false;
+          paint();
+          return;
+        }
         if (state.analysis.duplicateDocs.length > 0 && !state.analysis.forceImportConfirmed) {
           showToast(`Import blokiran: ${state.analysis.duplicateDocs.length} mašina već ima aktivan revers (verovatno duplikat).`);
           state.importing = false;
@@ -840,7 +856,7 @@ export function openBulkImportModal(opts = {}) {
   /* ─── REVERS pre-import analiza ───────────────────────────────────
    * Pre nego što kreiramo dokumente:
    *   1. resolve employee imena (strict — admin ne dozvoljava auto-create)
-   *   2. resolve postojeće šifre reznog alata po oznaci/barkodu
+   *   2. CUTTING_TOOL → resolve reznog kataloga po oznaci; TOOL → rev_tools.id za RPC
    *   3. za nepoznate oznake — pripremi auto-create podatke iz Napomene
    * Vraća objekat sa listama: missingEmployees (blokira import), newCatalog (kreiraće se),
    * existingCatalog, machineCodes, docCount, lineCount.

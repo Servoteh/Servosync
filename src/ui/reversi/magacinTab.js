@@ -259,7 +259,7 @@ function renderTable() {
           <th>Kataloški broj</th>
           <th>Naziv</th>
           <th>Grupa</th>
-          <th>Lokacija</th>
+          <th>Lokacija / primalac</th>
           <th class="rev-th-num">Količina</th>
           <th>Status</th>
           <th>Ažurirano</th>
