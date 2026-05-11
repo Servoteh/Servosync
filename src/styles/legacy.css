@@ -3893,6 +3893,91 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .loc-mov-list { margin:0; padding-left:18px; font-size:12px; color:var(--text2); max-height:280px; overflow:auto; }
 .loc-mov-list li { margin-bottom:6px; }
 .loc-mov-type { font-family:var(--mono); font-size:10px; color:var(--accent); }
+
+/* -- Poslednja premeštanja (Početna tab) ---------------------------- */
+.loc-recent-card {
+  margin-top:14px;
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  overflow:hidden;
+}
+.loc-recent-head {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; padding:12px 14px;
+  border-bottom:1px solid var(--border2);
+  background:var(--surface2);
+}
+.loc-recent-title { margin:0 !important; display:flex; align-items:center; gap:8px; }
+.loc-count-pill {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:22px; height:20px; padding:0 7px;
+  border-radius:10px; background:var(--surface3);
+  color:var(--text2); font-size:11px; font-weight:600;
+  font-family:var(--mono);
+}
+.loc-link-btn {
+  background:none; border:0; padding:4px 6px;
+  font-size:12px; font-weight:500; color:var(--accent);
+  cursor:pointer; border-radius:4px;
+}
+.loc-link-btn:hover { background:color-mix(in srgb, var(--accent) 10%, transparent); }
+.loc-recent-tablewrap { max-height:360px; overflow:auto; }
+.loc-recent-table { font-size:12px; }
+.loc-recent-table thead th {
+  position:sticky; top:0; z-index:1;
+  background:var(--surface2);
+  font-size:10px; text-transform:uppercase; letter-spacing:0.4px;
+  color:var(--text3);
+  padding:8px 10px;
+}
+.loc-recent-table tbody td { padding:8px 10px; vertical-align:middle; }
+.loc-recent-table tbody tr + tr td { border-top:1px solid var(--border); }
+
+/* Type pills */
+.loc-mov-pill {
+  display:inline-block; padding:2px 8px; border-radius:10px;
+  font-size:10px; font-weight:600; letter-spacing:0.3px;
+  text-transform:uppercase; border:1px solid transparent;
+  white-space:nowrap;
+}
+.loc-mov-pill--initial {
+  background:color-mix(in srgb, var(--status-done) 14%, var(--surface));
+  color:var(--status-done);
+  border-color:color-mix(in srgb, var(--status-done) 40%, transparent);
+}
+.loc-mov-pill--move {
+  background:color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color:var(--accent);
+  border-color:color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.loc-mov-pill--return {
+  background:color-mix(in srgb, var(--status-prog) 14%, var(--surface));
+  color:var(--status-prog);
+  border-color:color-mix(in srgb, var(--status-prog) 40%, transparent);
+}
+.loc-mov-pill--inv {
+  background:color-mix(in srgb, var(--status-hold) 14%, var(--surface));
+  color:var(--status-hold);
+  border-color:color-mix(in srgb, var(--status-hold) 40%, transparent);
+}
+.loc-mov-pill--remove {
+  background:color-mix(in srgb, var(--risk-high) 14%, var(--surface));
+  color:var(--risk-high);
+  border-color:color-mix(in srgb, var(--risk-high) 40%, transparent);
+}
+.loc-mov-pill--other {
+  background:var(--surface3); color:var(--text2); border-color:var(--border2);
+}
+
+.loc-mov-cell-item { font-family:var(--mono); font-size:11px; color:var(--text); }
+.loc-mov-item { white-space:nowrap; }
+.loc-mov-cell-flow { white-space:nowrap; font-family:var(--mono); font-size:11px; }
+.loc-mov-code { color:var(--text2); }
+.loc-mov-code-to { color:var(--text); font-weight:600; }
+.loc-mov-arrow { color:var(--text3); margin:0 4px; }
+.loc-mov-target { color:var(--text2); font-size:11px; }
+.loc-mov-when { white-space:nowrap; font-family:var(--mono); font-size:11px; color:var(--text2); }
 .loc-path { font-size:11px; color:var(--text2); word-break:break-all; }
 .loc-code-cell { white-space:nowrap; }
 .loc-code-strong { font-weight:600; font-family:var(--mono); font-size:11px; color:var(--text); }

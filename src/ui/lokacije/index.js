@@ -97,6 +97,20 @@ const MOVEMENT_TYPE_LABELS = {
   REMOVAL: 'Uklonjeno',
 };
 
+/* CSS klase za type pills u „Poslednja premeštanja" tabeli — boje
+ * preuzete iz postojećih status tokena (--status-done/-prog/-hold itd.). */
+const MOVEMENT_TYPE_PILL = {
+  INITIAL_PLACEMENT: 'loc-mov-pill--initial',
+  TRANSFER: 'loc-mov-pill--move',
+  RETURN: 'loc-mov-pill--return',
+  INVENTORY_ADJUSTMENT: 'loc-mov-pill--inv',
+  REMOVAL: 'loc-mov-pill--remove',
+};
+
+function movementTypePillClass(type) {
+  return MOVEMENT_TYPE_PILL[type] || 'loc-mov-pill--other';
+}
+
 /* Cache user-a (id → prikaz) — rekešira se pri svakom mount-u, ali ne per-render. */
 let historyUsersCache = null;
 
@@ -1028,22 +1042,59 @@ async function renderPanel(host, tabId) {
   }
 
   if (tabId === 'dashboard') {
-    const [locs, plac, movs, syncStatus] = await Promise.all([
+    const [locs, plac, movs, syncStatus, users] = await Promise.all([
       fetchLocations(),
       fetchPlacements({ limit: 500 }),
-      fetchRecentMovements(20),
+      fetchRecentMovements(12),
       fetchBridgeSyncStatus().catch(() => []),
+      /* Users za prikaz „Korisnik" kolone — tih fallback ako endpoint nije dostupan. */
+      loadUsersFromDb().catch(() => []),
     ]);
     const locN = Array.isArray(locs) ? locs.length : '—';
     const plN = Array.isArray(plac) ? plac.length : '—';
     const locIdx = locationIndex(locs);
-    const recent = Array.isArray(movs)
-      ? movs
-          .slice(0, 12)
-          .map(
-            m =>
-              `<li><span class="loc-mov-type">${escHtml(m.movement_type || '')}</span> · ${escHtml(m.item_ref_id || '')} → <span class="loc-path">${formatLocBrief(m.to_location_id, locIdx)}</span> · ${escHtml((m.moved_at || '').replace('T', ' ').slice(0, 16))}</li>`,
-          )
+    const userIdx = new Map(
+      (Array.isArray(users) ? users : []).map(u => [String(u.id).toLowerCase(), u.label]),
+    );
+    const recentList = Array.isArray(movs) ? movs.slice(0, 12) : [];
+    const recentCount = recentList.length;
+    const recent = recentList.length
+      ? recentList
+          .map(m => {
+            const type = m.movement_type || '';
+            const pillCls = movementTypePillClass(type);
+            const pillLabel = MOVEMENT_TYPE_LABELS[type] || type;
+            const item = m.item_ref_id
+              ? `<span class="loc-mov-item">${escHtml(m.item_ref_table || '')}<span class="loc-muted">:</span>${escHtml(m.item_ref_id || '')}</span>`
+              : '<span class="loc-muted">—</span>';
+            const fromCode = m.from_location_id
+              ? `<span class="loc-mov-code">${escHtml(locIdx.get(m.from_location_id)?.location_code || '')}</span>`
+              : '<span class="loc-muted">—</span>';
+            const toCode = m.to_location_id
+              ? `<span class="loc-mov-code loc-mov-code-to">${escHtml(locIdx.get(m.to_location_id)?.location_code || '')}</span>`
+              : '<span class="loc-muted">—</span>';
+            const toName = m.to_location_id
+              ? escHtml(locIdx.get(m.to_location_id)?.name || '')
+              : type === 'REMOVAL'
+                ? 'Uklonjen sa lokacije'
+                : '';
+            const whoRaw = String(m.moved_by || '').toLowerCase();
+            const who = userIdx.get(whoRaw);
+            const whoLabel = who
+              ? escHtml(who)
+              : whoRaw
+                ? `<span class="loc-muted">${escHtml(whoRaw.slice(0, 8))}…</span>`
+                : '<span class="loc-muted">—</span>';
+            const when = escHtml((m.moved_at || '').replace('T', ' ').slice(0, 16));
+            return `<tr>
+              <td><span class="loc-mov-pill ${pillCls}">${escHtml(pillLabel)}</span></td>
+              <td class="loc-mov-cell-item">${item}</td>
+              <td class="loc-mov-cell-flow">${fromCode} <span class="loc-mov-arrow" aria-hidden="true">→</span> ${toCode}</td>
+              <td>${toName ? `<span class="loc-mov-target">${toName}</span>` : '<span class="loc-muted">—</span>'}</td>
+              <td>${whoLabel}</td>
+              <td class="loc-mov-when">${when}</td>
+            </tr>`;
+          })
           .join('')
       : '';
 
@@ -1082,10 +1133,38 @@ async function renderPanel(host, tabId) {
           <div class="loc-kpi"><span class="loc-kpi-label">Aktivnih lokacija</span><span class="loc-kpi-val">${escHtml(String(locN))}</span></div>
           <div class="loc-kpi"><span class="loc-kpi-label">Placements (stavki)</span><span class="loc-kpi-val">${escHtml(String(plN))}</span></div>
         </div>
-        <h3 class="loc-subh">Poslednja premeštanja</h3>
-        <ul class="loc-mov-list">${recent || '<li class="loc-muted">Nema podataka.</li>'}</ul>
+        <div class="loc-recent-card">
+          <div class="loc-recent-head">
+            <h3 class="loc-subh loc-recent-title">
+              Poslednja premeštanja
+              <span class="loc-count-pill" aria-label="Broj prikazanih premeštanja">${recentCount}</span>
+            </h3>
+            <button type="button" class="loc-link-btn" id="locRecentFilterLink">Filtriraj →</button>
+          </div>
+          ${recent
+            ? `<div class="loc-table-wrap loc-recent-tablewrap">
+                <table class="loc-table loc-recent-table">
+                  <thead>
+                    <tr>
+                      <th>Tip</th>
+                      <th>Predmet / Stavka</th>
+                      <th>Premeštanje</th>
+                      <th>Lokacija (cilj)</th>
+                      <th>Korisnik</th>
+                      <th>Vreme</th>
+                    </tr>
+                  </thead>
+                  <tbody>${recent}</tbody>
+                </table>
+              </div>`
+            : '<p class="loc-muted" style="padding:14px 12px">Nema podataka.</p>'}
+        </div>
       </div>`;
     attachLocToolbar();
+    host.querySelector('#locRecentFilterLink')?.addEventListener('click', () => {
+      const tabBtn = mountRef?.querySelector('[data-loc-tab="history"]');
+      if (tabBtn instanceof HTMLElement) tabBtn.click();
+    });
     return;
   }
 
