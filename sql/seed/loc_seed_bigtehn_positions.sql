@@ -10,7 +10,7 @@
 
 -- ── A — ROOT + VIRTUALNE LOKACIJE ───────────────────────────────────────────
 -- MAG       : parent za većinu K-polica (BigTehn flat hijerarhija).
--- HALA 2    : K-kontrolni set K-A1..5, K-B1..5, K-C1..5, K-M (fizički u Hali 2).
+-- HALA 2A   : postojeća Hala 2 (proizvodnja); K-kontrolni set K-A1..5, K-B1..5, K-C1..5, K-M.
 -- UGRADJENO : komad ušao u finalni sklop — izlazi iz bilansa.
 -- PROIZVODNJA: komad je WIP (u radu), još nije završen.
 -- OTPISANO  : softverski škart (za razliku od K-S koji je fizička polica).
@@ -22,17 +22,16 @@ VALUES
   ('OTPISANO',    'Otpisano / softverski škart',      'SCRAPPED',   NULL, true)
 ON CONFLICT (location_code) DO NOTHING;
 
--- Hala 2 — fizička hala za K-kontrolne police (K-A1..5, K-B1..5, K-C1..5, K-M).
 INSERT INTO public.loc_locations (location_code, name, location_type, parent_id, is_active)
-VALUES ('HALA 2', 'Hala 2', 'WAREHOUSE', NULL, true)
+VALUES ('HALA 2A', 'Hala 2a-proizvodnja', 'WAREHOUSE', NULL, true)
 ON CONFLICT (location_code) DO NOTHING;
 
 -- ── B — POLICE IZ tPozicije (25 redova) ─────────────────────────────────────
--- K-kontrolni set pod HALA 2; ostale K-* police ostaju pod MAG (BigTehn flat hijerarhija).
+-- K-kontrolni set pod HALA 2A; ostale K-* police ostaju pod MAG (BigTehn flat hijerarhija).
 WITH
 mag AS (SELECT id FROM public.loc_locations WHERE location_code = 'MAG' LIMIT 1),
-h2 AS (SELECT id FROM public.loc_locations WHERE location_code = 'HALA 2' LIMIT 1),
-src (code, naziv, under_hala2) AS (
+h2a AS (SELECT id FROM public.loc_locations WHERE location_code = 'HALA 2A' LIMIT 1),
+src (code, naziv, under_hala2a) AS (
   VALUES
     ('K-A1',  'FARBANJE', true),
     ('K-A2',  'FARBANJE', true),
@@ -66,7 +65,7 @@ ins AS (
     s.code,
     s.naziv,
     'SHELF'::public.loc_type_enum,
-    CASE WHEN s.under_hala2 THEN (SELECT id FROM h2) ELSE (SELECT id FROM mag) END,
+    CASE WHEN s.under_hala2a THEN (SELECT id FROM h2a) ELSE (SELECT id FROM mag) END,
     true
   FROM src s
   ON CONFLICT (location_code) DO NOTHING
