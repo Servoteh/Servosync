@@ -275,4 +275,42 @@ describe('formatBigTehnRnzBarcode / formatBigTehnShortBarcode', () => {
     expect(s).toBe('9000/1091063');
     expect(parseBigTehnBarcode(s)?.format).toBe('short');
   });
+
+  it('RNZ generator čuva crticu u orderNo (broj predmeta 8311-1)', () => {
+    const raw = formatBigTehnRnzBarcode({
+      internalId: '0',
+      orderNo: '8311-1',
+      tpNo: '123',
+    });
+    expect(raw).toBe('RNZ:0:8311-1/123:0:0');
+    expect(parseBigTehnBarcode(raw)).toMatchObject({
+      format: 'rnz',
+      orderNo: '8311-1',
+      itemRefId: '123',
+    });
+  });
+
+  it('RNZ generator čuva crticu u orderNo i alfanumerički TP (9400-1/7-5-S1)', () => {
+    const raw = formatBigTehnRnzBarcode({
+      internalId: '9833',
+      orderNo: '9400-1',
+      tpNo: '7-5-S1',
+      segment3: '1',
+      segment4: '44963',
+    });
+    expect(raw).toBe('RNZ:9833:9400-1/7-5-S1:1:44963');
+    expect(parseBigTehnBarcode(raw)).toMatchObject({
+      format: 'rnz',
+      orderNo: '9400-1',
+      itemRefId: '7-5-S1',
+      idrn: '9833',
+      varijanta: '1',
+      field4: '44963',
+    });
+  });
+
+  it('RNZ encoder strip-uje leading/trailing crtice u orderNo', () => {
+    const raw = formatBigTehnRnzBarcode({ orderNo: '-8311-', tpNo: '1' });
+    expect(raw).toBe('RNZ:0:8311/1:0:0');
+  });
 });

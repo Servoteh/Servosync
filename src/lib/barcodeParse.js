@@ -126,9 +126,12 @@ export function parseBigTehnBarcode(raw) {
   if (!clean) return null;
 
   /* RNZ — PRE regex je zahtevao TP kao \d{1,8} (npr. 1088), pa "7-5-S1" nije prolazio.
-   * U `itemRefId` dozvoljen je i `/` (npr. `9400/1/300` → nalog 9400, TP `1/300`). */
+   * U `itemRefId` dozvoljen je i `/` (npr. `9400/1/300` → nalog 9400, TP `1/300`).
+   * orderNo dozvoljava i internu crticu (npr. „8311-1" — BigTehn revizijski
+   * sufiks na broju predmeta), ali separator do tpNo je sužen na `/`/`\` da
+   * crtica unutar orderNo ne bude tretirana kao razdvajač. */
   const rnz = clean.match(
-    /^RNZ\s*[:|]\s*(\d{1,10})\s*[:|]\s*(\d{1,8})\s*[/\\\-_ ]\s*([A-Za-z0-9._/\-]{1,64})\s*[:|]\s*(\d+)\s*[:|]\s*(\d+)\s*$/i,
+    /^RNZ\s*[:|]\s*(\d{1,10})\s*[:|]\s*([0-9][0-9\-]{0,12})\s*[/\\]\s*([A-Za-z0-9._/\-]{1,64})\s*[:|]\s*(\d+)\s*[:|]\s*(\d+)\s*$/i,
   );
   if (rnz) {
     const [, idrn, orderNo, itemRefId, varijanta, field4] = rnz;
@@ -264,7 +267,13 @@ export function formatBigTehnRnzBarcode({
 } = {}) {
   if (orderNo == null || tpNo == null) return null;
   const a = String(internalId).replace(/\D/g, '').slice(0, 10) || '0';
-  const o = String(orderNo).replace(/\D/g, '').slice(0, 8);
+  /* orderNo: dozvoljene cifre i interna crtica (npr. „8311-1" — broj predmeta
+   * sa revizijskim sufiksom u BigTehn-u). Strip leading/trailing dashes da
+   * parser pouzdano hvata prvi karakter kao cifru. */
+  const o = String(orderNo)
+    .replace(/[^0-9\-]/g, '')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 13);
   const t = String(tpNo)
     .replace(/[^A-Za-z0-9._/\-]/g, '')
     .slice(0, 64);

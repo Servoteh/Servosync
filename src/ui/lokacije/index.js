@@ -19,6 +19,7 @@ import {
   getLokacijeUiState,
   setBrowseFilter,
   setBrowseKindFilter,
+  setBrowseHallId,
   setItemsFilter,
   setItemsPage,
   setItemsPageSize,
@@ -335,6 +336,73 @@ function filterLocationsByKindHierarchical(locs, kind) {
   return locs.filter(l => keep.has(l.id));
 }
 
+/**
+ * Suzi listu lokacija na izabranu HALU i sve njene potomke (rekurzivno).
+ * Sama HALA ostaje u rezultatu da operater zna „odakle gleda".
+ *
+ * @param {Array<object>} locs flat lista
+ * @param {string} hallId UUID lokacije tipa HALA; prazno = bez filtera
+ * @returns {Array<object>}
+ */
+function filterLocationsBySubtree(locs, hallId) {
+  if (!Array.isArray(locs)) return [];
+  if (!hallId) return locs.slice();
+  const childrenByParent = new Map();
+  for (const l of locs) {
+    const k = l.parent_id || '__root__';
+    if (!childrenByParent.has(k)) childrenByParent.set(k, []);
+    childrenByParent.get(k).push(l);
+  }
+  const keep = new Set();
+  const stack = [hallId];
+  while (stack.length) {
+    const id = stack.pop();
+    if (keep.has(id)) continue;
+    keep.add(id);
+    const kids = childrenByParent.get(id) || [];
+    for (const k of kids) stack.push(k.id);
+  }
+  return locs.filter(l => keep.has(l.id));
+}
+
+/**
+ * Sortira siblinge A-Z po `location_code` (natural — „A.10" posle „A.9"),
+ * čuvajući redosled na nivou stabla. Rezultat je nova flat lista
+ * gde su prvo svi root-ovi (po code-u), pa za svaki root njegova deca
+ * rekurzivno — odgovara redosledu koji `renderLocationsTreeHtml` koristi
+ * kroz `parent_id`/`depth`, ali sa naturalnim A-Z sort-om umesto
+ * `path_cached`-a (koji slovi „R-A-10" pre „R-A-9").
+ *
+ * @param {Array<object>} locs flat lista
+ * @returns {Array<object>}
+ */
+function sortLocationsAZNatural(locs) {
+  if (!Array.isArray(locs) || locs.length === 0) return [];
+  const childrenByParent = new Map();
+  for (const l of locs) {
+    const k = l.parent_id || '__root__';
+    if (!childrenByParent.has(k)) childrenByParent.set(k, []);
+    childrenByParent.get(k).push(l);
+  }
+  const cmp = (a, b) =>
+    String(a.location_code || '').localeCompare(
+      String(b.location_code || ''),
+      undefined,
+      { numeric: true, sensitivity: 'base' },
+    );
+  for (const arr of childrenByParent.values()) arr.sort(cmp);
+
+  const result = [];
+  const visit = node => {
+    result.push(node);
+    const kids = childrenByParent.get(node.id) || [];
+    for (const k of kids) visit(k);
+  };
+  const roots = childrenByParent.get('__root__') || [];
+  for (const r of roots) visit(r);
+  return result;
+}
+
 function attachBrowseViewSwitch() {
   const host = locPanelHost;
   if (!host) return;
@@ -358,8 +426,13 @@ function attachBrowseSearch() {
   if (!host) return;
   const input = host.querySelector('#locBrowseSearch');
   const kindSel = host.querySelector('#locBrowseKind');
+  const hallSel = host.querySelector('#locBrowseHall');
   kindSel?.addEventListener('change', () => {
     setBrowseKindFilter(kindSel.value || '');
+    refreshLocPanel();
+  });
+  hallSel?.addEventListener('change', () => {
+    setBrowseHallId(hallSel.value || '');
     refreshLocPanel();
   });
   if (!input) return;
@@ -1038,9 +1111,13 @@ async function renderPanel(host, tabId) {
     const locs = await fetchLocations({ activeOnly: !showInactiveLocations });
     const canEditLocs = canEdit();
     const err = locs === null ? `<p class="loc-warn">Učitavanje neuspešno.</p>` : '';
-    const { browseFilter, browseKindFilter } = getLokacijeUiState();
-    const textFiltered = filterLocationsHierarchical(locs, browseFilter);
-    const filtered = filterLocationsByKindHierarchical(textFiltered, browseKindFilter);
+    const { browseFilter, browseKindFilter, browseHallId } = getLokacijeUiState();
+    /* Hall-subtree filter prvo (suzi domen na izabranu halu), pa text/kind,
+     * pa A-Z natural sort siblinga na svim nivoima. */
+    const hallScoped = filterLocationsBySubtree(locs, browseHallId);
+    const textFiltered = filterLocationsHierarchical(hallScoped, browseFilter);
+    const kindFiltered = filterLocationsByKindHierarchical(textFiltered, browseKindFilter);
+    const filtered = sortLocationsAZNatural(kindFiltered);
     const matchCount = browseFilter
       ? `<span class="loc-muted loc-filter-hint">Pogodaka: ${Array.isArray(locs) ? filtered.length : 0} / ${Array.isArray(locs) ? locs.length : 0}</span>`
       : '';
@@ -1053,6 +1130,29 @@ async function renderPanel(host, tabId) {
       .map(([v, label]) => `<option value="${escHtml(v)}"${browseKindFilter === v ? ' selected' : ''}>${escHtml(label)}</option>`)
       .join('');
 
+    /* HALE dropdown — sve aktivne i (ako je „Prikaži neaktivne" čekirano) neaktivne
+     * hale iz trenutno učitanog `locs` skupa. Sort A-Z po location_code (natural). */
+    const halls = Array.isArray(locs)
+      ? locs
+          .filter(l => getLocationKind(l.location_type) === 'hall')
+          .slice()
+          .sort((a, b) =>
+            String(a.location_code || '').localeCompare(
+              String(b.location_code || ''),
+              undefined,
+              { numeric: true, sensitivity: 'base' },
+            ),
+          )
+      : [];
+    const hallOptions = [`<option value="">Sve hale</option>`]
+      .concat(
+        halls.map(
+          h =>
+            `<option value="${escHtml(h.id)}"${h.id === browseHallId ? ' selected' : ''}>${escHtml(h.location_code || '')}${h.name ? ` · ${escHtml(h.name)}` : ''}</option>`,
+        ),
+      )
+      .join('');
+
     const extraToolbar = `
       <div class="loc-master-heading">
         <strong>Šifarnik hala i polica</strong>
@@ -1062,6 +1162,10 @@ async function renderPanel(host, tabId) {
         <button type="button" class="btn btn-xs${browseViewMode === 'table' ? ' is-active' : ''}" data-loc-view="table">Tabela</button>
         <button type="button" class="btn btn-xs${browseViewMode === 'tree' ? ' is-active' : ''}" data-loc-view="tree">Stablo</button>
       </div>
+      <label class="loc-inline-check">
+        <span>Hala:</span>
+        <select id="locBrowseHall">${hallOptions}</select>
+      </label>
       <label class="loc-inline-check">
         <span>Tip:</span>
         <select id="locBrowseKind">${kindOptions}</select>

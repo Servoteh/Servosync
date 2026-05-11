@@ -31,6 +31,10 @@ const state = {
   activeTab: DEFAULT_TAB,
   browseFilter: '',
   browseKindFilter: '',
+  /* UUID konkretne HALE — kad je setovan, browse prikazuje samo tu halu i
+   * njene potomke. Prazan string = sve hale. Validira se kao UUID, nevalidne
+   * vrednosti se tihо resetuju na ''. */
+  browseHallId: '',
   itemsFilter: '',
   itemsPage: 0,
   itemsPageSize: DEFAULT_PAGE_SIZE,
@@ -108,6 +112,10 @@ export function setBrowseFilter(v) {
 
 export function setBrowseKindFilter(v) {
   state.browseKindFilter = VALID_BROWSE_KIND_FILTERS.has(v) ? v : '';
+}
+
+export function setBrowseHallId(v) {
+  state.browseHallId = normalizeUuid(v);
 }
 
 export function setItemsFilter(v) {
