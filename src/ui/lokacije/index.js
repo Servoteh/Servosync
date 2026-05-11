@@ -169,6 +169,64 @@ function renderBridgeStaleBanner(statusList) {
     </div>`;
 }
 
+/**
+ * Quick-action grid za Početni tab (zameni `locToolbarHtml` samo na Početnoj —
+ * ostali tabovi i dalje koriste običan toolbar). Koristi iste ID-jeve kao
+ * toolbar, pa `attachLocToolbar()` može da veže iste click handler-e bez
+ * dupliranja koda. Svaka kartica = velika action sa ikonom + naslovom +
+ * podnaslovom; SKENIRAJ je primary (akcentovan).
+ */
+function locDashboardActionsHtml() {
+  const cards = [];
+  if (canUseCamera()) {
+    cards.push({
+      id: 'locBtnScanMove',
+      icon: '📷',
+      title: 'SKENIRAJ',
+      sub: 'Premeštaj barkodom',
+      primary: true,
+    });
+  }
+  cards.push({
+    id: 'locBtnQuickMove',
+    icon: '🔀',
+    title: 'BRZO PREMEŠTANJE',
+    sub: 'Ručni unos',
+  });
+  if (canEdit()) {
+    cards.push({
+      id: 'locBtnNewLoc',
+      icon: '📍',
+      title: 'NOVA LOKACIJA',
+      sub: 'Definiši mesto',
+    });
+    cards.push({
+      id: 'locBtnLabels',
+      icon: '🏷',
+      title: 'NALEPNICA POLICE',
+      sub: 'Štampa za regal',
+    });
+    cards.push({
+      id: 'locBtnTpLabel',
+      icon: '🧾',
+      title: 'NALEPNICA TP',
+      sub: 'Štampa za predmet',
+    });
+  }
+  const inner = cards
+    .map(
+      c => `<button type="button" class="loc-action-card${c.primary ? ' is-primary' : ''}" id="${escHtml(c.id)}">
+        <span class="loc-action-card-icon" aria-hidden="true">${c.icon}</span>
+        <span class="loc-action-card-body">
+          <span class="loc-action-card-title">${escHtml(c.title)}</span>
+          <span class="loc-action-card-sub">${escHtml(c.sub)}</span>
+        </span>
+      </button>`,
+    )
+    .join('');
+  return `<div class="loc-action-grid" role="group" aria-label="Brze akcije">${inner}</div>`;
+}
+
 function locToolbarHtml({ extra = '' } = {}) {
   const parts = [];
   if (canUseCamera()) {
@@ -1139,7 +1197,7 @@ async function renderPanel(host, tabId) {
     host.innerHTML = `
       <div class="kadr-panel active loc-panel">
         ${err}
-        ${locToolbarHtml()}
+        ${locDashboardActionsHtml()}
         ${bridgeBanner}
         ${firstRunHtml}
         <div class="loc-kpi-row loc-kpi-row--dashboard">

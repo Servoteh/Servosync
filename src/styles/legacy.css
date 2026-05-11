@@ -3920,6 +3920,71 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 .loc-kpi--violet .loc-kpi-icon { background:color-mix(in srgb, #8b5cf6 18%, transparent); color:#8b5cf6; }
 .loc-kpi--green  .loc-kpi-icon { background:color-mix(in srgb, var(--status-done) 18%, transparent); color:var(--status-done); }
 .loc-kpi--amber  .loc-kpi-icon { background:color-mix(in srgb, var(--status-hold) 18%, transparent); color:var(--status-hold); }
+
+/* -- Quick-action grid (Početna tab — zamena toolbar-a) ------------- */
+.loc-action-grid {
+  display:grid;
+  grid-template-columns:repeat(5, minmax(0, 1fr));
+  gap:10px;
+  margin:6px 0 14px;
+}
+@media (max-width: 1100px) {
+  .loc-action-grid { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .loc-action-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+}
+.loc-action-card {
+  display:flex; align-items:center; gap:12px;
+  text-align:left;
+  padding:14px 14px;
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  cursor:pointer;
+  transition: background 120ms, border-color 120ms, transform 120ms;
+  min-width:0;
+}
+.loc-action-card:hover {
+  background:color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border-color:color-mix(in srgb, var(--accent) 30%, var(--border2));
+}
+.loc-action-card:active { transform: translateY(1px); }
+.loc-action-card-icon {
+  display:inline-flex; align-items:center; justify-content:center;
+  flex:0 0 auto;
+  width:36px; height:36px;
+  border-radius:9px;
+  background:var(--surface3);
+  font-size:18px; line-height:1;
+}
+.loc-action-card-body { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.loc-action-card-title {
+  font-size:12px; font-weight:700; letter-spacing:0.4px;
+  color:var(--text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.loc-action-card-sub {
+  font-size:11px; color:var(--text3);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.loc-action-card.is-primary {
+  background:var(--accent); color:#fff;
+  border-color:var(--accent);
+}
+.loc-action-card.is-primary:hover {
+  background:color-mix(in srgb, var(--accent) 88%, black);
+  border-color:color-mix(in srgb, var(--accent) 88%, black);
+}
+.loc-action-card.is-primary .loc-action-card-icon {
+  background:rgba(255, 255, 255, 0.18);
+  color:#fff;
+}
+.loc-action-card.is-primary .loc-action-card-title,
+.loc-action-card.is-primary .loc-action-card-sub {
+  color:#fff;
+}
+.loc-action-card.is-primary .loc-action-card-sub { opacity:0.88; }
 .loc-mov-list { margin:0; padding-left:18px; font-size:12px; color:var(--text2); max-height:280px; overflow:auto; }
 .loc-mov-list li { margin-bottom:6px; }
 .loc-mov-type { font-family:var(--mono); font-size:10px; color:var(--accent); }
