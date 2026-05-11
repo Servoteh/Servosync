@@ -5,11 +5,16 @@
 import { escHtml, showToast } from '../../lib/dom.js';
 import { toggleTheme } from '../../lib/theme.js';
 import { logout } from '../../services/auth.js';
-import { getAuth } from '../../state/auth.js';
+import { getAuth, canEdit } from '../../state/auth.js';
 import {
   searchBigtehnItems,
   searchBigtehnWorkOrdersForItem,
+  fetchLocations,
+  fetchItemPlacements,
+  locCreateMovement,
+  formatLocationDisplay,
 } from '../../services/lokacije.js';
+import { getLocationKind } from '../../lib/lokacijeTypes.js';
 import { formatBigTehnRnzBarcode, parseBigTehnBarcode } from '../../lib/barcodeParse.js';
 import {
   buildTechLabelHtmlBlock,
@@ -133,29 +138,51 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
           <section class="sn-step-card is-disabled" id="snCard3" style="display:none">
             <h2 class="sn-step-label is-muted" id="snLab3">3. Komada na nalepnici i broj otisaka</h2>
             <div id="snQtyBlock" style="display:none">
-              <div class="sn-field-block">
-                <label class="sn-field-lbl" for="snKomada">Komada na nalepnici (prikaz)</label>
-                <div class="sn-qty-row">
-                  <div class="sn-qty-ctrl">
-                    <button type="button" id="snKomadaM" aria-label="Smanji komadu">−</button>
-                    <input type="number" id="snKomada" min="1" max="${MAX_QTY}" step="1" value="1" inputmode="numeric" />
-                    <button type="button" id="snKomadaP" aria-label="Povećaj komadu">+</button>
+              <div class="sn-qty-pair-row">
+                <div class="sn-field-block sn-qty-pair-item">
+                  <label class="sn-field-lbl" for="snKomada">Komada na nalepnici (prikaz)</label>
+                  <div class="sn-qty-row">
+                    <div class="sn-qty-ctrl">
+                      <button type="button" id="snKomadaM" aria-label="Smanji komadu">−</button>
+                      <input type="number" id="snKomada" min="1" max="${MAX_QTY}" step="1" value="1" inputmode="numeric" />
+                      <button type="button" id="snKomadaP" aria-label="Povećaj komadu">+</button>
+                    </div>
                   </div>
+                  <span class="sn-hint" id="snKomadaHint"></span>
                 </div>
-                <span class="sn-hint" id="snKomadaHint"></span>
-              </div>
-              <div class="sn-field-block" style="margin-top:18px">
-                <label class="sn-field-lbl" for="snCopy">Broj nalepnica za štampu</label>
-                <div class="sn-qty-row">
-                  <div class="sn-qty-ctrl">
-                    <button type="button" id="snCopyM" aria-label="Smanji broj nalepnica">−</button>
-                    <input type="number" id="snCopy" min="1" max="${MAX_QTY}" step="1" value="1" inputmode="numeric" />
-                    <button type="button" id="snCopyP" aria-label="Povećaj broj nalepnica">+</button>
+                <div class="sn-field-block sn-qty-pair-item">
+                  <label class="sn-field-lbl" for="snCopy">Broj nalepnica za štampu</label>
+                  <div class="sn-qty-row">
+                    <div class="sn-qty-ctrl">
+                      <button type="button" id="snCopyM" aria-label="Smanji broj nalepnica">−</button>
+                      <input type="number" id="snCopy" min="1" max="${MAX_QTY}" step="1" value="1" inputmode="numeric" />
+                      <button type="button" id="snCopyP" aria-label="Povećaj broj nalepnica">+</button>
+                    </div>
                   </div>
+                  <span class="sn-hint">Koliko identičnih nalepnica odštampati (isti tekst i barkod).</span>
                 </div>
-                <div class="sn-quick-chips" id="snQuick"></div>
-                <span class="sn-hint">Koliko identičnih nalepnica odštampati (isti tekst i barkod).</span>
               </div>
+              ${
+                canEdit()
+                  ? `<div class="sn-field-block" style="margin-top:20px" id="snLocBlock">
+                <label class="sn-field-lbl">Lokacija smeštaja (opciono)</label>
+                <p class="sn-hint" style="margin:0 0 10px">
+                  Ako izabereš policu, posle uspešne štampe zapisuje se smeštaj u modulu Lokacije.
+                  „Bez police" — samo štampa, bez izmene smeštaja.
+                </p>
+                <div class="sn-loc-row">
+                  <label class="sn-loc-field">
+                    <span class="sn-loc-lbl">Hala</span>
+                    <select id="snHall" class="sn-select" aria-label="Hala"></select>
+                  </label>
+                  <label class="sn-loc-field">
+                    <span class="sn-loc-lbl">Polica</span>
+                    <select id="snShelf" class="sn-select" aria-label="Polica" disabled></select>
+                  </label>
+                </div>
+              </div>`
+                  : ''
+              }
               <div class="sn-field-block" style="margin-top:18px">
                 <label class="sn-field-lbl">Tip operacije (opciono — natpis ispod barkoda)</label>
                 <div class="sn-quick-chips" id="snTipChips"></div>
@@ -210,8 +237,11 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   const prevHint = wrap.querySelector('#snPrevHint');
   const btnPrint = wrap.querySelector('#snPrint');
   const progressEl = wrap.querySelector('#snProgress');
-  const quickHost = wrap.querySelector('#snQuick');
   const tipChipsHost = wrap.querySelector('#snTipChips');
+  const hallEl = /** @type {HTMLSelectElement|null} */ (wrap.querySelector('#snHall'));
+  const shelfEl = /** @type {HTMLSelectElement|null} */ (wrap.querySelector('#snShelf'));
+  /** @type {object[]} Lokacije master (hale + police) za dropdown-e. */
+  let locRowsAll = [];
 
   /** @type {object|null} */
   let selectedPredmet = null;
@@ -257,7 +287,6 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
 
   function setPrintCopies(n) {
     copyEl.value = String(Math.max(1, Math.min(MAX_QTY, Math.floor(Number(n) || 1))));
-    paintCopyChips();
     refreshPreview();
   }
 
@@ -284,25 +313,85 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     dropEl.classList.add('is-open');
   }
 
+  function paintShelfSelect(hallId) {
+    if (!shelfEl || !hallEl) return;
+    const hid = String(hallId || '').trim();
+    shelfEl.disabled = !hid;
+    const shelves = !hid
+      ? []
+      : locRowsAll.filter(
+          l =>
+            l &&
+            l.is_active !== false &&
+            getLocationKind(l.location_type) === 'shelf' &&
+            String(l.parent_id || '') === hid,
+        )
+          .slice()
+          .sort((a, b) =>
+            String(a.location_code || '').localeCompare(String(b.location_code || ''), undefined, {
+              numeric: true,
+              sensitivity: 'base',
+            }),
+          );
+    const prevShelf = shelfEl.value;
+    shelfEl.innerHTML =
+      `<option value="">— Bez police (samo štampa) —</option>` +
+      shelves
+        .map(s => {
+          const c = escHtml(String(s.location_code || ''));
+          const n = s.name ? ` · ${escHtml(String(s.name))}` : '';
+          return `<option value="${escHtml(String(s.id))}">${c}${n}</option>`;
+        })
+        .join('');
+    if (prevShelf && shelves.some(s => String(s.id) === prevShelf)) shelfEl.value = prevShelf;
+    else shelfEl.value = '';
+  }
+
+  function paintHallSelect() {
+    if (!hallEl) return;
+    const prev = hallEl.value;
+    const halls = locRowsAll
+      .filter(l => l && l.is_active !== false && getLocationKind(l.location_type) === 'hall')
+      .slice()
+      .sort((a, b) =>
+        String(a.location_code || '').localeCompare(String(b.location_code || ''), undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        }),
+      );
+    hallEl.innerHTML =
+      `<option value="">— Izaberi halu —</option>` +
+      halls
+        .map(h => {
+          const c = escHtml(String(h.location_code || ''));
+          const n = h.name ? ` · ${escHtml(String(h.name))}` : '';
+          return `<option value="${escHtml(String(h.id))}">${c}${n}</option>`;
+        })
+        .join('');
+    if (prev && halls.some(h => String(h.id) === prev)) hallEl.value = prev;
+    else hallEl.value = '';
+    paintShelfSelect(hallEl.value);
+  }
+
+  async function loadLocationDropdowns() {
+    if (!canEdit() || !hallEl) return;
+    const rows = await fetchLocations({ activeOnly: true });
+    locRowsAll = Array.isArray(rows) ? rows : [];
+    if (!Array.isArray(rows)) showToast('⚠ Lokacije nisu učitane (mreža ili sesija).');
+    paintHallSelect();
+  }
+
+  function resetLocationPickers() {
+    if (!hallEl || !shelfEl) return;
+    hallEl.value = '';
+    paintShelfSelect('');
+  }
+
   function paintProgress() {
     const s = !selectedPredmet ? 1 : !selectedTp ? 2 : 3;
     progressEl.querySelectorAll('.sn-progress-step').forEach(el => {
       const k = Number(el.getAttribute('data-step'));
       el.classList.toggle('is-active', k <= s);
-    });
-  }
-
-  function paintCopyChips() {
-    const v = getPrintCopies();
-    const vals = [1, 5, 10, 25, 50];
-    quickHost.innerHTML = vals
-      .map(
-        n =>
-          `<button type="button" class="sn-q-chip ${n === v ? 'is-active' : ''}" data-q="${n}">${n}</button>`,
-      )
-      .join('');
-    quickHost.querySelectorAll('[data-q]').forEach(btn => {
-      btn.addEventListener('click', () => setPrintCopies(btn.getAttribute('data-q')));
     });
   }
 
@@ -511,6 +600,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     if (komadaEl) komadaEl.value = '1';
     selectedTip = '';
     paintTipChips();
+    resetLocationPickers();
     syncStepCards();
     paintProgress();
     refreshPreview();
@@ -746,6 +836,91 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     }
   }
 
+  /**
+   * Posle uspešne štampe — ako je izabrana polica, poziva loc_create_movement.
+   * @param {number} copiesPrinted
+   */
+  async function applyPlacementAfterPrint(copiesPrinted) {
+    if (!canEdit() || !shelfEl) return;
+    const shelfId = String(shelfEl.value || '').trim();
+    if (!shelfId) return;
+    if (!selectedPredmet || !selectedTp) return;
+
+    const order_no = String(selectedPredmet.broj_predmeta || '').trim();
+    const idb = String(selectedTp.ident_broj || '');
+    const slash = idb.indexOf('/');
+    const tpPart = slash >= 0 ? idb.slice(slash + 1).trim() : '';
+    if (!order_no || !tpPart) {
+      showToast('⚠ Štampa OK. Smeštaj nije zabeležen: nepotpun RN/TP.');
+      return;
+    }
+
+    const kp = getKomadaPrikaz();
+    const qty = Math.max(1, kp) * Math.max(1, copiesPrinted);
+    const drawing_no = String(selectedTp.broj_crteza || '').trim() || undefined;
+    const note = ['Štampa nalepnice', drawing_no ? `Crtež:${drawing_no}` : ''].filter(Boolean).join(' | ');
+
+    const placements = (await fetchItemPlacements('bigtehn_rn', tpPart, order_no)) || [];
+
+    const destLabel = formatLocationDisplay(locRowsAll.find(l => String(l.id) === shelfId) || { id: shelfId });
+
+    if (placements.length === 0) {
+      const res = await locCreateMovement({
+        item_ref_table: 'bigtehn_rn',
+        item_ref_id: tpPart,
+        order_no,
+        drawing_no,
+        to_location_id: shelfId,
+        movement_type: 'INITIAL_PLACEMENT',
+        quantity: qty,
+        note,
+      });
+      if (!res || !res.ok) {
+        showToast(`⚠ Štampa OK. Smeštaj neuspešan: ${String(res?.error || 'RPC')}`);
+        return;
+      }
+      showToast(`✓ Štampano ${copiesPrinted} nalepnica · prvi smeštaj na ${destLabel}`);
+      return;
+    }
+
+    if (placements.length > 1) {
+      showToast(
+        '⚠ Štampa OK. Smeštaj nije ažuriran jer je deo na više polica — koristi Brzo premeštanje u Lokacijama.',
+      );
+      return;
+    }
+
+    const fromRow = placements[0];
+    if (String(fromRow.location_id) === shelfId) {
+      showToast(`✓ Štampano ${copiesPrinted} nalepnica · već zabeleženo na ${destLabel}`);
+      return;
+    }
+    const maxQ = Number(fromRow.quantity);
+    if (Number.isFinite(maxQ) && qty > maxQ) {
+      showToast(
+        `⚠ Štampa OK. Premeštaj nije izvršen: traženo ukupno ${qty} kom, na polaznoj polici je ${maxQ}.`,
+      );
+      return;
+    }
+
+    const res = await locCreateMovement({
+      item_ref_table: 'bigtehn_rn',
+      item_ref_id: tpPart,
+      order_no,
+      drawing_no,
+      to_location_id: shelfId,
+      from_location_id: String(fromRow.location_id),
+      movement_type: 'TRANSFER',
+      quantity: qty,
+      note,
+    });
+    if (!res || !res.ok) {
+      showToast(`⚠ Štampa OK. Premeštaj neuspešan: ${String(res?.error || 'RPC')}`);
+      return;
+    }
+    showToast(`✓ Štampano ${copiesPrinted} nalepnica · premeštaj na ${destLabel}`);
+  }
+
   async function doPrint() {
     if (!selectedPredmet || !selectedTp) return;
     const copies = getPrintCopies();
@@ -777,7 +952,12 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
         },
       },
     ]);
-    showToast(`✓ Štampano ${copies} nalepnica`);
+    const shelfChosen = canEdit() && shelfEl && String(shelfEl.value || '').trim();
+    if (shelfChosen) {
+      await applyPlacementAfterPrint(copies);
+    } else {
+      showToast(`✓ Štampano ${copies} nalepnica`);
+    }
   }
 
   /* Events */
@@ -880,12 +1060,15 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   });
 
   document.addEventListener('mousedown', docClick);
-  paintCopyChips();
+  hallEl?.addEventListener('change', () => {
+    paintShelfSelect(hallEl.value);
+  });
   paintTipChips();
   syncStepCards();
   paintProgress();
   void refreshPreview();
   void runPredSearch('');
+  void loadLocationDropdowns();
 
   teardownFn = () => {
     document.removeEventListener('mousedown', docClick);
