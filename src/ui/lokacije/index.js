@@ -78,16 +78,19 @@ function canUseCamera() {
   );
 }
 
+/* Ikone su semantički vezane za svaki tab — isti emoji set kao u Quick-action
+ * karticama (Početna) i toolbar dugmadima, da kroz ceo modul postoji
+ * dosledan vizuelni jezik. Ako se kasnije pređe na SVG, samo se ovde menja. */
 const TABS = [
-  { id: 'dashboard', label: 'Početna' },
-  { id: 'predmet', label: 'Pregled predmeta' },
-  { id: 'browse', label: 'Lokacije' },
-  { id: 'items', label: 'Stavke' },
-  { id: 'report', label: 'Pregled po lokacijama' },
-  { id: 'labels', label: '🏷 Štampa nalepnica' },
-  { id: 'definitions', label: 'Istorija definicija', manageOnly: true },
-  { id: 'history', label: 'Istorija premeštanja' },
-  { id: 'sync', label: 'Sync', adminOnly: true },
+  { id: 'dashboard', label: 'Početna', icon: '🏠' },
+  { id: 'predmet', label: 'Pregled predmeta', icon: '👁' },
+  { id: 'browse', label: 'Lokacije', icon: '📍' },
+  { id: 'items', label: 'Stavke', icon: '📦' },
+  { id: 'report', label: 'Pregled po lokacijama', icon: '📊' },
+  { id: 'labels', label: 'Štampa nalepnica', icon: '🏷' },
+  { id: 'definitions', label: 'Istorija definicija', icon: '🕘', manageOnly: true },
+  { id: 'history', label: 'Istorija premeštanja', icon: '🔄' },
+  { id: 'sync', label: 'Sync', icon: '🔁', adminOnly: true },
 ];
 
 const MOVEMENT_TYPE_LABELS = {
@@ -1106,7 +1109,7 @@ function tabsHtml(activeId) {
           t => `
         <button type="button" role="tab" class="kadrovska-tab loc-tab${t.id === activeId ? ' active' : ''}"
           data-loc-tab="${escHtml(t.id)}" aria-selected="${t.id === activeId ? 'true' : 'false'}">
-          ${escHtml(t.label)}
+          ${t.icon ? `<span class="loc-tab-icon" aria-hidden="true">${t.icon}</span>` : ''}<span class="loc-tab-label">${escHtml(t.label)}</span>
         </button>`,
         )
         .join('')}
@@ -1261,7 +1264,7 @@ async function renderPanel(host, tabId) {
         <div class="loc-recent-card">
           <div class="loc-recent-head">
             <h3 class="loc-subh loc-recent-title">
-              Poslednja premeštanja
+              <span class="loc-section-icon" aria-hidden="true">🔄</span>Poslednja premeštanja
               <span class="loc-count-pill" aria-label="Broj prikazanih premeštanja">${recentCount}</span>
             </h3>
             <button type="button" class="loc-link-btn" id="locRecentFilterLink">Filtriraj →</button>
@@ -1311,7 +1314,7 @@ async function renderPanel(host, tabId) {
     const hub = locLabelPrintActionGridHtml();
     host.innerHTML = `
       <div class="kadr-panel active loc-panel">
-        <h2 class="loc-subh" style="margin:0 0 6px">Štampa nalepnica</h2>
+        <h2 class="loc-subh" style="margin:0 0 6px"><span class="loc-section-icon" aria-hidden="true">🏷</span>Štampa nalepnica</h2>
         <p class="loc-muted" style="margin:0 0 16px">Izaberi tip nalepnice — isto kao brze akcije na Početnoj.</p>
         ${
           hub
@@ -1379,7 +1382,7 @@ async function renderPanel(host, tabId) {
 
     const extraToolbar = `
       <div class="loc-master-heading">
-        <strong>Šifarnik hala i polica</strong>
+        <strong><span class="loc-section-icon" aria-hidden="true">📍</span>Šifarnik hala i polica</strong>
         <span>HALA je veći prostor; POLICA je konkretno mesto unutar hale. Sve izmene se čuvaju kroz istoriju definicija.</span>
       </div>
       <div class="loc-view-switch" role="group" aria-label="Prikaz">
@@ -1683,7 +1686,7 @@ async function renderPanel(host, tabId) {
         ${err}
         ${locToolbarHtml()}
         <div class="loc-master-heading">
-          <strong>Istorija definicija hala i polica</strong>
+          <strong><span class="loc-section-icon" aria-hidden="true">🕘</span>Istorija definicija hala i polica</strong>
           <span>Prikazuje ko je i kada dodao, promenio ili deaktivirao red u šifarniku <code>loc_locations</code>. Ovo nije istorija premeštanja stavki.</span>
         </div>
         <div class="loc-table-wrap">

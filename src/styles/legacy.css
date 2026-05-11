@@ -1832,6 +1832,30 @@ body.module-kadrovska > #module-settings { display:none !important; }
 /* Tab Odsustva uklonjen iz app-a; stari keširani JS može ga i dalje ubaciti u DOM. */
 .kadrovska-tab[data-kadr-tab="absences"] { display:none !important; }
 
+/* Lokacije modul — uniformna veličina i poravnanje emoji ikone u tab strip-u
+ * (Početna 🏠 / Pregled 👁 / Lokacije 📍 / itd). Active tab dobija nešto
+ * jaču saturaciju kroz `opacity` da prati teksturu acrylic akcent linije. */
+.loc-tab .loc-tab-icon {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:16px; height:16px;
+  font-size:14px; line-height:1;
+  opacity:0.78;
+}
+.loc-tab.active .loc-tab-icon { opacity:1; }
+.loc-tab .loc-tab-label { display:inline-block; }
+
+/* Mali emoji prefix u section heading-ima (browse „Šifarnik...",
+ * definitions „Istorija definicija...", recent „Poslednja premeštanja",
+ * labels „Štampa nalepnica") — održava semantičku poveznicu sa tabom. */
+.loc-section-icon {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:16px; height:16px;
+  margin-right:6px;
+  font-size:14px; line-height:1;
+  vertical-align:-2px;
+  opacity:0.85;
+}
+
 /* Tab panels ? only active one visible */
 .kadr-panel { display:none; }
 .kadr-panel.active { display:block; }

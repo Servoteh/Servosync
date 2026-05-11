@@ -97,7 +97,7 @@ export async function renderLabelsPrintPage(host, { onRefresh } = {}) {
    * + queue od starta. */
   host.innerHTML = `
     <div class="kadr-panel active loc-panel">
-      <h2 class="loc-subh" style="margin:0 0 6px;letter-spacing:0.5px">ŠTAMPA NALEPNICA — BATCH</h2>
+      <h2 class="loc-subh" style="margin:0 0 6px;letter-spacing:0.5px"><span class="loc-section-icon" aria-hidden="true">🏷</span>ŠTAMPA NALEPNICA — BATCH</h2>
       <p class="loc-muted" style="margin:0 0 14px">
         Izaberi jedan ili više predmeta iz tabele (čekiraj kvadrat). Klik na red prikazuje sve njegove tehnološke postupke u donjem panelu — čekiraj TP-ove koje želiš da odštampaš.
         Ceo „Red za štampu" odlazi u jedan otisak.
