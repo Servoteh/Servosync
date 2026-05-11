@@ -20,6 +20,11 @@ import {
   buildTechLabelHtmlBlock,
   printTechProcessLabelsBatch,
 } from '../lokacije/labelsPrint.js';
+import { fetchAktivniPredmeti } from '../../services/pracenjeProizvodnje.js';
+import {
+  ensurePrioritetHydrated,
+  sortByPredmetPrioritet,
+} from '../podesavanja/podesavanjePredmeta/prioritetService.js';
 
 const FETCH_LIMIT = 200;
 const FIRST_PAGE = 20;
@@ -121,7 +126,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
               </div>
               <div class="sn-dropdown" id="snDrop" aria-expanded="false"></div>
             </div>
-            <span class="sn-hint">Lista uključuje samo nezatvorene predmete iz BigTehn-a (status „U TOKU")</span>
+            <span class="sn-hint">Samo predmeti uključeni u Podešavanjima predmeta (isti skup kao aktivna lista u praćenju). Na vrhu liste prvo idu ⭐ prioritetni (do 10, redosled iz podešavanja), zatim ostali po broju predmeta. Kad ukucaš pretragu, filtrira se i po ugovoru i narudžbenici.</span>
           </section>
 
           <section class="sn-step-card is-disabled" id="snCard2" style="display:none">
@@ -552,16 +557,80 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     dropEl._virtCleanup = virtCleanup;
   }
 
+  function parsePredmetiRpcRaw(raw) {
+    if (raw == null) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string') {
+      try {
+        const p = JSON.parse(raw);
+        return Array.isArray(p) ? p : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
+  /** Ista polja kao `searchBigtehnItems` za dropdown (id = bigtehn_items_cache.id). */
+  function aktivniRpcRowToPickerRow(r) {
+    const id = Number(r.item_id);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return {
+      id,
+      broj_predmeta: r.broj_predmeta ?? '',
+      naziv_predmeta: r.naziv_predmeta ?? '',
+      customer_name: r.customer_name ?? '',
+      rok_zavrsetka: r.rok_zavrsetka != null ? r.rok_zavrsetka : null,
+      opis: '',
+      status: 'U TOKU',
+      department_code: '',
+      broj_ugovora: '',
+      broj_narudzbenice: '',
+      modified_at: null,
+      customer_id: null,
+    };
+  }
+
+  function cmpPickerBrojPredmeta(a, b) {
+    return String(a.broj_predmeta || '').localeCompare(String(b.broj_predmeta || ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  }
+
+  /**
+   * Aktivni predmeti (production.get_aktivni_predmeti) → skup ID-jeva + mapirani redovi za prazan upit.
+   * @returns {Promise<{ idSet: Set<number>, mapped: object[] }>}
+   */
+  async function loadAktivniPredmetPickerRows() {
+    const aktivniRaw = await fetchAktivniPredmeti();
+    const aktivniRows = parsePredmetiRpcRaw(aktivniRaw);
+    const idSet = new Set(
+      aktivniRows.map(r => Number(r.item_id)).filter(n => Number.isFinite(n) && n > 0),
+    );
+    const mapped = aktivniRows.map(aktivniRpcRowToPickerRow).filter(Boolean);
+    return { idSet, mapped };
+  }
+
   async function runPredSearch(q) {
     predLoading = true;
     predExpanded = false;
     renderPredDropdown();
     try {
-      predRows = await searchBigtehnItems(q, FETCH_LIMIT);
+      await ensurePrioritetHydrated().catch(() => {});
+      const { idSet, mapped } = await loadAktivniPredmetPickerRows();
+      const s = typeof q === 'string' ? q.trim() : '';
+      if (!s) {
+        predRows = sortByPredmetPrioritet(mapped, row => row.id, cmpPickerBrojPredmeta);
+      } else {
+        const bt = await searchBigtehnItems(s, FETCH_LIMIT, { onlyActive: true });
+        const filtered = Array.isArray(bt) ? bt.filter(r => idSet.has(Number(r.id))) : [];
+        predRows = sortByPredmetPrioritet(filtered, row => row.id, cmpPickerBrojPredmeta);
+      }
     } catch (e) {
       console.error('[sn/predmet]', e);
       predRows = [];
-      showToast('⚠ Greška pri pretrazi predmeta');
+      showToast('⚠ Greška pri učitavanju aktivnih predmeta');
     } finally {
       predLoading = false;
       renderPredDropdown();
@@ -629,13 +698,19 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     const needle = `${orderNo}/${tpRef}`;
     showToast(`🔎 Učitavam RNZ ${needle}…`);
     try {
-      const items = await searchBigtehnItems(orderNo, 50);
+      await ensurePrioritetHydrated().catch(() => {});
+      const { idSet: aktivniSet } = await loadAktivniPredmetPickerRows();
+      const items = await searchBigtehnItems(orderNo, 50, { onlyActive: true });
       const item =
         (Array.isArray(items) ? items : []).find(
           r => String(r.broj_predmeta || '').trim() === orderNo,
         ) || (Array.isArray(items) && items.length === 1 ? items[0] : null);
       if (!item) {
         showToast(`⚠ Predmet ${orderNo} nije pronađen`);
+        return false;
+      }
+      if (!aktivniSet.has(Number(item.id))) {
+        showToast('⚠ Predmet nije u aktivnom prikazu — uključi ga u Podeš. predmeta');
         return false;
       }
 
