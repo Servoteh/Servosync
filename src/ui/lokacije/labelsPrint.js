@@ -532,6 +532,10 @@ export function buildTechLabelHtmlBlock(spec, index = 0) {
     if (opts.bare) return `<span class="lbl-v">${escHtml(v)}</span>`;
     return `<span class="lbl-k">${escHtml(label)}:</span> <span class="lbl-v">${escHtml(v)}</span>`;
   };
+  /* TIP operacije (opciono) — S/O/Z → SKLOP/OBRADA/ZAVARIVANJE; ostalo skipuj. */
+  const tipMap = { S: 'SKLOP', O: 'OBRADA', Z: 'ZAVARIVANJE' };
+  const tipLabel = tipMap[String(f.tipOperacije || '').trim().toUpperCase()] || '';
+  const tipHtml = tipLabel ? `<div class="lbl-tip">${escHtml(tipLabel)}</div>` : '';
   return `<div class="label" data-bc-idx="${index}">
     <div class="lbl-meta">
       <div class="lbl-row lbl-row-split">
@@ -550,6 +554,7 @@ export function buildTechLabelHtmlBlock(spec, index = 0) {
       </div>
     </div>
     <div class="lbl-bc"><svg id="bc_${index}"></svg></div>
+    ${tipHtml}
   </div>`;
 }
 
@@ -623,6 +628,18 @@ const TECH_LABEL_CSS = `
     overflow: hidden;
   }
   .lbl-bc svg { width: 100%; height: 100%; max-height: 17mm; display: block; }
+  /* TIP (opciono) — krupan centrirani natpis ispod barkoda; renderuje se
+   * samo ako je operater izabrao S/O/Z. Bez TIP-a element ne postoji u DOM-u
+   * pa layout ostaje identican prethodnom. */
+  .lbl-tip {
+    flex: 0 0 auto;
+    text-align: center;
+    font-size: 10pt;
+    font-weight: 800;
+    line-height: 1;
+    margin-top: 0.4mm;
+    letter-spacing: 0.5px;
+  }
   @media print {
     .toolbar { display: none !important; }
     body { margin:0; padding:0; }

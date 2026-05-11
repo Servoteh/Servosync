@@ -199,6 +199,17 @@ export function buildTspLabelProgram(spec) {
   const BC_H = mm(15);
   lines.push(`BARCODE ${BC_X},${BC_Y},"128M",${BC_H},0,0,2,4,${tsplStr(bc)}`);
 
+  /* ─ TIP operacije (opciono) — S/O/Z → SKLOP/OBRADA/ZAVARIVANJE ─
+   * Pozicija: y=30.5mm (barkod zavrsava na 29.8mm; ostavi 0.7mm gap).
+   * Font "4" (~12pt, 4mm visine) → end y≈34.5mm; nalepnica je 40.3mm.
+   * Levo poravnano sa PAD_LEFT-om (vec ofsetovano 5mm zbog operaterskog
+   * pomaka udesno — vidi gore). */
+  const tipMap = { S: 'SKLOP', O: 'OBRADA', Z: 'ZAVARIVANJE' };
+  const tipLabel = tipMap[String(f.tipOperacije || '').trim().toUpperCase()];
+  if (tipLabel) {
+    lines.push(`TEXT ${PAD_LEFT},${mm(30.5)},"4",0,1,1,${tsplStr(tipLabel)}`);
+  }
+
   /* ─ Pošalji u feed ─ */
   lines.push(`PRINT ${copies},1`);
 

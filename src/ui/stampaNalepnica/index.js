@@ -156,6 +156,11 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
                 <div class="sn-quick-chips" id="snQuick"></div>
                 <span class="sn-hint">Koliko identičnih nalepnica odštampati (isti tekst i barkod).</span>
               </div>
+              <div class="sn-field-block" style="margin-top:18px">
+                <label class="sn-field-lbl">Tip operacije (opciono — natpis ispod barkoda)</label>
+                <div class="sn-quick-chips" id="snTipChips"></div>
+                <span class="sn-hint">Bira se prema TIP polju na crtežu (S / O / Z). Ako ostane „Bez“, nalepnica se štampa kao i do sada.</span>
+              </div>
             </div>
           </section>
         </div>
@@ -206,6 +211,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   const btnPrint = wrap.querySelector('#snPrint');
   const progressEl = wrap.querySelector('#snProgress');
   const quickHost = wrap.querySelector('#snQuick');
+  const tipChipsHost = wrap.querySelector('#snTipChips');
 
   /** @type {object|null} */
   let selectedPredmet = null;
@@ -213,6 +219,8 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   let tpsCache = [];
   /** @type {object|null} */
   let selectedTp = null;
+  /** @type {''|'S'|'O'|'Z'} */
+  let selectedTip = '';
   /** @type {object[]} */
   let predRows = [];
   let predLoading = false;
@@ -296,6 +304,37 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     quickHost.querySelectorAll('[data-q]').forEach(btn => {
       btn.addEventListener('click', () => setPrintCopies(btn.getAttribute('data-q')));
     });
+  }
+
+  /* TIP operacije: 4 chip-a (Bez / SKLOP / OBRADA / ZAVARIVANJE). Default „Bez"
+   * znaci selectedTip = '' — TIP red se NE renderuje na nalepnici, identicno
+   * pre-ovom-feature ponasanju. */
+  const TIP_OPTIONS = [
+    { code: '', label: 'Bez' },
+    { code: 'S', label: 'SKLOP' },
+    { code: 'O', label: 'OBRADA' },
+    { code: 'Z', label: 'ZAVARIVANJE' },
+  ];
+
+  function paintTipChips() {
+    if (!tipChipsHost) return;
+    tipChipsHost.innerHTML = TIP_OPTIONS.map(
+      o =>
+        `<button type="button" class="sn-q-chip ${o.code === selectedTip ? 'is-active' : ''}" data-tip="${escHtml(o.code)}">${escHtml(o.label)}</button>`,
+    ).join('');
+    tipChipsHost.querySelectorAll('[data-tip]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const code = btn.getAttribute('data-tip') || '';
+        setSelectedTip(code);
+      });
+    });
+  }
+
+  function setSelectedTip(code) {
+    const ok = ['', 'S', 'O', 'Z'].includes(code);
+    selectedTip = ok ? /** @type {''|'S'|'O'|'Z'} */ (code) : '';
+    paintTipChips();
+    refreshPreview();
   }
 
   function syncStepCards() {
@@ -470,6 +509,8 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     tpFilter.value = '';
     setPrintCopies(1);
     if (komadaEl) komadaEl.value = '1';
+    selectedTip = '';
+    paintTipChips();
     syncStepCards();
     paintProgress();
     refreshPreview();
@@ -681,6 +722,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
       kolicina: `${kp}/${ku}`,
       materijal: selectedTp.materijal || '',
       datum: todayStrDDMMYY(),
+      tipOperacije: selectedTip,
     };
     prevScale.innerHTML = buildTechLabelHtmlBlock({ fields, barcodeValue: bc }, 0);
     btnPrint.disabled = false;
@@ -731,6 +773,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
           kolicina: `${kp}/${ku}`,
           materijal: selectedTp.materijal || '',
           datum: todayStrDDMMYY(),
+          tipOperacije: selectedTip,
         },
       },
     ]);
@@ -838,6 +881,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
 
   document.addEventListener('mousedown', docClick);
   paintCopyChips();
+  paintTipChips();
   syncStepCards();
   paintProgress();
   void refreshPreview();
