@@ -2805,38 +2805,68 @@ body.module-projektni-biro {
   background: rgba(232, 82, 58, 0.1);
 }
 
-/* Projektni biro: zoom-safe scroll fix.
-   Browser zoom može smanjiti CSS viewport ispod 768px,
-   pa desktop scroll pravila iz @media bloka prestanu da važe,
-   dok .pb-chrome ostane sticky. Ovaj override zadržava .pb-tab-body
-   kao glavni vertikalni scroll container i sprečava sakrivanje sadržaja
-   ispod zalepljenog menija. */
+/* Projektni biro: zoom-safe scroll hard fix.
+   Cilj: page/body ne smeju da skroluju u PB modulu.
+   Skrol mora biti samo u .pb-tab-body.
+   Ovo mora da radi i kada browser zoom spusti CSS viewport ispod 768px. */
 
-body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-module {
-  display: flex;
-  flex-direction: column;
+body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) {
   height: 100vh;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
 }
 
+body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) #app.pb-module,
+body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-module {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0;
+  padding: 0 16px 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Važno: postojeći desktop kod već gasi sticky za .pb-chrome,
+   ali samo u @media (min-width: 768px). Pri zoom-u taj media query
+   može da prestane da važi, pa .pb-chrome ponovo postaje sticky
+   i sadržaj ide ispod njega. Zato ovo mora da važi van breakpoint-a. */
+body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-module > .pb-chrome {
+  flex: 0 0 auto;
+  position: relative;
+  top: auto;
+  z-index: 2;
+  will-change: auto;
+}
+
+/* Jedini vertikalni scroll container u PB modulu. */
 body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
   flex: 1 1 auto;
   min-height: 0;
+  height: auto;
+  max-height: none;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding-top: 16px;
   padding-bottom: 96px;
+  box-sizing: border-box;
 }
 
-/* Pri većem zoom-u ili manjoj visini ekrana, gornji kontekst blok
-   ne sme da pojede previše prostora. */
+/* Gornji kontekst blok ne sme da pojede previše visine pri zoom-u. */
 body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-context-card {
+  flex: 0 0 auto;
   max-height: min(240px, 36dvh);
+  overflow-x: visible;
   overflow-y: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (max-height: 760px) {
@@ -2854,3 +2884,4 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
     margin-bottom: 8px;
   }
 }
+
