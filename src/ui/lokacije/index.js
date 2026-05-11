@@ -112,6 +112,36 @@ function movementTypePillClass(type) {
   return MOVEMENT_TYPE_PILL[type] || 'loc-mov-pill--other';
 }
 
+/**
+ * Kartice NALEPNICA POLICE / NALEPNICA TP — isti sadržaj kao na Početnoj i u toolbar-u
+ * (`locBtnLabels`, `locBtnTpLabel`) da `attachLocToolbar()` veže jedan skup handlera.
+ * @returns {Array<{ id: string, icon: string, title: string, sub: string, primary?: boolean }>}
+ */
+function locLabelPrintActionCardDefs() {
+  if (!canEdit()) return [];
+  return [
+    { id: 'locBtnLabels', icon: '🏷', title: 'NALEPNICA POLICE', sub: 'Štampa za regal' },
+    { id: 'locBtnTpLabel', icon: '🧾', title: 'NALEPNICA TP', sub: 'Štampa za predmet' },
+  ];
+}
+
+/** HTML za grid samo ove dve kartice (prazan ako nema prava). */
+function locLabelPrintActionGridHtml() {
+  const inner = locLabelPrintActionCardDefs()
+    .map(
+      c => `<button type="button" class="loc-action-card" id="${escHtml(c.id)}">
+        <span class="loc-action-card-icon" aria-hidden="true">${c.icon}</span>
+        <span class="loc-action-card-body">
+          <span class="loc-action-card-title">${escHtml(c.title)}</span>
+          <span class="loc-action-card-sub">${escHtml(c.sub)}</span>
+        </span>
+      </button>`,
+    )
+    .join('');
+  if (!inner) return '';
+  return `<div class="loc-action-grid" role="group" aria-label="Štampa nalepnica">${inner}</div>`;
+}
+
 /* Cache user-a (id → prikaz) — rekešira se pri svakom mount-u, ali ne per-render. */
 let historyUsersCache = null;
 
@@ -200,18 +230,7 @@ function locDashboardActionsHtml() {
       title: 'NOVA LOKACIJA',
       sub: 'Definiši mesto',
     });
-    cards.push({
-      id: 'locBtnLabels',
-      icon: '🏷',
-      title: 'NALEPNICA POLICE',
-      sub: 'Štampa za regal',
-    });
-    cards.push({
-      id: 'locBtnTpLabel',
-      icon: '🧾',
-      title: 'NALEPNICA TP',
-      sub: 'Štampa za predmet',
-    });
+    cards.push(...locLabelPrintActionCardDefs());
   }
   const inner = cards
     .map(
@@ -1288,11 +1307,27 @@ async function renderPanel(host, tabId) {
   }
 
   if (tabId === 'labels') {
-    /* „Štampa nalepnica" — multi-select predmeti + TP queue + batch print.
-     * Reuse-uje BigTehn search RPC-ove i `printTechProcessLabelsBatch`.
-     * Ne zovemo locToolbarHtml jer ovaj tab ima sopstveni „Štampaj N
-     * nalepnica" CTA + svoj layout (vidi `labelsPrintPage.js`). */
-    await renderLabelsPrintPage(host, { onRefresh: refreshLocPanel });
+    /* Ulaz = isti izbor kao Početna (Police / TP); batch ostaje pod „Otvori batch režim". */
+    const hub = locLabelPrintActionGridHtml();
+    host.innerHTML = `
+      <div class="kadr-panel active loc-panel">
+        <h2 class="loc-subh" style="margin:0 0 6px">Štampa nalepnica</h2>
+        <p class="loc-muted" style="margin:0 0 16px">Izaberi tip nalepnice — isto kao brze akcije na Početnoj.</p>
+        ${
+          hub
+            ? hub
+            : `<p class="loc-muted" style="margin:0 0 16px">Za nalepnice polica i TP (stranica po koracima) potrebna je uloga sa pravom izmene lokacija.</p>`
+        }
+        <div class="loc-labels-batch" style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border2,#ddd)">
+          <h3 class="loc-subh" style="margin:0 0 8px">Batch štampa</h3>
+          <p class="loc-muted" style="margin:0 0 12px">Više predmeta i TP-ova u jednom otisku (TSC).</p>
+          <button type="button" class="btn btn-primary" id="locBtnLabelsBatch">Otvori batch režim</button>
+        </div>
+      </div>`;
+    attachLocToolbar();
+    host.querySelector('#locBtnLabelsBatch')?.addEventListener('click', async () => {
+      await renderLabelsPrintPage(host, { onRefresh: refreshLocPanel });
+    });
     return;
   }
 
