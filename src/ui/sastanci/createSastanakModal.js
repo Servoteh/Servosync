@@ -1,7 +1,7 @@
 /**
  * Modal za kreiranje novog sastanka.
  *
- * Korak 1: izbor tipa (Sedmični vs Projektni).
+ * Korak 1: izbor tipa (Sedmični / Projektni / Tematski).
  * Korak 2: forma sa osnovnim podacima (naslov, datum, vreme, mesto, projekat).
  *
  * Posle uspešnog kreiranja → onCreated(sastanak) callback (obično otvori
@@ -47,6 +47,11 @@ export function openCreateSastanakModal({ projekti = [], onCreated } = {}) {
           <div class="sast-tip-name">Projektni sastanak</div>
           <div class="sast-tip-desc">Per-projekat presek stanja. Hijerarhijski opis radova + slike sa terena.</div>
         </button>
+        <button type="button" class="sast-tip-card" data-tip="tematski">
+          <div class="sast-tip-icon">🎯</div>
+          <div class="sast-tip-name">Tematski sastanak</div>
+          <div class="sast-tip-desc">Usklađivanje specifičnih aktivnosti između različitih biroa i sektora. Jedna glavna tema (npr. projektovanje i tehnologija).</div>
+        </button>
       </div>
     `;
     host.querySelectorAll('[data-tip]').forEach(b => {
@@ -59,7 +64,9 @@ export function openCreateSastanakModal({ projekti = [], onCreated } = {}) {
     const today = new Date().toISOString().slice(0, 10);
     const defNaslov = tip === 'sedmicni'
       ? `Sedmični sastanak — ${formatDateForTitle(today)}`
-      : `Presek stanja — `;
+      : tip === 'tematski'
+        ? `Tematski sastanak — ${formatDateForTitle(today)}`
+        : `Presek stanja — `;
 
     host.innerHTML = `
       <form id="csForm" class="sast-form">

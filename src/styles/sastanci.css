@@ -243,6 +243,10 @@
   background: #fef3c7;
   color: #92400e;
 }
+.sast-tip-tematski {
+  background: #ede9fe;
+  color: #5b21b6;
+}
 .sast-status-pill {
   display: inline-block;
   font-size: 11px;
@@ -542,7 +546,7 @@
 /* ── Tip choice (kreiraj sastanak) ─────────────────── */
 .sast-tip-choice {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
 }
 .sast-tip-card {
@@ -929,6 +933,10 @@ body.dark .sast-tip-sedmicni {
 body.dark .sast-tip-projektni {
   background: rgba(245, 158, 11, 0.2);
   color: #fcd34d;
+}
+body.dark .sast-tip-tematski {
+  background: rgba(139, 92, 246, 0.22);
+  color: #c4b5fd;
 }
 body.dark .sast-presek-podrn {
   background: rgba(168, 85, 247, 0.2);

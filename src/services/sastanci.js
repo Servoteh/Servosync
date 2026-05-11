@@ -1,7 +1,7 @@
 /**
  * Sastanci — Supabase REST service.
  *
- * Centralni CRUD za sve tipove sastanaka (sedmicni / projektni), učesnike
+ * Centralni CRUD za sve tipove sastanaka (sedmicni / projektni / tematski), učesnike
  * i utility helpere koje koriste svi tabovi (Dashboard, PM Teme, Akcioni
  * Plan, Sedmični, Projektni).
  *
@@ -35,6 +35,14 @@ const UCESNICI_COLUMNS = [
 export const SASTANAK_TIPOVI = {
   sedmicni: 'Sedmični sastanak',
   projektni: 'Projektni sastanak',
+  tematski: 'Tematski sastanak',
+};
+
+/** Kratka oznaka za badge u headerima i listama (ne pun naziv). */
+export const SASTANAK_TIP_BADGE_LABEL = {
+  sedmicni: 'Sedmični',
+  projektni: 'Projektni',
+  tematski: 'Tematski',
 };
 
 export const SASTANAK_STATUSI = {
@@ -94,7 +102,7 @@ export function mapDbUcesnik(d) {
 /**
  * Lista sastanaka sa filterima.
  * @param {object} filters
- * @param {'sedmicni'|'projektni'|null} filters.tip
+ * @param {'sedmicni'|'projektni'|'tematski'|null} filters.tip
  * @param {string|null} filters.status
  * @param {string|null} filters.fromDate  YYYY-MM-DD
  * @param {string|null} filters.toDate    YYYY-MM-DD

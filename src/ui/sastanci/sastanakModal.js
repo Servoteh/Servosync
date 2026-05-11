@@ -2,7 +2,7 @@
  * Sastanak modal — pregled / vođenje pojedinačnog sastanka.
  *
  * Razgranava se po tipu:
- *   - 'sedmicni'  → meta + učesnici + dnevni red (PM teme) + akcioni plan
+ *   - 'sedmicni' | 'tematski' → meta + učesnici + dnevni red (PM teme) + akcioni plan
  *   - 'projektni' → meta + učesnici + presek aktivnosti (rich text + slike)
  *                   (S2 sloj — videti projektniContent.js)
  *
@@ -20,7 +20,7 @@ import { formatDate } from '../../lib/date.js';
 import {
   loadSastanak, loadUcesnici, saveSastanak, saveUcesnici,
   updateSastanakStatus, updateUcesnikPrisustvo,
-  SASTANAK_STATUSI, SASTANAK_STATUS_BOJE,
+  SASTANAK_STATUSI, SASTANAK_STATUS_BOJE, SASTANAK_TIP_BADGE_LABEL,
 } from '../../services/sastanci.js';
 import { loadPmTeme, dodeliTemuSastanku, saveTema } from '../../services/pmTeme.js';
 import { loadAkcije, saveAkcija, updateAkcijaStatus, deleteAkcija, AKCIJA_STATUSI, AKCIJA_STATUS_BOJE } from '../../services/akcioniPlan.js';
@@ -82,7 +82,7 @@ async function renderSastanak(overlay, sast, { canEdit, onClose }) {
     <header class="sast-modal-header sast-modal-header-rich">
       <div class="sast-mh-left">
         <div class="sast-mh-tip">
-          <span class="sast-tip-badge sast-tip-${escHtml(sast.tip)}">${sast.tip === 'projektni' ? 'Projektni' : 'Sedmični'}</span>
+          <span class="sast-tip-badge sast-tip-${escHtml(sast.tip)}">${escHtml(SASTANAK_TIP_BADGE_LABEL[sast.tip] || sast.tip)}</span>
           <span class="sast-status-pill" style="background:${statusColor}">${escHtml(SASTANAK_STATUSI[sast.status])}</span>
           ${isLocked ? '<span class="sast-lock-badge">🔒 Arhivirano</span>' : ''}
         </div>
@@ -103,7 +103,7 @@ async function renderSastanak(overlay, sast, { canEdit, onClose }) {
       <nav class="sast-inner-tabs" id="sastInnerTabs">
         <button class="sast-inner-tab is-active" data-itab="meta">📝 Meta</button>
         <button class="sast-inner-tab" data-itab="ucesnici">👥 Učesnici (${ucesnici.length})</button>
-        ${sast.tip === 'sedmicni' ? '<button class="sast-inner-tab" data-itab="dnevni-red">📋 Dnevni red</button>' : ''}
+        ${(sast.tip === 'sedmicni' || sast.tip === 'tematski') ? '<button class="sast-inner-tab" data-itab="dnevni-red">📋 Dnevni red</button>' : ''}
         ${sast.tip === 'projektni' ? '<button class="sast-inner-tab" data-itab="presek">🏗 Presek stanja</button>' : ''}
         <button class="sast-inner-tab" data-itab="akcije">✅ Akcioni plan</button>
         ${arhiva ? '<button class="sast-inner-tab" data-itab="zapisnik">📄 Zapisnik</button>' : ''}
