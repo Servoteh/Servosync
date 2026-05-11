@@ -1194,13 +1194,18 @@ async function renderPanel(host, tabId) {
 
     const bridgeBanner = renderBridgeStaleBanner(syncStatus);
 
+    /* Kad je first-run (sve prazno), KPI grid i tabela poslednjih premeštanja
+     * nemaju šta da pokažu — sakrivamo ih da ne bi bili „0 svuda". Quick-actions
+     * i first-run CTA ostaju kao primarni vodič. */
+    const showStats = !isEmptyFirstRun;
+
     host.innerHTML = `
-      <div class="kadr-panel active loc-panel">
+      <div class="kadr-panel active loc-panel loc-panel--dashboard">
         ${err}
         ${locDashboardActionsHtml()}
         ${bridgeBanner}
         ${firstRunHtml}
-        <div class="loc-kpi-row loc-kpi-row--dashboard">
+        ${showStats ? `<div class="loc-kpi-row loc-kpi-row--dashboard">
           <div class="loc-kpi loc-kpi--blue">
             <span class="loc-kpi-icon" aria-hidden="true">📍</span>
             <span class="loc-kpi-body">
@@ -1258,8 +1263,12 @@ async function renderPanel(host, tabId) {
                   <tbody>${recent}</tbody>
                 </table>
               </div>`
-            : '<p class="loc-muted" style="padding:14px 12px">Nema podataka.</p>'}
-        </div>
+            : `<div class="loc-recent-empty">
+                <div class="loc-recent-empty-icon" aria-hidden="true">📭</div>
+                <div class="loc-recent-empty-title">Nema skorašnjih premeštanja</div>
+                <p class="loc-recent-empty-sub">Skeniraj barkod ili klikni „Brzo premeštanje" da evidentiraš prvu izmenu.</p>
+              </div>`}
+        </div>` : ''}
       </div>`;
     attachLocToolbar();
     host.querySelector('#locRecentFilterLink')?.addEventListener('click', () => {
