@@ -61,8 +61,8 @@ SELECT
     END,
     ' · '
   ), '')                                              AS location_label,
-  COALESCE(string_agg(DISTINCT l.location_code
-    FILTER (WHERE s.on_hand_qty > 0 AND l.id IS NOT NULL), ', '), '') AS location_code,
+  COALESCE(string_agg(DISTINCT l.location_code, ', ')
+    FILTER (WHERE s.on_hand_qty > 0 AND l.id IS NOT NULL), '') AS location_code,
   c.status,
   NULL::text                                          AS serijski_broj,
   c.napomena,
