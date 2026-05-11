@@ -27,13 +27,20 @@ body.module-projektni-biro {
     padding-left: 16px;
     padding-right: 16px;
     box-sizing: border-box;
-    height: 100vh;
+    /* 100vh + sticky chrome dovodi do klizanja main ispod zalepljenog headera pri zoom / document scroll. */
+    height: 100%;
+    max-height: 100%;
     min-height: 0;
     overflow: hidden;
   }
 
   body.desktop-erp-module:not(.hub-active):not(.m-body) .pb-module > .pb-chrome {
     flex: 0 0 auto;
+    /* Scroll je u main.pb-tab-body; sticky ovde aktivira overlap sadržaja ispod pri body scroll. */
+    position: relative;
+    top: auto;
+    z-index: 2;
+    will-change: auto;
   }
 }
 
@@ -392,6 +399,7 @@ body.module-projektni-biro {
     overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
+    overscroll-behavior-y: contain;
   }
 }
 
@@ -1934,6 +1942,7 @@ body.module-projektni-biro {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border, #e5e7eb);
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .pb-kanban-col__title {
@@ -2794,4 +2803,54 @@ body.module-projektni-biro {
 
 .pb-bulk-menu-item:hover {
   background: rgba(232, 82, 58, 0.1);
+}
+
+/* Projektni biro: zoom-safe scroll fix.
+   Browser zoom može smanjiti CSS viewport ispod 768px,
+   pa desktop scroll pravila iz @media bloka prestanu da važe,
+   dok .pb-chrome ostane sticky. Ovaj override zadržava .pb-tab-body
+   kao glavni vertikalni scroll container i sprečava sakrivanje sadržaja
+   ispod zalepljenog menija. */
+
+body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-module {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-top: 16px;
+  padding-bottom: 96px;
+}
+
+/* Pri većem zoom-u ili manjoj visini ekrana, gornji kontekst blok
+   ne sme da pojede previše prostora. */
+body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-context-card {
+  max-height: min(240px, 36dvh);
+  overflow-y: auto;
+}
+
+@media (max-height: 760px) {
+  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-context-card {
+    max-height: min(180px, 32dvh);
+  }
+
+  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
+    padding-top: 10px;
+  }
+
+  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-filter-toolbar {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+  }
 }
