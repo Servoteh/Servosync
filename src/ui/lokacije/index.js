@@ -47,6 +47,7 @@ import {
   fetchAllLocReportPartsByLocations,
   fetchBridgeSyncStatus,
   fetchLocationDefinitionsAudit,
+  fetchMovementsCountSince,
 } from '../../services/lokacije.js';
 import { loadUsersFromDb } from '../../services/users.js';
 import { hasSupabaseConfig } from '../../services/supabase.js';
@@ -1042,16 +1043,28 @@ async function renderPanel(host, tabId) {
   }
 
   if (tabId === 'dashboard') {
-    const [locs, plac, movs, syncStatus, users] = await Promise.all([
+    /* Datumi za KPI count-ove — lokalno YYYY-MM-DD. */
+    const _today = new Date();
+    const _ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const todayYMD = _ymd(_today);
+    const weekAgo = new Date(_today);
+    weekAgo.setDate(weekAgo.getDate() - 6); /* uključi i današnji dan = 7 kalendarskih dana */
+    const weekAgoYMD = _ymd(weekAgo);
+
+    const [locs, plac, movs, syncStatus, users, movsTodayN, movsWeekN] = await Promise.all([
       fetchLocations(),
       fetchPlacements({ limit: 500 }),
       fetchRecentMovements(12),
       fetchBridgeSyncStatus().catch(() => []),
       /* Users za prikaz „Korisnik" kolone — tih fallback ako endpoint nije dostupan. */
       loadUsersFromDb().catch(() => []),
+      fetchMovementsCountSince(todayYMD).catch(() => null),
+      fetchMovementsCountSince(weekAgoYMD).catch(() => null),
     ]);
     const locN = Array.isArray(locs) ? locs.length : '—';
     const plN = Array.isArray(plac) ? plac.length : '—';
+    const todayN = movsTodayN == null ? '—' : String(movsTodayN);
+    const weekN = movsWeekN == null ? '—' : String(movsWeekN);
     const locIdx = locationIndex(locs);
     const userIdx = new Map(
       (Array.isArray(users) ? users : []).map(u => [String(u.id).toLowerCase(), u.label]),
@@ -1129,9 +1142,39 @@ async function renderPanel(host, tabId) {
         ${locToolbarHtml()}
         ${bridgeBanner}
         ${firstRunHtml}
-        <div class="loc-kpi-row">
-          <div class="loc-kpi"><span class="loc-kpi-label">Aktivnih lokacija</span><span class="loc-kpi-val">${escHtml(String(locN))}</span></div>
-          <div class="loc-kpi"><span class="loc-kpi-label">Placements (stavki)</span><span class="loc-kpi-val">${escHtml(String(plN))}</span></div>
+        <div class="loc-kpi-row loc-kpi-row--dashboard">
+          <div class="loc-kpi loc-kpi--blue">
+            <span class="loc-kpi-icon" aria-hidden="true">📍</span>
+            <span class="loc-kpi-body">
+              <span class="loc-kpi-label">Aktivnih lokacija</span>
+              <span class="loc-kpi-val">${escHtml(String(locN))}</span>
+              <span class="loc-kpi-sub">definisanih mesta</span>
+            </span>
+          </div>
+          <div class="loc-kpi loc-kpi--violet">
+            <span class="loc-kpi-icon" aria-hidden="true">📦</span>
+            <span class="loc-kpi-body">
+              <span class="loc-kpi-label">Placements</span>
+              <span class="loc-kpi-val">${escHtml(String(plN))}</span>
+              <span class="loc-kpi-sub">stavki sa lokacijom</span>
+            </span>
+          </div>
+          <div class="loc-kpi loc-kpi--green">
+            <span class="loc-kpi-icon" aria-hidden="true">🔄</span>
+            <span class="loc-kpi-body">
+              <span class="loc-kpi-label">Premeštanja danas</span>
+              <span class="loc-kpi-val">${escHtml(todayN)}</span>
+              <span class="loc-kpi-sub">poslednjih 24h</span>
+            </span>
+          </div>
+          <div class="loc-kpi loc-kpi--amber">
+            <span class="loc-kpi-icon" aria-hidden="true">📊</span>
+            <span class="loc-kpi-body">
+              <span class="loc-kpi-label">Aktivnost (7 dana)</span>
+              <span class="loc-kpi-val">${escHtml(weekN)}</span>
+              <span class="loc-kpi-sub">izmena ukupno</span>
+            </span>
+          </div>
         </div>
         <div class="loc-recent-card">
           <div class="loc-recent-head">

@@ -243,6 +243,21 @@ export async function fetchRecentMovements(limit = 50) {
 }
 
 /**
+ * Broj premeštanja od datog kalendarskog dana (inkluzivno, lokalno YYYY-MM-DD).
+ * Vraća `null` ako je upit pao (UI prikazuje „—" u tom slučaju).
+ *
+ * @param {string} dateFromYMD npr. „2026-05-11" (inkluzivno od 00:00 tog dana)
+ * @returns {Promise<number|null>}
+ */
+export async function fetchMovementsCountSince(dateFromYMD) {
+  if (typeof dateFromYMD !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateFromYMD)) return null;
+  const fromIso = encodeURIComponent(`${dateFromYMD}T00:00:00`);
+  const path = `loc_location_movements?select=id&moved_at=gte.${fromIso}&limit=1`;
+  const res = await sbReqWithCount(path);
+  return res && typeof res.total === 'number' ? res.total : null;
+}
+
+/**
  * Istorija premeštanja sa filterima (paginated).
  *
  * @param {{

@@ -3890,6 +3890,36 @@ body.module-lokacije #module-lokacije { display:flex !important; flex:1; flex-di
 }
 .loc-kpi-label { display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.4px; color:var(--text3); }
 .loc-kpi-val { font-size:22px; font-weight:700; font-family:var(--mono); color:var(--text); }
+
+/* -- KPI grid na Početnoj (4 kartice sa ikonom + naslov + vrednost + podtekst) - */
+.loc-kpi-row--dashboard {
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:12px;
+}
+@media (max-width: 980px) {
+  .loc-kpi-row--dashboard { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+}
+.loc-kpi-row--dashboard .loc-kpi {
+  display:flex; align-items:center; gap:12px;
+  min-width:0; padding:14px 16px;
+  border-radius:10px;
+}
+.loc-kpi-icon {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:38px; height:38px; flex:0 0 auto;
+  border-radius:9px;
+  font-size:18px; line-height:1;
+  background:var(--surface3);
+}
+.loc-kpi-body { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.loc-kpi-body .loc-kpi-val { font-size:22px; line-height:1.15; }
+.loc-kpi-sub { font-size:11px; color:var(--text3); margin-top:1px; }
+
+.loc-kpi--blue   .loc-kpi-icon { background:color-mix(in srgb, #3b82f6 18%, transparent); color:#3b82f6; }
+.loc-kpi--violet .loc-kpi-icon { background:color-mix(in srgb, #8b5cf6 18%, transparent); color:#8b5cf6; }
+.loc-kpi--green  .loc-kpi-icon { background:color-mix(in srgb, var(--status-done) 18%, transparent); color:var(--status-done); }
+.loc-kpi--amber  .loc-kpi-icon { background:color-mix(in srgb, var(--status-hold) 18%, transparent); color:var(--status-hold); }
 .loc-mov-list { margin:0; padding-left:18px; font-size:12px; color:var(--text2); max-height:280px; overflow:auto; }
 .loc-mov-list li { margin-bottom:6px; }
 .loc-mov-type { font-family:var(--mono); font-size:10px; color:var(--accent); }
