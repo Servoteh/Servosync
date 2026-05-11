@@ -80,7 +80,9 @@ function canUseCamera() {
 
 /* Ikone su semantički vezane za svaki tab — isti emoji set kao u Quick-action
  * karticama (Početna) i toolbar dugmadima, da kroz ceo modul postoji
- * dosledan vizuelni jezik. Ako se kasnije pređe na SVG, samo se ovde menja. */
+ * dosledan vizuelni jezik. Ako se kasnije pređe na SVG, samo se ovde menja.
+ * `type: 'group'` znači dropdown trigger sa `items` listom — sub-tabovi
+ * zadržavaju iste `id` vrednosti kao da su flat (state, deep-link, history). */
 const TABS = [
   { id: 'dashboard', label: 'Početna', icon: '🏠' },
   { id: 'predmet', label: 'Pregled predmeta', icon: '👁' },
@@ -88,9 +90,17 @@ const TABS = [
   { id: 'items', label: 'Stavke', icon: '📦' },
   { id: 'report', label: 'Pregled po lokacijama', icon: '📊' },
   { id: 'labels', label: 'Štampa nalepnica', icon: '🏷' },
-  { id: 'definitions', label: 'Istorija definicija', icon: '🕘', manageOnly: true },
-  { id: 'history', label: 'Istorija premeštanja', icon: '🔄' },
-  { id: 'sync', label: 'Sync', icon: '🔁', adminOnly: true },
+  {
+    type: 'group',
+    id: 'more',
+    label: 'Više',
+    icon: '⋯',
+    items: [
+      { id: 'definitions', label: 'Istorija definicija', icon: '🕘', manageOnly: true },
+      { id: 'history', label: 'Istorija premeštanja', icon: '🔄' },
+      { id: 'sync', label: 'Sync', icon: '🔁', adminOnly: true },
+    ],
+  },
 ];
 
 const MOVEMENT_TYPE_LABELS = {
@@ -1097,22 +1107,59 @@ function headerHtml() {
 }
 
 function tabsHtml(activeId) {
-  const visible = TABS.filter(t => {
+  const isAllowed = t => {
     if (t.adminOnly && !canViewLokacijeSync()) return false;
     if (t.manageOnly && !canEdit()) return false;
     return true;
-  });
+  };
+  const renderLeaf = t => `
+    <button type="button" role="tab" class="kadrovska-tab loc-tab${t.id === activeId ? ' active' : ''}"
+      data-loc-tab="${escHtml(t.id)}" aria-selected="${t.id === activeId ? 'true' : 'false'}">
+      ${t.icon ? `<span class="loc-tab-icon" aria-hidden="true">${t.icon}</span>` : ''}<span class="loc-tab-label">${escHtml(t.label)}</span>
+    </button>`;
+
+  const renderGroup = g => {
+    const items = (g.items || []).filter(isAllowed);
+    if (!items.length) return ''; /* nema čime da se popuni meni — ne renderuj */
+    const groupActive = items.some(it => it.id === activeId);
+    const activeItem = items.find(it => it.id === activeId);
+    /* Kad je sub-tab aktivan, na samom trigger-u prikaži njegov naziv i ikonu
+     * (umesto generičkog „Više") — operater vidi gde se nalazi. */
+    const triggerIcon = activeItem?.icon || g.icon;
+    const triggerLabel = activeItem?.label || g.label;
+    return `
+      <div class="loc-tab-group" data-loc-tab-group>
+        <button type="button" class="kadrovska-tab loc-tab loc-tab-trigger${groupActive ? ' active' : ''}"
+          aria-haspopup="menu" aria-expanded="false" aria-label="${escHtml(g.label)} — više opcija">
+          ${triggerIcon ? `<span class="loc-tab-icon" aria-hidden="true">${triggerIcon}</span>` : ''}<span class="loc-tab-label">${escHtml(triggerLabel)}</span>
+          <span class="loc-tab-caret" aria-hidden="true">▾</span>
+        </button>
+        <div class="loc-tab-menu" role="menu" hidden>
+          ${items
+            .map(
+              it => `
+            <button type="button" role="menuitem" class="loc-tab-menuitem${it.id === activeId ? ' is-current' : ''}"
+              data-loc-tab="${escHtml(it.id)}">
+              ${it.icon ? `<span class="loc-tab-icon" aria-hidden="true">${it.icon}</span>` : ''}<span>${escHtml(it.label)}</span>
+            </button>`,
+            )
+            .join('')}
+        </div>
+      </div>`;
+  };
+
+  const html = TABS
+    .map(t => {
+      if (t.type === 'group') return renderGroup(t);
+      if (!isAllowed(t)) return '';
+      return renderLeaf(t);
+    })
+    .filter(Boolean)
+    .join('');
+
   return `
     <nav class="kadrovska-tabs loc-tabs" role="tablist" aria-label="Lokacije — sekcije">
-      ${visible
-        .map(
-          t => `
-        <button type="button" role="tab" class="kadrovska-tab loc-tab${t.id === activeId ? ' active' : ''}"
-          data-loc-tab="${escHtml(t.id)}" aria-selected="${t.id === activeId ? 'true' : 'false'}">
-          ${t.icon ? `<span class="loc-tab-icon" aria-hidden="true">${t.icon}</span>` : ''}<span class="loc-tab-label">${escHtml(t.label)}</span>
-        </button>`,
-        )
-        .join('')}
+      ${html}
     </nav>`;
 }
 
@@ -2117,22 +2164,91 @@ function buildHistoryExportFilename() {
   return `lokacije_istorija_${ts}.csv`;
 }
 
+/* Flat lista svih leaf tab-ova (top-level + group items) — koristi se za
+ * permission checks i lookup-e gde nas ne zanima grupisanje. */
+function flatTabs() {
+  const out = [];
+  for (const t of TABS) {
+    if (t.type === 'group') {
+      for (const it of (t.items || [])) out.push(it);
+    } else {
+      out.push(t);
+    }
+  }
+  return out;
+}
+
 function wireTabs(container, initialTabId) {
   const host = container.querySelector('#locPanelHost');
   locPanelHost = host;
 
-  container.querySelectorAll('[data-loc-tab]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.getAttribute('data-loc-tab');
-      setLokacijeActiveTab(id);
-      container.querySelectorAll('[data-loc-tab]').forEach(b => {
-        const on = b.getAttribute('data-loc-tab') === id;
-        b.classList.toggle('active', on);
-        b.setAttribute('aria-selected', on ? 'true' : 'false');
-      });
-      host.innerHTML = `<div class="kadr-panel active loc-panel"><p class="loc-muted">Učitavam…</p></div>`;
-      await renderPanel(host, id);
-    });
+  /** Vraća trenutno aktivni `<nav>` element (re-renderuje se na promenu taba). */
+  const getNav = () => container.querySelector('.loc-tabs');
+
+  const closeMenu = () => {
+    const open = container.querySelector('.loc-tab-group .loc-tab-menu:not([hidden])');
+    if (!open) return;
+    open.setAttribute('hidden', '');
+    const trigger = open.parentElement?.querySelector('.loc-tab-trigger');
+    trigger?.setAttribute('aria-expanded', 'false');
+  };
+
+  const toggleMenu = trigger => {
+    const group = trigger.closest('.loc-tab-group');
+    const menu = group?.querySelector('.loc-tab-menu');
+    if (!menu) return;
+    const isOpen = !menu.hasAttribute('hidden');
+    closeMenu(); /* zatvori bilo koji drugi otvoreni meni */
+    if (!isOpen) {
+      menu.removeAttribute('hidden');
+      trigger.setAttribute('aria-expanded', 'true');
+    }
+  };
+
+  const switchTab = async id => {
+    if (!id) return;
+    setLokacijeActiveTab(id);
+    closeMenu();
+    /* Re-renderuj tab strip da group trigger pravilno prikaže aktivni sub-tab. */
+    const nav = getNav();
+    if (nav) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = tabsHtml(id).trim();
+      const fresh = tmp.firstElementChild;
+      if (fresh) nav.replaceWith(fresh);
+    }
+    host.innerHTML = `<div class="kadr-panel active loc-panel"><p class="loc-muted">Učitavam…</p></div>`;
+    await renderPanel(host, id);
+  };
+
+  /* Delegirani click — pokriva i leaf tabove i menuitem-e i group trigger.
+   * Posle re-render-a tab strip-a, isti listener i dalje radi (na container-u). */
+  container.addEventListener('click', ev => {
+    const target = ev.target;
+    if (!(target instanceof Element)) return;
+    const trigger = target.closest('.loc-tab-trigger');
+    if (trigger && container.contains(trigger)) {
+      ev.preventDefault();
+      toggleMenu(trigger);
+      return;
+    }
+    const tabBtn = target.closest('[data-loc-tab]');
+    if (tabBtn && container.contains(tabBtn)) {
+      const id = tabBtn.getAttribute('data-loc-tab');
+      void switchTab(id);
+      return;
+    }
+  });
+
+  /* Outside click + Escape — zatvaranje dropdown menija. */
+  document.addEventListener('mousedown', ev => {
+    const t = ev.target;
+    if (!(t instanceof Element)) return;
+    if (t.closest('.loc-tab-group')) return; /* klik unutar group-a obrađen iznad */
+    closeMenu();
+  });
+  document.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') closeMenu();
   });
 
   renderPanel(host, initialTabId);
@@ -2146,7 +2262,14 @@ export function renderLokacijeModule(mountEl, { onBackToHub, onLogout } = {}) {
   loadLokacijeTabFromStorage();
   loadPredmetStateFromStorage();
   let { activeTab: tabId } = getLokacijeUiState();
-  if (TABS.find(t => t.id === tabId && t.adminOnly) && !canViewLokacijeSync()) {
+  /* Permission guard: sync/definitions su sad unutar „Više" group-a, pa
+   * TABS.find ne hvata leaf entry-je. `flatTabs()` vraća sve leaf tabove
+   * (top-level + group items) — tačan lookup za adminOnly/manageOnly. */
+  const currentLeaf = flatTabs().find(t => t.id === tabId);
+  if (currentLeaf?.adminOnly && !canViewLokacijeSync()) {
+    tabId = 'dashboard';
+    setLokacijeActiveTab(tabId);
+  } else if (currentLeaf?.manageOnly && !canEdit()) {
     tabId = 'dashboard';
     setLokacijeActiveTab(tabId);
   }
