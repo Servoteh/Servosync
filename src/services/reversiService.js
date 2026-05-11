@@ -758,15 +758,27 @@ export async function fetchCuttingByEmployee(opts = {}) {
 /**
  * Magacin — UNION rev_tools (HAND) + rev_cutting_tool_catalog (CUTTING).
  * Vraća samo redove sa qty > 0 osim ako includeZero=true.
- * @param {{ grupa?: 'HAND'|'CUTTING'|'ALL', search?: string, klasa?: string, includeZero?: boolean }} [opts]
+ * Sa allLocations=true koristi v_rev_inventory_all_locations (qty_total, location_label) ako view postoji.
+ *
+ * @param {{
+ *   grupa?: 'HAND'|'CUTTING'|'ALL',
+ *   search?: string,
+ *   klasa?: string,
+ *   includeZero?: boolean,
+ *   allLocations?: boolean
+ * }} [opts]
  */
 export async function fetchUnifiedWarehouse(opts = {}) {
   return wrap(async () => {
+    const allLoc = !!opts.allLocations;
+    let view = allLoc ? 'v_rev_inventory_all_locations' : 'v_rev_warehouse_unified';
     const parts = ['select=*', 'order=grupa.asc,oznaka.asc', 'limit=1000'];
     const grupa = opts.grupa && String(opts.grupa).trim();
     if (grupa === 'HAND') parts.push('grupa=eq.HAND');
     else if (grupa === 'CUTTING') parts.push('grupa=eq.CUTTING');
-    if (!opts.includeZero) parts.push('in_warehouse_qty=gt.0');
+    if (!opts.includeZero) {
+      parts.push(allLoc ? 'qty_total=gt.0' : 'in_warehouse_qty=gt.0');
+    }
     const klasa = opts.klasa && String(opts.klasa).trim();
     if (klasa) parts.push(`klasa=eq.${encodeURIComponent(klasa)}`);
     const s = opts.search && String(opts.search).trim();
@@ -774,8 +786,21 @@ export async function fetchUnifiedWarehouse(opts = {}) {
       const enc = encodeURIComponent(`*${s}*`);
       parts.push(`or=(oznaka.ilike.${enc},naziv.ilike.${enc},barcode.ilike.${enc},klasa.ilike.${enc})`);
     }
-    const rows = await sbReq(`v_rev_warehouse_unified?${parts.join('&')}`);
-    return Array.isArray(rows) ? rows : [];
+    try {
+      const rows = await sbReq(`${view}?${parts.join('&')}`);
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      if (
+        allLoc &&
+        /relation|does not exist|42P01|404|PGRST205/i.test(String(e?.message || ''))
+      ) {
+        const fb = parts.filter((p) => !p.startsWith('qty_total='));
+        if (!opts.includeZero) fb.push('in_warehouse_qty=gt.0');
+        const rows = await sbReq(`v_rev_warehouse_unified?${fb.join('&')}`);
+        return Array.isArray(rows) ? rows : [];
+      }
+      throw e;
+    }
   })();
 }
 

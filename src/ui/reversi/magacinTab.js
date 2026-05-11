@@ -20,6 +20,8 @@ const state = {
   search: '',
   klasa: '',
   includeZero: false,
+  /** Pregled i škart zadužene ručne / razmazane rezni po svim lokacijama */
+  showAllLocations: false,
   searchDeb: null,
   locations: [],
   magacinId: null,
@@ -33,6 +35,7 @@ async function load() {
     search: state.search,
     klasa: state.klasa,
     includeZero: state.includeZero,
+    allLocations: state.showAllLocations,
   });
   state.rows = r.ok && Array.isArray(r.data) ? r.data : [];
 }
@@ -51,7 +54,11 @@ function minForRow(r) {
 }
 
 function stockPresentation(r) {
-  const qty = Number(r.in_warehouse_qty) || 0;
+  const hasExt = typeof r.qty_total !== 'undefined' && Number.isFinite(Number(r.qty_total));
+  const qty = state.showAllLocations && hasExt
+    ? (Number(r.qty_total) || 0)
+    : (Number(r.in_warehouse_qty) || 0);
+  const warehouseQty = Number(r.in_warehouse_qty) || 0;
   const minQ = minForRow(r);
   let cls = 'rev-mag-qty-ok';
   let pill = 'rev-status-pill--ok';
@@ -60,10 +67,22 @@ function stockPresentation(r) {
     cls = 'rev-mag-qty-danger';
     pill = 'rev-status-pill--danger';
     label = 'Nema';
-  } else if (minQ > 0 && qty < minQ) {
+  } else if (
+    state.showAllLocations &&
+    warehouseQty === 0 &&
+    hasExt &&
+    qty > 0
+  ) {
     cls = 'rev-mag-qty-warn';
     pill = 'rev-status-pill--warn';
-    label = 'Nisko stanje';
+    label = 'Kod primaoca';
+  } else if (minQ > 0) {
+    const minCheck = r.grupa === 'CUTTING' && state.showAllLocations ? warehouseQty : qty;
+    if (minCheck < minQ) {
+      cls = 'rev-mag-qty-warn';
+      pill = 'rev-status-pill--warn';
+      label = 'Nisko stanje';
+    }
   }
   return { qty, minQ, cls, pill, label };
 }
@@ -99,7 +118,7 @@ function magacinStatsHtml(rows) {
       <div class="rev-stat-card rev-stat-card--primary">
         <div class="rev-stat-label">Ukupno u prikazu</div>
         <div class="rev-stat-value">${total}</div>
-        <div class="rev-stat-hint">Redova (filter)</div>
+        <div class="rev-stat-hint">${state.showAllLocations ? 'Ukupno aktivnih (sve lokacije)' : 'Redova (filter)'}</div>
       </div>
       <div class="rev-stat-card">
         <div class="rev-stat-label">Ručni (slobodno)</div>
@@ -125,7 +144,7 @@ function renderPageHeader() {
       <div class="rev-page-header__icon" aria-hidden="true">📦</div>
       <div class="rev-page-header__text">
         <h2 class="rev-page-header__title">Magacin</h2>
-        <p class="rev-page-header__desc">Ručni i rezni artikli u skladištu — jedan pregled, iste logike statusa po količini.</p>
+        <p class="rev-page-header__desc">Ručni i rezni artikli — prema zalihi u magacinu ili opciono ceo inventar po lokacijama primaoca.</p>
       </div>
     </header>`;
 }
@@ -168,6 +187,12 @@ function renderToolbar() {
         }
         <div class="rev-field">
           <label class="rev-field-label" style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+            <input type="checkbox" id="revMagAllLoc" ${state.showAllLocations ? 'checked' : ''}/>
+            Sve lokacije
+          </label>
+        </div>
+        <div class="rev-field">
+          <label class="rev-field-label" style="display:flex;align-items:center;gap:6px;white-space:nowrap">
             <input type="checkbox" id="revMagInclZero" ${state.includeZero ? 'checked' : ''}/>
             Nulta stanja
           </label>
@@ -198,18 +223,21 @@ function exportMagacin() {
     showToast('Nema redova');
     return;
   }
-  const headers = ['Grupa', 'Kataloški broj', 'Barkod', 'Naziv', 'Klasa', 'Lokacija', 'Količina', 'Min', 'Status', 'Napomena'];
+  const headers = ['Grupa', 'Kataloški broj', 'Barkod', 'Naziv', 'Klasa', 'Lokacija (primalac ili kod)', 'Količina prikaz', 'U magacin', 'Min', 'Status', 'Napomena'];
   const data = state.rows.map((r) => {
     const p = stockPresentation(r);
     const kat = r.grupa === 'HAND' ? r.oznaka || '' : r.oznaka || '';
+    const loc = String(r.location_label || '').trim() || r.location_code || '';
+    const wh = String(Number(r.in_warehouse_qty) || 0);
     return [
       r.grupa === 'CUTTING' ? 'Rezni' : 'Ručni',
       kat,
       r.barcode || '',
       r.naziv || '',
       r.klasa || '',
-      r.location_code || '',
+      loc,
       String(p.qty),
+      wh,
       String(p.minQ),
       p.label,
       r.napomena || '',
@@ -255,9 +283,16 @@ function renderTable() {
               <td>${escHtml(r.naziv || '')}</td>
               <td>${grupaBadge(r.grupa)}</td>
               <td>${
-                r.location_code
-                  ? `<span class="rev-mono rev-muted">${escHtml(r.location_code)}</span>`
-                  : '<span class="rev-muted">—</span>'
+                (() => {
+                  const lab = String(r.location_label || '').trim();
+                  const code = String(r.location_code || '').trim();
+                  if (lab && code && lab !== code) {
+                    return `<span title="${escHtml(code)}">${escHtml(lab)}</span> <span class="rev-mono rev-muted" style="font-size:11px">${escHtml(code)}</span>`;
+                  }
+                  if (lab) return `<span>${escHtml(lab)}</span>`;
+                  if (code) return `<span class="rev-mono rev-muted">${escHtml(code)}</span>`;
+                  return '<span class="rev-muted">—</span>';
+                })()
               }</td>
               <td class="rev-td-num">
                 <div class="rev-mag-stock-pill">
@@ -307,6 +342,10 @@ function bindEvents(refreshAll) {
   });
   r.querySelector('#revMagKlasa')?.addEventListener('change', (e) => {
     state.klasa = e.target.value;
+    void refreshAll();
+  });
+  r.querySelector('#revMagAllLoc')?.addEventListener('change', (e) => {
+    state.showAllLocations = !!e.target.checked;
     void refreshAll();
   });
   r.querySelector('#revMagInclZero')?.addEventListener('change', (e) => {
@@ -442,5 +481,6 @@ export function teardownMagacinTab() {
   state.grupa = 'ALL';
   state.search = '';
   state.klasa = '';
+  state.showAllLocations = false;
   clearTimeout(state.searchDeb);
 }

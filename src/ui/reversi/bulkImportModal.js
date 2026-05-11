@@ -855,6 +855,8 @@ export function openBulkImportModal(opts = {}) {
       docCount: 0,
       lineCount: rows.length,
       catalogByOznaka: new Map(), // oznaka -> { id (ako postoji) | placeholder za novi }
+      toolByOznaka: new Map(), // oznaka -> rev_tools.id (TOOL / COOPERATION_GOODS linije)
+      missingToolOznaka: [],   // blokira import ako nije pronađen aktivan ručni alat
       magacinExists: false,    // ALAT-MAG-01 — blokira CUTTING_TOOL import ako fali
       duplicateDocs: [],       // [{ machine, doc_number, issued_at, employee }] — već postoji aktivan revers za istu mašinu
       forceImportConfirmed: false, // user je eksplicitno potvrdio override duplikata
@@ -865,25 +867,31 @@ export function openBulkImportModal(opts = {}) {
     const magId = await getMagacinLocationId();
     result.magacinExists = !!magId;
 
-    /* 1. Skupi unique oznake alata sa metapodacima iz Napomene */
-    const oznakaToMeta = new Map(); // oznaka -> { naziv, klasa, masine: Set }
+    /* 1. CUTTING_TOOL: oznake + meta za rezni katalog. TOOL/COOPERATION: samo skup oznaka za rev_tools */
+    const cuttingOznakaToMeta = new Map();
+    const toolOznake = new Set();
     for (const r of rows) {
+      const tip = (r.tip || 'TOOL').toUpperCase();
       const oznaka = String(r.alat_oznaka_ili_barkod || '').trim();
       if (!oznaka) continue;
-      if (!oznakaToMeta.has(oznaka)) {
-        const meta = parseCuttingMetaFromNote(r.napomena);
-        oznakaToMeta.set(oznaka, {
-          naziv: meta.naziv || oznaka,
-          klasa: mapKategorijaToKlasa(meta.kategorija),
-          masine: new Set(),
-        });
+      if (tip === 'CUTTING_TOOL') {
+        if (!cuttingOznakaToMeta.has(oznaka)) {
+          const meta = parseCuttingMetaFromNote(r.napomena);
+          cuttingOznakaToMeta.set(oznaka, {
+            naziv: meta.naziv || oznaka,
+            klasa: mapKategorijaToKlasa(meta.kategorija),
+            masine: new Set(),
+          });
+        }
+        const masina = String(r.masina || '').trim();
+        if (masina) cuttingOznakaToMeta.get(oznaka).masine.add(masina);
+      } else if (tip === 'TOOL' || tip === 'COOPERATION_GOODS') {
+        toolOznake.add(oznaka);
       }
-      const masina = String(r.masina || '').trim();
-      if (masina) oznakaToMeta.get(oznaka).masine.add(masina);
     }
 
-    /* 2. Resolve catalog po oznaci (ili barkodu ako počinje sa RZN-) */
-    for (const [oznaka, meta] of oznakaToMeta.entries()) {
+    /* 2. Resolve rezni katalog po oznaci (samo CUTTING_TOOL redovi) */
+    for (const [oznaka, meta] of cuttingOznakaToMeta.entries()) {
       let found = null;
       if (/^RZN-/i.test(oznaka)) {
         const r = await fetchCuttingToolByBarcode(oznaka);
@@ -934,6 +942,18 @@ export function openBulkImportModal(opts = {}) {
         result.resolvedEmployees.set(name, { id: found.id, full_name: found.full_name });
       } else {
         result.missingEmployees.push(`Radnik ne postoji u Kadrovskoj: ${name}`);
+      }
+    }
+
+    /* 4b. Resolve rev_tools po oznaci za TOOL / COOPERATION_GOODS (RPC zahteva tool_id) */
+    for (const oz of toolOznake) {
+      const tr = await sbReq(
+        `rev_tools?select=id&oznaka=eq.${encodeURIComponent(oz)}&status=eq.active&order=created_at.desc&limit=1`,
+      );
+      if (Array.isArray(tr) && tr[0]?.id) {
+        result.toolByOznaka.set(oz, tr[0].id);
+      } else {
+        result.missingToolOznaka.push(oz);
       }
     }
 
@@ -1168,10 +1188,19 @@ export function openBulkImportModal(opts = {}) {
             payload.recipient_company_name = m.primalac;
           }
           for (const ln of grp.lines) {
+            const oz = String(ln.alat_oznaka_ili_barkod || '').trim();
+            let toolUuid = null;
+            if (tip === 'TOOL' || tip === 'COOPERATION_GOODS') {
+              toolUuid = analysis.toolByOznaka.get(oz);
+              if (!toolUuid) {
+                state.progress.fail += 1;
+                continue;
+              }
+            }
             payload.lines.push({
               line_type: 'TOOL',
-              tool_id: null,
-              part_name: ln.alat_oznaka_ili_barkod,
+              tool_id: toolUuid,
+              part_name: oz,
               drawing_no: '',
               quantity: Number(ln.kolicina) || 1,
               unit: 'kom',
