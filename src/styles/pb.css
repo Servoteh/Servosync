@@ -2852,12 +2852,7 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   will-change: auto;
 }
 
-/* Jedini vertikalni scroll container u PB modulu.
- * `padding-top` je nepravilno male da bi sadržaj „lebdeo" pri scroll-u;
- * povećan na 20px i fiksiran kroz sve zoom nivoe. `scroll-padding-top`
- * čini da `scrollIntoView` ne gura prvi red sadržaja uz samu ivicu chrome-a.
- * `border-top` daje vizuelnu liniju razdvajanja od chrome-a (sadržaj koji
- * scroll-uje gore ne deluje kao da „nestaje pod menijima") */
+/* Jedini vertikalni scroll container u PB modulu. */
 body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -2867,75 +2862,33 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding-top: 20px;
+  padding-top: 16px;
   padding-bottom: 96px;
-  scroll-padding-top: 20px;
-  border-top: 1px solid var(--border, #e5e7eb);
   box-sizing: border-box;
 }
 
-/* Gornji kontekst blok: strogi cap + interni scroll; tabovi ostaju uvek izvan overflow-a chrome-a. */
+/* Gornji kontekst blok ne sme da pojede previše visine pri zoom-u. */
 body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-context-card {
   flex: 0 0 auto;
-  max-height: min(120px, 18dvh);
+  max-height: min(240px, 36dvh);
   overflow-x: visible;
   overflow-y: auto;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
 
-body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-chip-list.pb-chip-list--wrap {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 4px;
-}
-
-body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tabs {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: var(--bg, #f8f9fa);
-}
-
-/* Zoom > 100% na 1920×1080 (efektivna visina <760px). */
 @media (max-height: 760px) {
   body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-context-card {
-    max-height: min(90px, 14dvh);
+    max-height: min(180px, 32dvh);
   }
 
   body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
-    padding-top: 14px;
-    scroll-padding-top: 14px;
+    padding-top: 10px;
   }
 
   body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-filter-toolbar {
     padding-top: 8px;
     padding-bottom: 8px;
-    margin-bottom: 8px;
-  }
-
-  /* Tabovi i header tighter na nižoj efektivnoj visini. */
-  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-header {
-    padding-top: 4px;
-    padding-bottom: 4px;
-  }
-}
-
-/* Zoom 150% na 1920×1080 (efektivna visina <600px) — agresivnije sažimanje. */
-@media (max-height: 600px) {
-  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-context-card {
-    max-height: min(70px, 12dvh);
-  }
-
-  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
-    padding-top: 10px;
-    scroll-padding-top: 10px;
-  }
-
-  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-stats-grid {
     margin-bottom: 8px;
   }
 }
