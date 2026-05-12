@@ -1063,18 +1063,53 @@ export async function openScanMoveModal({
     );
   }
 
-  /** Postavi filter hale (roditelj police), osveži listu odredišta, izaberi lokaciju. */
+  /**
+   * Prva HALA u lancu roditelja (za filter „iznad"); ako nema, direktan parent_id.
+   * @param {object} loc
+   * @returns {string}
+   */
+  function findHallFilterTargetId(loc) {
+    if (!loc) return '';
+    if (getLocationKind(loc.location_type) === 'hall') return String(loc.id);
+    let cur = loc;
+    const seen = new Set();
+    for (let i = 0; i < 25 && cur && !seen.has(cur.id); i++) {
+      seen.add(cur.id);
+      if (!cur.parent_id) break;
+      const par = state.locById.get(String(cur.parent_id));
+      if (!par) break;
+      if (getLocationKind(par.location_type) === 'hall') return String(par.id);
+      cur = par;
+    }
+    return loc.parent_id ? String(loc.parent_id) : '';
+  }
+
+  /** Da li `loc` (polica) pripada pod `hallId` (bilo gde u parent lancu iznad). */
+  function locationDescendsFromHall(loc, hallId) {
+    if (!loc || !hallId) return false;
+    let cur = loc;
+    const seen = new Set();
+    for (let i = 0; i < 25 && cur && !seen.has(cur.id); i++) {
+      seen.add(cur.id);
+      if (!cur.parent_id) return false;
+      const par = state.locById.get(String(cur.parent_id));
+      if (!par) return false;
+      if (String(par.id) === String(hallId)) return true;
+      cur = par;
+    }
+    return false;
+  }
+
+  /** Postavi filter hale (roditelj / predak HALA), osveži listu odredišta, izaberi lokaciju. */
   function applyLocationToFormSelect(loc) {
     if (!loc) return;
     const hallFilterEl = /** @type {HTMLSelectElement|null} */ ($('#locScanHallFilter'));
     const kind = getLocationKind(loc.location_type);
 
     if (hallFilterEl) {
-      if (kind === 'shelf' && loc.parent_id) {
-        /* Polica → hala iz mastera (parent_id); lista „Na lokaciju” onda sadrži tu policu. */
-        hallFilterEl.value = String(loc.parent_id);
-      } else if (kind === 'hall') {
-        hallFilterEl.value = String(loc.id);
+      const hid = findHallFilterTargetId(loc);
+      if (hid && (kind === 'shelf' || kind === 'hall' || kind === 'other')) {
+        hallFilterEl.value = hid;
       }
     }
 
@@ -1156,18 +1191,38 @@ export async function openScanMoveModal({
       arr.sort(pathCmp);
     }
 
+    /** Ključevi za filter hale: direktan parent police + sve HALE iz lanca predaka
+     * (inače izabrana HALA 1 nema <option> kad je parent_id regal / međučvor). */
+    const hallFilterIdsSet = new Set(
+      Array.from(shelfByParent.keys())
+        .filter(p => p != null)
+        .map(String),
+    );
+    for (const s of shelves) {
+      let cur = s;
+      const seen = new Set();
+      for (let i = 0; i < 25 && cur && !seen.has(cur.id); i++) {
+        seen.add(cur.id);
+        if (!cur.parent_id) break;
+        const par = state.locById.get(String(cur.parent_id));
+        if (!par) break;
+        if (getLocationKind(par.location_type) === 'hall') hallFilterIdsSet.add(String(par.id));
+        cur = par;
+      }
+    }
+
     const hallFilterEl = /** @type {HTMLSelectElement|null} */ ($('#locScanHallFilter'));
     const savedHallFilter = hallFilterEl?.value || '';
     if (hallFilterEl) {
-      const parentIds = Array.from(shelfByParent.keys()).filter(p => p != null);
-      parentIds.sort((a, b) => {
+      const hallFilterIds = Array.from(hallFilterIdsSet);
+      hallFilterIds.sort((a, b) => {
         const pa = state.locById.get(a);
         const pb = state.locById.get(b);
         return pathCmp(pa || {}, pb || {});
       });
       hallFilterEl.innerHTML =
         '<option value="">— sve hale (sve police) —</option>' +
-        parentIds
+        hallFilterIds
           .map(pid => {
             const p = state.locById.get(pid);
             if (!p) return '';
@@ -1180,9 +1235,10 @@ export async function openScanMoveModal({
         hallFilterEl.value = '';
       }
     }
+    const filterHallSel = hallFilterEl?.value?.trim() || '';
     const filterHallId =
-      hallFilterEl?.value?.trim() && shelfByParent.has(hallFilterEl.value.trim())
-        ? hallFilterEl.value.trim()
+      filterHallSel && shelves.some(s => locationDescendsFromHall(s, filterHallSel))
+        ? filterHallSel
         : null;
 
     const shelfLabelForParent = pid => {
@@ -1200,7 +1256,13 @@ export async function openScanMoveModal({
         const pb = state.locById.get(b);
         return pathCmp(pa || {}, pb || {});
       });
-      const pids = filterHallId != null ? [filterHallId] : allPids;
+      const pids =
+        filterHallId != null
+          ? allPids.filter(pid => {
+              const items = shelfByParent.get(pid);
+              return items?.some(s => locationDescendsFromHall(s, filterHallId));
+            })
+          : allPids;
       return pids
         .map(pid => {
           const items = shelfByParent.get(pid);
