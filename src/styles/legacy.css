@@ -1868,27 +1868,45 @@ body.module-kadrovska > #module-settings { display:none !important; }
  * dropdown meni. Wrap (flex-wrap) već rešava overflow tabova; scroll nije potreban. */
 .loc-tabs { overflow: visible; }
 .loc-tab-group { position:relative; display:inline-flex; }
+
+/* Trigger („⋯ Više") — vizuelno usklađen sa ostalim tabovima:
+ *  - min-width da ne izgleda usitnjen pored 2-3 rečnih labela
+ *  - veći caret (12px) za bolji touch target i čitljivost na 1920×1080
+ *  - suptilni border-left/right pseudo-separator kad meni nije aktivan,
+ *    da operater odmah vidi da je to dropdown a ne običan tab. */
+.loc-tab-trigger {
+  min-width: 110px;
+  justify-content: center;
+}
 .loc-tab-trigger .loc-tab-caret {
   display:inline-block;
-  margin-left:2px;
-  font-size:10px;
+  margin-left:4px;
+  font-size:12px; line-height:1;
   color:var(--text3);
   transition: transform 120ms;
 }
+.loc-tab-trigger:hover .loc-tab-caret { color:var(--text2); }
 .loc-tab-trigger[aria-expanded="true"] .loc-tab-caret {
   transform: rotate(180deg);
   color:var(--text);
 }
+.loc-tab-trigger[aria-expanded="true"] {
+  background: var(--surface2);
+}
+
 .loc-tab-menu {
-  position:absolute; top:100%; right:0;
-  z-index:50;
-  margin-top:2px;
-  min-width:220px;
-  padding:4px;
+  /* `position: fixed` + JS pozicioniranje garantuje vidljivost nezavisno od
+   * wrap-a tab strip-a, scroll-a ili clipping-a parent kontejnera. JS računa
+   * `top`/`left` na osnovu trigger-ove `getBoundingClientRect()`, i clamp-uje
+   * na viewport granice (8px margin). */
+  position:fixed;
+  z-index:200; /* iznad sticky toolbar-a / sticky tabela hedera u panel sadržaju */
+  min-width:240px;
+  padding:5px;
   background:var(--surface);
   border:1px solid var(--border2);
   border-radius:8px;
-  box-shadow: 0 6px 24px -4px rgba(0,0,0,0.18), 0 2px 6px -2px rgba(0,0,0,0.08);
+  box-shadow: 0 8px 28px -4px rgba(0,0,0,0.22), 0 2px 6px -2px rgba(0,0,0,0.10);
   display:flex; flex-direction:column; gap:1px;
 }
 /* `hidden` HTML atribut ima istu specifičnost kao `.loc-tab-menu`, pa
@@ -1896,6 +1914,17 @@ body.module-kadrovska > #module-settings { display:none !important; }
  * Eksplicitnim selektorom sa class+attribute (specifičnost 0,2,0) hvatamo
  * stanje i vraćamo `display: none` dok meni nije otvoren. */
 .loc-tab-menu[hidden] { display: none; }
+
+/* Na manjim viewport-ima @media (max-width: 1400px) gore zateže sve tabove
+ * uniformno. Override-ujemo SAMO trigger da zadrži veću proporciju
+ * (operater mora da ga uoči kao zaseban dropdown, ne kao još jedan tab). */
+@media (max-width: 1400px) {
+  .loc-tabs .loc-tab-trigger { min-width: 96px; padding: 9px 12px; }
+  .loc-tabs .loc-tab-trigger .loc-tab-caret { font-size: 11px; }
+}
+@media (max-width: 1100px) {
+  .loc-tabs .loc-tab-trigger { min-width: 84px; padding: 8px 10px; }
+}
 .loc-tab-menuitem {
   display:flex; align-items:center; gap:8px;
   padding:8px 10px;

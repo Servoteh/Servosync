@@ -2185,12 +2185,52 @@ function wireTabs(container, initialTabId) {
   /** Vraća trenutno aktivni `<nav>` element (re-renderuje se na promenu taba). */
   const getNav = () => container.querySelector('.loc-tabs');
 
+  /** Postavi `top`/`left` na `position: fixed` meni — anker desno-uz-trigger,
+   *  clamp na viewport (8px margin), prebaci na vrh trigger-a ako ne staje
+   *  dole. Garantuje vidljivost čak i kad trigger wrap-uje u drugi red ili
+   *  je u sticky/fixed kontejneru. */
+  const positionMenu = (trigger, menu) => {
+    /* Privremeno učini meni vidljivim ali nevidljiv (visibility) da bismo
+     * izmerili stvarnu širinu/visinu — display:none ne može da se izmeri. */
+    const wasHidden = menu.hasAttribute('hidden');
+    menu.style.visibility = 'hidden';
+    menu.removeAttribute('hidden');
+    const tr = trigger.getBoundingClientRect();
+    const menuW = menu.offsetWidth || 240;
+    const menuH = menu.offsetHeight || 200;
+    if (wasHidden) menu.setAttribute('hidden', '');
+    menu.style.visibility = '';
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const margin = 8;
+    /* Default: desni rub menija = desni rub trigger-a (prirodno za poslednji tab). */
+    let left = Math.round(tr.right - menuW);
+    if (left < margin) left = margin;
+    if (left + menuW > vw - margin) left = Math.max(margin, vw - menuW - margin);
+    /* Default: ispod trigger-a; ako ne staje, iznad. */
+    let top = Math.round(tr.bottom + 2);
+    if (top + menuH > vh - margin) {
+      top = Math.max(margin, Math.round(tr.top - menuH - 2));
+    }
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+  };
+
   const closeMenu = () => {
     const open = container.querySelector('.loc-tab-group .loc-tab-menu:not([hidden])');
     if (!open) return;
     open.setAttribute('hidden', '');
     const trigger = open.parentElement?.querySelector('.loc-tab-trigger');
     trigger?.setAttribute('aria-expanded', 'false');
+  };
+
+  /** Re-pozicioniraj otvoreni meni (resize/scroll). */
+  const repositionOpenMenu = () => {
+    const open = container.querySelector('.loc-tab-group .loc-tab-menu:not([hidden])');
+    if (!open) return;
+    const trigger = open.parentElement?.querySelector('.loc-tab-trigger');
+    if (trigger instanceof HTMLElement) positionMenu(trigger, open);
   };
 
   const toggleMenu = trigger => {
@@ -2200,6 +2240,7 @@ function wireTabs(container, initialTabId) {
     const isOpen = !menu.hasAttribute('hidden');
     closeMenu(); /* zatvori bilo koji drugi otvoreni meni */
     if (!isOpen) {
+      positionMenu(trigger, menu);
       menu.removeAttribute('hidden');
       trigger.setAttribute('aria-expanded', 'true');
     }
@@ -2250,6 +2291,12 @@ function wireTabs(container, initialTabId) {
   document.addEventListener('keydown', ev => {
     if (ev.key === 'Escape') closeMenu();
   });
+
+  /* Resize / scroll — `position: fixed` koordinata se ne menja automatski
+   * pri scroll-u dokumenta, a wrap tab strip-a pomera trigger pri resize-u.
+   * Re-pozicioniramo otvoren meni; passive da ne usporava scroll. */
+  window.addEventListener('resize', repositionOpenMenu);
+  window.addEventListener('scroll', repositionOpenMenu, { passive: true });
 
   renderPanel(host, initialTabId);
 }
