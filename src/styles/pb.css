@@ -2874,31 +2874,36 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   box-sizing: border-box;
 }
 
-/* Chrome se DRŽI uvek u stabilnom opsegu visine — sprečava da wrap tabova
- * + chips u context-card-u stvori sudden „skok" za 30–80px pri zoom-u.
- * Ako sadržaj prelazi max-height, chrome dobija unutrašnji scroll umesto da
- * pomera tab-body granicu i seče sadržaj. */
-body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-module > .pb-chrome {
-  max-height: 40vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-}
-
-/* Gornji kontekst blok ne sme da pojede previše visine pri zoom-u. */
+/* Gornji kontekst blok: strogi cap + interni scroll; tabovi ostaju uvek izvan overflow-a chrome-a. */
 body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-context-card {
   flex: 0 0 auto;
-  max-height: min(200px, 30dvh);
+  max-height: min(120px, 18dvh);
   overflow-x: visible;
   overflow-y: auto;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
 
+body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-chip-list.pb-chip-list--wrap {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg, #f8f9fa);
+}
+
 /* Zoom > 100% na 1920×1080 (efektivna visina <760px). */
 @media (max-height: 760px) {
   body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-context-card {
-    max-height: min(160px, 28dvh);
+    max-height: min(90px, 14dvh);
   }
 
   body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
@@ -2922,7 +2927,7 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
 /* Zoom 150% na 1920×1080 (efektivna visina <600px) — agresivnije sažimanje. */
 @media (max-height: 600px) {
   body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-context-card {
-    max-height: min(120px, 22dvh);
+    max-height: min(70px, 12dvh);
   }
 
   body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
