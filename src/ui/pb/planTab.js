@@ -27,12 +27,51 @@ import {
 } from '../../services/pb.js';
 import { downloadCsv } from '../../lib/csv.js';
 import { canEditProjektniBiro } from '../../state/auth.js';
+import { positionFloatingMenu } from './menuPosition.js';
 
 const IC_CHEVRON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 const IC_REFRESH = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>';
 
 /* Podrazumevano otvoren panel opterećenja — inače je max-height:0 i izgleda kao da „nema statusa“. */
 let _loadOpen = true;
+
+/** Jednokratno vezivanje resize/scroll/Escape; callback se ažurira svakim paint() (renderPlanTab se ponovo poziva pri svakom ulasku u Plan tab). */
+let _pbPlanFloatViewportWired = false;
+let _pbPlanFloatScrollRoot = /** @type {HTMLElement|null} */ (null);
+let _pbPlanFloatLatestRoot = /** @type {HTMLElement|null} */ (null);
+let _pbPlanFloatReposition = /** @type {null | (() => void)} */ (null);
+let _pbPlanFloatOnEscape = /** @type {null | (() => void)} */ (null);
+let _pbPlanEscapeWired = false;
+
+function wirePbPlanFloatingViewport() {
+  if (_pbPlanFloatViewportWired) return;
+  _pbPlanFloatViewportWired = true;
+  const run = () => {
+    if (!_pbPlanFloatLatestRoot?.isConnected) return;
+    _pbPlanFloatReposition?.();
+  };
+  window.addEventListener('resize', run);
+  window.addEventListener('scroll', run, { passive: true });
+}
+
+function wirePbPlanFloatingScrollRoot(/** @type {HTMLElement} */ scrollRoot) {
+  if (_pbPlanFloatScrollRoot === scrollRoot) return;
+  _pbPlanFloatScrollRoot = scrollRoot;
+  const run = () => {
+    if (!_pbPlanFloatLatestRoot?.isConnected) return;
+    _pbPlanFloatReposition?.();
+  };
+  scrollRoot.addEventListener('scroll', run, { passive: true });
+}
+
+function wirePbPlanFloatingEscape() {
+  if (_pbPlanEscapeWired) return;
+  _pbPlanEscapeWired = true;
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    _pbPlanFloatOnEscape?.();
+  });
+}
 
 function parseYmd(s) {
   if (!s) return null;
@@ -220,6 +259,30 @@ export function renderPlanTab(root, ctx) {
     paint();
   };
   _mqMobile.addEventListener('change', _mqListener);
+
+  function repositionOpenFloatingMenus() {
+    if (!root.isConnected) return;
+    if (_viewsOpen) {
+      const trigger = root.querySelector('#pbViewsBtn');
+      const menu = root.querySelector('.pb-views-menu');
+      if (trigger instanceof HTMLElement && menu instanceof HTMLElement) {
+        positionFloatingMenu(trigger, menu, 'left');
+      }
+    }
+    const bulkPairs = {
+      status: ['#pbBulkStatus', '#pbBulkMenuStatus'],
+      prio: ['#pbBulkPrio', '#pbBulkMenuPrio'],
+      engineer: ['#pbBulkEng', '#pbBulkMenuEng'],
+    };
+    if (_bulkMenu && bulkPairs[_bulkMenu]) {
+      const [selT, selM] = bulkPairs[_bulkMenu];
+      const trig = root.querySelector(selT);
+      const menuEl = root.querySelector(selM);
+      if (trig instanceof HTMLElement && menuEl instanceof HTMLElement) {
+        positionFloatingMenu(trig, menuEl, 'left');
+      }
+    }
+  }
 
   function filtered() {
     return filterTasks(ctx.tasks || [], filters);
@@ -478,6 +541,7 @@ export function renderPlanTab(root, ctx) {
       attachBulkBarListeners();
     }
     applyMasterIndeterminate();
+    requestAnimationFrame(() => repositionOpenFloatingMenus());
   }
 
   function applyMasterIndeterminate() {
@@ -783,6 +847,28 @@ export function renderPlanTab(root, ctx) {
       attachRootDelegation();
       _delegationAttached = true;
     }
+
+    requestAnimationFrame(() => repositionOpenFloatingMenus());
+
+    _pbPlanFloatLatestRoot = root;
+    _pbPlanFloatReposition = repositionOpenFloatingMenus;
+    _pbPlanFloatOnEscape = () => {
+      if (!root.isConnected) return;
+      if (!root.querySelector('.pb-plan-split')) return;
+      let needPaint = false;
+      if (_viewsOpen) {
+        _viewsOpen = false;
+        needPaint = true;
+      }
+      if (_bulkMenu) {
+        _bulkMenu = null;
+        needPaint = true;
+      }
+      if (needPaint) paint();
+    };
+    wirePbPlanFloatingViewport();
+    wirePbPlanFloatingScrollRoot(root);
+    wirePbPlanFloatingEscape();
   }
 
   const _emptyFilters = {

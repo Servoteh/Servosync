@@ -330,19 +330,7 @@ body.module-projektni-biro {
   row-gap: 2px;
   margin: 8px 0 0;
   border-bottom: 1px solid var(--border, #e5e7eb);
-  overflow-x: auto;
-  overflow-y: visible;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-}
-
-.pb-tabs::-webkit-scrollbar {
-  height: 6px;
-}
-
-.pb-tabs::-webkit-scrollbar-thumb {
-  border-radius: 3px;
-  background: var(--border, #d1d5db);
+  overflow: visible;
 }
 
 .pb-tab-btn {
@@ -379,6 +367,12 @@ body.module-projektni-biro {
 
 .pb-tab-btn.active svg {
   opacity: 1;
+}
+
+@media (max-width: 1400px) {
+  .pb-tabs .pb-tab-btn {
+    padding: 7px 10px;
+  }
 }
 
 @media (max-width: 1100px) {
@@ -723,6 +717,8 @@ body.module-projektni-biro {
 }
 
 .pb-ft-toggle {
+  display: inline-flex;
+  align-items: center;
   padding: 6px 11px;
   border-radius: 8px;
   border: 1px solid var(--border, #e5e7eb);
@@ -744,6 +740,15 @@ body.module-projektni-biro {
   background: rgba(232, 82, 58, 0.08);
   color: var(--accent, #E8523A);
   font-weight: 500;
+}
+
+.pb-ft-toggle[aria-haspopup="true"] {
+  min-width: 110px;
+  justify-content: center;
+}
+
+.pb-ft-toggle[aria-expanded="true"] {
+  background: var(--surface2, var(--surface3, #f3f4f6));
 }
 
 .pb-ft-refresh {
@@ -778,10 +783,7 @@ body.module-projektni-biro {
 }
 
 .pb-views-menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 4px;
+  position: fixed;
   min-width: 240px;
   max-height: 420px;
   overflow-y: auto;
@@ -791,7 +793,11 @@ body.module-projektni-biro {
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
   padding: 6px;
-  z-index: 20;
+  z-index: 200;
+}
+
+.pb-views-menu[hidden] {
+  display: none;
 }
 
 .pb-views-section-label {
@@ -2769,9 +2775,7 @@ body.module-projektni-biro {
 }
 
 .pb-bulk-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
+  position: fixed;
   min-width: 180px;
   max-height: 320px;
   overflow-y: auto;
@@ -2781,7 +2785,11 @@ body.module-projektni-biro {
   border-radius: 8px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
   padding: 4px;
-  z-index: 10;
+  z-index: 200;
+}
+
+.pb-bulk-menu[hidden] {
+  display: none;
 }
 
 .pb-bulk-menu--wide {
