@@ -2877,6 +2877,22 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   -webkit-overflow-scrolling: touch;
 }
 
+/* Inženjer chips: na desktop-u (≥768px, NE u mobile responsive view-u) jedan
+ * horizontalan red sa scroll-om umesto flex-wrap-a. Sa 17 inženjera chips
+ * inače lome u 5 redova → chrome bloat-uje. Ovo je JEDINA promena za stabilan
+ * layout — chrome ostaje prirodne (manje) visine, tab-body dobija više
+ * vertikalnog prostora, tabovi uvek vidljivi. */
+@media (min-width: 768px) {
+  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-chip-list.pb-chip-list--wrap {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+}
+
 @media (max-height: 760px) {
   body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-context-card {
     max-height: min(180px, 32dvh);
