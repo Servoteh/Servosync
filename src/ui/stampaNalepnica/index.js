@@ -5,7 +5,7 @@
 import { escHtml, showToast } from '../../lib/dom.js';
 import { toggleTheme } from '../../lib/theme.js';
 import { logout } from '../../services/auth.js';
-import { getAuth, canEdit } from '../../state/auth.js';
+import { getAuth, canRecordLocPlacementFromPrint } from '../../state/auth.js';
 import {
   searchBigtehnItems,
   searchBigtehnWorkOrdersForItem,
@@ -168,12 +168,12 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
                 </div>
               </div>
               ${
-                canEdit()
+                canRecordLocPlacementFromPrint()
                   ? `<div class="sn-field-block" style="margin-top:20px" id="snLocBlock">
                 <label class="sn-field-lbl">Lokacija smeštaja (opciono)</label>
                 <p class="sn-hint" style="margin:0 0 10px">
-                  Ako izabereš policu, posle uspešne štampe zapisuje se smeštaj u modulu Lokacije.
-                  „Bez police" — samo štampa, bez izmene smeštaja.
+                  Ako izabereš halu i policu, posle uspešne štampe zapisuje se smeštaj u modulu Lokacije
+                  za broj komada na nalepnici × broj otisaka. „Bez police" — samo štampa, bez izmene smeštaja.
                 </p>
                 <div class="sn-loc-row">
                   <label class="sn-loc-field">
@@ -379,7 +379,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   }
 
   async function loadLocationDropdowns() {
-    if (!canEdit() || !hallEl) return;
+    if (!canRecordLocPlacementFromPrint() || !hallEl) return;
     const rows = await fetchLocations({ activeOnly: true });
     locRowsAll = Array.isArray(rows) ? rows : [];
     if (!Array.isArray(rows)) showToast('⚠ Lokacije nisu učitane (mreža ili sesija).');
@@ -916,7 +916,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
    * @param {number} copiesPrinted
    */
   async function applyPlacementAfterPrint(copiesPrinted) {
-    if (!canEdit() || !shelfEl) return;
+    if (!canRecordLocPlacementFromPrint() || !shelfEl || !hallEl) return;
     const shelfId = String(shelfEl.value || '').trim();
     if (!shelfId) return;
     if (!selectedPredmet || !selectedTp) return;
@@ -930,14 +930,26 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
       return;
     }
 
+    const hallId = String(hallEl.value || '').trim();
+    const hallRow = hallId ? locRowsAll.find(l => String(l.id) === hallId) : null;
+    const shelfRow = locRowsAll.find(l => String(l.id) === shelfId);
+    if (!shelfRow || (hallId && String(shelfRow.parent_id || '') !== hallId)) {
+      showToast('⚠ Štampa OK. Smeštaj nije zabeležen: polica mora pripadati izabranoj hali.');
+      return;
+    }
+
     const kp = getKomadaPrikaz();
     const qty = Math.max(1, kp) * Math.max(1, copiesPrinted);
     const drawing_no = String(selectedTp.broj_crteza || '').trim() || undefined;
-    const note = ['Štampa nalepnice', drawing_no ? `Crtež:${drawing_no}` : ''].filter(Boolean).join(' | ');
+    const noteParts = ['Štampa nalepnice'];
+    if (hallRow) noteParts.push(`Hala:${formatLocationDisplay(hallRow)}`);
+    noteParts.push(`Polica:${formatLocationDisplay(shelfRow)}`);
+    if (drawing_no) noteParts.push(`Crtež:${drawing_no}`);
+    const note = noteParts.join(' | ');
 
     const placements = (await fetchItemPlacements('bigtehn_rn', tpPart, order_no)) || [];
 
-    const destLabel = formatLocationDisplay(locRowsAll.find(l => String(l.id) === shelfId) || { id: shelfId });
+    const destLabel = formatLocationDisplay(shelfRow);
 
     if (placements.length === 0) {
       const res = await locCreateMovement({
@@ -1027,7 +1039,8 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
         },
       },
     ]);
-    const shelfChosen = canEdit() && shelfEl && String(shelfEl.value || '').trim();
+    const shelfChosen =
+      canRecordLocPlacementFromPrint() && shelfEl && String(shelfEl.value || '').trim();
     if (shelfChosen) {
       await applyPlacementAfterPrint(copies);
     } else {

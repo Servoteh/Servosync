@@ -100,6 +100,14 @@ export function isMagacioner() {
 export function isCncOperater() {
   return state.role === 'cnc_operater';
 }
+
+/**
+ * Smeštaj pri štampi TP nalepnice (RPC loc_create_movement) — magacioner/CNC na terenu,
+ * pored uloga iz {@link canEdit}.
+ */
+export function canRecordLocPlacementFromPrint() {
+  return canEdit() || isMagacioner() || isCncOperater();
+}
 export function isLeadPM() {
   return state.role === 'leadpm';
 }
