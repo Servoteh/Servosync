@@ -587,19 +587,7 @@ export async function openScanMoveModal({
       if (loc) {
         decodeBusy = true;
         try {
-          state.pickLocationMode = false;
-          const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
-          if (sel) sel.value = loc.id;
-          cleanupScan();
-          leaveScanPresentation();
-          stageScan.hidden = true;
-          stageForm.hidden = false;
-          const tit = document.getElementById('locScanTitleScan');
-          if (tit) tit.textContent = 'Skeniraj barkod';
-          setScanStatus('', 'info');
-          const code = loc.location_code != null ? String(loc.location_code) : loc.id;
-          showToast(`✓ Lokacija: ${code}`);
-          if (navigator.vibrate) navigator.vibrate(60);
+          commitLocationPickFromHit(loc);
         } finally {
           decodeBusy = false;
         }
@@ -1075,6 +1063,32 @@ export async function openScanMoveModal({
     );
   }
 
+  /** Postavi #locScanTo po UUID / location_code (bez zatvaranja sken faze). */
+  function applyLocationToFormSelect(loc) {
+    if (!loc) return;
+    const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
+    if (sel) sel.value = loc.id;
+    const ci = /** @type {HTMLInputElement|null} */ ($('#locScanToCode'));
+    if (ci) ci.value = '';
+  }
+
+  /** Uspešan sken lokacije (kamera ili „iz slike” u režimu police) — isto kao TP sken zatvara overlay fazu. */
+  function commitLocationPickFromHit(loc) {
+    if (!loc) return;
+    state.pickLocationMode = false;
+    applyLocationToFormSelect(loc);
+    cleanupScan();
+    leaveScanPresentation();
+    stageScan.hidden = true;
+    stageForm.hidden = false;
+    const tit = document.getElementById('locScanTitleScan');
+    if (tit) tit.textContent = 'Skeniraj barkod';
+    setScanStatus('', 'info');
+    const code = loc.location_code != null ? String(loc.location_code) : loc.id;
+    showToast(`✓ Lokacija: ${code}`);
+    if (navigator.vibrate) navigator.vibrate(60);
+  }
+
   function tryApplyLocScanToCode() {
     const inp = /** @type {HTMLInputElement|null} */ ($('#locScanToCode'));
     const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
@@ -1084,8 +1098,7 @@ export async function openScanMoveModal({
       showToast('⚠ Nema lokacije za ovu šifru (proveri master).');
       return;
     }
-    sel.value = hit.id;
-    inp.value = '';
+    applyLocationToFormSelect(hit);
     const code = hit.location_code != null ? String(hit.location_code) : hit.id;
     showToast(`✓ Odredište: ${code}`);
   }
@@ -1780,7 +1793,8 @@ export async function openScanMoveModal({
         $('#locScanFile')?.click();
         break;
       case 'pickLocImage':
-        $('#locScanLocFile')?.click();
+        /* Isti punoekranski skener kao za TP (torch, zum, „iz slike” u toolbaru). */
+        void startScanner({ locationPick: true });
         break;
       case 'applyLocCode':
         void tryApplyLocScanToCode();
@@ -1826,13 +1840,29 @@ export async function openScanMoveModal({
     try {
       const res = await decodeBarcodeFromFile(file);
       if ('text' in res) {
-        /* Hit — isti tok kao live camera decode. */
+        const clean = normalizeBarcodeText(res.text);
+        if (state.pickLocationMode) {
+          const hit = resolveLocationToken(clean);
+          if (hit) {
+            if (navigator.vibrate) navigator.vibrate(80);
+            if (isIOSWebPlatform()) {
+              await new Promise(r => setTimeout(r, 70));
+            }
+            commitLocationPickFromHit(hit);
+            return;
+          }
+          setScanStatus(
+            '⚠ Barkod nije prepoznat kao lokacija — šifra mora postojati u masteru (npr. sa nalepnice police).',
+            'warn',
+          );
+          return;
+        }
+        /* Hit — isti tok kao live camera decode (TP). */
         cleanupScan();
         if (isIOSWebPlatform()) {
           await new Promise(r => setTimeout(r, 70));
         }
         if (navigator.vibrate) navigator.vibrate(80);
-        const clean = normalizeBarcodeText(res.text);
         const parsed = parseBigTehnBarcode(clean);
         try {
           await showForm(parsed || clean);
@@ -1866,10 +1896,7 @@ export async function openScanMoveModal({
       if ('text' in res) {
         const hit = resolveLocationToken(res.text);
         if (hit) {
-          const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
-          if (sel) sel.value = hit.id;
-          const ci = /** @type {HTMLInputElement|null} */ ($('#locScanToCode'));
-          if (ci) ci.value = '';
+          applyLocationToFormSelect(hit);
           const code = hit.location_code != null ? String(hit.location_code) : hit.id;
           showToast(`✓ Lokacija: ${code}`);
         } else {
