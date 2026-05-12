@@ -64,7 +64,7 @@ function tryParseCompactLabelLoose(clean) {
   if (si < 1 || si >= mid.length - 1) return null;
   const orderNo = mid.slice(0, si).trim();
   const itemRefId = mid.slice(si + 1).trim();
-  if (!/^\d{1,8}$/.test(orderNo)) return null;
+  if (!/^[0-9][0-9\-]{0,12}$/.test(orderNo)) return null;
   if (!itemRefId || !/^[A-Za-z0-9._-]+$/.test(itemRefId)) return null;
   return {
     orderNo,
@@ -164,7 +164,7 @@ export function parseBigTehnBarcode(raw) {
 
   /* Kompaktna nalepnica: `interni:nalog/tp:var` (čitač često šalje `|` umesto `:`). */
   const compactRe =
-    /^(\d{1,10})\s*[:;]\s*(\d{1,8})\s*[/\\]\s*([A-Za-z0-9._-]+)\s*[:;]\s*(\d+)\s*$/i;
+    /^(\d{1,10})\s*[:;]\s*([0-9][0-9\-]{0,12})\s*[/\\]\s*([A-Za-z0-9._-]+)\s*[:;]\s*(\d+)\s*$/i;
   const seen = new Set();
   for (const cand of [clean, normalizeNonRnzSeparators(clean)]) {
     if (!cand || seen.has(cand)) continue;
@@ -206,7 +206,11 @@ export function parsePredmetTpFromLabelText(raw) {
   const tryMatch = (s, pattern) => {
     const m = s.match(pattern);
     if (!m) return null;
-    const orderNo = m[1].replace(/\D/g, '').slice(0, 8);
+    /* Nalog može biti „9811-1" (crtica u broju predmeta) — ne stripovati sve ne-cifre. */
+    const orderNo = m[1]
+      .replace(/[^0-9\-]/g, '')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 13);
     const tp = m[2].replace(/\D/g, '').slice(0, 8);
     if (!orderNo || !tp) return null;
     return {
@@ -218,9 +222,9 @@ export function parsePredmetTpFromLabelText(raw) {
     };
   };
 
-  /* Tipičan OCR: cifre + razdvajač (/ \\ - | I l) + cifre */
+  /* Tipičan OCR: nalog (cifre + opc. crtica) + razdvajač + TP (cifre) */
   const sep = '[/\\\\\\-_|Il]{1,4}';
-  const core = new RegExp(`(\\d{1,8})\\s*${sep}\\s*(\\d{1,8})`, 'i');
+  const core = new RegExp(`([0-9][0-9\\-]{0,12})\\s*${sep}\\s*(\\d{1,8})`, 'i');
 
   const blocks = [t, ...t.split(/[\r\n]+/)];
   for (const block of blocks) {
