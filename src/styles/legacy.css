@@ -1864,6 +1864,9 @@ body.module-kadrovska > #module-settings { display:none !important; }
 }
 
 /* -- Tab dropdown group („⋯ Više" pri kraju tab strip-a) ---------- */
+/* Override `.kadrovska-tabs { overflow-x: auto }` koji seče absolute-pozicionirani
+ * dropdown meni. Wrap (flex-wrap) već rešava overflow tabova; scroll nije potreban. */
+.loc-tabs { overflow: visible; }
 .loc-tab-group { position:relative; display:inline-flex; }
 .loc-tab-trigger .loc-tab-caret {
   display:inline-block;
@@ -1888,6 +1891,11 @@ body.module-kadrovska > #module-settings { display:none !important; }
   box-shadow: 0 6px 24px -4px rgba(0,0,0,0.18), 0 2px 6px -2px rgba(0,0,0,0.08);
   display:flex; flex-direction:column; gap:1px;
 }
+/* `hidden` HTML atribut ima istu specifičnost kao `.loc-tab-menu`, pa
+ * `display: flex` iznad nadjačava UA `[hidden] { display: none }`.
+ * Eksplicitnim selektorom sa class+attribute (specifičnost 0,2,0) hvatamo
+ * stanje i vraćamo `display: none` dok meni nije otvoren. */
+.loc-tab-menu[hidden] { display: none; }
 .loc-tab-menuitem {
   display:flex; align-items:center; gap:8px;
   padding:8px 10px;
