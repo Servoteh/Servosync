@@ -1063,11 +1063,25 @@ export async function openScanMoveModal({
     );
   }
 
-  /** Postavi #locScanTo po UUID / location_code (bez zatvaranja sken faze). */
+  /** Postavi filter hale (roditelj police), osveži listu odredišta, izaberi lokaciju. */
   function applyLocationToFormSelect(loc) {
     if (!loc) return;
+    const hallFilterEl = /** @type {HTMLSelectElement|null} */ ($('#locScanHallFilter'));
+    const kind = getLocationKind(loc.location_type);
+
+    if (hallFilterEl) {
+      if (kind === 'shelf' && loc.parent_id) {
+        /* Polica → hala iz mastera (parent_id); lista „Na lokaciju” onda sadrži tu policu. */
+        hallFilterEl.value = String(loc.parent_id);
+      } else if (kind === 'hall') {
+        hallFilterEl.value = String(loc.id);
+      }
+    }
+
+    populateToSelect();
+
     const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
-    if (sel) sel.value = loc.id;
+    if (sel) sel.value = String(loc.id);
     const ci = /** @type {HTMLInputElement|null} */ ($('#locScanToCode'));
     if (ci) ci.value = '';
   }
