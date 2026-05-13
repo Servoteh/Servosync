@@ -361,22 +361,22 @@ export async function openScanMoveModal({
               </label>
               <select id="locScanHallFilter" aria-label="Hala ako skenirate samo šifru police"
                 style="width:100%;max-width:100%;font-size:15px;padding:9px 10px;margin-bottom:8px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
-                <option value="">— QR police: hala sama · inače najpre hala pa šifru —</option>
+                <option value="">— Nalepnica sa kodom HALA - POLICA sama postavlja halu · samo kod police prvo halu ovde izaberi —</option>
               </select>
               <select id="locScanTo" required></select>
-              <div class="loc-scan-to-tools" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+              <div class="loc-scan-to-tools" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%">
+                <button type="button" class="btn btn-primary" data-act="pickLocBarcodeCam">Skeniraj barkod police</button>
+                <button type="button" class="btn" data-act="pickLocBarcodeFile">Barkod police iz slike</button>
+              </div>
+              <div class="loc-scan-to-tools" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%">
                 <input type="text" id="locScanToCode" autocomplete="off" maxlength="80"
-                  placeholder="Sken štampano (npr. MAG-X - P-09 ili LP:… ili šifra police ako je HALA izabrana"
+                  placeholder="Ili ukucaj ili nalepi (npr. HALA 1 - A1, MAG-X - P-09 ili LP…)"
                   style="flex:1;min-width:140px;font-size:16px;padding:9px 10px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
-                <button type="button" class="btn" data-act="applyLocCode">Primeni QR / šifru</button>
-                <button type="button" class="btn" data-act="pickLocImage">📷 Skeniraj QR police (slika)</button>
-                <button type="button" class="btn" data-act="pickLocCamera">📹 QR kamerom za policu</button>
+                <button type="button" class="btn" data-act="applyLocCode">Primeni</button>
               </div>
               <div class="loc-muted" style="font-size:11px;margin-top:4px;line-height:1.35">
-                Nova nalepnica police ima kratku šifru u grafici (npr. <code style="font-size:11px">MAG-X - P-09</code>) ili još uvek QR sa <code style="font-size:11px">LP:…</code> ako je štampa starija.
-                Ista <strong>šifra</strong> police u različitim halama — prvo HALA u listi, pa ručno ili foto starog 1D barkoda.
-                <br />
-                Ako <strong>sistemska</strong> iOS aplikacija „Kamera“ prikaže „No usable data found“: to je uobičajeno za QR sa običnim tekstom (nije link); koristi <strong>dugmad u ovoj aplikaciji</strong> (slika / kamera) ili „Skeniraj ponovo“.
+                Isti protok kao <strong>barkod radnog naloga</strong>: kamera kao glavni unos za policu. Stare naljepnice QR/LP još uvek mogu prolaziti dekoderom ako su u kadru.
+                Ako imaš samo <strong>kod police bez hale</strong> u kombinaciji sa drugim halama izaberi <strong>hala</strong> u listi iznad pa sken ili unos.
               </div>
             </div>
             <div class="emp-field col-full">
@@ -685,9 +685,9 @@ export async function openScanMoveModal({
 
     if (purpose === 'location') {
       const tit = document.getElementById('locScanTitleScan');
-      if (tit) tit.textContent = 'Skeniraj QR police';
+      if (tit) tit.textContent = 'Skeniraj barkod police';
       setScanStatus(
-        '📐 Usmeri kameru na QR/barkod nalepnice police (tekst MAG-X - P-09 ili stariji LP:…) ili na jednodimenzionalnu šifru ako je HALA već izabrana',
+        '📐 Drži kao na RNZ: široku traku 1D barkoda paralelno ivici ekrana; može prolaziti i QR sa starih naljepnica (tekst MAG-X - P-09 ili LP…).',
         'info',
       );
     } else {
@@ -719,7 +719,7 @@ export async function openScanMoveModal({
         },
       });
 
-      setTimeout(() => reportCameraDiag(videoEl, purpose === 'location'), 600);
+      setTimeout(() => reportCameraDiag(videoEl, !!state.pickLocationMode), 600);
       setTimeout(() => setupZoomUI(), 800);
       if (isAndroidChromeBrowser()) {
         clearAndroidChromeHintTimer();
@@ -728,7 +728,7 @@ export async function openScanMoveModal({
           if (!state.scanCtrl || stageScan.hidden) return;
           if (state.pickLocationMode) {
             setScanStatus(
-              '💡 QR: drži ceo kvadrat u kadru · zum ako je sitan; stariji 1D barkod kao i RNZ kod.',
+              '💡 Fokus na Code128 trag (širina ekrana) · stare LP/QR još prolaze; kao RNZ kod prilagodi zoom.',
               'info',
             );
             return;
@@ -842,7 +842,7 @@ export async function openScanMoveModal({
   }
 
   /** Prikaži kratak info koji stream iOS dao (front/back + rezolucija). */
-  function reportCameraDiag(videoEl, qrPoliceMode = false) {
+  function reportCameraDiag(videoEl, shelfBarcodePick = false) {
     try {
       const stream = /** @type {MediaStream|null} */ (videoEl?.srcObject);
       if (!stream) return;
@@ -851,7 +851,7 @@ export async function openScanMoveModal({
       const s = track.getSettings?.() || {};
       const label = track.label || '(bez labele)';
       const looksFront = /front|user|face/i.test(label);
-      const tail = qrPoliceMode ? ' — drži QR u centru' : ' — drži kod u centru';
+      const tail = shelfBarcodePick ? ' — 1D barkod široko u kadru' : ' — drži kod u centru';
       const parts = [
         looksFront ? '⚠ FRONT kamera' : '✓ back kamera',
         `${s.width || '?'}×${s.height || '?'}`,
@@ -1241,7 +1241,7 @@ export async function openScanMoveModal({
     const savedHallFilter = hallFilterEl?.value || '';
     if (hallFilterEl) {
       hallFilterEl.innerHTML =
-        '<option value="">— QR police: hala sama · inače najpre hala pa šifru —</option>' +
+        '<option value="">— Nalepnica HALA - POLICA sama postavlja halu · inače najpre halu ovde izaberi —</option>' +
         halls
           .map(
             h =>
@@ -1937,13 +1937,13 @@ export async function openScanMoveModal({
          * ne radi zbog moire/kompresije. */
         $('#locScanFile')?.click();
         break;
-      case 'pickLocImage':
+      case 'pickLocBarcodeFile':
         $('#locScanLocFile')?.click();
         break;
       case 'applyLocCode':
         void tryApplyLocScanToCode();
         break;
-      case 'pickLocCamera':
+      case 'pickLocBarcodeCam':
         void startScanner({ locationPick: true });
         break;
       case 'ocrScan':

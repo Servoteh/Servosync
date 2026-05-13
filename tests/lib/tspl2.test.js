@@ -110,7 +110,7 @@ describe('buildTspShelfLabelProgram', () => {
     const out = buildTspShelfLabelProgram({ location_code: 'MAG-1.A.03', name: 'Polica A03' });
     expect(out).toContain('CLS');
     expect(out).toContain('"MAG-1.A.03"');
-    expect(out).toContain('"Polica A03"');
+    expect(out).toMatch(/TEXT \d+,\d+,"3",0,1,1,"MAG-1\.A\.03"/);
     expect(out).toMatch(/BARCODE [\d]+,[\d]+,"128M"/);
     expect(out).toContain('PRINT 1,1');
     /* Ne sme menjati štampač konfiguraciju: */
@@ -133,17 +133,25 @@ describe('buildTspShelfLabelProgram', () => {
     expect(out).toContain('PRINT 3,1');
   });
 
-  it('places code element ABOVE the shelf code text (reverse layout 2026-05)', () => {
+  it('places barcode or QR graphic ABOVE the foot line text', () => {
     const out = buildTspShelfLabelProgram({ location_code: 'R-A-001', name: 'Magacin' });
-    /* Barkod y mora biti manji od y oba TEXT reda (kod police gore, šifra dole). */
     const bcM = out.match(/BARCODE \d+,(\d+),"128M"/);
     const textMs = [...out.matchAll(/TEXT \d+,(\d+),"\d"/g)];
     expect(bcM).not.toBeNull();
-    expect(textMs.length).toBeGreaterThanOrEqual(2);
+    expect(textMs.length).toBeGreaterThanOrEqual(1);
     const bcY = Number(bcM[1]);
     for (const m of textMs) {
       expect(bcY).toBeLessThan(Number(m[1]));
     }
+  });
+
+  it('labelFootline daje tekst ispod grafike kad se štampa drugačije od kodnog niza', () => {
+    const out = buildTspShelfLabelProgram({
+      barcodeValue: 'LP:a:b',
+      labelFootline: 'HALA 1 - A1',
+    });
+    expect(out).toContain('"LP:a:b"');
+    expect(out).toContain('"HALA 1 - A1"');
   });
 
   it('emits QRCODE command instead of BARCODE when codeType=qr', () => {
@@ -152,8 +160,9 @@ describe('buildTspShelfLabelProgram', () => {
       name: 'Magacin',
       codeType: 'qr',
     });
-    expect(out).toMatch(/QRCODE \d+,\d+,M,\d+,A,0,M2,"R-A-001"/);
-    /* QR mode = bez 128M barkoda; jedini ostatak su TEXT redovi za šifru/naziv. */
+    expect(out).toMatch(/QRCODE \d+,\d+,L,\d+,A,0,M2,"R-A-001"/);
+    expect(out).toMatch(/^TEXT [\d]+,[\d]+,"3".*"R-A-001"/m);
+    /* QR mode = bez 128M barkoda; ostaje jedan TEXT red ispod grafike. */
     expect(out).not.toMatch(/BARCODE [\d]+,[\d]+,"128M"/);
     expect(out).toContain('CLS');
     expect(out).toContain('PRINT 1,1');

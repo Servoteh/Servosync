@@ -100,6 +100,11 @@ const FORMAT_DIMS = {
 
 function shelfLabelHtml(loc, codeType, format) {
   const cls = `label fmt-${format}`;
+  const footRaw = String(loc.printLabelFootline ?? '').trim();
+  const foot =
+    footRaw !== ''
+      ? `<div class="label-footline">${escHtml(footRaw)}</div>`
+      : '';
   const codeBox =
     codeType === 'qr'
       ? `<canvas id="qr_${escHtml(String(loc.id))}" class="label-qr"></canvas>`
@@ -107,6 +112,7 @@ function shelfLabelHtml(loc, codeType, format) {
   return `
     <div class="${cls}">
       <div class="label-codebox">${codeBox}</div>
+      ${foot}
     </div>`;
 }
 
@@ -128,17 +134,23 @@ function shelfLabelsHtmlShell(count, codeType, format) {
     ? `@page { size: ${dims.w} ${dims.h}; margin: 0; }`
     : `@page { size: A4; margin: ${pageMarginA4}; }`;
 
-  /* Grafika ispuni nalepnicu (čitljiv trag); min-visina štiti mali TSC odozgo. */
+  /* Grafika + obavezni natpis HALA_-_POLICA ispod (isti slog kao barkod tekst). */
+  const footPx =
+    isWide200 ? '19pt'
+    : isLarge ? '15pt'
+    : isTwoUp105 ? '14pt'
+    : isTsc ? '10pt'
+    : '12pt';
   const codeBoxH =
     codeType === 'qr'
-      ? isWide200 ? '88mm'
-        : isLarge || isTwoUp105 ? '70mm'
-        : '32mm'
-      : isWide200 ? '90mm'
-        : isLarge ? '74mm'
-        : isTwoUp105 ? '64mm'
-        : isTsc ? '32mm'
-        : '30mm';
+      ? isWide200 ? '76mm'
+        : isLarge || isTwoUp105 ? '60mm'
+        : '26mm'
+      : isWide200 ? '74mm'
+        : isLarge ? '66mm'
+        : isTwoUp105 ? '56mm'
+        : isTsc ? '26mm'
+        : '24mm';
   return `<!DOCTYPE html>
 <html lang="sr-Latn">
 <head>
@@ -178,8 +190,8 @@ function shelfLabelsHtmlShell(count, codeType, format) {
       text-align: center;
       page-break-inside: avoid;
       break-inside: avoid;
-      display: flex; flex-direction: column; justify-content: center; align-items: stretch;
-      gap: 0;
+      display: flex; flex-direction: column; justify-content: space-between; align-items: stretch;
+      gap: 1.75mm;
       overflow: hidden;
     }
     .label-codebox {
@@ -194,11 +206,15 @@ function shelfLabelsHtmlShell(count, codeType, format) {
       max-height: 100%;
       display: block;
     }
-    .label-qr {
-      max-width: 100%;
-      max-height: 100%;
-      width: auto; height: auto;
-      image-rendering: pixelated;
+    .label-footline {
+      flex: 0 0 auto;
+      width: 100%;
+      text-align: center;
+      font-weight: 900;
+      font-size: ${footPx};
+      line-height: 1.08;
+      letter-spacing: 0.02em;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     @media print {
       .toolbar { display: none; }
@@ -209,7 +225,7 @@ function shelfLabelsHtmlShell(count, codeType, format) {
       }
       .label { border: 1px solid #000; }
       ${isWide200 && codeType === 'barcode' ? '.label.fmt-wide-200x99 { overflow: visible; }' : ''}
-      ${isWide200 && codeType === 'barcode' ? '.label.fmt-wide-200x99 .label-codebox { min-height: 86mm; }' : ''}
+      ${isWide200 && codeType === 'barcode' ? '.label.fmt-wide-200x99 .label-codebox { min-height: 72mm; }' : ''}
       ${isTsc ? '.label { border: 0; }' : ''}
     }
   </style>
@@ -254,6 +270,7 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
         ...l,
         printBarcodeValue: parts.barcodeValue,
         printDisplayPrimary: parts.displayPrimary,
+        printLabelFootline: parts.displayPrimary,
       });
   }
 
@@ -351,6 +368,7 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
           return buildTspShelfLabelProgram({
             location_code: l.location_code,
             barcodeValue: parts.barcodeValue,
+            labelFootline: parts.displayPrimary,
             copies,
             codeType,
           });
@@ -414,7 +432,7 @@ export async function openShelfLabelsPrintPicker() {
     <div class="kadr-modal-overlay" id="${id}" role="dialog" aria-modal="true">
       <div class="kadr-modal" style="max-width:640px">
         <div class="kadr-modal-title">Štampa nalepnica polica</div>
-        <div class="kadr-modal-subtitle">Označi jednu ili više polica. Grafika štampa najkraće moguće: <strong>npr. MAG-X - P-09</strong> (šifrom hale razmak crtica razmak šifrom police) samo u barkodu ili QR-u, bez dodatnog teksta na nalepnici. Podrazumevano barkod na formatu <strong>200×99&nbsp;mm</strong>.</div>
+        <div class="kadr-modal-subtitle">Štampaju se grafika barkoda ili QR plus <strong>tekst obavezno ispod</strong> (npr. HALA 1 - A1 po šiframa u masteru). Za sken police koristi dugme barkod kao za radne naloge.</div>
         <div class="kadr-modal-body">
           <label class="loc-filter-field" style="display:block;margin-bottom:10px">
             <span>Pretraga police</span>

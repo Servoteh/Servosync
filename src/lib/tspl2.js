@@ -276,13 +276,17 @@ function tspShelfQrLayoutDots(encode) {
   return { xDots, cellDots };
 }
 /**
- * Generiše TSPL2 za nalepnicu police (**samo grafika**, bez teksta ispod): kratak kod `ŠIF_HALE - ŠIF_POLICE` ili legacy `LP:…` kao QR/Code128.
+ * Generiše TSPL za nalepnicu police: CODE128 ili QR plus jedan red teksta (`HALA_CODE - SHELF_CODE`).
  * **NE šalje SIZE/GAP/DENSITY**.
  *
- * @param {{ location_code?: string, copies?: number, codeType?: 'barcode'|'qr', barcodeValue?: string }} loc
+ * @param {{ location_code?: string, copies?: number, codeType?: 'barcode'|'qr',
+ *   barcodeValue?: string, labelFootline?: string }} loc
+ *   `labelFootline` tekst reda ispod grafike (isti kao na ekranu / PDF-u).
  */
 export function buildTspShelfLabelProgram(loc) {
   const encode = String(loc?.barcodeValue ?? loc?.location_code ?? '').trim();
+  const footRaw = loc?.labelFootline ?? loc?.barcodeValue ?? loc?.location_code;
+  const foot = String(footRaw ?? '').trim();
   const copies = Math.max(1, Math.floor(Number(loc?.copies) || 1));
   const codeType = loc?.codeType === 'qr' ? 'qr' : 'barcode';
   if (!encode) throw new Error('buildTspShelfLabelProgram: štampani barkod / šifra obavezni');
@@ -294,7 +298,12 @@ export function buildTspShelfLabelProgram(loc) {
     const { xDots, cellDots } = tspShelfQrLayoutDots(encode);
     lines.push(`QRCODE ${xDots},${mm(2)},L,${cellDots},A,0,M2,${tsplStr(encode)}`);
   } else {
-    lines.push(`BARCODE ${mm(2)},${mm(3)},"128M",${mm(34)},0,0,2,5,${tsplStr(encode)}`);
+    lines.push(`BARCODE ${mm(2)},${mm(2)},"128M",${mm(22)},0,0,2,5,${tsplStr(encode)}`);
+  }
+
+  if (foot) {
+    const yText = codeType === 'qr' ? mm(30.5) : mm(26.5);
+    lines.push(`TEXT ${mm(2)},${yText},"3",0,1,1,${tsplStr(truncFit(foot, 46))}`);
   }
 
   lines.push(`PRINT ${copies},1`);
