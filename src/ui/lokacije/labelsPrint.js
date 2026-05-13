@@ -111,13 +111,33 @@ function shelfLabelsHtmlShell(count, codeType, format) {
     ? `@page { size: ${dims.w} ${dims.h}; margin: 0; }`
     : `@page { size: A4; margin: 8mm; }`;
 
-  /* 80×80mm large: tekst 14mm + gap + kod 60mm + 2mm pad budžet → kod ~58mm h.
-   * 60×40mm grid: tekst ~12mm + kod ~26mm.
-   * 80×40mm tsc:  tekst ~12mm + kod ~26mm. */
-  const codeBoxH = isLarge ? '52mm' : '24mm';
-  const codeFont = isLarge ? '24pt' : '16pt';
-  const nameFont = isLarge ? '11pt' : '8pt';
+  /* CODE128 zona: duži LP:uuid payload ima isti modul skupljen horizontalno kao i kratki tekst —
+   * držimo visceralno VEĆU visinu (nalik TP nalepnici: height≈80, width≈2.2) da linije ostanu debele i čitljive.
+   * QR zadrži stariji raster (Kvadrat u većem okviru za sken mobilnim). */
+  const codeBoxH =
+    codeType === 'qr'
+      ? isLarge
+        ? '52mm'
+        : '24mm'
+      : isLarge
+        ? '56mm'
+        : isTsc
+          ? '27mm'
+          : '26mm';
 
+  /** Tipografija teksta ispod zona (barkod/QR ima posebnu logiku jer QR zauzima manje visine teksta). */
+  let codeFont = '16pt';
+  let nameFont = '8pt';
+  if (codeType === 'qr') {
+    codeFont = isLarge ? '24pt' : '16pt';
+    nameFont = isLarge ? '11pt' : '8pt';
+  } else if (codeType === 'barcode') {
+    codeFont = isLarge ? '21pt' : isTsc ? '11pt' : isCompact ? '13pt' : '14pt';
+    nameFont = isLarge ? '10pt' : isTsc ? '7pt' : '8pt';
+  } else {
+    codeFont = isLarge ? '24pt' : '16pt';
+    nameFont = isLarge ? '11pt' : '8pt';
+  }
   return `<!DOCTYPE html>
 <html lang="sr-Latn">
 <head>
@@ -196,6 +216,7 @@ function shelfLabelsHtmlShell(count, codeType, format) {
       .toolbar { display: none; }
       .grid { padding: 0; gap: ${isCompact ? '3mm' : isLarge ? '5mm' : '0'}; }
       .label { border: 1px solid #000; }
+      ${isLarge && codeType === 'barcode' ? '.label.fmt-a4-large { overflow: visible; }' : ''}
       ${isTsc ? '.label { border: 0; }' : ''}
     }
   </style>
@@ -282,12 +303,15 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
         } else {
           const svg = w.document.getElementById(`bc_${loc.id}_${i}`);
           if (svg) {
+            /* Istа skala kao na TP/stampaNalepnica (height 80, width 2.2); viša zona u CSS-u
+             * dodaje „mast” po Y osi da dug LP ne izgleda kao tanka crtica na nalepnici. */
+            const tall = format === 'a4-large' ? 92 : format === 'tsc' ? 72 : 58;
             JsBarcode(svg, code, {
               format: 'CODE128',
               displayValue: false,
               margin: 0,
-              height: format === 'a4-large' ? 100 : 50,
-              width: 2,
+              height: tall,
+              width: 2.2,
               background: '#ffffff',
               lineColor: '#000000',
             });

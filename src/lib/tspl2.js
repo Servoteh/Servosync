@@ -222,10 +222,10 @@ export function buildTspLabelProgram(spec) {
  *
  * Layout (kod GORE, šifra DOLE — operater traženo 2026-05):
  *   ┌───────── 80.34mm ─────────┐
- *   │  ║║│║║║│║│║║║│ ili [QR]    │  y=1.5mm  h=22mm  (kod)
+ *   │  ║║│║║║│║│║║║│ ili [QR]    │  y=1.5mm  h≈26mm (kod — veći trag za dug LP payload)
  *   │                            │
- *   │       R-A-001              │  y=27mm   font "5" (krupno)
- *   │   Magacin · Polica         │  y=33mm   font "2" (sitno)
+ *   │       R-A-001              │  y≈29.5mm   font "5" (krupno)
+ *   │   Magacin · Polica         │  y≈36mm    font "2" (sitno)
  *   └────────────────────────────┘
  *               40.3mm
  *
@@ -253,14 +253,14 @@ export function buildTspShelfLabelProgram(loc) {
      *   Centriraj horizontalno: x = (80 - 22) / 2 = 29mm */
     lines.push(`QRCODE ${mm(29)},${mm(1.5)},M,8,A,0,M2,${tsplStr(encode)}`);
   } else {
-    /* Barkod horizontalan, full width minus 2mm svake strane, h=22mm */
-    lines.push(`BARCODE ${mm(2)},${mm(1.5)},"128M",${mm(22)},0,0,3,5,${tsplStr(encode)}`);
+    /* Barkod horizontalan — veća geometrijska visina da debeli LP Code128 ostane čitljiv na termalnoj traci */
+    lines.push(`BARCODE ${mm(2)},${mm(1.5)},"128M",${mm(26)},0,0,2,5,${tsplStr(encode)}`);
   }
 
   /* Hala · polica ili šifra DOLE — krupno (font "5" ≈ 16pt) */
-  lines.push(`TEXT ${mm(2)},${mm(27)},"5",0,1,1,${tsplStr(truncFit(primary, 22))}`);
+  lines.push(`TEXT ${mm(2)},${mm(29.5)},"5",0,1,1,${tsplStr(truncFit(primary, 22))}`);
   if (name) {
-    lines.push(`TEXT ${mm(2)},${mm(33)},"2",0,1,1,${tsplStr(truncFit(name, 60))}`);
+    lines.push(`TEXT ${mm(2)},${mm(36)},"2",0,1,1,${tsplStr(truncFit(name, 60))}`);
   }
 
   lines.push(`PRINT ${copies},1`);
