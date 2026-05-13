@@ -6,6 +6,7 @@ import { escHtml, showToast } from '../../lib/dom.js';
 import {
   HALL_TYPE_OPTIONS,
   canBeShelfParent,
+  getLocationKind,
   getLocationKindLabel,
   getLocationTypeLabel,
   isHallType,
@@ -75,32 +76,6 @@ function qmSetDrawingCache(orderNo, tp, drawingNo) {
   } catch {
     /* ignore */
   }
-}
-
-/**
- * Ne-breaking space indent zavisno od `depth`.
- * @param {number} depth
- */
-function indentFor(depth) {
-  const n = Math.max(0, Math.min(Number(depth) || 0, 12));
-  return n === 0 ? '' : '\u00a0\u00a0'.repeat(n) + '· ';
-}
-
-/**
- * HTML <option> redovi za dropdown sa indentiranim prikazom hijerarhije.
- * Ulazna lista je već sortirana po `path_cached` (fetchLocations order).
- * @param {object[]} locs
- * @param {{ blankLabel?: string, includeBlank?: boolean }} [opts]
- */
-function locationOptionsHtml(locs, { blankLabel = '', includeBlank = true } = {}) {
-  const rows = [];
-  if (includeBlank) rows.push(`<option value="">${escHtml(blankLabel)}</option>`);
-  for (const l of locs) {
-    const indent = indentFor(l.depth);
-    const label = `${indent}${l.location_code || ''} — ${l.name || ''}`;
-    rows.push(`<option value="${escHtml(String(l.id))}">${escHtml(label)}</option>`);
-  }
-  return rows.join('');
 }
 
 /**
@@ -449,9 +424,8 @@ function renderShelfForm({ overlay, body, locs, close, onSuccess }) {
     const from = Math.max(1, Math.min(999, Number(bulkFrom.value) || 1));
     const to = Math.max(1, Math.min(999, Number(bulkTo.value) || 1));
     const count = Math.max(0, to - from + 1);
-    const hallCode = hallSel.selectedOptions[0]?.dataset?.code || '';
-    const example = `${hallCode ? hallCode + '-' : ''}${p}${from}, ${hallCode ? hallCode + '-' : ''}${p}${from + 1}, ...`;
-    bulkPreview.textContent = `Kreiraće se ${count} polica: ${example}`;
+    const example = `${p}${from}, ${p}${from + 1}, ...`;
+    bulkPreview.textContent = `Kreiraće se ${count} polica: ${example} (šifra unutar izabrane hale)`;
   }
   [bulkPrefix, bulkFrom, bulkTo, hallSel].forEach(el => el.addEventListener('input', updateBulkPreview));
   updateBulkPreview();
@@ -463,7 +437,6 @@ function renderShelfForm({ overlay, body, locs, close, onSuccess }) {
       errEl.textContent = 'Prvo izaberi halu.';
       return;
     }
-    const hallCode = hallSel.selectedOptions[0]?.dataset?.code || '';
     const p = bulkPrefix.value;
     const from = Math.max(1, Math.min(999, Number(bulkFrom.value) || 1));
     const to = Math.max(1, Math.min(999, Number(bulkTo.value) || 1));
@@ -486,7 +459,7 @@ function renderShelfForm({ overlay, body, locs, close, onSuccess }) {
     let failed = 0;
     for (let n = from; n <= to; n++) {
       const slot = `${p}${n}`;
-      const location_code = hallCode ? `${hallCode}-${slot}` : slot;
+      const location_code = slot;
       const row = await createLocation({
         location_code,
         name: desc,
@@ -525,10 +498,8 @@ function renderShelfForm({ overlay, body, locs, close, onSuccess }) {
       errEl.textContent = 'Unesi kratak opis police.';
       return;
     }
-    const hallCode = hallSel.selectedOptions[0]?.dataset?.code || '';
-    /* Finalna šifra: "HALA-SLOT" (konzistentno sa postojećim K-A1..K-S).
-     * Ako user već kuca punu šifru (koja sadrži `-`), preskačemo prefiks. */
-    const location_code = slot.includes('-') ? slot : hallCode ? `${hallCode}-${slot}` : slot;
+    /* Šifra police je lokalna u okviru hale (`parent_id`); unikat u bazi je (hala × šifra). */
+    const location_code = slot;
 
     submitBtn.disabled = true;
     const row = await createLocation({
@@ -949,10 +920,6 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       return;
     }
 
-    const toOpts = locationOptionsHtml(locs, {
-      includeBlank: true,
-      blankLabel: '— izaberi odredište —',
-    });
     const movOpts = MOVEMENT_TYPES.map(t => `<option value="${t}">${escHtml(t)}</option>`).join('');
 
     /* Index lokacija po UUID-u — za brzi lookup labele u "trenutno na..." pregledu. */
@@ -997,8 +964,18 @@ export function openQuickMoveModal({ onSuccess } = {}) {
           </div>
 
           <div class="emp-field col-full">
+            <label for="locQmHallFilter">Hala ako ide na policu</label>
+            <select id="locQmHallFilter" aria-label="Hala za scope police kod odredišta">
+              <option value="">— najpre halu ako ide na policu —</option>
+            </select>
+            <div class="loc-muted" style="font-size:11px;margin-top:4px">
+              Šifra police je unutar hale (isti štampani kod u dve hale = dve lokacije). Za HALA/skart izaberi red u listi ispod bez obaveznog konteksta.
+            </div>
+          </div>
+          <div class="emp-field col-full">
             <label for="locQmTo">Odredišna lokacija *</label>
-            <select id="locQmTo" required>${toOpts}</select>
+            <select id="locQmTo" required></select>
+            <div id="locQmToHint" class="loc-muted" style="font-size:11px;margin-top:4px"></div>
           </div>
 
           <div class="emp-field col-full">
@@ -1038,6 +1015,119 @@ export function openQuickMoveModal({ onSuccess } = {}) {
     const fromHint = overlay.querySelector('#locQmFromHint');
     const stateWrap = overlay.querySelector('#locQmStateWrap');
     const stateEl = overlay.querySelector('#locQmState');
+    const hallFilterEl = /** @type {HTMLSelectElement|null} */ (overlay.querySelector('#locQmHallFilter'));
+    const toSelEl = /** @type {HTMLSelectElement|null} */ (overlay.querySelector('#locQmTo'));
+    const toHintEl = overlay.querySelector('#locQmToHint');
+
+    /** Ista semantika kao `scanModal` — police u listi samo posle izbora halе kom su vežane šifrimа. */
+    function populateQmDestinationSelects() {
+      const shelves = [];
+      const halls = [];
+      const others = [];
+      for (const l of locs) {
+        if (l.is_active === false) continue;
+        const kind = getLocationKind(l.location_type);
+        if (kind === 'shelf') shelves.push(l);
+        else if (kind === 'hall') halls.push(l);
+        else others.push(l);
+      }
+      const pathCmp = (a, b) => String(a.path_cached || '').localeCompare(String(b.path_cached || ''), 'sr');
+
+      halls.sort(pathCmp);
+      others.sort(pathCmp);
+
+      /** @type {Map<string|null, object[]>} */
+      const shelfByParent = new Map();
+      for (const s of shelves) {
+        const pid = s.parent_id ? String(s.parent_id) : null;
+        if (!shelfByParent.has(pid)) shelfByParent.set(pid, []);
+        shelfByParent.get(pid).push(s);
+      }
+      for (const arr of shelfByParent.values()) {
+        arr.sort(pathCmp);
+      }
+
+      const savedHallFilter = hallFilterEl?.value || '';
+      if (hallFilterEl) {
+        const parentIds = Array.from(shelfByParent.keys()).filter(p => p != null);
+        parentIds.sort((a, b) => {
+          const pa = locById.get(a);
+          const pb = locById.get(b);
+          return pathCmp(pa || {}, pb || {});
+        });
+        hallFilterEl.innerHTML =
+          '<option value="">— najpre halu ako ide na policu —</option>' +
+          parentIds
+            .map(pid => {
+              const p = locById.get(pid);
+              if (!p) return '';
+              return `<option value="${escHtml(pid)}">${escHtml(p.location_code)} — ${escHtml(p.name)}</option>`;
+            })
+            .join('');
+        if (savedHallFilter && [...hallFilterEl.options].some(o => o.value === savedHallFilter)) {
+          hallFilterEl.value = savedHallFilter;
+        } else {
+          hallFilterEl.value = '';
+        }
+      }
+
+      const filterHallId =
+        hallFilterEl?.value?.trim() && shelfByParent.has(hallFilterEl.value.trim())
+          ? hallFilterEl.value.trim()
+          : null;
+
+      const shelfLabelForParent = pid => {
+        if (pid == null) return '📍 POLICE (bez povezane hale)';
+        const p = locById.get(pid);
+        if (p && p.is_active !== false) return `📍 Police · ${p.location_code} — ${p.name}`;
+        return '📍 POLICE (roditelj nije u listi)';
+      };
+
+      const renderShelfGroups = () => {
+        const pids = filterHallId != null ? [filterHallId] : [];
+        return pids
+          .map(pid => {
+            const items = shelfByParent.get(pid);
+            if (!items?.length) return '';
+            const opts = items
+              .map(
+                l =>
+                  `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
+              )
+              .join('');
+            return `<optgroup label="${escHtml(shelfLabelForParent(pid))}">${opts}</optgroup>`;
+          })
+          .join('');
+      };
+
+      const renderFlatGroup = (label, items) => {
+        if (!items.length) return '';
+        const opts = items
+          .map(
+            l =>
+              `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
+          )
+          .join('');
+        return `<optgroup label="${escHtml(label)}">${opts}</optgroup>`;
+      };
+
+      const grouped =
+        renderShelfGroups() +
+        renderFlatGroup('🏭 HALE', halls) +
+        renderFlatGroup('📦 OSTALE', others);
+
+      if (toSelEl) {
+        toSelEl.innerHTML = '<option value="">— izaberi odredište —</option>' + grouped;
+      }
+      if (toHintEl) {
+        toHintEl.textContent = filterHallId
+          ? 'Police kao odredište su vezane za izabranu halu; ostale lokacije dostupne ispod.'
+          : 'Za prikaz lista police izaberi halu; za odredište HALA/skart ostaje lista ispod bez police.';
+      }
+    }
+
+    populateQmDestinationSelects();
+    hallFilterEl?.addEventListener('change', () => populateQmDestinationSelects());
 
     /* Stanje: trenutni placement-i za (bigtehn_rn, TP, predmet) — mapa location_id → qty. */
     let currentPlacements = [];
@@ -1256,10 +1346,25 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       const qty = Number(qtyInput.value);
       const needsFrom = movement_type !== 'INITIAL_PLACEMENT' && movement_type !== 'INVENTORY_ADJUSTMENT';
       const from_location_id = needsFrom ? String(fromSel.value || '').trim() : '';
+      const hallForShelves = hallFilterEl?.value.trim() ?? '';
 
       if (!order_no || !item_ref_id || !to_location_id || !movement_type) {
         qmShowErr('Popuni obavezna polja: broj predmeta, broj TP i odredišna lokacija.');
         return;
+      }
+
+      const destLoc = locById.get(to_location_id);
+      if (destLoc && isShelfType(destLoc.location_type)) {
+        if (!hallForShelves) {
+          qmShowErr(
+            'Za odredište na polici mora da bude izabrana hala iznad liste (pa polica za tu halu).',
+          );
+          return;
+        }
+        if (String(destLoc.parent_id || '') !== hallForShelves) {
+          qmShowErr('Izabrana polica ne odgovara hali iz prvog padajućeg polja — uskladiti oba koraka.');
+          return;
+        }
       }
       if (!Number.isFinite(qty) || qty <= 0) {
         qmShowErr('Količina mora biti veća od 0.');

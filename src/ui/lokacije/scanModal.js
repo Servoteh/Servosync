@@ -4,13 +4,14 @@
  *   2. Barkod dekodiran → auto popuni item_ref_id + fetch-uj trenutne placement-e
  *   3. Forma traži samo: Sa lokacije (pre-popunjena ako može), Na lokaciju, Količina
  *   4. Submit → RPC loc_create_movement
+ *      (polica kao odredište: najpre halu iz #locScanHallFilter, šifra je lokalna u hali.)
  *
  * UX namerno minimalistički za korišćenje jednom rukom u hali (drugi drži komad).
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { parsePredmetTpFromLabelText } from '../../lib/barcodeParse.js';
-import { getLocationKind } from '../../lib/lokacijeTypes.js';
+import { getLocationKind, isHallType, isShelfType } from '../../lib/lokacijeTypes.js';
 import {
   fetchItemPlacements,
   fetchLocations,
@@ -353,21 +354,22 @@ export async function openScanMoveModal({
                 Na lokaciju *
                 <span class="loc-muted" id="locScanToHint" style="font-weight:400;font-size:12px"></span>
               </label>
-              <select id="locScanHallFilter" aria-label="Filtriraj police po hali"
+              <select id="locScanHallFilter" aria-label="Hala za odredište (police)"
                 style="width:100%;max-width:100%;font-size:15px;padding:9px 10px;margin-bottom:8px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
-                <option value="">— sve hale (sve police) —</option>
+                <option value="">— izaberi halu za police (obavezno) —</option>
               </select>
               <select id="locScanTo" required></select>
               <div class="loc-scan-to-tools" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
                 <input type="text" id="locScanToCode" autocomplete="off" maxlength="80"
-                  placeholder="Šifra lokacije (npr. HALA3-D6) ili sken"
+                  placeholder="Šifru police (npr. A12), posle izbora hale"
                   style="flex:1;min-width:140px;font-size:16px;padding:9px 10px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
                 <button type="button" class="btn" data-act="applyLocCode">Primeni šifru</button>
                 <button type="button" class="btn" data-act="pickLocImage">📷 Skeniraj lokaciju</button>
                 <button type="button" class="btn" data-act="pickLocCamera">📹 Kamera</button>
               </div>
               <div class="loc-muted" style="font-size:11px;margin-top:4px;line-height:1.35">
-                Barkod na polici = obično <strong>location_code</strong> iz mastera lokacija.
+                Isti <strong>location_code</strong> police može da postoji u više hala — najpre izaberi halu iznad,
+                pa sken ili „Primeni šifru“. Hale / ostale lokacije su i dalje u listi ispod bez ovog pravila.
               </div>
             </div>
             <div class="emp-field col-full">
@@ -583,8 +585,9 @@ export async function openScanMoveModal({
     const clean = normalizeBarcodeText(text);
     if (state.pickLocationMode) {
       if (decodeBusy) return;
-      const loc = resolveLocationToken(clean);
-      if (loc) {
+      const res = resolveDestinationByToken(clean);
+      if (res.ok) {
+        const loc = res.loc;
         decodeBusy = true;
         try {
           state.pickLocationMode = false;
@@ -597,15 +600,16 @@ export async function openScanMoveModal({
           const tit = document.getElementById('locScanTitleScan');
           if (tit) tit.textContent = 'Skeniraj barkod';
           setScanStatus('', 'info');
-          const code = loc.location_code != null ? String(loc.location_code) : loc.id;
-          showToast(`✓ Lokacija: ${code}`);
+          const lab = shelfOrHallDisplayLabel(loc);
+          const fallback = loc.location_code != null ? String(loc.location_code) : loc.id;
+          showToast(`✓ Lokacija: ${lab || fallback}`);
           if (navigator.vibrate) navigator.vibrate(60);
         } finally {
           decodeBusy = false;
         }
         return;
       }
-      showToast('⚠ Nije prepoznata lokacija — probaj drugi barkod, „Primeni šifru” ili sliku.');
+      showToast(`⚠ ${res.msg}`);
       return;
     }
     await handleDecodedBarcode(clean);
@@ -644,6 +648,13 @@ export async function openScanMoveModal({
   /** @param {{ purpose?: 'item' | 'location' }} [opts] */
   async function startWebScanner(opts = {}) {
     const purpose = opts.purpose === 'location' ? 'location' : 'item';
+    if (purpose === 'location') {
+      const h = $('#locScanHallFilter')?.value?.trim();
+      if (!h) {
+        showToast('⚠ Izaberi halu za odredište, pa tek onda skeniraj šifru police.');
+        return;
+      }
+    }
     if (purpose === 'item') state.pickLocationMode = false;
     else state.pickLocationMode = true;
 
@@ -665,7 +676,7 @@ export async function openScanMoveModal({
     if (purpose === 'location') {
       const tit = document.getElementById('locScanTitleScan');
       if (tit) tit.textContent = 'Skeniraj lokaciju';
-      setScanStatus('📐 Usmeri kameru na barkod police ili hale (location_code)', 'info');
+      setScanStatus('📐 Usmeri kameru na barkod šifre police (hala je već izabrana iznad)', 'info');
     } else {
       setScanStatus('📷 Tražim kameru…', 'info');
     }
@@ -1016,7 +1027,7 @@ export async function openScanMoveModal({
       `<div class="loc-chip-row">${pl
         .map(r => {
           const loc = state.locById.get(r.location_id);
-          const locLbl = loc ? loc.location_code : String(r.location_id).slice(0, 8);
+          const locLbl = loc ? shelfOrHallDisplayLabel(loc) : String(r.location_id).slice(0, 8);
           const orderLbl = r.order_no ? `<strong>${escHtml(r.order_no)}</strong> · ` : '';
           const dataAttr = showOrder && r.order_no
             ? ` data-chip-order="${escHtml(r.order_no)}"`
@@ -1024,6 +1035,90 @@ export async function openScanMoveModal({
           return `<span class="loc-chip${showOrder && r.order_no ? ' loc-chip-click' : ''}"${dataAttr}>${orderLbl}${escHtml(locLbl)} · <strong>${escHtml(String(r.quantity))}</strong></span>`;
         })
         .join('')}</div>`;
+  }
+
+  function shelfOrHallDisplayLabel(loc) {
+    if (!loc) return '';
+    if (!isShelfType(loc.location_type)) return String(loc.location_code || '').trim();
+    const p = loc.parent_id ? state.locById.get(String(loc.parent_id)) : null;
+    const pcode = p?.location_code != null ? String(p.location_code) : '';
+    const scode = loc.location_code != null ? String(loc.location_code) : '';
+    return pcode ? `${pcode} · ${scode}` : scode || String(loc.id || '').slice(0, 8);
+  }
+
+  /**
+   * Rešavanje lokacije iz barkoda/šifrе uz obaveznu halu za police (scoped `location_code`).
+   * UUID i jedinstvena šifra hale ostaju jednoznačni bez filtera halе.
+   *
+   * @returns {{ ok: true, loc: object } | { ok: false, msg: string }}
+   */
+  function resolveDestinationByToken(raw) {
+    const t = normalizeBarcodeText(String(raw || '')).trim();
+    if (!t) return { ok: false, msg: 'Unesi šifru lokacije ili sken.' };
+    const uuidLike =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(t);
+    if (uuidLike) {
+      const hit = state.locs.find(l => l.id === t && l.is_active !== false) || null;
+      return hit ? { ok: true, loc: hit } : { ok: false, msg: 'Nema aktivne lokacije za ovaj UUID.' };
+    }
+    const lower = t.toLowerCase();
+    /** @type {object[]} */
+    const matches =
+      state.locs.filter(l => {
+        if (!l || l.is_active === false) return false;
+        return (
+          String(l.location_code || '')
+            .trim()
+            .toLowerCase() === lower
+        );
+      }) || [];
+
+    const hallScoped = $('#locScanHallFilter')?.value?.trim() || '';
+
+    if (!matches.length) {
+      return { ok: false, msg: 'Nema lokacije za ovu šifru u masteru.' };
+    }
+    /* Jedna lokacija ukupno (najčešće hala MAG, virtuelna, …): dozvoljeno bez konteksta halе. */
+    if (matches.length === 1) {
+      const only = matches[0];
+      if (isShelfType(only.location_type)) {
+        if (!hallScoped)
+          return {
+            ok: false,
+            msg: 'Za police izaberi halu iz prvog padajućeg polja iznad pa ponovo Primeni ili skeniraj.',
+          };
+        if (String(only.parent_id || '') !== hallScoped) {
+          const hk = state.locById.get(hallScoped);
+          const hn = hk?.location_code ? String(hk.location_code) : 'izabranu halu';
+          return {
+            ok: false,
+            msg: `Ova šifra ne pripada hali „${hn}".`,
+          };
+        }
+      }
+      return { ok: true, loc: only };
+    }
+
+    /* Više lokacija iste šifre — kontekst halе obavezan. */
+    if (!hallScoped)
+      return {
+        ok: false,
+        msg: 'Više lokacija ima istu šifru štampe — najpre izaberi halu u prvom polju.',
+      };
+
+    const narrowed = matches.filter(
+      l =>
+        String(l.parent_id || '') === hallScoped || (isHallType(l.location_type) && String(l.id) === hallScoped),
+    );
+    if (narrowed.length === 1) return { ok: true, loc: narrowed[0] };
+    if (!narrowed.length)
+      return {
+        ok: false,
+        msg: 'U izabranoj hali nema lokacije pod tom šifrom.',
+      };
+
+    /* Teoretski: više pogodaka čak uz halu — nedozvoljenо. */
+    return { ok: false, msg: 'Nejednoznačna šifra — kontakt IT (više pogodaka u istoj halu).' };
   }
 
   function populateFromSelect() {
@@ -1042,7 +1137,9 @@ export async function openScanMoveModal({
     sel.innerHTML = pl
       .map(r => {
         const loc = state.locById.get(r.location_id);
-        const label = loc ? `${loc.location_code} — ${loc.name}` : r.location_id;
+        const label = loc
+          ? `${shelfOrHallDisplayLabel(loc)} — ${loc.name || ''}`.replace(/\s+—\s*$/, '').trim()
+          : r.location_id;
         return `<option value="${escHtml(r.location_id)}" data-qty="${escHtml(String(r.quantity))}">${escHtml(label)} (${escHtml(String(r.quantity))} kom.)</option>`;
       })
       .join('');
@@ -1051,43 +1148,23 @@ export async function openScanMoveModal({
     if (first) $('#locScanQty').value = String(first.quantity);
   }
 
-  /**
-   * Pronađi lokaciju po UUID-u ili `location_code` (case-insensitive).
-   *
-   * @param {string} raw
-   * @returns {object|null}
-   */
-  function resolveLocationToken(raw) {
-    const t = normalizeBarcodeText(String(raw || '')).trim();
-    if (!t) return null;
-    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(t)) {
-      return state.locs.find(l => l.id === t && l.is_active !== false) || null;
-    }
-    const lower = t.toLowerCase();
-    return (
-      state.locs.find(
-        l =>
-          l.is_active !== false &&
-          String(l.location_code || '')
-            .trim()
-            .toLowerCase() === lower,
-      ) || null
-    );
-  }
-
   function tryApplyLocScanToCode() {
     const inp = /** @type {HTMLInputElement|null} */ ($('#locScanToCode'));
     const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
+    const err = $('#locScanErr');
     if (!inp || !sel) return;
-    const hit = resolveLocationToken(inp.value);
-    if (!hit) {
-      showToast('⚠ Nema lokacije za ovu šifru (proveri master).');
+    const res = resolveDestinationByToken(inp.value);
+    if (!res.ok) {
+      if (err) err.textContent = res.msg;
+      showToast(`⚠ ${res.msg}`);
       return;
     }
-    sel.value = hit.id;
+    if (err) err.textContent = '';
+    sel.value = res.loc.id;
     inp.value = '';
-    const code = hit.location_code != null ? String(hit.location_code) : hit.id;
-    showToast(`✓ Odredište: ${code}`);
+    const code =
+      res.loc.location_code != null ? String(res.loc.location_code) : String(res.loc.id);
+    showToast(`✓ Odredište: ${shelfOrHallDisplayLabel(res.loc) || code}`);
   }
 
   /**
@@ -1139,7 +1216,7 @@ export async function openScanMoveModal({
         return pathCmp(pa || {}, pb || {});
       });
       hallFilterEl.innerHTML =
-        '<option value="">— sve hale (sve police) —</option>' +
+        '<option value="">— najpre halu za police / sken šifru —</option>' +
         parentIds
           .map(pid => {
             const p = state.locById.get(pid);
@@ -1166,14 +1243,8 @@ export async function openScanMoveModal({
     };
 
     const renderShelfGroups = () => {
-      const allPids = Array.from(shelfByParent.keys()).sort((a, b) => {
-        if (a == null) return 1;
-        if (b == null) return -1;
-        const pa = state.locById.get(a);
-        const pb = state.locById.get(b);
-        return pathCmp(pa || {}, pb || {});
-      });
-      const pids = filterHallId != null ? [filterHallId] : allPids;
+      /* Bez izabrane hale ne listamo police (šifra je scoped po hali) — ostaju HALE i OSTALE. */
+      const pids = filterHallId != null ? [filterHallId] : [];
       return pids
         .map(pid => {
           const items = shelfByParent.get(pid);
@@ -1220,7 +1291,7 @@ export async function openScanMoveModal({
      * neka grupa prva (npr. kliknuo je "POLICA" prečicu sa home-a). */
     const hintEl = $('#locScanToHint');
     if (hintEl) {
-      const filt = filterHallId ? ' · filter: jedna hala' : ' · filter po hali iznad';
+      const filt = filterHallId ? ' · izabrana hala' : ' · izaberi halu da vidiš police u listi';
       if (preferLocationCategory === 'shelf') {
         hintEl.textContent = '— prečica sa home: POLICE su prve; police su po halama' + filt;
       } else if (preferLocationCategory === 'warehouse') {
@@ -1597,6 +1668,23 @@ export async function openScanMoveModal({
       err.textContent = 'Izaberi odredišnu lokaciju.';
       return;
     }
+    const toLoc = state.locById.get(to_location_id);
+    const hallForShelves =
+      $('#locScanHallFilter') instanceof HTMLSelectElement
+        ? $('#locScanHallFilter').value.trim()
+        : '';
+    if (toLoc && isShelfType(toLoc.location_type)) {
+      if (!hallForShelves) {
+        err.textContent =
+          'Za odredište na polici najpre izaberi halu u polju iznad liste, pa ponovo izaberi policu.';
+        return;
+      }
+      if (String(toLoc.parent_id || '') !== hallForShelves) {
+        err.textContent =
+          'Odabrana polica ne pripada izabranoj hali — promeni jedno od ta dva polja da se poklapaju.';
+        return;
+      }
+    }
     if (!Number.isFinite(qty) || qty <= 0) {
       err.textContent = 'Količina mora biti veća od 0.';
       return;
@@ -1864,16 +1952,21 @@ export async function openScanMoveModal({
     try {
       const res = await decodeBarcodeFromFile(file);
       if ('text' in res) {
-        const hit = resolveLocationToken(res.text);
-        if (hit) {
+        const hit = resolveDestinationByToken(res.text);
+        const errEl = $('#locScanErr');
+        if (hit.ok) {
           const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
-          if (sel) sel.value = hit.id;
+          if (sel) sel.value = hit.loc.id;
           const ci = /** @type {HTMLInputElement|null} */ ($('#locScanToCode'));
           if (ci) ci.value = '';
-          const code = hit.location_code != null ? String(hit.location_code) : hit.id;
-          showToast(`✓ Lokacija: ${code}`);
+          if (errEl) errEl.textContent = '';
+          const lab = shelfOrHallDisplayLabel(hit.loc);
+          const fb =
+            hit.loc.location_code != null ? String(hit.loc.location_code) : hit.loc.id;
+          showToast(`✓ Lokacija: ${lab || fb}`);
         } else {
-          showToast('⚠ Nema lokacije za pročitan barkod (šifra mora postojati u masteru).');
+          if (errEl) errEl.textContent = hit.msg;
+          showToast(`⚠ ${hit.msg}`);
         }
       } else {
         showToast('⚠ Barkod nije prepoznat na slici.');

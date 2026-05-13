@@ -3,7 +3,8 @@
  * iz iste palete), pa jednim klikom "Pošalji sve" upisujemo sve u Supabase.
  *
  * Workflow:
- *   1. Korisnik prvo izabere ODREDIŠNU lokaciju (gde ide sve što skenira).
+ *   1. Korisnik najpre izabere halu (kad ide na policu), pa odredište;
+ *      police u listi tek posle izabrane hale (isti kod u dve hale = dve lokacije).
  *   2. Pritisne "Start" → otvara se kamera.
  *   3. Svaki skeniranje = jedan red u lokalnoj listi sa malim +/- qty kontrolama.
  *   4. "Obriši skeniranje" po redu ako je greškom.
@@ -18,6 +19,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
+import { getLocationKind, isShelfType } from '../../lib/lokacijeTypes.js';
 import { isAndroidWebCameraTorchZoomHidden } from '../../services/barcode.js';
 import { fetchLocations, formatLocationDisplay, locCreateMovement } from '../../services/lokacije.js';
 import { enqueueMovement } from '../../services/offlineQueue.js';
@@ -39,11 +41,7 @@ export async function renderMobileBatch(mountEl, ctx) {
 
   const locs = await fetchLocations();
   const activeLocs = (locs || []).filter(l => l.is_active !== false);
-  const locOptions =
-    '<option value="">— izaberi odredište —</option>' +
-    activeLocs
-      .map(l => `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`)
-      .join('');
+  const locById = new Map(activeLocs.map(l => [l.id, l]));
 
   mountEl.innerHTML = `
     <div class="m-shell">
@@ -58,8 +56,11 @@ export async function renderMobileBatch(mountEl, ctx) {
 
       <main class="m-main m-batch-main">
         <div class="m-batch-setup">
-          <label class="m-field-label" for="mBatchTo">Sve ide u lokaciju</label>
-          <select id="mBatchTo" class="m-select">${locOptions}</select>
+          <label class="m-field-label" for="mBatchHall">Hala ako ide na policu</label>
+          <select id="mBatchHall" class="m-select" aria-label="Hala za scope police"><option value="">— najpre halu ako je polica —</option></select>
+          <label class="m-field-label" for="mBatchTo">Odredište za sve redove</label>
+          <select id="mBatchTo" class="m-select"></select>
+          <div class="loc-muted m-batch-setup-hint" style="font-size:11px;margin-top:6px">Za policu: prvo hala, pa odredište. Za halu ili ostale tipove dovoljno je drugo polje.</div>
         </div>
 
         <div class="m-batch-video-wrap" hidden id="mBatchVideoWrap">
@@ -101,7 +102,104 @@ export async function renderMobileBatch(mountEl, ctx) {
   const videoEl = $('#mBatchVideo');
   const hintEl = $('#mBatchHint');
   const errEl = $('#mBatchErr');
-  const toSel = $('#mBatchTo');
+  const hallEl = /** @type {HTMLSelectElement|null} */ ($('#mBatchHall'));
+  const toSel = /** @type {HTMLSelectElement|null} */ ($('#mBatchTo'));
+
+  function populateBatchDestinationSelects() {
+    const shelves = [];
+    const halls = [];
+    const others = [];
+    for (const l of activeLocs) {
+      const kind = getLocationKind(l.location_type);
+      if (kind === 'shelf') shelves.push(l);
+      else if (kind === 'hall') halls.push(l);
+      else others.push(l);
+    }
+    const pathCmp = (a, b) => String(a.path_cached || '').localeCompare(String(b.path_cached || ''), 'sr');
+    halls.sort(pathCmp);
+    others.sort(pathCmp);
+
+    /** @type {Map<string|null, object[]>} */
+    const shelfByParent = new Map();
+    for (const s of shelves) {
+      const pid = s.parent_id ? String(s.parent_id) : null;
+      if (!shelfByParent.has(pid)) shelfByParent.set(pid, []);
+      shelfByParent.get(pid).push(s);
+    }
+    for (const arr of shelfByParent.values()) {
+      arr.sort(pathCmp);
+    }
+
+    const savedHall = hallEl?.value || '';
+    if (hallEl) {
+      const parentIds = Array.from(shelfByParent.keys()).filter(p => p != null);
+      parentIds.sort((a, b) => pathCmp(locById.get(a) || {}, locById.get(b) || {}));
+      hallEl.innerHTML =
+        '<option value="">— najpre halu ako je polica —</option>' +
+        parentIds
+          .map(pid => {
+            const p = locById.get(pid);
+            if (!p) return '';
+            return `<option value="${escHtml(pid)}">${escHtml(p.location_code)} — ${escHtml(p.name)}</option>`;
+          })
+          .join('');
+      if (savedHall && [...hallEl.options].some(o => o.value === savedHall)) {
+        hallEl.value = savedHall;
+      } else {
+        hallEl.value = '';
+      }
+    }
+
+    const filterHallId =
+      hallEl?.value?.trim() && shelfByParent.has(hallEl.value.trim())
+        ? hallEl.value.trim()
+        : null;
+
+    const shelfLabelForParent = pid => {
+      if (pid == null) return '📍 POLICE (bez hale)';
+      const p = locById.get(pid);
+      return p?.is_active !== false
+        ? `📍 Police · ${p.location_code} — ${p.name}`
+        : '📍 POLICE';
+    };
+
+    let shelfOpts = '';
+    if (filterHallId != null) {
+      const items = shelfByParent.get(filterHallId);
+      if (items?.length) {
+        const opts = items
+          .map(
+            l =>
+              `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
+          )
+          .join('');
+        shelfOpts = `<optgroup label="${escHtml(shelfLabelForParent(filterHallId))}">${opts}</optgroup>`;
+      }
+    }
+
+    const renderFlat = (label, items) => {
+      if (!items.length) return '';
+      const opts = items
+        .map(
+          l =>
+            `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
+        )
+        .join('');
+      return `<optgroup label="${escHtml(label)}">${opts}</optgroup>`;
+    };
+
+    const grouped =
+      shelfOpts +
+      renderFlat('🏭 HALE', halls) +
+      renderFlat('📦 OSTALE', others);
+
+    if (toSel) {
+      toSel.innerHTML = '<option value="">— izaberi odredište —</option>' + grouped;
+    }
+  }
+
+  populateBatchDestinationSelects();
+  hallEl?.addEventListener('change', () => populateBatchDestinationSelects());
 
   if (isAndroidWebCameraTorchZoomHidden()) {
     mountEl.querySelector('.m-batch-torch')?.setAttribute('hidden', '');
@@ -169,11 +267,22 @@ export async function renderMobileBatch(mountEl, ctx) {
     if (navigator.vibrate) navigator.vibrate(60);
     refreshList();
   }
-
   async function startScanner() {
-    if (!toSel.value) {
+    if (!toSel?.value) {
       showToast('⚠ Prvo izaberi odredišnu lokaciju');
       return;
+    }
+    const destPick = locById.get(toSel.value);
+    const hallChosen = hallEl?.value?.trim() ?? '';
+    if (destPick && isShelfType(destPick.location_type)) {
+      if (!hallChosen) {
+        showToast('⚠ Za policu mora da bude izabrana hala u prvom polju');
+        return;
+      }
+      if (String(destPick.parent_id || '') !== hallChosen) {
+        showToast('⚠ Izabrana polica ne odgovara hali iz prvog polja');
+        return;
+      }
     }
     errEl.textContent = '';
     videoWrap.hidden = false;
@@ -214,10 +323,24 @@ export async function renderMobileBatch(mountEl, ctx) {
 
   async function submitAll() {
     if (!rows.length) return;
+
     const toId = toSel.value;
     if (!toId) {
       errEl.textContent = 'Odredišna lokacija je obavezna.';
       return;
+    }
+    const batchDestLoc = locById.get(toId);
+    const batchHallChosen = hallEl?.value?.trim() ?? '';
+    if (batchDestLoc && isShelfType(batchDestLoc.location_type)) {
+      if (!batchHallChosen) {
+        errEl.textContent =
+          'Za policu kao odredište mora biti izabrana hala iznad liste, pa lokacija koja pripada toj hali.';
+        return;
+      }
+      if (String(batchDestLoc.parent_id || '') !== batchHallChosen) {
+        errEl.textContent = 'Polica i hala iz prvog polja se ne poklapaju.';
+        return;
+      }
     }
 
     stopScanner();

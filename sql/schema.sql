@@ -495,7 +495,10 @@ CREATE TABLE IF NOT EXISTS public.loc_locations (
   updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   CONSTRAINT loc_locations_no_self_parent CHECK (parent_id IS NULL OR parent_id <> id)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS loc_locations_code_uq ON public.loc_locations (location_code);
+CREATE UNIQUE INDEX IF NOT EXISTS loc_locations_scope_code_ci_uq ON public.loc_locations (
+  COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'::uuid),
+  lower(location_code)
+);
 
 CREATE TABLE IF NOT EXISTS public.rev_tools (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -657,6 +660,9 @@ BEGIN
     WHEN 'EXTERNAL_COMPANY' THEN
       v_loc_type := 'SERVICE';
       v_loc_code := 'ZADU-K-' || p_recipient_key;
+    WHEN 'MACHINE' THEN
+      v_loc_type := 'PRODUCTION';
+      v_loc_code := 'ZADU-M-' || regexp_replace(p_recipient_key, '[^A-Za-z0-9._-]', '_', 'g');
     ELSE
       RAISE EXCEPTION 'Nepoznat tip primaoca: %', p_recipient_type;
   END CASE;
@@ -669,7 +675,10 @@ BEGIN
     true,
     'Automatski kreirana virtuelna lokacija za reversal primalac'
   )
-  ON CONFLICT (location_code) DO UPDATE
+  ON CONFLICT (
+    COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    lower(location_code)
+  ) DO UPDATE
     SET name = EXCLUDED.name, is_active = true
   RETURNING id INTO v_loc_id;
 

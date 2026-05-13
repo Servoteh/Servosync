@@ -48,15 +48,15 @@ SELECT has_column('public', 'loc_item_placements', 'placement_status', 'loc_item
 SELECT has_column('public', 'loc_sync_outbound_events', 'attempts', 'loc_sync_outbound_events.attempts');
 SELECT has_column('public', 'loc_sync_outbound_events', 'next_retry_at', 'loc_sync_outbound_events.next_retry_at');
 
--- ── Funkcionalni unique index (CI) ─────────────────────────────────────
+-- ── Jedinstvena šifra u okviru roditelja (CI; root u sentinel bucketu) ───
 SELECT ok(
   EXISTS(
     SELECT 1
       FROM pg_indexes
      WHERE schemaname = 'public'
-       AND indexname = 'loc_locations_code_ci_uq'
+       AND indexname = 'loc_locations_scope_code_ci_uq'
   ),
-  'case-insensitive unique index loc_locations_code_ci_uq postoji (step2)'
+  'unique index loc_locations_scope_code_ci_uq postoji (scoped location_code)'
 );
 
 -- ── RLS enabled ────────────────────────────────────────────────────────

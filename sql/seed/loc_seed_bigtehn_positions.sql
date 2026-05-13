@@ -19,7 +19,10 @@ VALUES
   ('UGRADJENO',   'Ugrađeno u finalni proizvod',      'ASSEMBLY',   NULL, true),
   ('PROIZVODNJA', 'U proizvodnji (work-in-progress)', 'PRODUCTION', NULL, true),
   ('OTPISANO',    'Otpisano / softverski škart',      'SCRAPPED',   NULL, true)
-ON CONFLICT (location_code) DO NOTHING;
+ON CONFLICT (
+    COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    lower(location_code)
+  ) DO NOTHING;
 
 -- ── B — POLICE IZ tPozicije (25 redova) ─────────────────────────────────────
 WITH parent AS (
@@ -62,7 +65,10 @@ ins AS (
     (SELECT id FROM parent),
     true
   FROM src s
-  ON CONFLICT (location_code) DO NOTHING
+  ON CONFLICT (
+    COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    lower(location_code)
+  ) DO NOTHING
   RETURNING 1
 )
 SELECT
