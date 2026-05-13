@@ -52,34 +52,57 @@ export function nearestHallAncestorId(loc, locById) {
 /**
  * Vrednost u CODE128/QR za policu koja pripada hali (nadređeni HAL tip u stablu).
  *
+ * `captionHall` / `captionShelf` — čitljiv tekst ispod grafike na nalepnici (NATPIS „Hala“ / „Polica”).
+ *
  * @param {object} shelfLoc
  * @param {Map<string, object>} locById
- * @returns {{ barcodeValue: string, displayPrimary: string, presetHallFilterId: string|null }}
+ * @returns {{ barcodeValue: string, displayPrimary: string, presetHallFilterId: string|null,
+ *   captionHall: string|null, captionShelf: string }}
  */
 export function buildShelfPrintBarcodeParts(shelfLoc, locById) {
   const shelfId = String(shelfLoc?.id ?? '').trim();
   const fallbackCode =
     shelfLoc?.location_code != null ? String(shelfLoc.location_code).trim() : shelfId.slice(0, 8);
+  const shelfNameTrim =
+    shelfLoc?.name != null ? String(shelfLoc.name).trim().replace(/\s+/g, ' ') : '';
 
   const hallId = nearestHallAncestorId(shelfLoc, locById);
   if (!hallId) {
+    const captionShelf =
+      fallbackCode && shelfNameTrim && shelfNameTrim !== fallbackCode
+        ? `${fallbackCode} · ${shelfNameTrim}`
+        : fallbackCode || shelfNameTrim || shelfId.slice(0, 8);
     return {
       barcodeValue: shelfId || fallbackCode,
       displayPrimary: fallbackCode || shelfId,
       presetHallFilterId: null,
+      captionHall: null,
+      captionShelf,
     };
   }
 
   const hall = mapGetUuid(locById, hallId);
   const hCode = hall?.location_code != null ? String(hall.location_code).trim() : '';
   const sCode = shelfLoc.location_code != null ? String(shelfLoc.location_code).trim() : '';
+  const hallNameTrim = hall?.name != null ? String(hall.name).trim().replace(/\s+/g, ' ') : '';
   const displayPrimary =
     hCode && sCode ? `${hCode} · ${sCode}` : sCode || hCode || shelfId.slice(0, 8);
+
+  const captionHallChunks = [];
+  if (hCode) captionHallChunks.push(hCode);
+  if (hallNameTrim && hallNameTrim !== hCode) captionHallChunks.push(hallNameTrim);
+  const captionHallRaw = captionHallChunks.length ? captionHallChunks.join(' · ') : hallNameTrim || hCode;
+
+  const captionShelf =
+    sCode && shelfNameTrim && shelfNameTrim !== sCode ? `${sCode} · ${shelfNameTrim}` :
+    sCode || shelfNameTrim || displayPrimary;
 
   return {
     barcodeValue: `LP:${hallId}:${shelfId}`,
     displayPrimary,
     presetHallFilterId: hallId,
+    captionHall: captionHallRaw || null,
+    captionShelf,
   };
 }
 

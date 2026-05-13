@@ -1,9 +1,10 @@
 /**
  * Barcode skeniranje preko kamere (Android Chrome + iOS Safari + desktop).
  *
- * - iOS / desktop: ZXing (`@zxing/browser`).
+ * - iOS / desktop: uglavnom ZXing (`@zxing/browser`).
  * - Android Chrome + mode AUTO: `BarcodeDetector` kada postoji, inače ZXing.
- * - Mobilni live: `TRY_HARDER` + ideal 2880×1620 radi gustog Code128 na nalepnici.
+ * - Na **Safari/iOS**, režim `decodeProfile: 'location'`: ZXing nad live `<video>` u praksi živo ne nalazi QR —
+ *   zato `jsQR` nad snapshotima canvasa (QR pouzdano na iPhone-u); retko ZXing nad istim canvason za 1D (šifra police).
  * - Folija / odsjaj: best-effort tamniji kadar (`exposureCompensation`) + kontrast pri „iz slike”.
  * - Gusti Code128 (npr. kratki `9000/365`): „iz slike” — Code128-only hintovi + više upscale pokušaja.
  * - Debug: `sessionStorage.loc_scan_decode_mode` = `AUTO` | `ZXING_ONLY` | `BARCODE_DETECTOR_ONLY`
@@ -22,38 +23,68 @@ import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 
 export { normalizeBarcodeText, parseBigTehnBarcode } from '../lib/barcodeParse.js';
 
-/** iPhone / iPad / Android — gusti Code128 na nalepnici zahtevaju TRY_HARDER + više px. */
+/** UA „mobilnog” uređaja (Android / klasičan iPhone UA). */
 function isLiveScanMobile() {
   if (typeof navigator === 'undefined') return false;
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
 }
 
+/** Safari na iPhone/iPad (isti heuristika kao scanModal; iPad desktop UA „Macintosh”). */
+function isIOSWebPlatform() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/i.test(ua)) return true;
+  return ua.includes('Mac') && typeof document !== 'undefined' && 'ontouchend' in document;
+}
+
+/** iPad u desktop UA klasifikaciji kao „mobile” kada treba ZXing/skener koji iPhone koristi */
+function isHandledLikeMobileWebScan() {
+  return isLiveScanMobile() || isIOSWebPlatform();
+}
+
 /**
+ * Uski RNZ / item profil — samo 1D na live video (brže kadrovanje; QR u ovom koraku ne tražimo).
+ *
  * @param {{ tryHarder?: boolean }} [opts]
  */
-/**
- * `decodeProfile: 'location'` uključuje QR kod (nova nalepnica police), uz 1D za starije etikete.
- *
- * @param {{ tryHarder?: boolean, decodeProfile?: 'item'|'location' }} [opts]
- */
-function buildLiveScanHints(opts = {}) {
+function buildZXingHintsItem(opts = {}) {
   const m = new Map();
-  const fmts =
-    opts.decodeProfile === 'location'
-      ? [BarcodeFormat.QR_CODE, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39]
-      : [BarcodeFormat.CODE_128, BarcodeFormat.CODE_39];
-  m.set(DecodeHintType.POSSIBLE_FORMATS, fmts);
+  m.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128, BarcodeFormat.CODE_39]);
   const tryHarder = typeof opts.tryHarder === 'boolean' ? opts.tryHarder : isLiveScanMobile();
   m.set(DecodeHintType.TRY_HARDER, tryHarder);
   return m;
 }
 
-function buildMobileCameraVideoConstraints() {
-  if (!isLiveScanMobile()) {
+/**
+ * Polica — QR (+ stariji 1D) na Androidu/desktopu MultiFormat-u: kao `STILL_IMAGE_SCAN_HINTS`.
+ */
+function buildZXingHintsLocation() {
+  const m = new Map();
+  m.set(DecodeHintType.POSSIBLE_FORMATS, [
+    BarcodeFormat.QR_CODE,
+    BarcodeFormat.CODE_128,
+    BarcodeFormat.CODE_39,
+    BarcodeFormat.ITF,
+  ]);
+  m.set(DecodeHintType.TRY_HARDER, true);
+  return m;
+}
+
+/** @param {string|undefined} decodeProfile za iOS lokaciju bira lakši video stream (manje FPS drop-a u ZXing-u). */
+function buildMobileCameraVideoConstraints(decodeProfile) {
+  if (!isHandledLikeMobileWebScan()) {
     return {
       width: { ideal: 1920 },
       height: { ideal: 1080 },
       frameRate: { ideal: 30 },
+    };
+  }
+  const iosQr = decodeProfile === 'location' && isIOSWebPlatform();
+  if (iosQr) {
+    return {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30, max: 30 },
     };
   }
   return {
@@ -86,6 +117,18 @@ const ZXING_READER_OPTIONS_MOBILE = {
   delayBetweenScanAttempts: 28,
   delayBetweenScanSuccess: 150,
   tryPlayVideoTimeout: 5000,
+};
+
+const ZXING_READER_OPTIONS_LOCATION = {
+  delayBetweenScanAttempts: 72,
+  delayBetweenScanSuccess: 320,
+  tryPlayVideoTimeout: 7500,
+};
+
+const ZXING_READER_OPTIONS_LOCATION_MOBILE = {
+  delayBetweenScanAttempts: 60,
+  delayBetweenScanSuccess: 280,
+  tryPlayVideoTimeout: 7500,
 };
 
 const SESSION_DECODE_MODE_KEY = 'loc_scan_decode_mode';
@@ -359,6 +402,9 @@ async function primeCameraPipeline(track, isAndroid, opts = {}) {
  * @param {boolean} isAndroid
  */
 async function applyAntiGlareExposureBestEffort(track, isAndroid) {
+  void isAndroid;
+  /* iOS Safari: diranje EV često pobrlja eksponiranje kadra za ZXing bez bljeskalice; ima smisla samo za Android RNZ foliju */
+  if (!isAndroidWebPlatform()) return;
   if (!track?.getCapabilities) return;
   const caps = track.getCapabilities();
   const ec = caps.exposureCompensation;
@@ -391,6 +437,204 @@ function schedulePrimeAfterVideoReady(videoEl, getTrack, isAndroid) {
   });
 }
 
+const IOS_JSQR_DECODE_EVERY_MS = 78;
+const IOS_ONED_ZX_MS = 400;
+
+/**
+ * iOS Safari: ZXing kontinuirano dekodovanje sa `<video>` skoro nikada ne nalazi QR koristan u proizvodu.
+ * Uzmemo snapshot u canvas + `jsQR` (radi stabilno na WebKit-u).
+ *
+ * Staru 1D nalepicu povremeno pokuša isti ZXing kao desktop (retko jer je skuplje).
+ *
+ * @param {HTMLVideoElement} videoEl
+ * @param {MediaStreamConstraints} constraintsWithVideo
+ * @param {{ onResult: (text: string, format?: string) => void, onError?: (e: Error) => void }} handlers
+ */
+async function startIosLocationShelfQrHybrid(videoEl, constraintsWithVideo, handlers) {
+  const { onResult, onError } = handlers;
+  const isAndroidCtrl = false;
+
+  function disposeCamStream(stream, vid) {
+    if (stream instanceof MediaStream) {
+      for (const t of stream.getTracks()) {
+        try {
+          t.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    try {
+      if (vid) {
+        vid.srcObject = null;
+        vid.load();
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function getTrack() {
+    const stream = /** @type {MediaStream|null} */ (videoEl.srcObject);
+    if (!(stream instanceof MediaStream)) return null;
+    return stream.getVideoTracks()[0] || null;
+  }
+
+  /** @type {MediaStream|null} */
+  let nativeStream = null;
+  try {
+    nativeStream = await navigator.mediaDevices.getUserMedia(constraintsWithVideo);
+  } catch (e) {
+    onError?.(/** @type {Error} */ (e));
+    throw e;
+  }
+
+  videoEl.srcObject = nativeStream;
+  try {
+    await videoEl.play();
+  } catch (e) {
+    disposeCamStream(nativeStream, videoEl);
+    nativeStream = null;
+    onError?.(/** @type {Error} */ (e));
+    throw e;
+  }
+
+  schedulePrimeAfterVideoReady(videoEl, getTrack, isAndroidCtrl);
+
+  let jsQR;
+  try {
+    jsQR = (await import('jsqr')).default;
+  } catch (e) {
+    disposeCamStream(nativeStream, videoEl);
+    onError?.(/** @type {Error} */ (e));
+    throw e;
+  }
+
+  const zxingReader1d = new BrowserMultiFormatReader(
+    buildZXingHintsItem({ tryHarder: true }),
+    ZXING_READER_OPTIONS_MOBILE,
+  );
+
+  /** @type {HTMLCanvasElement} */
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) {
+    disposeCamStream(nativeStream, videoEl);
+    throw new Error('Canvas za sken lokacije (iOS).');
+  }
+
+  let stopped = false;
+  let rafId = 0;
+  let lastQrDecodeAt = 0;
+  let lastOneDAt = -IOS_ONED_ZX_MS;
+  /** @type {number} */
+  let lastDedupQrAt = -999999;
+  const QR_DEDUP_MS = 700;
+
+  const runRefocusAfterZoomInner = async () => {
+    const track = getTrack();
+    if (!track) return;
+    await refocusRound(track, isAndroidCtrl, 0.5, 0.5);
+    const caps = track.getCapabilities?.() || {};
+    const modes = Array.isArray(caps.focusMode) ? caps.focusMode.map(String) : [];
+    if (modes.includes('continuous') && !isAndroidChromeBrowser()) {
+      await safeApplyFlatCompat(
+        track,
+        /** @type {any} */ ({ focusMode: 'continuous' }),
+        'post-zoom: continuous',
+        isAndroidCtrl,
+      );
+    }
+  };
+
+  const loop = ts => {
+    if (stopped) return;
+    rafId = requestAnimationFrame(loop);
+    const wall = typeof performance !== 'undefined' ? performance.now() : typeof ts === 'number' ? ts : Date.now();
+    if (!(videoEl instanceof HTMLVideoElement)) return;
+    if (videoEl.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+    const vw = videoEl.videoWidth;
+    const vh = videoEl.videoHeight;
+    if (!vw || !vh) return;
+    const cap = Math.max(vw, vh);
+    const maxPx = 1280;
+    const scale = cap > maxPx ? maxPx / cap : 1;
+    const cw = Math.max(280, Math.floor(vw * scale));
+    const ch = Math.max(280, Math.floor(vh * scale));
+    try {
+      canvas.width = cw;
+      canvas.height = ch;
+      ctx.drawImage(videoEl, 0, 0, cw, ch);
+    } catch {
+      return;
+    }
+    /** @type {ImageData|null} */
+    let id;
+    try {
+      id = ctx.getImageData(0, 0, cw, ch);
+    } catch {
+      return;
+    }
+    try {
+      if (wall - lastQrDecodeAt >= IOS_JSQR_DECODE_EVERY_MS) {
+        lastQrDecodeAt = wall;
+        const qr = jsQR(id.data, cw, ch, {
+          inversionAttempts: 'attemptBoth',
+        });
+        if (qr?.data && typeof qr.data === 'string') {
+          const s = qr.data.trim();
+          if (s && wall - lastDedupQrAt >= QR_DEDUP_MS) {
+            lastDedupQrAt = wall;
+            try {
+              onResult(s, 'QR_CODE');
+            } catch (e) {
+              onError?.(e);
+            }
+            return;
+          }
+        }
+      }
+      /* 1D pokušaj ređe (skuplje); isti ZXing kao RNZ uživo kad postoji raster. */
+      if (wall - lastOneDAt >= IOS_ONED_ZX_MS) {
+        lastOneDAt = wall;
+        try {
+          const hit = zxingReader1d.decodeFromCanvas(canvas);
+          const text =
+            hit && typeof hit.getText === 'function' ? String(hit.getText() || '').trim() : '';
+          if (text) {
+            const fmt =
+              typeof hit?.getBarcodeFormat === 'function' ? hit.getBarcodeFormat()?.toString?.() : undefined;
+            try {
+              onResult(text, fmt);
+            } catch (e) {
+              onError?.(e);
+            }
+          }
+        } catch {
+          /* NotFound ili format mismatch */
+        }
+      }
+    } catch (e) {
+      if (!stopped && e && /** @type {any} */ (e).name && /** @type {any} */ (e).name !== 'NotFoundException') {
+        onError?.(/** @type {Error} */ (e));
+      }
+    }
+  };
+
+  rafId = requestAnimationFrame(loop);
+
+  return buildController({
+    stop: () => {
+      stopped = true;
+      cancelAnimationFrame(rafId);
+      if (nativeStream) disposeCamStream(nativeStream, videoEl);
+    },
+    getTrack,
+    isAndroid: isAndroidCtrl,
+    runRefocusAfterZoom: runRefocusAfterZoomInner,
+  });
+}
+
 /**
  * @param {{
  *   onResult: (text: string, format?: string) => void,
@@ -412,12 +656,13 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId, dec
   const isAndroid = isAndroidWebCameraTorchZoomHidden();
   const mode = getScanDecodeMode();
   const useBarcodeDetectorPath =
+    decodeProfile !== 'location' &&
     isAndroidChromeBrowser() &&
     typeof window !== 'undefined' &&
     typeof window.BarcodeDetector === 'function' &&
     (mode === 'AUTO' || mode === 'BARCODE_DETECTOR_ONLY');
 
-  const videoBase = buildMobileCameraVideoConstraints();
+  const videoBase = buildMobileCameraVideoConstraints(decodeProfile);
   const constraints = forceDeviceId
     ? { video: { ...videoBase, deviceId: { exact: forceDeviceId } } }
     : { video: { ...videoBase, facingMode: { ideal: 'environment' } } };
@@ -545,9 +790,28 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId, dec
     }
   }
 
-  const hints = buildLiveScanHints({ decodeProfile: decodeProfile === 'location' ? 'location' : 'item' });
-  const readerOpts = isLiveScanMobile() ? ZXING_READER_OPTIONS_MOBILE : ZXING_READER_OPTIONS_DESKTOP;
-  const reader = new BrowserMultiFormatReader(hints, readerOpts);
+  const iosLocation = decodeProfile === 'location' && isIOSWebPlatform();
+  if (iosLocation) {
+    try {
+      return await startIosLocationShelfQrHybrid(videoEl, constraints, {
+        onResult,
+        onError,
+      });
+    } catch (e) {
+      console.warn('[barcode] iOS location jsQR+hibrid nije uspel — ZXing fallback', e);
+    }
+  }
+
+  const hints =
+    decodeProfile === 'location' ? buildZXingHintsLocation() : buildZXingHintsItem();
+  const mobish = isHandledLikeMobileWebScan();
+  const readerOptsLocation = mobish ? ZXING_READER_OPTIONS_LOCATION_MOBILE : ZXING_READER_OPTIONS_LOCATION;
+  const readerOptsItemScan = mobish ? ZXING_READER_OPTIONS_MOBILE : ZXING_READER_OPTIONS_DESKTOP;
+
+  const reader = new BrowserMultiFormatReader(
+    hints,
+    decodeProfile === 'location' ? readerOptsLocation : readerOptsItemScan,
+  );
 
   const controls = await reader.decodeFromConstraints(
     constraints,
@@ -555,7 +819,13 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId, dec
     (result, err) => {
       if (result) {
         try {
-          onResult(result.getText(), result.getBarcodeFormat?.().toString());
+          const text = typeof result.getText === 'function' ? result.getText() : '';
+          const fmt =
+            typeof result.getBarcodeFormat === 'function'
+              ? result.getBarcodeFormat()?.toString?.()
+              : undefined;
+          if (!String(text ?? '').trim()) return;
+          onResult(text, fmt);
         } catch (e) {
           onError?.(e);
         }

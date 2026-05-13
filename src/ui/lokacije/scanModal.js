@@ -375,6 +375,8 @@ export async function openScanMoveModal({
               <div class="loc-muted" style="font-size:11px;margin-top:4px;line-height:1.35">
                 Nova nalepnica police je <strong>QR</strong> (<code style="font-size:11px">LP:…</code>): slika ili „QR kamerom“ obično sami podešavaju HALU i policu.
                 Ista <strong>šifra</strong> police u različitim halama — prvo HALA u listi, pa ručno ili foto starog 1D barkoda.
+                <br />
+                Ako <strong>sistemska</strong> iOS aplikacija „Kamera“ prikaže „No usable data found“: to je uobičajeno za QR sa običnim tekstom (nije link); koristi <strong>dugmad u ovoj aplikaciji</strong> (slika / kamera) ili „Skeniraj ponovo“.
               </div>
             </div>
             <div class="emp-field col-full">
@@ -664,6 +666,15 @@ export async function openScanMoveModal({
     stageScan.hidden = false;
     enterScanPresentation();
     const videoEl = $('#locScanVideo');
+    if (videoEl) {
+      try {
+        videoEl.setAttribute('playsinline', '');
+        videoEl.playsInline = true;
+        videoEl.muted = true;
+      } catch {
+        /* ignore */
+      }
+    }
     /* Obavezno „čist” video pre novog ZXing stream-a (npr. posle ← sa forme). */
     releaseVideoStream(videoEl);
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));

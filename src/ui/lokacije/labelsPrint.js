@@ -62,16 +62,27 @@ export async function dispatchOptionalNetworkLabelPrint(args) {
 
 /**
  * Format opcije za nalepnicu police:
+ *   - 'wide-200x99' — 200×99 mm (portrait; podrazumevano — kod ima maksimalnu visinu za CODE128 na A4)
  *   - 'tsc'         — TSC ML340P 80×40mm (TSPL2 push, paralelni preview u browser-u)
  *   - 'a4-105x74'   — A4, 105×74,25 mm, 2 nalepnice u redu (puna širina 210 mm)
  *   - 'a4-large'    — A4, 80×80mm po nalepnici, 4 po stranici (2×2)
  *   - 'a4-grid'     — A4, kompaktni 3-kolona ~60mm raster (legacy)
  *
- * @typedef {'tsc'|'a4-105x74'|'a4-large'|'a4-grid'} ShelfLabelFormat
+ * @typedef {'wide-200x99'|'tsc'|'a4-105x74'|'a4-large'|'a4-grid'} ShelfLabelFormat
  * @typedef {'barcode'|'qr'} ShelfCodeType
  */
 
 const FORMAT_DIMS = {
+  'wide-200x99': {
+    w: '200mm',
+    h: '99mm',
+    cols: 1,
+    name: '200×99 mm (široka)',
+    /** 210 − 200 = 10 mm → uniformno 5 mm sa strana; ostaje prostor za 2× visina (~198 mm + gap) ili 3 strane kod nultih margina štampača. */
+    pageMargins: '4.95mm 5mm',
+    gapScreen: '10mm',
+    gapPrint: '2mm',
+  },
   tsc:         { w: '80mm',    h: '40mm',    cols: 1, name: 'TSC 80×40mm' },
   /* Dve × 105 mm širine = tačno portrait A4 210 mm; margin 0 u štampačkom @page kada je dostupno. */
   'a4-105x74': {
@@ -88,13 +99,23 @@ const FORMAT_DIMS = {
 };
 
 function shelfLabelHtml(loc, codeType, format) {
-  const code = escHtml(
-    loc.printDisplayPrimary != null && String(loc.printDisplayPrimary).trim() !== ''
-      ? String(loc.printDisplayPrimary)
-      : loc.location_code || '',
-  );
-  const name = escHtml(loc.name || '');
   const cls = `label fmt-${format}`;
+  const capHallRaw = loc.printCaptionHall != null ? String(loc.printCaptionHall).trim() : '';
+  const shelfCapRaw =
+    loc.printCaptionShelf != null && String(loc.printCaptionShelf).trim() !== ''
+      ? String(loc.printCaptionShelf).trim()
+      : String(loc.printDisplayPrimary || loc.location_code || '').trim();
+
+  const hallRow =
+    capHallRaw !== ''
+      ? `<div class="label-caption-row"><span class="label-caption-k">Hala</span> <span class="label-caption-v">${escHtml(capHallRaw)}</span></div>`
+      : '';
+
+  const policaRow =
+    shelfCapRaw !== ''
+      ? `<div class="label-caption-row"><span class="label-caption-k">Polica</span> <span class="label-caption-v">${escHtml(shelfCapRaw)}</span></div>`
+      : '';
+
   const codeBox =
     codeType === 'qr'
       ? `<canvas id="qr_${escHtml(String(loc.id))}" class="label-qr"></canvas>`
@@ -102,20 +123,17 @@ function shelfLabelHtml(loc, codeType, format) {
   return `
     <div class="${cls}">
       <div class="label-codebox">${codeBox}</div>
-      <div class="label-text">
-        <div class="label-code">${code}</div>
-        ${name ? `<div class="label-name">${name}</div>` : ''}
-      </div>
+      <div class="label-text">${hallRow}${policaRow}</div>
     </div>`;
 }
 
 function shelfLabelsHtmlShell(count, codeType, format) {
-  const dims = FORMAT_DIMS[format] || FORMAT_DIMS['a4-105x74'];
+  const dims = FORMAT_DIMS[format] || FORMAT_DIMS['wide-200x99'];
   const codeLabel = codeType === 'qr' ? 'QR kod' : 'Barkod';
   const isCompact = format === 'a4-grid';
   const isLarge = format === 'a4-large';
   const isTwoUp105 = format === 'a4-105x74';
-  const isWideA4Row = isLarge || isTwoUp105;
+  const isWide200 = format === 'wide-200x99';
   const isTsc = format === 'tsc';
   const pageMarginA4 = !isTsc && dims.pageMargins != null ? dims.pageMargins : '8mm';
   const gapScreen = dims.gapScreen != null ? dims.gapScreen : isLarge ? '5mm' : '4mm';
@@ -127,35 +145,37 @@ function shelfLabelsHtmlShell(count, codeType, format) {
     ? `@page { size: ${dims.w} ${dims.h}; margin: 0; }`
     : `@page { size: A4; margin: ${pageMarginA4}; }`;
 
-  /* CODE128 zona: duži LP:uuid payload ima isti modul skupljen horizontalno kao i kratki tekst —
-   * držimo visceralno VEĆU visinu (nalik TP nalepnici: height≈80, width≈2.2) da linije ostanu debele i čitljive.
-   * QR zadrži stariji raster (Kvadrat u većem okviru za sken mobilnim). */
+  /* CODE128 zona: što veći okvir kod formata wide-200x99 (~200×99 mm). */
   const codeBoxH =
     codeType === 'qr'
-      ? isLarge || isTwoUp105
+      ? isWide200 ? '62mm'
+      : isLarge || isTwoUp105
         ? '52mm'
         : '24mm'
-      : isLarge
-        ? '56mm'
-        : isTwoUp105
-          ? '40mm'
-          : isTsc
-            ? '27mm'
-            : '26mm';
+      : isWide200
+        ? '78mm'
+        : isLarge
+          ? '56mm'
+          : isTwoUp105
+            ? '40mm'
+            : isTsc
+              ? '27mm'
+              : '26mm';
 
-  /** Tipografija teksta ispod zona (barkod/QR ima posebnu logiku jer QR zauzima manje visine teksta). */
-  let codeFont = '16pt';
-  let nameFont = '8pt';
-  if (codeType === 'qr') {
-    codeFont = isWideA4Row ? '24pt' : '16pt';
-    nameFont = isWideA4Row ? '11pt' : '8pt';
-  } else if (codeType === 'barcode') {
-    codeFont = isLarge ? '21pt' : isTwoUp105 ? '20pt' : isTsc ? '11pt' : isCompact ? '13pt' : '14pt';
-    nameFont = isLarge ? '10pt' : isTwoUp105 ? '9.5pt' : isTsc ? '7pt' : '8pt';
-  } else {
-    codeFont = isWideA4Row ? '24pt' : '16pt';
-    nameFont = isWideA4Row ? '11pt' : '8pt';
-  }
+  const captionK =
+    isWide200 ? '13pt'
+    : isLarge ? '9pt'
+    : isTwoUp105 ? '8.5pt'
+    : isTsc ? '7pt'
+    : isCompact ? '8pt'
+    : '8.5pt';
+  const captionV =
+    isWide200 ? '22pt'
+    : isLarge ? '14pt'
+    : isTwoUp105 ? '13pt'
+    : isTsc ? '11pt'
+    : isCompact ? '12pt'
+    : '12.5pt';
   return `<!DOCTYPE html>
 <html lang="sr-Latn">
 <head>
@@ -217,18 +237,31 @@ function shelfLabelsHtmlShell(count, codeType, format) {
     }
     .label-text {
       flex: 0 0 auto;
-      display: flex; flex-direction: column; align-items: center;
-      gap: 1mm;
+      display: flex; flex-direction: column; align-items: flex-start;
+      gap: 1.25mm;
+      width: 100%;
+      padding: 0 1mm;
     }
-    .label-code {
-      font-size: ${codeFont}; font-weight: 800; letter-spacing: 1px;
-      font-family: 'Courier New', monospace;
-      line-height: 1;
+    .label-caption-row {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px;
+      line-height: 1.18; width: 100%; justify-content: center; text-align: center;
     }
-    .label-name {
-      font-size: ${nameFont}; color: #333; line-height: 1.2;
+    .label-caption-k {
+      font-size: ${captionK}; font-weight: 800;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
+      flex: 0 0 auto;
+      color: #111;
+    }
+    .label-caption-v {
+      font-size: ${captionV}; font-weight: 700;
+      text-transform: none;
+      letter-spacing: 0;
+      flex: 0 1 auto;
+      max-width: 100%;
       word-break: break-word;
+      color: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     @media print {
       .toolbar { display: none; }
@@ -238,8 +271,10 @@ function shelfLabelsHtmlShell(count, codeType, format) {
         ${isTwoUp105 ? 'justify-content: flex-start;' : ''}
       }
       .label { border: 1px solid #000; }
-      ${isLarge && codeType === 'barcode' ? '.label.fmt-a4-large { overflow: visible; }' : ''}
-      ${isTwoUp105 && codeType === 'barcode' ? '.label.fmt-a4-105x74 { overflow: visible; }' : ''}
+      ${isWide200 && codeType === 'barcode' ? '.label.fmt-wide-200x99 { overflow: visible; }' : ''}
+      ${isWide200 && codeType === 'barcode'
+        ? '.label.fmt-wide-200x99 .label-codebox { min-height: 72mm; }'
+        : ''}
       ${isTsc ? '.label { border: 0; }' : ''}
     }
   </style>
@@ -271,8 +306,8 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
   const locByIdForPrint =
     opts.locById instanceof Map && opts.locById.size ? opts.locById : new Map(locs.map(l => [String(l.id), l]));
 
-  const codeType = opts.codeType === 'barcode' ? 'barcode' : 'qr';
-  const format = FORMAT_DIMS[opts.format] ? opts.format : 'a4-105x74';
+  const codeType = opts.codeType === 'qr' ? 'qr' : 'barcode';
+  const format = FORMAT_DIMS[opts.format] ? opts.format : 'wide-200x99';
   const copies = Math.max(1, Math.floor(Number(opts.copies) || 1));
 
   /* Razvi `copies` u flat listu — N kopija po polici izlazi N puta. */
@@ -284,6 +319,8 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
         ...l,
         printBarcodeValue: parts.barcodeValue,
         printDisplayPrimary: parts.displayPrimary,
+        printCaptionHall: parts.captionHall ?? null,
+        printCaptionShelf: parts.captionShelf ?? '',
       });
   }
 
@@ -316,13 +353,19 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
         if (codeType === 'qr') {
           const canvas = w.document.getElementById(`qr_${loc.id}_${i}`);
           if (canvas && QRCode) {
+            const qrWidthPx =
+              format === 'wide-200x99'
+                ? 880
+                : format === 'a4-large' || format === 'a4-105x74'
+                  ? 640
+                  : format === 'tsc'
+                    ? 440
+                    : 420;
             await QRCode.toCanvas(canvas, code, {
-              errorCorrectionLevel: 'M',
-              margin: 1,
-              scale:
-                format === 'a4-large' ? 10
-                : format === 'a4-105x74' ? 11
-                : 4,
+              /* Manje ECC = manje modula pri istoj širini → krupniji modul lakši za foto/sistemsku kameru. */
+              errorCorrectionLevel: 'L',
+              margin: 2,
+              width: qrWidthPx,
               color: { dark: '#000000', light: '#ffffff' },
             });
           }
@@ -332,19 +375,24 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
             /* Istа skala kao na TP/stampaNalepnica (height 80, width 2.2); viša zona u CSS-u
              * dodaje „mast” po Y osi da dug LP ne izgleda kao tanka crtica na nalepnici. */
             const tall =
-              format === 'a4-large'
-                ? 92
-                : format === 'a4-105x74'
-                  ? 86
-                  : format === 'tsc'
-                    ? 72
-                    : 58;
+              format === 'wide-200x99'
+                ? 148
+                : format === 'a4-large'
+                  ? 92
+                  : format === 'a4-105x74'
+                    ? 86
+                    : format === 'tsc'
+                      ? 72
+                      : 58;
+            const modW =
+              format === 'wide-200x99' ? 2.95
+              : 2.2;
             JsBarcode(svg, code, {
               format: 'CODE128',
               displayValue: false,
               margin: 0,
               height: tall,
-              width: 2.2,
+              width: modW,
               background: '#ffffff',
               lineColor: '#000000',
             });
@@ -372,6 +420,8 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
             barcodeValue: parts.barcodeValue,
             labelPrimary: parts.displayPrimary,
             name: l.name,
+            captionHall: parts.captionHall ?? null,
+            captionShelf: parts.captionShelf,
             copies,
             codeType,
           });
@@ -391,6 +441,8 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
             name: l.name,
             barcodeValue: parts.barcodeValue,
             displayPrimary: parts.displayPrimary,
+            captionHall: parts.captionHall,
+            captionShelf: parts.captionShelf,
           };
         }),
         codeType,
@@ -406,8 +458,8 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
  *
  * Funkcionalnost (2026-05):
  *   - Multi-select (čekboks) — operater bira N polica → 1 batch otisak
- *   - Tip koda: QR (podrazumevano) ili CODE128
- *   - Format: A4 105×74,25 mm (2 u redu; podrazumevano) | A4 80×80 mm | A4 kompakt | TSC termalni
+ *   - Tip koda: barkod CODE128 (podrazumevano) ili QR
+ *   - Format: **200×99 mm** podrazumevano | ostali A4 / TSC termalni
  *   - Kopije po polici (1+)
  *   - Pretraga po šifri / nazivu / path-u
  *   - "Označi sve prikazane" / "Očisti izbor"
@@ -436,7 +488,7 @@ export async function openShelfLabelsPrintPicker() {
     <div class="kadr-modal-overlay" id="${id}" role="dialog" aria-modal="true">
       <div class="kadr-modal" style="max-width:640px">
         <div class="kadr-modal-title">Štampa nalepnica polica</div>
-        <div class="kadr-modal-subtitle">Označi jednu ili više polica. Podrazumevano <strong>QR</strong> (isto LP:hala_uuid:polica_uuid) — pouzdanije na telefonima i industrijskim čitačima. CODE128 opciono ako treba štampa bez QR.</div>
+        <div class="kadr-modal-subtitle">Označi jednu ili više polica. Podrazumevano <strong>barkod (CODE128)</strong> na nalepnici <strong>200×99&nbsp;mm</strong> (veliki trag za skeniranje čitačima) i tekst <strong>Hala</strong> / <strong>Polica</strong> ispod grafike.</div>
         <div class="kadr-modal-body">
           <label class="loc-filter-field" style="display:block;margin-bottom:10px">
             <span>Pretraga police</span>
@@ -455,14 +507,15 @@ export async function openShelfLabelsPrintPicker() {
             <label class="loc-filter-field" style="display:block">
               <span>Tip koda</span>
               <select id="locShelfPickCodeType" class="loc-search-input">
-                <option value="qr" selected>QR kod (preporučeno)</option>
-                <option value="barcode">Barkod (CODE128)</option>
+                <option value="barcode" selected>Barkod (CODE128)</option>
+                <option value="qr">QR kod</option>
               </select>
             </label>
             <label class="loc-filter-field" style="display:block">
               <span>Format</span>
               <select id="locShelfPickFormat" class="loc-search-input">
-                <option value="a4-105x74" selected>A4 · 105×74,25 mm (2 u redu)</option>
+                <option value="wide-200x99" selected>200×99 mm (široka — podrazumevano)</option>
+                <option value="a4-105x74">A4 · 105×74,25 mm (2 u redu)</option>
                 <option value="a4-large">A4 · 80×80 mm (2×2)</option>
                 <option value="a4-grid">A4 kompakt 3-kolona</option>
                 <option value="tsc">TSC 80×40 mm (termalni)</option>
@@ -584,9 +637,11 @@ export async function openShelfLabelsPrintPicker() {
     const picked = candidates.filter(l => selectedIds.has(String(l.id)));
     if (!picked.length) return;
     const codeType = codeTypeEl.value === 'barcode' ? 'barcode' : 'qr';
-    const format = ['tsc', 'a4-large', 'a4-grid', 'a4-105x74'].includes(formatEl.value)
+    const format = ['tsc', 'a4-large', 'a4-grid', 'a4-105x74', 'wide-200x99'].includes(
+      formatEl.value,
+    )
       ? formatEl.value
-      : 'a4-105x74';
+      : 'wide-200x99';
     const copies = Math.max(1, Math.floor(Number(copiesEl.value) || 1));
     await printShelfLabelsToBrowserWindow(picked, {
       codeType,

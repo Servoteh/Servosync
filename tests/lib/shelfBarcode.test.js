@@ -34,6 +34,34 @@ describe('shelfBarcode', () => {
     expect(p.barcodeValue).toBe(`LP:${H_ID}:${S_ID}`);
     expect(p.displayPrimary).toBe('MAG-X · P-09');
     expect(p.presetHallFilterId).toBe(H_ID);
+    expect(p.captionHall).toBe('MAG-X');
+    expect(p.captionShelf).toBe('P-09');
+  });
+
+  it('captionHall kombinuje šifru halе i naziv kad se razlikuju', () => {
+    const shelf = {
+      id: S_ID,
+      location_type: 'SHELF',
+      location_code: 'P-09',
+      parent_id: H_ID,
+      name: 'Farbanje A',
+      is_active: true,
+    };
+    const hall = {
+      id: H_ID,
+      location_type: 'WAREHOUSE',
+      location_code: 'MAG-X',
+      name: 'Centralni magacin',
+      parent_id: null,
+      is_active: true,
+    };
+    const m = new Map([
+      [H_ID, hall],
+      [S_ID, shelf],
+    ]);
+    const p = buildShelfPrintBarcodeParts(shelf, m);
+    expect(p.captionHall).toBe('MAG-X · Centralni magacin');
+    expect(p.captionShelf).toBe('P-09 · Farbanje A');
   });
 
   it('resolveCompositeShelfScan uspe kad hall u barkodu poklapa ancestrа', () => {
