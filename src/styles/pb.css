@@ -336,32 +336,75 @@ body.module-projektni-biro {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
+  align-content: flex-start;
   gap: 0;
   row-gap: 2px;
+  column-gap: 2px;
   margin: 8px 0 0;
   border-bottom: 1px solid var(--border, #e5e7eb);
   overflow: visible;
 }
 
+/* Na širini tipičnog 24" 1080p (i laptop 1366+) jedan red tabova — svi tabovi vidljivi bez skrola. */
+@media (min-width: 900px) {
+  body.module-projektni-biro:not(.hub-active) .pb-tabs {
+    flex-wrap: nowrap;
+    column-gap: 1px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 .pb-tab-btn {
   display: inline-flex;
   align-items: center;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 8px 11px;
+  flex-shrink: 0;
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--text2, #6b7280);
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
   font-weight: 500;
+  font-family: var(--font, inherit);
   white-space: nowrap;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
   margin-bottom: -1px;
+}
+
+/* Kao Lokacije — emoji u tabu. */
+.pb-tab-btn .pb-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  font-size: 0.875rem;
+  line-height: 1;
+  opacity: 0.78;
+  flex-shrink: 0;
+}
+
+.pb-tab-btn.active .pb-tab-icon {
+  opacity: 1;
+}
+
+.pb-tab-btn .pb-tab-label {
+  display: inline-block;
 }
 
 .pb-tab-btn:hover {
   color: var(--text, #111);
   background: rgba(0, 0, 0, 0.03);
+}
+
+.pb-tab-btn:focus-visible {
+  outline: 2px solid var(--accent, #E8523A);
+  outline-offset: 2px;
 }
 
 .pb-tab-btn.active {
@@ -370,6 +413,7 @@ body.module-projektni-biro {
   background: transparent;
 }
 
+/* SVG i dalje podržan u tabu (npr. buduće proširenje). */
 .pb-tab-btn svg {
   flex-shrink: 0;
   opacity: 0.7;
@@ -381,14 +425,44 @@ body.module-projektni-biro {
 
 @media (max-width: 1400px) {
   .pb-tabs .pb-tab-btn {
-    padding: 7px 10px;
+    padding: 7px 9px;
+  }
+
+  .pb-tab-btn .pb-tab-icon {
+    width: 1rem;
+    height: 1rem;
+    font-size: 0.8125rem;
   }
 }
 
 @media (max-width: 1100px) {
   .pb-tab-btn {
-    padding: 7px 10px;
-    font-size: 0.81rem;
+    padding: 7px 8px;
+    font-size: 0.76rem;
+    gap: 5px;
+  }
+
+  .pb-tab-btn .pb-tab-icon {
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 767px) {
+  body.module-projektni-biro:not(.hub-active) .pb-tabs {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .pb-tab-btn {
+    min-height: 44px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+  }
+
+  .pb-tab-btn .pb-tab-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    font-size: 0.9375rem;
   }
 }
 
@@ -2845,7 +2919,7 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   height: 100dvh;
   min-height: 0;
   margin: 0;
-  padding: 0 16px 0;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -2862,7 +2936,11 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   will-change: auto;
 }
 
-/* Jedini vertikalni scroll container u PB modulu. */
+body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-chrome-pinned {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Jedini vertikalni scroll: sadržaj ne sme vizuelno da „upada” ispod tab/context trake. */
 body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -2872,8 +2950,9 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding-top: 16px;
-  padding-bottom: 96px;
+  scroll-padding-top: 12px;
+  padding-top: 20px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
