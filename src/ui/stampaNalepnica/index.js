@@ -265,8 +265,6 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   let dropOpen = false;
   let activeDdIndex = -1;
   let pendingSearch = '';
-  /** Posle izbora TP — kompaktan prikaz umesto duge liste (mobilni UX). */
-  let tpListCollapsed = false;
 
   const docClick = ev => {
     const combo = wrap.querySelector('#snCombo');
@@ -644,7 +642,6 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   const debouncedPred = debounce(() => runPredSearch(pendingSearch), 250);
 
   function pickPredmet(item) {
-    tpListCollapsed = false;
     selectedPredmet = item;
     selectedTp = null;
     tpsCache = [];
@@ -808,7 +805,8 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
 
   async function renderTpList(filterText) {
     if (!selectedPredmet) return;
-    if (tpListCollapsed && selectedTp) {
+    /* Izabran TP — ostali RN se ne prikazuju (samo jedan red + Promeni). */
+    if (selectedTp) {
       tpSearchWrap.style.display = 'none';
       const wo = selectedTp;
       const idb = escHtml(String(wo.ident_broj || ''));
@@ -823,9 +821,8 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
           <button type="button" class="sn-tp-expand" id="snTpExpand">Promeni TP</button>
         </div>`;
       tpListEl.querySelector('#snTpExpand')?.addEventListener('click', () => {
-        tpListCollapsed = false;
-        tpSearchWrap.style.display = tpsCache.length > 8 ? '' : 'none';
-        void renderTpList(tpFilter.value);
+        clearTp();
+        tpFilter?.focus();
       });
       return;
     }
@@ -889,7 +886,6 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     debouncedPred.cancel();
     qEl?.blur();
     tpFilter?.blur();
-    tpListCollapsed = true;
     selectedTp = wo;
     card3.classList.add('sn-step-animate-in');
     setPrintCopies(1);
@@ -909,7 +905,6 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   }
 
   function clearTp() {
-    tpListCollapsed = false;
     selectedTp = null;
     void renderTpList(tpFilter.value);
     syncStepCards();
