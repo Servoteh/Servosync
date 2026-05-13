@@ -21,6 +21,7 @@ import {
 import { fetchBigtehnOpSnapshotByRnAndTp } from '../../services/planProizvodnje.js';
 import { enqueueMovement } from '../../services/offlineQueue.js';
 import { getIsOnline } from '../../state/auth.js';
+import { compareLocationCodeNatural } from '../../lib/lokacijeSort.js';
 
 function debounce(fn, ms) {
   let t = null;
@@ -1190,10 +1191,7 @@ export async function openScanMoveModal({
       else if (kind === 'hall') halls.push(l);
       else others.push(l);
     }
-    const pathCmp = (a, b) => String(a.path_cached || '').localeCompare(String(b.path_cached || ''), 'sr');
-
-    halls.sort(pathCmp);
-    others.sort(pathCmp);
+    others.sort(compareLocationCodeNatural);
 
     /** @type {Map<string|null, object[]>} */
     const shelfByParent = new Map();
@@ -1203,26 +1201,19 @@ export async function openScanMoveModal({
       shelfByParent.get(pid).push(s);
     }
     for (const arr of shelfByParent.values()) {
-      arr.sort(pathCmp);
+      arr.sort(compareLocationCodeNatural);
     }
 
     const hallFilterEl = /** @type {HTMLSelectElement|null} */ ($('#locScanHallFilter'));
     const savedHallFilter = hallFilterEl?.value || '';
     if (hallFilterEl) {
-      const parentIds = Array.from(shelfByParent.keys()).filter(p => p != null);
-      parentIds.sort((a, b) => {
-        const pa = state.locById.get(a);
-        const pb = state.locById.get(b);
-        return pathCmp(pa || {}, pb || {});
-      });
       hallFilterEl.innerHTML =
         '<option value="">— najpre halu za police / sken šifru —</option>' +
-        parentIds
-          .map(pid => {
-            const p = state.locById.get(pid);
-            if (!p) return '';
-            return `<option value="${escHtml(pid)}">${escHtml(p.location_code)} — ${escHtml(p.name)}</option>`;
-          })
+        halls
+          .map(
+            h =>
+              `<option value="${escHtml(String(h.id))}">${escHtml(String(h.location_code || ''))} — ${escHtml(h.name || '')}</option>`,
+          )
           .join('');
       if (savedHallFilter && [...hallFilterEl.options].some(o => o.value === savedHallFilter)) {
         hallFilterEl.value = savedHallFilter;
@@ -1230,10 +1221,10 @@ export async function openScanMoveModal({
         hallFilterEl.value = '';
       }
     }
+    const hallValScan = hallFilterEl?.value?.trim() || '';
+    const hallLocPick = hallValScan ? state.locById.get(hallValScan) : null;
     const filterHallId =
-      hallFilterEl?.value?.trim() && shelfByParent.has(hallFilterEl.value.trim())
-        ? hallFilterEl.value.trim()
-        : null;
+      hallLocPick && isHallType(hallLocPick.location_type) ? hallValScan : null;
 
     const shelfLabelForParent = pid => {
       if (pid == null) return '📍 POLICE (bez povezane hale)';
@@ -1291,7 +1282,7 @@ export async function openScanMoveModal({
      * neka grupa prva (npr. kliknuo je "POLICA" prečicu sa home-a). */
     const hintEl = $('#locScanToHint');
     if (hintEl) {
-      const filt = filterHallId ? ' · izabrana hala' : ' · izaberi halu da vidiš police u listi';
+      const filt = filterHallId ? ' · izabrana hala · police A–Z po šifri' : ' · sve HALE u filteru · izaberi halu za police';
       if (preferLocationCategory === 'shelf') {
         hintEl.textContent = '— prečica sa home: POLICE su prve; police su po halama' + filt;
       } else if (preferLocationCategory === 'warehouse') {

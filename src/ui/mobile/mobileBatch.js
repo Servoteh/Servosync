@@ -19,7 +19,8 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { getLocationKind, isShelfType } from '../../lib/lokacijeTypes.js';
+import { getLocationKind, isHallType, isShelfType } from '../../lib/lokacijeTypes.js';
+import { compareLocationCodeNatural } from '../../lib/lokacijeSort.js';
 import { isAndroidWebCameraTorchZoomHidden } from '../../services/barcode.js';
 import { fetchLocations, formatLocationDisplay, locCreateMovement } from '../../services/lokacije.js';
 import { enqueueMovement } from '../../services/offlineQueue.js';
@@ -115,9 +116,8 @@ export async function renderMobileBatch(mountEl, ctx) {
       else if (kind === 'hall') halls.push(l);
       else others.push(l);
     }
-    const pathCmp = (a, b) => String(a.path_cached || '').localeCompare(String(b.path_cached || ''), 'sr');
-    halls.sort(pathCmp);
-    others.sort(pathCmp);
+    halls.sort(compareLocationCodeNatural);
+    others.sort(compareLocationCodeNatural);
 
     /** @type {Map<string|null, object[]>} */
     const shelfByParent = new Map();
@@ -127,21 +127,18 @@ export async function renderMobileBatch(mountEl, ctx) {
       shelfByParent.get(pid).push(s);
     }
     for (const arr of shelfByParent.values()) {
-      arr.sort(pathCmp);
+      arr.sort(compareLocationCodeNatural);
     }
 
     const savedHall = hallEl?.value || '';
     if (hallEl) {
-      const parentIds = Array.from(shelfByParent.keys()).filter(p => p != null);
-      parentIds.sort((a, b) => pathCmp(locById.get(a) || {}, locById.get(b) || {}));
       hallEl.innerHTML =
         '<option value="">— najpre halu ako je polica —</option>' +
-        parentIds
-          .map(pid => {
-            const p = locById.get(pid);
-            if (!p) return '';
-            return `<option value="${escHtml(pid)}">${escHtml(p.location_code)} — ${escHtml(p.name)}</option>`;
-          })
+        halls
+          .map(
+            h =>
+              `<option value="${escHtml(String(h.id))}">${escHtml(String(h.location_code || ''))} — ${escHtml(h.name || '')}</option>`,
+          )
           .join('');
       if (savedHall && [...hallEl.options].some(o => o.value === savedHall)) {
         hallEl.value = savedHall;
@@ -150,10 +147,9 @@ export async function renderMobileBatch(mountEl, ctx) {
       }
     }
 
-    const filterHallId =
-      hallEl?.value?.trim() && shelfByParent.has(hallEl.value.trim())
-        ? hallEl.value.trim()
-        : null;
+    const hallValBatch = hallEl?.value?.trim() || '';
+    const chosenHb = hallValBatch ? locById.get(hallValBatch) : null;
+    const filterHallId = chosenHb && isHallType(chosenHb.location_type) ? hallValBatch : null;
 
     const shelfLabelForParent = pid => {
       if (pid == null) return '📍 POLICE (bez hale)';

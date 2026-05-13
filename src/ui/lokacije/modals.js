@@ -27,6 +27,7 @@ import {
   fetchTpOptionsForPredmetOrder,
 } from '../../services/planProizvodnje.js';
 import { getIsOnline } from '../../state/auth.js';
+import { compareLocationCodeNatural } from '../../lib/lokacijeSort.js';
 
 /* TRANSFER je prvi jer je najčešći slučaj u svakodnevnom radu;
  * INITIAL_PLACEMENT je eksplicitno drugačiji tok (samo za nove stavke). */
@@ -1033,7 +1034,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
     const toSelEl = /** @type {HTMLSelectElement|null} */ (overlay.querySelector('#locQmTo'));
     const toHintEl = overlay.querySelector('#locQmToHint');
 
-    /** Ista semantika kao `scanModal` — police u listi samo posle izbora halе kom su vežane šifrimа. */
+    /** Hale iz mastera (sve aktivne); police A–Z po šifri kada je hala izabrana. */
     function populateQmDestinationSelects() {
       const shelves = [];
       const halls = [];
@@ -1045,10 +1046,8 @@ export function openQuickMoveModal({ onSuccess } = {}) {
         else if (kind === 'hall') halls.push(l);
         else others.push(l);
       }
-      const pathCmp = (a, b) => String(a.path_cached || '').localeCompare(String(b.path_cached || ''), 'sr');
-
-      halls.sort(pathCmp);
-      others.sort(pathCmp);
+      halls.sort(compareLocationCodeNatural);
+      others.sort(compareLocationCodeNatural);
 
       /** @type {Map<string|null, object[]>} */
       const shelfByParent = new Map();
@@ -1058,25 +1057,18 @@ export function openQuickMoveModal({ onSuccess } = {}) {
         shelfByParent.get(pid).push(s);
       }
       for (const arr of shelfByParent.values()) {
-        arr.sort(pathCmp);
+        arr.sort(compareLocationCodeNatural);
       }
 
       const savedHallFilter = hallFilterEl?.value || '';
       if (hallFilterEl) {
-        const parentIds = Array.from(shelfByParent.keys()).filter(p => p != null);
-        parentIds.sort((a, b) => {
-          const pa = locById.get(a);
-          const pb = locById.get(b);
-          return pathCmp(pa || {}, pb || {});
-        });
         hallFilterEl.innerHTML =
           '<option value="">— najpre halu ako ide na policu —</option>' +
-          parentIds
-            .map(pid => {
-              const p = locById.get(pid);
-              if (!p) return '';
-              return `<option value="${escHtml(pid)}">${escHtml(p.location_code)} — ${escHtml(p.name)}</option>`;
-            })
+          halls
+            .map(
+              h =>
+                `<option value="${escHtml(String(h.id))}">${escHtml(String(h.location_code || ''))} — ${escHtml(h.name || '')}</option>`,
+            )
             .join('');
         if (savedHallFilter && [...hallFilterEl.options].some(o => o.value === savedHallFilter)) {
           hallFilterEl.value = savedHallFilter;
@@ -1085,10 +1077,9 @@ export function openQuickMoveModal({ onSuccess } = {}) {
         }
       }
 
-      const filterHallId =
-        hallFilterEl?.value?.trim() && shelfByParent.has(hallFilterEl.value.trim())
-          ? hallFilterEl.value.trim()
-          : null;
+      const hallVal = hallFilterEl?.value?.trim() || '';
+      const chosenHall = hallVal ? locById.get(hallVal) : null;
+      const filterHallId = chosenHall && isHallType(chosenHall.location_type) ? hallVal : null;
 
       const shelfLabelForParent = pid => {
         if (pid == null) return '📍 POLICE (bez povezane hale)';
@@ -1135,8 +1126,8 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       }
       if (toHintEl) {
         toHintEl.textContent = filterHallId
-          ? 'Police kao odredište su vezane za izabranu halu; ostale lokacije dostupne ispod.'
-          : 'Za prikaz lista police izaberi halu; za odredište HALA/skart ostaje lista ispod bez police.';
+          ? 'Police ispod sortirane A–Z po šifri; HALE/skart ostaju u svojim grupama ispod.'
+          : 'Izaberi halu za listu police (sve aktivne HALE iz master liste).';
       }
     }
 
