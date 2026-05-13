@@ -900,12 +900,14 @@ function attachItemsExport() {
 
       const locIdx = locationIndex(locs);
       const headers = [
-        'Tabela',
-        'Crtež',
         'Nalog',
-        'Kod lokacije',
-        'Naziv lokacije',
-        'Putanja',
+        'Tehnološki postupak (TP)',
+        'Crtež',
+        'Polica_kod',
+        'Hala_kod',
+        'Hala_naziv',
+        'Tip_reda',
+        'Putanja lokacije',
         'Količina',
         'Status',
         'Napomena',
@@ -914,12 +916,19 @@ function attachItemsExport() {
       ];
       const dataRows = placements.map(p => {
         const loc = locIdx.get(p.location_id) || {};
+        const par = loc.parent_id ? locIdx.get(String(loc.parent_id)) || {} : {};
+        const tpVal =
+          String(p.item_ref_table || '').toLowerCase() === 'bigtehn_rn'
+            ? p.item_ref_id || ''
+            : '';
         return [
-          p.item_ref_table || '',
-          p.item_ref_id || '',
           p.order_no || '',
+          tpVal,
+          p.drawing_no || '',
           loc.location_code || '',
-          loc.name || '',
+          par.location_code || '',
+          par.name || '',
+          p.item_ref_table || '',
           loc.path_cached || '',
           p.quantity == null ? '' : p.quantity,
           p.placement_status || '',
@@ -1011,6 +1020,24 @@ function locationIndex(locs) {
     if (l?.id) m.set(l.id, l);
   }
   return m;
+}
+
+/** Prikaz lokacije u tabu Stavke: POLICA − šifra roditeljske hale (<code>parent_id</code> → <code>loc_locations</code>). */
+function formatPlacementLocationHtml(loc, locIdx) {
+  if (!loc) return '';
+  const sc = escHtml(loc.location_code || '');
+  const sn = loc.name ? escHtml(loc.name) : '';
+  const pid = loc.parent_id ? String(loc.parent_id) : '';
+  const parent = pid ? locIdx.get(pid) : null;
+  if (parent) {
+    const hallCode =
+      parent.location_code != null && String(parent.location_code).trim()
+        ? escHtml(String(parent.location_code).trim())
+        : escHtml(pid.slice(0, 8)) + '…';
+    const pn = parent.name ? escHtml(String(parent.name)) : '';
+    return `<span class="loc-code-strong">${sc}</span><span class="loc-muted"> − </span><span>${hallCode}</span>${pn ? `<span class="loc-muted"> · ${pn}</span>` : ''}`;
+  }
+  return `<span class="loc-code-strong">${sc}</span>${sn ? `<span class="loc-muted"> · ${sn}</span>` : ''}`;
 }
 
 /** @param {string|null|undefined} id @param {Map<string, object>} idx */
@@ -1490,18 +1517,27 @@ async function renderPanel(host, tabId) {
     const rows = Array.isArray(plac)
       ? plac
           .map(r => {
-            const loc = locIdx.get(r.location_id);
+            const loc = r.location_id != null ? locIdx.get(String(r.location_id)) : null;
             const locCell = loc
-              ? `<span class="loc-code-strong">${escHtml(loc.location_code || '')}</span><span class="loc-muted"> · ${escHtml(loc.name || '')}</span>`
+              ? formatPlacementLocationHtml(loc, locIdx)
               : `<span class="loc-path">${escHtml(String(r.location_id || '').slice(0, 8))}…</span>`;
-            const tbl = escHtml(r.item_ref_table || '');
-            const iid = escHtml(r.item_ref_id || '');
+            const itemTableRaw = String(r.item_ref_table || '');
+            const itemTableAttr = escHtml(itemTableRaw);
+            const itemIdAttr = escHtml(String(r.item_ref_id || ''));
+            const isBigtehn = itemTableRaw.toLowerCase() === 'bigtehn_rn';
+            const tpCell = isBigtehn
+              ? `<span class="loc-code-strong">${escHtml(String(r.item_ref_id || '').trim())}</span>`
+              : '<span class="loc-muted" title="Samo za bigtehn_rn postoji broj TP">—</span>';
+            const drawCell =
+              r.drawing_no != null && String(r.drawing_no).trim()
+                ? escHtml(String(r.drawing_no).trim())
+                : '<span class="loc-muted">—</span>';
             const ord = escHtml(r.order_no || '');
             const orderCell = r.order_no
               ? `<strong>${ord}</strong>`
               : '<span class="loc-muted">—</span>';
             const qty = r.quantity == null ? '' : escHtml(String(r.quantity));
-            return `<tr class="loc-row-click" data-loc-item-table="${tbl}" data-loc-item-id="${iid}" data-loc-item-order="${ord}" title="Klik za istoriju premeštanja"><td>${tbl}</td><td>${iid}</td><td>${orderCell}</td><td>${locCell}</td><td class="loc-qty-cell">${qty}</td><td>${escHtml(r.placement_status || '')}</td></tr>`;
+            return `<tr class="loc-row-click" data-loc-item-table="${itemTableAttr}" data-loc-item-id="${itemIdAttr}" data-loc-item-order="${ord}" title="Klik za istoriju premeštanja"><td>${orderCell}</td><td>${tpCell}</td><td>${drawCell}</td><td>${locCell}</td><td class="loc-qty-cell">${qty}</td><td>${escHtml(r.placement_status || '')}</td></tr>`;
           })
           .join('')
       : '';
@@ -1517,7 +1553,7 @@ async function renderPanel(host, tabId) {
       : `<span class="loc-muted loc-filter-hint">Pretraga ide na server, sortirana po poslednjoj izmeni.</span>`;
     const searchHtml = `
       <div class="loc-search loc-items-search">
-        <input type="search" id="locItemsSearch" class="loc-search-input" placeholder="Pretraga: crtež · ID stavke · nalog · tabela (ceo skup)…" value="${escHtml(search)}" autocomplete="off" />
+        <input type="search" id="locItemsSearch" class="loc-search-input" placeholder="Pretraga: nalog · TP · crtež · tip stavke (ceo skup)…" value="${escHtml(search)}" autocomplete="off" />
         <button type="button" class="btn btn-xs" id="locItemsExport" title="Preuzmi CSV koji odgovara trenutnoj pretrazi">Export CSV</button>
         ${searchHint}
       </div>`;
@@ -1526,10 +1562,10 @@ async function renderPanel(host, tabId) {
       <div class="kadr-panel active loc-panel">
         ${err}
         ${locToolbarHtml({ extra: searchHtml })}
-        <p class="loc-muted">Klik na red otvara istoriju premeštanja te stavke.</p>
+        <p class="loc-muted">Klik na red otvara istoriju premeštanja. <strong>Nalog</strong> = broj predmeta (<code>order_no</code>). <strong>Tehnološki postupak</strong> = broj TP iz placement-a za <code>bigtehn_rn</code>. <strong>Crtež</strong> = <code>drawing_no</code> iz placement-a (prazno prikazuje „—“ dok se ne upiše). <strong>Lokacija</strong> = šifra police − šifra hale roditelja (<code>parent_id</code>).</p>
         <div class="loc-table-wrap">
           <table class="loc-table">
-            <thead><tr><th>Tabela</th><th>Crtež</th><th>Nalog</th><th>Lokacija</th><th class="loc-qty-cell">Količina</th><th>Status</th></tr></thead>
+            <thead><tr><th>Nalog</th><th>Tehnološki postupak</th><th>Crtež</th><th>Lokacija</th><th class="loc-qty-cell">Količina</th><th>Status</th></tr></thead>
             <tbody>${rows || `<tr><td colspan="6" class="loc-muted" style="padding:18px 12px">
               <div><strong>Nema evidentiranih stavki na lokacijama.</strong></div>
               <div style="margin-top:6px">Tabela <code>loc_item_placements</code> je prazna ili filter nema pogodaka. Da bi se ovde pojavili podaci:</div>
