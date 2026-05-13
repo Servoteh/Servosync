@@ -18,6 +18,7 @@
 import { escHtml, showToast } from '../../lib/dom.js';
 import { fetchLocations } from '../../services/lokacije.js';
 import { formatBigTehnRnzBarcode, formatBigTehnShortBarcode } from '../../lib/barcodeParse.js';
+import { buildShelfPrintBarcodeParts } from '../../lib/shelfBarcode.js';
 import { buildTspLabelProgram, buildTspShelfLabelProgram } from '../../lib/tspl2.js';
 
 const SHELF_TYPES = ['SHELF', 'RACK', 'BIN'];
@@ -76,7 +77,11 @@ const FORMAT_DIMS = {
 };
 
 function shelfLabelHtml(loc, codeType, format) {
-  const code = escHtml(loc.location_code || '');
+  const code = escHtml(
+    loc.printDisplayPrimary != null && String(loc.printDisplayPrimary).trim() !== ''
+      ? String(loc.printDisplayPrimary)
+      : loc.location_code || '',
+  );
   const name = escHtml(loc.name || '');
   const cls = `label fmt-${format}`;
   const codeBox =
@@ -211,7 +216,7 @@ function shelfLabelsHtmlShell(count, codeType, format) {
  * Otvara novi prozor sa jednom ili više nalepnica polica.
  *
  * @param {object[]} locs
- * @param {{ codeType?: ShelfCodeType, format?: ShelfLabelFormat, copies?: number }} [opts]
+ * @param {{ codeType?: ShelfCodeType, format?: ShelfLabelFormat, copies?: number, locById?: Map<string, object> }} [opts]
  */
 export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
   if (!Array.isArray(locs) || !locs.length) {
@@ -219,13 +224,24 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
     return;
   }
 
+  const locByIdForPrint =
+    opts.locById instanceof Map && opts.locById.size ? opts.locById : new Map(locs.map(l => [String(l.id), l]));
+
   const codeType = opts.codeType === 'qr' ? 'qr' : 'barcode';
   const format = FORMAT_DIMS[opts.format] ? opts.format : 'a4-large';
   const copies = Math.max(1, Math.floor(Number(opts.copies) || 1));
 
   /* Razvi `copies` u flat listu — N kopija po polici izlazi N puta. */
   const flat = [];
-  for (const l of locs) for (let i = 0; i < copies; i++) flat.push(l);
+  for (const l of locs) {
+    const parts = buildShelfPrintBarcodeParts(l, locByIdForPrint);
+    for (let i = 0; i < copies; i++)
+      flat.push({
+        ...l,
+        printBarcodeValue: parts.barcodeValue,
+        printDisplayPrimary: parts.displayPrimary,
+      });
+  }
 
   const [{ default: JsBarcode }, qrcodeMod] = await Promise.all([
     import('jsbarcode'),
@@ -251,7 +267,7 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
         .join('');
       for (let i = 0; i < flat.length; i++) {
         const loc = flat[i];
-        const code = String(loc.location_code || '').trim();
+        const code = String(loc.printBarcodeValue || '').trim();
         if (!code) continue;
         if (codeType === 'qr') {
           const canvas = w.document.getElementById(`qr_${loc.id}_${i}`);
@@ -292,14 +308,17 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
     let tspl2 = '';
     try {
       tspl2 = locs
-        .map(l =>
-          buildTspShelfLabelProgram({
+        .map(l => {
+          const parts = buildShelfPrintBarcodeParts(l, locByIdForPrint);
+          return buildTspShelfLabelProgram({
             location_code: l.location_code,
+            barcodeValue: parts.barcodeValue,
+            labelPrimary: parts.displayPrimary,
             name: l.name,
             copies,
             codeType,
-          }),
-        )
+          });
+        })
         .join('');
     } catch (e) {
       console.warn('[labels/shelf] TSPL2 build failed:', e);
@@ -307,7 +326,16 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
     void dispatchOptionalNetworkLabelPrint({
       mode: 'shelf',
       payload: {
-        locations: locs.map(l => ({ id: l.id, code: l.location_code, name: l.name })),
+        locations: locs.map(l => {
+          const parts = buildShelfPrintBarcodeParts(l, locByIdForPrint);
+          return {
+            id: l.id,
+            code: l.location_code,
+            name: l.name,
+            barcodeValue: parts.barcodeValue,
+            displayPrimary: parts.displayPrimary,
+          };
+        }),
         codeType,
         copies,
         tspl2,
@@ -351,7 +379,7 @@ export async function openShelfLabelsPrintPicker() {
     <div class="kadr-modal-overlay" id="${id}" role="dialog" aria-modal="true">
       <div class="kadr-modal" style="max-width:640px">
         <div class="kadr-modal-title">Štampa nalepnica polica</div>
-        <div class="kadr-modal-subtitle">Označi jednu ili više polica. Kod = šifra police.</div>
+        <div class="kadr-modal-subtitle">Označi jednu ili više polica. Barkod/Code128 vrši LP:hala_uuid:polica_uuid (osim kada polica nema halu → samo UUID). Pri sken-u postavlja i halu.</div>
         <div class="kadr-modal-body">
           <label class="loc-filter-field" style="display:block;margin-bottom:10px">
             <span>Pretraga police</span>
@@ -500,7 +528,12 @@ export async function openShelfLabelsPrintPicker() {
     const codeType = codeTypeEl.value === 'qr' ? 'qr' : 'barcode';
     const format = ['tsc', 'a4-large', 'a4-grid'].includes(formatEl.value) ? formatEl.value : 'a4-large';
     const copies = Math.max(1, Math.floor(Number(copiesEl.value) || 1));
-    await printShelfLabelsToBrowserWindow(picked, { codeType, format, copies });
+    await printShelfLabelsToBrowserWindow(picked, {
+      codeType,
+      format,
+      copies,
+      locById: new Map(locs.map(l => [String(l.id), l])),
+    });
     close();
   });
 

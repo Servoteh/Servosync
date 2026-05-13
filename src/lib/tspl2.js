@@ -229,15 +229,19 @@ export function buildTspLabelProgram(spec) {
  *   └────────────────────────────┘
  *               40.3mm
  *
- * @param {{ location_code: string, name?: string, copies?: number, codeType?: 'barcode'|'qr' }} loc
+ * @param {{ location_code: string, name?: string, copies?: number, codeType?: 'barcode'|'qr',
+ *   barcodeValue?: string, labelPrimary?: string }} loc
+ *   `barcodeValue` — štampani kod (npr. `LP:<hala_uuid>:<polica_uuid>`); ako izostaje, ostaje šifra police.
  * @returns {string}
  */
 export function buildTspShelfLabelProgram(loc) {
-  const code = String(loc?.location_code || '').trim();
+  const encode = String(loc?.barcodeValue ?? loc?.location_code ?? '').trim();
+  const primaryRaw = String(loc?.labelPrimary ?? loc?.location_code ?? encode).trim();
+  const primary = primaryRaw || encode;
   const name = String(loc?.name || '').trim();
   const copies = Math.max(1, Math.floor(Number(loc?.copies) || 1));
   const codeType = loc?.codeType === 'qr' ? 'qr' : 'barcode';
-  if (!code) throw new Error('buildTspShelfLabelProgram: location_code obavezan');
+  if (!encode) throw new Error('buildTspShelfLabelProgram: štampani barkod / šifra obavezni');
 
   const lines = [];
   lines.push('CLS');
@@ -247,14 +251,14 @@ export function buildTspShelfLabelProgram(loc) {
     /* QRCODE x,y,ECC,cell_width,mode,rotation,model,mask,"data"
      *   ECC=M (~15% recovery), cell_width=8 dots (~0.7mm) → ~22×22mm za "R-A-001" length
      *   Centriraj horizontalno: x = (80 - 22) / 2 = 29mm */
-    lines.push(`QRCODE ${mm(29)},${mm(1.5)},M,8,A,0,M2,${tsplStr(code)}`);
+    lines.push(`QRCODE ${mm(29)},${mm(1.5)},M,8,A,0,M2,${tsplStr(encode)}`);
   } else {
     /* Barkod horizontalan, full width minus 2mm svake strane, h=22mm */
-    lines.push(`BARCODE ${mm(2)},${mm(1.5)},"128M",${mm(22)},0,0,3,5,${tsplStr(code)}`);
+    lines.push(`BARCODE ${mm(2)},${mm(1.5)},"128M",${mm(22)},0,0,3,5,${tsplStr(encode)}`);
   }
 
-  /* Šifra police DOLE — krupno (font "5" ≈ 16pt) */
-  lines.push(`TEXT ${mm(2)},${mm(27)},"5",0,1,1,${tsplStr(truncFit(code, 22))}`);
+  /* Hala · polica ili šifra DOLE — krupno (font "5" ≈ 16pt) */
+  lines.push(`TEXT ${mm(2)},${mm(27)},"5",0,1,1,${tsplStr(truncFit(primary, 22))}`);
   if (name) {
     lines.push(`TEXT ${mm(2)},${mm(33)},"2",0,1,1,${tsplStr(truncFit(name, 60))}`);
   }

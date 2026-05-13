@@ -4,7 +4,7 @@
  *   2. Barkod dekodiran → auto popuni item_ref_id + fetch-uj trenutne placement-e
  *   3. Forma traži samo: Sa lokacije (pre-popunjena ako može), Na lokaciju, Količina
  *   4. Submit → RPC loc_create_movement
- *      (polica kao odredište: najpre halu iz #locScanHallFilter, šifra je lokalna u hali.)
+ *      (polica: štampani barkod LP:hala_uuid:polica_uuid postavlja halu automatski; starе nalepnice i dalje koriste kontekst halе za šifru.)
  *
  * UX namerno minimalistički za korišćenje jednom rukom u hali (drugi drži komad).
  */
@@ -22,6 +22,10 @@ import { fetchBigtehnOpSnapshotByRnAndTp } from '../../services/planProizvodnje.
 import { enqueueMovement } from '../../services/offlineQueue.js';
 import { getIsOnline } from '../../state/auth.js';
 import { compareLocationCodeNatural } from '../../lib/lokacijeSort.js';
+import {
+  parseShelfCompositeBarcodeToken,
+  resolveCompositeShelfScan,
+} from '../../lib/shelfBarcode.js';
 
 function debounce(fn, ms) {
   let t = null;
@@ -556,6 +560,12 @@ export async function openScanMoveModal({
         await new Promise(r => setTimeout(r, 70));
       }
       if (navigator.vibrate) navigator.vibrate(80);
+      if (parseShelfCompositeBarcodeToken(clean)) {
+        showToast(
+          '⚠ Ovo je barkod nalepnice police (`LP:hala_uuid:polica_uuid`). Za premestanje koristi sken lokacije kao odredište ili polje „Šifra police“. Za TP ostavi podešavanje na kartici TP.',
+        );
+        return;
+      }
       const parsed = parseBigTehnBarcode(clean);
       try {
         await showForm(parsed || clean);
@@ -588,12 +598,9 @@ export async function openScanMoveModal({
       if (decodeBusy) return;
       const res = resolveDestinationByToken(clean);
       if (res.ok) {
-        const loc = res.loc;
         decodeBusy = true;
         try {
           state.pickLocationMode = false;
-          const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
-          if (sel) sel.value = loc.id;
           cleanupScan();
           leaveScanPresentation();
           stageScan.hidden = true;
@@ -601,9 +608,7 @@ export async function openScanMoveModal({
           const tit = document.getElementById('locScanTitleScan');
           if (tit) tit.textContent = 'Skeniraj barkod';
           setScanStatus('', 'info');
-          const lab = shelfOrHallDisplayLabel(loc);
-          const fallback = loc.location_code != null ? String(loc.location_code) : loc.id;
-          showToast(`✓ Lokacija: ${lab || fallback}`);
+          applyScanDestinationSuccess(res);
           if (navigator.vibrate) navigator.vibrate(60);
         } finally {
           decodeBusy = false;
@@ -649,13 +654,6 @@ export async function openScanMoveModal({
   /** @param {{ purpose?: 'item' | 'location' }} [opts] */
   async function startWebScanner(opts = {}) {
     const purpose = opts.purpose === 'location' ? 'location' : 'item';
-    if (purpose === 'location') {
-      const h = $('#locScanHallFilter')?.value?.trim();
-      if (!h) {
-        showToast('⚠ Izaberi halu za odredište, pa tek onda skeniraj šifru police.');
-        return;
-      }
-    }
     if (purpose === 'item') state.pickLocationMode = false;
     else state.pickLocationMode = true;
 
@@ -677,7 +675,10 @@ export async function openScanMoveModal({
     if (purpose === 'location') {
       const tit = document.getElementById('locScanTitleScan');
       if (tit) tit.textContent = 'Skeniraj lokaciju';
-      setScanStatus('📐 Usmeri kameru na barkod šifre police (hala je već izabrana iznad)', 'info');
+      setScanStatus(
+        '📐 Usmeri na barkod nalepnice police (nova: LP…) ili na šifru ako je halа već izabrana iznad',
+        'info',
+      );
     } else {
       setScanStatus('📷 Tražim kameru…', 'info');
     }
@@ -747,6 +748,12 @@ export async function openScanMoveModal({
         const clean = normalizeBarcodeText(text);
         if (clean) {
           if (navigator.vibrate) navigator.vibrate(80);
+          if (parseShelfCompositeBarcodeToken(clean)) {
+            showToast(
+              '⚠ Ovo je barkod nalepnice police (premestanje), ne RNZ za TP.',
+            );
+            return;
+          }
           const parsed = parseBigTehnBarcode(clean);
           try {
             await showForm(parsed || clean);
@@ -1049,13 +1056,25 @@ export async function openScanMoveModal({
 
   /**
    * Rešavanje lokacije iz barkoda/šifrе uz obaveznu halu za police (scoped `location_code`).
+   * Kompozit štampani barkod (`LP:hala_uuid:polica_uuid`) je jednoznačan i postavlja halu.
    * UUID i jedinstvena šifra hale ostaju jednoznačni bez filtera halе.
    *
-   * @returns {{ ok: true, loc: object } | { ok: false, msg: string }}
+   * @returns {{ ok: true, loc: object, presetHallFilterId?: string|null } | { ok: false, msg: string }}
    */
   function resolveDestinationByToken(raw) {
     const t = normalizeBarcodeText(String(raw || '')).trim();
     if (!t) return { ok: false, msg: 'Unesi šifru lokacije ili sken.' };
+
+    const lpRes = resolveCompositeShelfScan(t, state.locs, state.locById);
+    if (lpRes) {
+      if (!lpRes.ok) return lpRes;
+      return {
+        ok: true,
+        loc: lpRes.loc,
+        presetHallFilterId: lpRes.presetHallFilterId,
+      };
+    }
+
     const uuidLike =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(t);
     if (uuidLike) {
@@ -1160,12 +1179,7 @@ export async function openScanMoveModal({
       showToast(`⚠ ${res.msg}`);
       return;
     }
-    if (err) err.textContent = '';
-    sel.value = res.loc.id;
-    inp.value = '';
-    const code =
-      res.loc.location_code != null ? String(res.loc.location_code) : String(res.loc.id);
-    showToast(`✓ Odredište: ${shelfOrHallDisplayLabel(res.loc) || code}`);
+    applyScanDestinationSuccess(res);
   }
 
   /**
@@ -1291,6 +1305,52 @@ export async function openScanMoveModal({
         hintEl.textContent = '— police su grupisane po hali (parent_id)' + filt;
       }
     }
+  }
+
+  /**
+   * Postavi `#locScanHallFilter` ako kompozitni barkod donosi halu i izaberi red u `#locScanTo`.
+   *
+   * @param {{ ok: true, loc: object, presetHallFilterId?: string|null }} res
+   * @returns {boolean}
+   */
+  function applyScanDestinationSuccess(res) {
+    const errEl = $('#locScanErr');
+    const hallEl = /** @type {HTMLSelectElement|null} */ ($('#locScanHallFilter'));
+    if (
+      res.presetHallFilterId &&
+      hallEl &&
+      [...hallEl.options].some(o => o.value === res.presetHallFilterId)
+    ) {
+      if (hallEl.value !== res.presetHallFilterId) {
+        hallEl.value = res.presetHallFilterId;
+        populateToSelect();
+      }
+    }
+
+    const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
+    const id = String(res.loc.id || '');
+    if (sel && id) {
+      if (![...sel.options].some(o => o.value === id)) {
+        populateToSelect();
+      }
+      sel.value = id;
+      if (sel.value !== id) {
+        const msg =
+          'Odredište nije dostupno u listi — osveži stranicu ili proveri da li je lokacija aktivna.';
+        if (errEl) errEl.textContent = msg;
+        showToast(`⚠ ${msg}`);
+        return false;
+      }
+    }
+
+    const ci = /** @type {HTMLInputElement|null} */ ($('#locScanToCode'));
+    if (ci) ci.value = '';
+    if (errEl) errEl.textContent = '';
+    const lab = shelfOrHallDisplayLabel(res.loc);
+    const fb =
+      res.loc.location_code != null ? String(res.loc.location_code) : String(res.loc.id || '');
+    showToast(`✓ Odredište: ${lab || fb}`);
+    return true;
   }
 
   /**
@@ -1912,6 +1972,13 @@ export async function openScanMoveModal({
         }
         if (navigator.vibrate) navigator.vibrate(80);
         const clean = normalizeBarcodeText(res.text);
+        if (parseShelfCompositeBarcodeToken(clean)) {
+          showToast(
+            '⚠ Na slici je barkod nalepnice police (LP…) — dodaj kao odredište preko funkcije lokacije ili nalepnice police, ne preko dekodera RNZ ovde.',
+          );
+          setScanStatus('⚠ Ovo izgleda kao barkod lokacije (`LP`).', 'warn');
+          return;
+        }
         const parsed = parseBigTehnBarcode(clean);
         try {
           await showForm(parsed || clean);
@@ -1946,15 +2013,7 @@ export async function openScanMoveModal({
         const hit = resolveDestinationByToken(res.text);
         const errEl = $('#locScanErr');
         if (hit.ok) {
-          const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
-          if (sel) sel.value = hit.loc.id;
-          const ci = /** @type {HTMLInputElement|null} */ ($('#locScanToCode'));
-          if (ci) ci.value = '';
-          if (errEl) errEl.textContent = '';
-          const lab = shelfOrHallDisplayLabel(hit.loc);
-          const fb =
-            hit.loc.location_code != null ? String(hit.loc.location_code) : hit.loc.id;
-          showToast(`✓ Lokacija: ${lab || fb}`);
+          applyScanDestinationSuccess(hit);
         } else {
           if (errEl) errEl.textContent = hit.msg;
           showToast(`⚠ ${hit.msg}`);
