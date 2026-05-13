@@ -427,6 +427,18 @@ export async function openScanMoveModal({
   const stageScan = overlay.querySelector('[data-stage="scan"]');
   const stageForm = overlay.querySelector('[data-stage="form"]');
 
+  /** Osveži `loc_locations` sa servera (nove hale/police u masteru), pa ponovo popuni dropdown-e. */
+  async function reloadLocationsFromServer() {
+    try {
+      const locs = await fetchLocations();
+      state.locs = Array.isArray(locs) ? locs : [];
+    } catch (e) {
+      console.warn('[scan] fetchLocations failed', e);
+    }
+    state.locById = new Map(state.locs.map(l => [l.id, l]));
+    populateToSelect();
+  }
+
   function teardownIOSVisualViewport() {
     if (state.iosVvUnbind) {
       try {
@@ -1176,9 +1188,18 @@ export async function openScanMoveModal({
       else others.push(l);
     }
     const pathCmp = (a, b) => String(a.path_cached || '').localeCompare(String(b.path_cached || ''), 'sr');
+    /** Sortiranje police / hala u listi od A do Z (šifra lokacije, pa naziv). */
+    const codeCmpLoc = (a, b) => {
+      const c = String(a?.location_code ?? '').localeCompare(String(b?.location_code ?? ''), 'sr', {
+        numeric: true,
+        sensitivity: 'base',
+      });
+      if (c !== 0) return c;
+      return String(a?.name ?? '').localeCompare(String(b?.name ?? ''), 'sr', { sensitivity: 'base' });
+    };
 
-    halls.sort(pathCmp);
-    others.sort(pathCmp);
+    halls.sort(codeCmpLoc);
+    others.sort(codeCmpLoc);
 
     /** @type {Map<string|null, object[]>} */
     const shelfByParent = new Map();
@@ -1188,16 +1209,18 @@ export async function openScanMoveModal({
       shelfByParent.get(pid).push(s);
     }
     for (const arr of shelfByParent.values()) {
-      arr.sort(pathCmp);
+      arr.sort(codeCmpLoc);
     }
 
-    /** Ključevi za filter hale: direktan parent police + sve HALE iz lanca predaka
-     * (inače izabrana HALA 1 nema <option> kad je parent_id regal / međučvor). */
+    /** Ključevi za filter hale: svi HALA tipovi iz mastera + roditelji police + predci-HALE. */
     const hallFilterIdsSet = new Set(
       Array.from(shelfByParent.keys())
         .filter(p => p != null)
         .map(String),
     );
+    for (const h of halls) {
+      hallFilterIdsSet.add(String(h.id));
+    }
     for (const s of shelves) {
       let cur = s;
       const seen = new Set();
@@ -1216,9 +1239,9 @@ export async function openScanMoveModal({
     if (hallFilterEl) {
       const hallFilterIds = Array.from(hallFilterIdsSet);
       hallFilterIds.sort((a, b) => {
-        const pa = state.locById.get(a);
-        const pb = state.locById.get(b);
-        return pathCmp(pa || {}, pb || {});
+        const la = state.locById.get(a);
+        const lb = state.locById.get(b);
+        return codeCmpLoc(la || {}, lb || {});
       });
       hallFilterEl.innerHTML =
         '<option value="">— sve hale (sve police) —</option>' +
@@ -1256,17 +1279,30 @@ export async function openScanMoveModal({
         const pb = state.locById.get(b);
         return pathCmp(pa || {}, pb || {});
       });
-      const pids =
+      let pids =
         filterHallId != null
           ? allPids.filter(pid => {
               const items = shelfByParent.get(pid);
               return items?.some(s => locationDescendsFromHall(s, filterHallId));
             })
           : allPids;
+      if (filterHallId != null) {
+        pids = pids.slice().sort((a, b) => {
+          const fa = (shelfByParent.get(a) || []).filter(s => locationDescendsFromHall(s, filterHallId));
+          const fb = (shelfByParent.get(b) || []).filter(s => locationDescendsFromHall(s, filterHallId));
+          fa.sort(codeCmpLoc);
+          fb.sort(codeCmpLoc);
+          return codeCmpLoc(fa[0] || {}, fb[0] || {});
+        });
+      }
       return pids
         .map(pid => {
-          const items = shelfByParent.get(pid);
-          if (!items?.length) return '';
+          let items = shelfByParent.get(pid) || [];
+          if (filterHallId != null) {
+            items = items.filter(s => locationDescendsFromHall(s, filterHallId));
+          }
+          if (!items.length) return '';
+          items = items.slice().sort(codeCmpLoc);
           const opts = items
             .map(
               l =>
@@ -1280,7 +1316,8 @@ export async function openScanMoveModal({
 
     const renderFlatGroup = (label, items) => {
       if (!items.length) return '';
-      const opts = items
+      const sorted = items.slice().sort(codeCmpLoc);
+      const opts = sorted
         .map(
           l =>
             `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
@@ -1540,7 +1577,6 @@ export async function openScanMoveModal({
 
     /* Čekaj fetch lokacija pre „Na lokaciju“ — na iOS sporijoj mreži inače
      * populateToSelect vidi prazan state.locs i ostane samo placeholder. */
-    await locsReady;
     populateToSelect();
     await refreshPlacements();
   }
@@ -2034,38 +2070,25 @@ export async function openScanMoveModal({
     }
   });
 
-  /* Preload lokacije odmah, paralelno sa kamerom. */
-  const locsReady = (async () => {
-    const locs = await fetchLocations();
-    state.locs = Array.isArray(locs) ? locs : [];
-    state.locById = new Map(state.locs.map(l => [l.id, l]));
-    /* Uvek osveži odredišta kad stigne lista (showForm može biti ranije). */
-    populateToSelect();
-  })();
+  await reloadLocationsFromServer();
 
   /* Prefill flow: preskoči scan stage i odmah popuni formu poznatim poljima.
    * Koristi se iz /m/lookup kartice "Premesti odavde" — radnik već zna crtež,
    * nalog i trenutnu policu pa ga ne teramo da ponovo skenira. */
   if (prefill && (prefill.itemRefId || prefill.orderNo || prefill.drawingNo)) {
     if (prefill.itemRefTable) state.item_ref_table = prefill.itemRefTable;
-    /* Čekamo locsReady pre showForm-a jer showForm → refreshPlacements →
-     * populateFromSelect koristi state.locById za labele. Bez toga from-select
-     * bi se na trenutak prikazao sa golim UUID-evima. */
-    locsReady.then(() => {
-      showForm({
-        itemRefId: prefill.itemRefId || '',
-        orderNo: prefill.orderNo || '',
-        drawingNo: prefill.drawingNo || '',
-        raw: '',
-        format: '',
-      }).then(() => {
-        if (prefill.fromLocationId) {
-          const fromEl = /** @type {HTMLSelectElement} */ ($('#locScanFrom'));
-          if (fromEl) fromEl.value = prefill.fromLocationId;
-        }
-        setTimeout(() => $('#locScanTo')?.focus(), 80);
-      });
+    await showForm({
+      itemRefId: prefill.itemRefId || '',
+      orderNo: prefill.orderNo || '',
+      drawingNo: prefill.drawingNo || '',
+      raw: '',
+      format: '',
     });
+    if (prefill.fromLocationId) {
+      const fromEl = /** @type {HTMLSelectElement} */ ($('#locScanFrom'));
+      if (fromEl) fromEl.value = prefill.fromLocationId;
+    }
+    setTimeout(() => $('#locScanTo')?.focus(), 80);
   } else if (startMode === 'manual') {
     /* Preskoči kamera stage — prikaži formu praznu, fokus na polje `Broj naloga`.
      * Korisno za telefone bez kamere ili kada nalepnica fali. */

@@ -214,9 +214,17 @@ describe('parseBigTehnBarcode — compact label (fallback bez RNZ:)', () => {
     expect(parseBigTehnBarcode('9000/1091063')?.format).toBe('short');
   });
 
-  it('vraća null ako fali varijanta ili TP ima nedozvoljen znak', () => {
+  it('compact fallback: bez varijante vraća null', () => {
     expect(parseBigTehnBarcode('9833:9400/7-5')).toBeNull();
-    expect(parseBigTehnBarcode('9833:9400/7_5:0')).toBeNull();
+  });
+
+  it('compact fallback: TP sa _ i varijanta je validan', () => {
+    expect(parseBigTehnBarcode('9833:9400/7_5:0')).toMatchObject({
+      format: 'compact',
+      orderNo: '9400',
+      itemRefId: '7_5',
+      varijanta: '0',
+    });
   });
 });
 
