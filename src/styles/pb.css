@@ -10,6 +10,12 @@ body.module-projektni-biro {
   min-height: 100vh;
 }
 
+/* Uvek malo vazduha ispod chrome-a — i kad nije pun desktop-erp flex layout. */
+body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
+  padding-top: max(22px, 1.35rem);
+  scroll-padding-top: 16px;
+}
+
 .pb-module {
   max-width: 1400px;
   margin: 0 auto;
@@ -2934,13 +2940,16 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   top: auto;
   z-index: 2;
   will-change: auto;
+  /* Razmak pre scroll oblasti — bez podsecanja prvog reda teksta (alarm, Gantt legenda, itd.). */
+  padding-bottom: 12px;
+  box-sizing: border-box;
 }
 
 body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-chrome-pinned {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
-/* Jedini vertikalni scroll: sadržaj ne sme vizuelno da „upada” ispod tab/context trake. */
+/* Jedini vertikalni scroll: dovoljno odstoja od zalepljenog header+tab+filter bloka. */
 body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -2950,8 +2959,9 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  scroll-padding-top: 12px;
-  padding-top: 20px;
+  scroll-padding-top: 20px;
+  margin-top: 8px;
+  padding-top: 28px;
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
@@ -2987,8 +2997,14 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
     max-height: min(180px, 32dvh);
   }
 
+  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-module > .pb-chrome {
+    padding-bottom: 8px;
+  }
+
   body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
-    padding-top: 10px;
+    margin-top: 6px;
+    padding-top: 20px;
+    scroll-padding-top: 16px;
   }
 
   body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-filter-toolbar {
