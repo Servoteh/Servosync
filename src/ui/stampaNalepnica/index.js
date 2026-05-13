@@ -265,6 +265,8 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   let dropOpen = false;
   let activeDdIndex = -1;
   let pendingSearch = '';
+  /** Posle izbora TP — kompaktan prikaz umesto duge liste (mobilni UX). */
+  let tpListCollapsed = false;
 
   const docClick = ev => {
     const combo = wrap.querySelector('#snCombo');
@@ -642,6 +644,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   const debouncedPred = debounce(() => runPredSearch(pendingSearch), 250);
 
   function pickPredmet(item) {
+    tpListCollapsed = false;
     selectedPredmet = item;
     selectedTp = null;
     tpsCache = [];
@@ -764,7 +767,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
         refreshPreview();
         return false;
       }
-      selectTp(matchedWo);
+      void selectTp(matchedWo);
       showToast(`✓ Učitano iz barkoda: ${needle}`);
       return true;
     } catch (e) {
@@ -805,6 +808,27 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
 
   async function renderTpList(filterText) {
     if (!selectedPredmet) return;
+    if (tpListCollapsed && selectedTp) {
+      tpSearchWrap.style.display = 'none';
+      const wo = selectedTp;
+      const idb = escHtml(String(wo.ident_broj || ''));
+      const rnz = escHtml(String(wo.broj_crteza || '—'));
+      const nz = escHtml(String(wo.naziv_dela || '').slice(0, 160));
+      tpListEl.innerHTML = `
+        <div class="sn-tp-picked">
+          <div class="sn-tp-picked-body">
+            <div class="sn-tp-picked-title">${nz || '<span class="sn-placeholder-muted">—</span>'}</div>
+            <div class="sn-tp-picked-sub">RNZ <strong>${idb}</strong> · crtež ${rnz}</div>
+          </div>
+          <button type="button" class="sn-tp-expand" id="snTpExpand">Promeni TP</button>
+        </div>`;
+      tpListEl.querySelector('#snTpExpand')?.addEventListener('click', () => {
+        tpListCollapsed = false;
+        tpSearchWrap.style.display = tpsCache.length > 8 ? '' : 'none';
+        void renderTpList(tpFilter.value);
+      });
+      return;
+    }
     const rawF = String(filterText || '').trim();
     let list = filteredTpList(rawF);
     if (rawF && !list.length) {
@@ -855,26 +879,39 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
       btn.addEventListener('click', () => {
         const id = Number(btn.getAttribute('data-tpid'));
         const wo = tpsCache.find(x => Number(x.id) === id);
-        if (wo) selectTp(wo);
+        if (wo) void selectTp(wo);
       });
     });
   }
 
-  function selectTp(wo) {
+  async function selectTp(wo) {
+    closeDrop();
+    debouncedPred.cancel();
+    qEl?.blur();
+    tpFilter?.blur();
+    tpListCollapsed = true;
     selectedTp = wo;
     card3.classList.add('sn-step-animate-in');
     setPrintCopies(1);
     setKomadaPrikaz(Math.max(1, Number(wo.komada) || 1));
     paintKomadaHint();
-    renderTpList(tpFilter.value);
+    await renderTpList(tpFilter.value);
     syncStepCards();
     paintProgress();
     refreshPreview();
+    requestAnimationFrame(() => {
+      try {
+        card3.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch {
+        /* ignore */
+      }
+    });
   }
 
   function clearTp() {
+    tpListCollapsed = false;
     selectedTp = null;
-    renderTpList(tpFilter.value);
+    void renderTpList(tpFilter.value);
     syncStepCards();
     paintProgress();
     refreshPreview();
@@ -1158,7 +1195,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     }
   });
 
-  document.addEventListener('mousedown', docClick);
+  document.addEventListener('pointerdown', docClick, { capture: false });
   hallEl?.addEventListener('change', () => {
     paintShelfSelect(hallEl.value);
   });
@@ -1170,7 +1207,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
   void loadLocationDropdowns();
 
   teardownFn = () => {
-    document.removeEventListener('mousedown', docClick);
+    document.removeEventListener('pointerdown', docClick, { capture: false });
     debouncedPred.cancel();
     debTp.cancel();
     dropEl._virtCleanup?.();

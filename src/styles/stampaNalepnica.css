@@ -458,6 +458,55 @@ body.module-stampa-nalepnica {
   align-self: center;
 }
 
+/* Izabrani TP — kompaktno posle klika (lista se sklopi, korak 3 ostaje u fokusu). */
+.sn-tp-picked {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--sn-primary) 35%, var(--border, #e5e7eb));
+  background: var(--sn-primary-light);
+}
+
+.sn-tp-picked-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.sn-tp-picked-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text, #111);
+  line-height: 1.35;
+}
+
+.sn-tp-picked-sub {
+  font-size: 0.78rem;
+  color: var(--text2, #6b7280);
+  margin-top: 6px;
+}
+
+.sn-tp-expand {
+  flex-shrink: 0;
+  margin-top: 2px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border2, #d1d5db);
+  background: var(--surface, #fff);
+  color: var(--sn-primary);
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  font-family: var(--sn-font);
+}
+
+.sn-tp-expand:hover {
+  border-color: var(--sn-primary);
+  background: color-mix(in srgb, var(--sn-primary) 8%, var(--surface, #fff));
+}
+
 .sn-field-block {
   margin-bottom: 4px;
 }
