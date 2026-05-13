@@ -41,6 +41,7 @@ import {
 import {
   calcDuration,
   dayDiffFromToday,
+  formatDate,
 } from '../../lib/date.js';
 import {
   calcReadiness,
@@ -181,6 +182,17 @@ function _planFiltersToolbarHtml() {
   `;
 }
 
+function _phaseActualStartHtml(row) {
+  const aS = row.actualStartDate;
+  const sLbl = aS ? formatDate(aS) : '<span class="date-empty">—</span>';
+  return `<div class="phase-actual-dates phase-actual-dates--one" aria-label="Ostvareni početak"><span class="date-label">Ostv. poč:</span> ${sLbl}</div>`;
+}
+function _phaseActualEndHtml(row) {
+  const aE = row.actualEndDate;
+  const eLbl = aE ? formatDate(aE) : '<span class="date-empty">—</span>';
+  return `<div class="phase-actual-dates phase-actual-dates--one" aria-label="Ostvareni kraj"><span class="date-label">Ostv. kraj:</span> ${eLbl}</div>`;
+}
+
 function _planTheadHtml() {
   const checkHeads = CHECK_SHORT.map((s, i) => `<th class="th-check" title="${escHtml(CHECK_LABELS[i])}">${escHtml(s)}</th>`).join('');
   return `
@@ -188,8 +200,8 @@ function _planTheadHtml() {
       <th class="th-num">#</th>
       <th class="th-name">Naziv</th>
       <th class="th-loc">Lokacija</th>
-      <th class="th-date">Početak</th>
-      <th class="th-date">Kraj</th>
+      <th class="th-date th-date-stack">Početak<span class="th-sub">plan</span></th>
+      <th class="th-date th-date-stack">Kraj<span class="th-sub">plan</span></th>
       <th class="th-dur">Trajanje</th>
       <th class="th-eng">Inženjer</th>
       <th class="th-person">Vođa</th>
@@ -348,9 +360,11 @@ function _planRowHtml(row, i) {
       </td>
       <td class="td-date ${dateErr ? 'date-error' : ''}">
         <input type="date" data-field="start" value="${escHtml(row.start || '')}" ${dis}>
+        ${_phaseActualStartHtml(row)}
       </td>
       <td class="td-date ${dateErr ? 'date-error' : ''}">
         <input type="date" data-field="end" value="${escHtml(row.end || '')}" ${dis}>
+        ${_phaseActualEndHtml(row)}
       </td>
       <td class="${durC}">${durT}</td>
       <td class="td-eng">

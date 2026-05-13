@@ -2,7 +2,7 @@
  * Plan Montaže — Total Gantt (F5.4).
  *
  * Prikazuje agregirani gantogram svih projekata, sa:
- *   - Filterima: projekat, lokacija, vođa, inženjer, datum od / datum do
+ *   - Filterima: lokacija, vođa, inženjer, datum od / datum do
  *   - Per-WP checkbox listom (kontrola koje pozicije ulaze u prikaz)
  *   - Show finished toggle (deli sa single gantt-om)
  *   - Drag/resize (radi i ovde — koristi isti `wireGanttDrag`)
@@ -54,14 +54,18 @@ export function totalGanttSectionHtml() {
   return `
     ${_filtersHtml()}
     ${_wpFilterHtml()}
-    ${_toolbarHtml()}
-    <div class="gantt-wrap gantt-wrap--dock" id="totalGanttWrap"><div class="gantt-wrap-inner">${_tableHtml()}</div></div>
+    <div class="gantt-wrap gantt-wrap--dock" id="totalGanttWrap">
+      <div class="gantt-wrap-scroll">
+        <div class="gantt-wrap-inner">${_tableHtml()}</div>
+      </div>
+      <div class="gantt-scroll-mirror" aria-hidden="true"><div class="gantt-scroll-mirror-spacer"></div></div>
+    </div>
   `;
 }
 
 export function wireTotalGanttSection(root, { onChange } = {}) {
   /* Filter selektori */
-  ['projectId', 'loc', 'lead', 'engineer', 'dateFrom', 'dateTo'].forEach(key => {
+  ['loc', 'lead', 'engineer', 'dateFrom', 'dateTo'].forEach(key => {
     const el = root.querySelector(`[data-tg-filter="${key}"]`);
     if (!el) return;
     el.addEventListener('change', () => {
@@ -112,9 +116,7 @@ export function wireTotalGanttSection(root, { onChange } = {}) {
 
 function _filtersHtml() {
   const projects = sortProjectsForPredmetPrioritet(allData.projects || []);
-  const projOpts = ['<option value="">Svi projekti</option>'].concat(
-    projects.map(p => `<option value="${escHtml(p.id)}"${totalGanttFilters.projectId === p.id ? ' selected' : ''}>${escHtml(p.code)} — ${escHtml(p.name)}</option>`)
-  ).join('');
+  /* projectId filter uklonjen iz Ukupnog Gant-a — uvek svi projekti; stanje totalGanttFilters.projectId ostaje za kompatibilnost keša. */
 
   const allLocs = new Set();
   projects.forEach(p => (p.locations || []).forEach(l => l && allLocs.add(l)));
@@ -132,23 +134,24 @@ function _filtersHtml() {
 
   return `
     <div class="filter-bar tg-filter-bar" id="totalGanttFilters">
-      <label class="fb-field"><span>Projekat</span><select data-tg-filter="projectId">${projOpts}</select></label>
       <label class="fb-field"><span>Lokacija</span><select data-tg-filter="loc">${locOpts}</select></label>
       <label class="fb-field"><span>Vođa montaže</span><select data-tg-filter="lead">${leadOpts}</select></label>
       <label class="fb-field"><span>Odg. inženjer</span><select data-tg-filter="engineer">${engOpts}</select></label>
       <label class="fb-field"><span>Datum od</span><input type="date" data-tg-filter="dateFrom" value="${escHtml(totalGanttFilters.dateFrom || '')}"></label>
       <label class="fb-field"><span>Datum do</span><input type="date" data-tg-filter="dateTo" value="${escHtml(totalGanttFilters.dateTo || '')}"></label>
-      <div class="fb-actions">
+      <label class="fb-field fb-field--checkbox"><span>Prikaži završene</span>
+        <input type="checkbox" id="tgShowFinished" class="tg-show-finished-cb" ${showFinishedInGantt ? 'checked' : ''}>
+      </label>
+      <div class="fb-actions tg-filter-actions">
         <button type="button" class="btn btn-ghost" id="tgReset" title="Resetuj filtere">↺ Reset</button>
+        <span class="gantt-hint tg-gantt-hint">Drag bare · ručice za datume · Shift+klik na header</span>
       </div>
     </div>
   `;
 }
 
 function _wpFilterHtml() {
-  const projects = sortProjectsForPredmetPrioritet(
-    (allData.projects || []).filter(p => !totalGanttFilters.projectId || p.id === totalGanttFilters.projectId),
-  );
+  const projects = sortProjectsForPredmetPrioritet(allData.projects || []);
   const allWPs = [];
   projects.forEach(p => (p.workPackages || []).forEach(wp => {
     allWPs.push({ wp, project: p });
@@ -170,25 +173,11 @@ function _wpFilterHtml() {
   `;
 }
 
-function _toolbarHtml() {
-  return `
-    <div class="gantt-toolbar">
-      <label class="gantt-toggle">
-        <input type="checkbox" id="tgShowFinished" ${showFinishedInGantt ? 'checked' : ''}>
-        <span>Prikaži završene faze</span>
-      </label>
-      <span class="gantt-hint">Drag bare za pomeranje · ručice za promenu datuma · Shift+klik na header za raspon</span>
-    </div>
-  `;
-}
-
 /* ── INTERNAL: table rendering ──────────────────────────────────────── */
 
 function _tableHtml() {
   const f = totalGanttFilters;
-  const projects = sortProjectsForPredmetPrioritet(
-    (allData.projects || []).filter(p => !f.projectId || p.id === f.projectId),
-  );
+  const projects = sortProjectsForPredmetPrioritet(allData.projects || []);
 
   const rows = [];
   projects.forEach(project => {

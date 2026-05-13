@@ -9,9 +9,14 @@
  *   ako prvi POST sa `phase_type` vrati null (kolona ne postoji),
  *   trajno isključi `phase_type` u tom session-u (allData._phaseTypeSchemaSupported).
  *   Ovo se ovde čuva kao modulski flag `phaseTypeSchemaSupported`.
+ *
+ * Isto za `actual_start_date` / `actual_end_date`: modulski `phaseActualDatesSchemaSupported`;
+ * posle neuspeha POST-a bez tih polja ostaje isključeno do sledećeg load-a koji
+ * detektuje kolone u response-u.
  */
 
 import { sbReq } from './supabase.js';
+import { apiDateToYmd } from '../lib/date.js';
 import { canEdit, getIsOnline, getCurrentUser } from '../state/auth.js';
 import { DEFAULT_LOCATIONS, NUM_CHECKS } from '../lib/constants.js';
 import {
@@ -84,6 +89,15 @@ export function setWpAssemblyDrawingSchemaSupported(v) {
   wpAssemblyDrawingSchemaSupported = !!v;
 }
 
+/* `actual_start_date` / `actual_end_date` (migracija `add_phases_actual_dates.sql`). */
+let phaseActualDatesSchemaSupported = true;
+export function setPhaseActualDatesSchemaSupported(v) {
+  phaseActualDatesSchemaSupported = !!v;
+}
+export function isPhaseActualDatesSchemaSupported() {
+  return phaseActualDatesSchemaSupported;
+}
+
 export function normalizePhaseType(t) {
   const v = String(t || '').toLowerCase();
   return v === 'electrical' || v === 'elektro' || v === 'e' ? 'electrical' : 'mechanical';
@@ -138,6 +152,8 @@ export function mapDbPhase(d) {
   const ld = Array.isArray(d.linked_drawings)
     ? d.linked_drawings.filter(x => typeof x === 'string' && x.trim() !== '')
     : [];
+  const actS = apiDateToYmd(d.actual_start_date);
+  const actE = apiDateToYmd(d.actual_end_date);
   return {
     id: d.id,
     projectId: d.project_id,
@@ -146,6 +162,8 @@ export function mapDbPhase(d) {
     loc: d.location || 'Dobanovci',
     start: d.start_date,
     end: d.end_date,
+    actualStartDate: actS || null,
+    actualEndDate: actE || null,
     engineer: d.responsible_engineer || '',
     person: d.montage_lead || '',
     status: d.status || 0,
@@ -233,6 +251,12 @@ export function buildPhasePayload(ph, projectId, wpId, sortOrder) {
       return acc;
     }, []);
   }
+  if (phaseActualDatesSchemaSupported) {
+    const s = ph.actualStartDate != null ? String(ph.actualStartDate).trim() : '';
+    const e = ph.actualEndDate != null ? String(ph.actualEndDate).trim() : '';
+    base.actual_start_date = s || null;
+    base.actual_end_date = e || null;
+  }
   return base;
 }
 
@@ -284,6 +308,9 @@ export async function loadPhasesFromDb(projectId, wpId) {
     }
     if (Object.prototype.hasOwnProperty.call(sample, 'phase_type') && !phaseTypeSchemaSupported) {
       phaseTypeSchemaSupported = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(sample, 'actual_start_date') && !phaseActualDatesSchemaSupported) {
+      phaseActualDatesSchemaSupported = true;
     }
   }
   return data.map(mapDbPhase);
@@ -352,6 +379,15 @@ export async function savePhaseToDb(ph, projectId, wpId, sortOrder) {
     res = await sbReq('phases', 'POST', payload);
     if (res !== null) {
       console.warn('[phase.linked_drawings] Column not present in DB; skipping for this call. Apply sql/migrations/add_phases_linked_drawings.sql to enable.');
+    }
+  }
+  if (res === null && (payload.actual_start_date !== undefined || payload.actual_end_date !== undefined)) {
+    const { actual_start_date, actual_end_date, ...rest } = payload;
+    payload = rest;
+    phaseActualDatesSchemaSupported = false;
+    res = await sbReq('phases', 'POST', payload);
+    if (res !== null) {
+      console.warn('[phase.actual_*_date] Columns not present in DB; disabled for session. Apply sql/migrations/add_phases_actual_dates.sql.');
     }
   }
   return res;

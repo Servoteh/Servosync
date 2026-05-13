@@ -28,6 +28,7 @@ import {
   deletePhaseModel,
 } from '../../state/planMontaze.js';
 import { applyBusinessRules, normalizePhaseType } from '../../lib/phase.js';
+import { today, dateToYMD } from '../../lib/date.js';
 import {
   queuePhaseSaveByIndex,
   queueCurrentWpSync,
@@ -45,6 +46,10 @@ export function updatePhaseField(i, field, value) {
   if (field === 'type') value = normalizePhaseType(value);
   row[field] = value;
   applyBusinessRules(row);
+  /* Ostvareni datumi: jednokratno pri prelasku u U toku / Završeno (STATUSES indeksi 1 i 2). */
+  const ymd = dateToYMD(today);
+  if (ymd && row.status === 1 && !row.actualStartDate) row.actualStartDate = ymd;
+  if (ymd && row.status === 2 && !row.actualEndDate) row.actualEndDate = ymd;
   persistState();
   queuePhaseSaveByIndex(i);
 }

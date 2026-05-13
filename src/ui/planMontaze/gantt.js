@@ -43,7 +43,12 @@ export function ganttSectionHtml() {
   }
   return `
     ${_ganttToolbarHtml()}
-    <div class="gantt-wrap gantt-wrap--dock" id="ganttWrap"><div class="gantt-wrap-inner">${_ganttTableHtml()}</div></div>
+    <div class="gantt-wrap gantt-wrap--dock" id="ganttWrap">
+      <div class="gantt-wrap-scroll">
+        <div class="gantt-wrap-inner">${_ganttTableHtml()}</div>
+      </div>
+      <div class="gantt-scroll-mirror" aria-hidden="true"><div class="gantt-scroll-mirror-spacer"></div></div>
+    </div>
   `;
 }
 

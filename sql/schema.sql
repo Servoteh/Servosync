@@ -63,6 +63,8 @@ CREATE TABLE phases (
   location TEXT DEFAULT 'Dobanovci',
   start_date DATE,
   end_date DATE,
+  actual_start_date DATE,
+  actual_end_date DATE,
   responsible_engineer TEXT DEFAULT '',
   montage_lead TEXT DEFAULT '',
   status INT DEFAULT 0 CHECK (status IN (0,1,2,3)),

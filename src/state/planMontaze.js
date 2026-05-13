@@ -427,6 +427,8 @@ export function createBlankPhase(name, wp) {
     description: '',
     type: _normalizePhaseType(inferType),
     linkedDrawings: [],
+    actualStartDate: null,
+    actualEndDate: null,
   };
 }
 
@@ -515,6 +517,8 @@ function _ensurePhaseDefaults() {
       if (typeof wp.assemblyDrawingNo !== 'string') wp.assemblyDrawingNo = '';
       for (const ph of wp.phases || []) {
         if (!Array.isArray(ph.linkedDrawings)) ph.linkedDrawings = [];
+        if (ph.actualStartDate === undefined) ph.actualStartDate = null;
+        if (ph.actualEndDate === undefined) ph.actualEndDate = null;
       }
     }
   }

@@ -256,10 +256,12 @@ function _mobileCardHtml(row, i) {
       <div class="m-card-detail-item">
         <span class="m-lbl">Početak</span>
         <input type="date" data-stop data-mfield="start" value="${escHtml(row.start || '')}" ${dis}>
+        <div class="phase-actual-dates phase-actual-dates--one" style="margin-top:4px"><span class="date-label">Ostv. poč:</span> ${row.actualStartDate ? formatDate(row.actualStartDate) : '<span class="date-empty">—</span>'}</div>
       </div>
       <div class="m-card-detail-item">
         <span class="m-lbl">Kraj</span>
         <input type="date" data-stop data-mfield="end" value="${escHtml(row.end || '')}" ${dis}>
+        <div class="phase-actual-dates phase-actual-dates--one" style="margin-top:4px"><span class="date-label">Ostv. kraj:</span> ${row.actualEndDate ? formatDate(row.actualEndDate) : '<span class="date-empty">—</span>'}</div>
       </div>
     </div>
   `;

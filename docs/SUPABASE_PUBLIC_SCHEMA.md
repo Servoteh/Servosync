@@ -987,6 +987,8 @@ Ispod: **Pregledi**, **Enumi**, **Foreign keys**, zatim **flat tabela svih kolon
 | phases | location | text | YES |
 | phases | start_date | date(0) | YES |
 | phases | end_date | date(0) | YES |
+| phases | actual_start_date | date(0) | YES |
+| phases | actual_end_date | date(0) | YES |
 | phases | responsible_engineer | text | YES |
 | phases | montage_lead | text | YES |
 | phases | status | integer(32,0) | YES |
