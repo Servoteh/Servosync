@@ -248,7 +248,7 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
   const locByIdForPrint =
     opts.locById instanceof Map && opts.locById.size ? opts.locById : new Map(locs.map(l => [String(l.id), l]));
 
-  const codeType = opts.codeType === 'qr' ? 'qr' : 'barcode';
+  const codeType = opts.codeType === 'barcode' ? 'barcode' : 'qr';
   const format = FORMAT_DIMS[opts.format] ? opts.format : 'a4-large';
   const copies = Math.max(1, Math.floor(Number(opts.copies) || 1));
 
@@ -403,7 +403,7 @@ export async function openShelfLabelsPrintPicker() {
     <div class="kadr-modal-overlay" id="${id}" role="dialog" aria-modal="true">
       <div class="kadr-modal" style="max-width:640px">
         <div class="kadr-modal-title">Štampa nalepnica polica</div>
-        <div class="kadr-modal-subtitle">Označi jednu ili više polica. Barkod/Code128 vrši LP:hala_uuid:polica_uuid (osim kada polica nema halu → samo UUID). Pri sken-u postavlja i halu.</div>
+        <div class="kadr-modal-subtitle">Označi jednu ili više polica. Podrazumevano <strong>QR</strong> (isto LP:hala_uuid:polica_uuid) — pouzdanije na telefonima i industrijskim čitačima. CODE128 opciono ako treba štampa bez QR.</div>
         <div class="kadr-modal-body">
           <label class="loc-filter-field" style="display:block;margin-bottom:10px">
             <span>Pretraga police</span>
@@ -422,8 +422,8 @@ export async function openShelfLabelsPrintPicker() {
             <label class="loc-filter-field" style="display:block">
               <span>Tip koda</span>
               <select id="locShelfPickCodeType" class="loc-search-input">
+                <option value="qr" selected>QR kod (preporučeno)</option>
                 <option value="barcode">Barkod (CODE128)</option>
-                <option value="qr">QR kod</option>
               </select>
             </label>
             <label class="loc-filter-field" style="display:block">
@@ -549,7 +549,7 @@ export async function openShelfLabelsPrintPicker() {
     if (!selectedIds.size) return;
     const picked = candidates.filter(l => selectedIds.has(String(l.id)));
     if (!picked.length) return;
-    const codeType = codeTypeEl.value === 'qr' ? 'qr' : 'barcode';
+    const codeType = codeTypeEl.value === 'barcode' ? 'barcode' : 'qr';
     const format = ['tsc', 'a4-large', 'a4-grid'].includes(formatEl.value) ? formatEl.value : 'a4-large';
     const copies = Math.max(1, Math.floor(Number(copiesEl.value) || 1));
     await printShelfLabelsToBrowserWindow(picked, {

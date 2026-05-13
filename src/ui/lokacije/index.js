@@ -133,7 +133,7 @@ function movementTypePillClass(type) {
 function locLabelPrintActionCardDefs() {
   if (!canEdit()) return [];
   return [
-    { id: 'locBtnLabels', icon: '🏷', title: 'NALEPNICA POLICE', sub: 'Štampa za regal' },
+    { id: 'locBtnLabels', icon: '🏷', title: 'NALEPNICA POLICE', sub: 'QR za regal' },
     { id: 'locBtnTpLabel', icon: '🧾', title: 'NALEPNICA TP', sub: 'Štampa za predmet' },
   ];
 }
@@ -276,7 +276,7 @@ function locToolbarHtml({ extra = '' } = {}) {
   if (canEdit()) {
     parts.push(`<button type="button" class="btn" id="locBtnNewLoc">Nova lokacija</button>`);
     parts.push(
-      `<button type="button" class="btn" id="locBtnLabels" title="Izaberi policu i štampaj nalepnicu (CODE128 = LP:hala_uuid:polica_uuid)">🏷 Nalepnica police</button>`,
+      `<button type="button" class="btn" id="locBtnLabels" title="Izaberi policu i štampaj nalepnicu (podrazumevano QR: LP…)">🏷 Nalepnica police</button>`,
     );
     parts.push(
       `<button type="button" class="btn" id="locBtnTpLabel" title="Štampa nalepnice za tehnološki postupak (RNZ / kratki barkod)">🏷 Nalepnica TP</button>`,

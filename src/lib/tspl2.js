@@ -231,7 +231,7 @@ export function buildTspLabelProgram(spec) {
  *
  * @param {{ location_code: string, name?: string, copies?: number, codeType?: 'barcode'|'qr',
  *   barcodeValue?: string, labelPrimary?: string }} loc
- *   `barcodeValue` — štampani kod (npr. `LP:<hala_uuid>:<polica_uuid>`); ako izostaje, ostaje šifra police.
+ *   `barcodeValue` — payload u QR/Code128 (`LP:<hala_uuid>:<polica_uuid>` ili UUID); **`codeType` podrazumevano `qr`**.
  * @returns {string}
  */
 export function buildTspShelfLabelProgram(loc) {
@@ -240,7 +240,8 @@ export function buildTspShelfLabelProgram(loc) {
   const primary = primaryRaw || encode;
   const name = String(loc?.name || '').trim();
   const copies = Math.max(1, Math.floor(Number(loc?.copies) || 1));
-  const codeType = loc?.codeType === 'qr' ? 'qr' : 'barcode';
+  /* Polica TSPL/CODE128 dug LP je teško čitljiv; podrazumevano QR kao u štampi pregledаča */
+  const codeType = loc?.codeType === 'barcode' ? 'barcode' : 'qr';
   if (!encode) throw new Error('buildTspShelfLabelProgram: štampani barkod / šifra obavezni');
 
   const lines = [];
