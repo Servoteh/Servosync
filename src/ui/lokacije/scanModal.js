@@ -4,7 +4,7 @@
  *   2. Barkod dekodiran → auto popuni item_ref_id + fetch-uj trenutne placement-e
  *   3. Forma traži samo: Sa lokacije (pre-popunjena ako može), Na lokaciju, Količina
  *   4. Submit → RPC loc_create_movement
- *      (polica: štampani barkod LP:hala_uuid:polica_uuid postavlja halu automatski; starе nalepnice i dalje koriste kontekst halе za šifru.)
+ *      (polica: sken grafike koja sadrži kratko `ŠIF_HALE - ŠIF_POLICE` ili legacy `LP:hala_uuid:polica_uuid` postavlja halu automatski kad treba.)
  *
  * UX namerno minimalistički za korišćenje jednom rukom u hali (drugi drži komad).
  */
@@ -366,14 +366,14 @@ export async function openScanMoveModal({
               <select id="locScanTo" required></select>
               <div class="loc-scan-to-tools" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
                 <input type="text" id="locScanToCode" autocomplete="off" maxlength="80"
-                  placeholder="QR / LP:… ili šifra police ako je HALA izabrana"
+                  placeholder="Sken štampano (npr. MAG-X - P-09 ili LP:… ili šifra police ako je HALA izabrana"
                   style="flex:1;min-width:140px;font-size:16px;padding:9px 10px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
                 <button type="button" class="btn" data-act="applyLocCode">Primeni QR / šifru</button>
                 <button type="button" class="btn" data-act="pickLocImage">📷 Skeniraj QR police (slika)</button>
                 <button type="button" class="btn" data-act="pickLocCamera">📹 QR kamerom za policu</button>
               </div>
               <div class="loc-muted" style="font-size:11px;margin-top:4px;line-height:1.35">
-                Nova nalepnica police je <strong>QR</strong> (<code style="font-size:11px">LP:…</code>): slika ili „QR kamerom“ obično sami podešavaju HALU i policu.
+                Nova nalepnica police ima kratku šifru u grafici (npr. <code style="font-size:11px">MAG-X - P-09</code>) ili još uvek QR sa <code style="font-size:11px">LP:…</code> ako je štampa starija.
                 Ista <strong>šifra</strong> police u različitim halama — prvo HALA u listi, pa ručno ili foto starog 1D barkoda.
                 <br />
                 Ako <strong>sistemska</strong> iOS aplikacija „Kamera“ prikaže „No usable data found“: to je uobičajeno za QR sa običnim tekstom (nije link); koristi <strong>dugmad u ovoj aplikaciji</strong> (slika / kamera) ili „Skeniraj ponovo“.
@@ -564,7 +564,7 @@ export async function openScanMoveModal({
       if (navigator.vibrate) navigator.vibrate(80);
       if (parseShelfCompositeBarcodeToken(clean)) {
         showToast(
-          '⚠ Ovo je barkod nalepnice police (`LP:hala_uuid:polica_uuid`). Za premestanje koristi sken lokacije kao odredište ili polje „Šifra police“. Za TP ostavi podešavanje na kartici TP.',
+          '⚠ Ovo izgleda kao lokacijski barkod (`ŠIF_HALE - ŠIF_POLICA` ili `LP:uuid:uuid`). Za premestanje idi na lokacije; karticu TP ne diraj ako skeniraš RNZ.',
         );
         return;
       }
@@ -687,7 +687,7 @@ export async function openScanMoveModal({
       const tit = document.getElementById('locScanTitleScan');
       if (tit) tit.textContent = 'Skeniraj QR police';
       setScanStatus(
-        '📐 Usmeri kameru na QR na nalepnici police (tekst LP:…) ili na 1D šifru ako je HALA već izabrana',
+        '📐 Usmeri kameru na QR/barkod nalepnice police (tekst MAG-X - P-09 ili stariji LP:…) ili na jednodimenzionalnu šifru ako je HALA već izabrana',
         'info',
       );
     } else {
@@ -1075,7 +1075,7 @@ export async function openScanMoveModal({
 
   /**
    * Rešavanje lokacije iz barkoda/šifrе uz obaveznu halu za police (scoped `location_code`).
-   * Kompozit štampani barkod (`LP:hala_uuid:polica_uuid`) je jednoznačan i postavlja halu.
+   * Kompozit: kratak slog `ŠIF_HALE - ŠIF_POLICA` ili legacy `LP:hala_uuid:polica_uuid` jednoznačno postavlja halu ako treba.
    * UUID i jedinstvena šifra hale ostaju jednoznačni bez filtera halе.
    *
    * @returns {{ ok: true, loc: object, presetHallFilterId?: string|null } | { ok: false, msg: string }}

@@ -216,27 +216,9 @@ export function buildTspLabelProgram(spec) {
   return lines.join('\r\n') + '\r\n';
 }
 
+
 /**
- * Generiše TSPL2 program za nalepnicu police.
- * **NE šalje SIZE/GAP/DENSITY** — koristi konfiguraciju štampača.
- *
- * Layout (kod GORE, šifra DOLE — operater traženo 2026-05):
- *   ┌───────── 80.34mm ─────────┐
- *   │  ║║│║║║│║│║║║│ ili [QR]    │  y=1.5mm  h≈26mm (kod — veći trag za dug LP payload)
- *   │                            │
- *   │       R-A-001              │  y≈29.5mm   font "5" (krupno)
- *   │   Magacin · Polica         │  y≈36mm    font "2" (sitno)
- *   └────────────────────────────┘
- *               40.3mm
- *
- * @param {{ location_code: string, name?: string, copies?: number, codeType?: 'barcode'|'qr',
- *   barcodeValue?: string, labelPrimary?: string,
- *   captionHall?: string|null, captionShelf?: string }} loc
- *   `barcodeValue` — payload u QR/Code128 (`LP:<hala_uuid>:<polica_uuid>` ili UUID); **`codeType` podrazumevano `barcode`**.
- * @returns {string}
- */
-/**
- * TSC QRCODE: konservativna procena širine simbola za byte payload (~LP:uuid:uuid).
+ * TSC QRCODE helper: konservativna širina u modulima (kratak štampani string ili duži `LP:…`).
  *
  * @param {number} encodingLength
  */
@@ -253,9 +235,7 @@ function tspEstimateQrSymbolSideModules(encodingLength) {
 }
 
 /**
- * Preferirani cell width (dots po modulu) za duži LP payload — fiksno 8 daje OGROMAN QR
- * koji overflow-uje na 80×40 mm štampi kad simbol ima mnogo modula (~60+ mm); telefon
- * "ne vidi" nevalidan isečen simbol kao QR.
+ * Preferirani cell širinski za QR (automatski se smanjuje kad tekst ima mnogo karaktera).
  *
  * @param {string} encode
  */
@@ -295,16 +275,14 @@ function tspShelfQrLayoutDots(encode) {
   xDots = Math.max(mm(1.5), Math.min(mm(42), xDots));
   return { xDots, cellDots };
 }
-
+/**
+ * Generiše TSPL2 za nalepnicu police (**samo grafika**, bez teksta ispod): kratak kod `ŠIF_HALE - ŠIF_POLICE` ili legacy `LP:…` kao QR/Code128.
+ * **NE šalje SIZE/GAP/DENSITY**.
+ *
+ * @param {{ location_code?: string, copies?: number, codeType?: 'barcode'|'qr', barcodeValue?: string }} loc
+ */
 export function buildTspShelfLabelProgram(loc) {
   const encode = String(loc?.barcodeValue ?? loc?.location_code ?? '').trim();
-  const primaryRaw = String(loc?.labelPrimary ?? loc?.location_code ?? encode).trim();
-  const primary = primaryRaw || encode;
-  const name = String(loc?.name || '').trim();
-  const captionHallRaw = loc?.captionHall != null ? String(loc.captionHall).trim() : '';
-  const captionShelfRaw =
-    loc?.captionShelf != null ? String(loc.captionShelf).trim().replace(/\s+/g, ' ') : '';
-  const captionShelf = captionShelfRaw || primary;
   const copies = Math.max(1, Math.floor(Number(loc?.copies) || 1));
   const codeType = loc?.codeType === 'qr' ? 'qr' : 'barcode';
   if (!encode) throw new Error('buildTspShelfLabelProgram: štampani barkod / šifra obavezni');
@@ -312,32 +290,11 @@ export function buildTspShelfLabelProgram(loc) {
   const lines = [];
   lines.push('CLS');
 
-  /* Kod GORE: QR sa dinamičkim cell‑om za dugačak LP:, inače fiksacija prelomi simbol ili ga telefon ignoriše. */
   if (codeType === 'qr') {
     const { xDots, cellDots } = tspShelfQrLayoutDots(encode);
-    /*
-     * ecc=L manje modula od M kod istog teksta → veći modul fizički na istom cellDots (čitljivije).
-     * QRCODE x,y,ECC,cell_width,mode,rotation,model,mask,"data"
-     */
-    lines.push(`QRCODE ${xDots},${mm(1.5)},L,${cellDots},A,0,M2,${tsplStr(encode)}`);
+    lines.push(`QRCODE ${xDots},${mm(2)},L,${cellDots},A,0,M2,${tsplStr(encode)}`);
   } else {
-    /* Barkod horizontalan — veća geometrijska visina da debeli LP Code128 ostane čitljiv na termalnoj traci */
-    lines.push(`BARCODE ${mm(2)},${mm(1.5)},"128M",${mm(26)},0,0,2,5,${tsplStr(encode)}`);
-  }
-
-  /* Tekst DOLE — jasni natpisi Hala / Polica (kad nema nadređene Hale, ostaje jedan red kao ranije). */
-  if (captionHallRaw) {
-    lines.push(
-      `TEXT ${mm(2)},${mm(28.9)},"3",0,1,1,${tsplStr(truncFit(`Hala ${captionHallRaw}`, 54))}`,
-    );
-    lines.push(
-      `TEXT ${mm(2)},${mm(34)},"5",0,1,1,${tsplStr(truncFit(`Polica ${captionShelf}`, 20))}`,
-    );
-  } else {
-    lines.push(`TEXT ${mm(2)},${mm(29.5)},"5",0,1,1,${tsplStr(truncFit(captionShelf, 22))}`);
-    if (name && name.trim() && name.trim() !== captionShelf) {
-      lines.push(`TEXT ${mm(2)},${mm(36)},"2",0,1,1,${tsplStr(truncFit(name.trim(), 60))}`);
-    }
+    lines.push(`BARCODE ${mm(2)},${mm(3)},"128M",${mm(34)},0,0,2,5,${tsplStr(encode)}`);
   }
 
   lines.push(`PRINT ${copies},1`);

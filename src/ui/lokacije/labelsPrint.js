@@ -100,22 +100,6 @@ const FORMAT_DIMS = {
 
 function shelfLabelHtml(loc, codeType, format) {
   const cls = `label fmt-${format}`;
-  const capHallRaw = loc.printCaptionHall != null ? String(loc.printCaptionHall).trim() : '';
-  const shelfCapRaw =
-    loc.printCaptionShelf != null && String(loc.printCaptionShelf).trim() !== ''
-      ? String(loc.printCaptionShelf).trim()
-      : String(loc.printDisplayPrimary || loc.location_code || '').trim();
-
-  const hallRow =
-    capHallRaw !== ''
-      ? `<div class="label-caption-row"><span class="label-caption-k">Hala</span> <span class="label-caption-v">${escHtml(capHallRaw)}</span></div>`
-      : '';
-
-  const policaRow =
-    shelfCapRaw !== ''
-      ? `<div class="label-caption-row"><span class="label-caption-k">Polica</span> <span class="label-caption-v">${escHtml(shelfCapRaw)}</span></div>`
-      : '';
-
   const codeBox =
     codeType === 'qr'
       ? `<canvas id="qr_${escHtml(String(loc.id))}" class="label-qr"></canvas>`
@@ -123,7 +107,6 @@ function shelfLabelHtml(loc, codeType, format) {
   return `
     <div class="${cls}">
       <div class="label-codebox">${codeBox}</div>
-      <div class="label-text">${hallRow}${policaRow}</div>
     </div>`;
 }
 
@@ -145,37 +128,17 @@ function shelfLabelsHtmlShell(count, codeType, format) {
     ? `@page { size: ${dims.w} ${dims.h}; margin: 0; }`
     : `@page { size: A4; margin: ${pageMarginA4}; }`;
 
-  /* CODE128 zona: što veći okvir kod formata wide-200x99 (~200×99 mm). */
+  /* Grafika ispuni nalepnicu (čitljiv trag); min-visina štiti mali TSC odozgo. */
   const codeBoxH =
     codeType === 'qr'
-      ? isWide200 ? '62mm'
-      : isLarge || isTwoUp105
-        ? '52mm'
-        : '24mm'
-      : isWide200
-        ? '78mm'
-        : isLarge
-          ? '56mm'
-          : isTwoUp105
-            ? '40mm'
-            : isTsc
-              ? '27mm'
-              : '26mm';
-
-  const captionK =
-    isWide200 ? '13pt'
-    : isLarge ? '9pt'
-    : isTwoUp105 ? '8.5pt'
-    : isTsc ? '7pt'
-    : isCompact ? '8pt'
-    : '8.5pt';
-  const captionV =
-    isWide200 ? '22pt'
-    : isLarge ? '14pt'
-    : isTwoUp105 ? '13pt'
-    : isTsc ? '11pt'
-    : isCompact ? '12pt'
-    : '12.5pt';
+      ? isWide200 ? '88mm'
+        : isLarge || isTwoUp105 ? '70mm'
+        : '32mm'
+      : isWide200 ? '90mm'
+        : isLarge ? '74mm'
+        : isTwoUp105 ? '64mm'
+        : isTsc ? '32mm'
+        : '30mm';
   return `<!DOCTYPE html>
 <html lang="sr-Latn">
 <head>
@@ -215,53 +178,27 @@ function shelfLabelsHtmlShell(count, codeType, format) {
       text-align: center;
       page-break-inside: avoid;
       break-inside: avoid;
-      display: flex; flex-direction: column; justify-content: space-between; align-items: center;
-      gap: 2mm;
+      display: flex; flex-direction: column; justify-content: center; align-items: stretch;
+      gap: 0;
       overflow: hidden;
     }
     .label-codebox {
-      flex: 0 0 ${codeBoxH};
+      flex: 1 1 0;
       width: 100%;
+      min-height: ${codeBoxH};
       display: flex; align-items: center; justify-content: center;
     }
     .label-barcode {
       width: 100%;
-      height: ${codeBoxH};
+      height: 100%;
+      max-height: 100%;
       display: block;
     }
     .label-qr {
       max-width: 100%;
-      max-height: ${codeBoxH};
+      max-height: 100%;
       width: auto; height: auto;
       image-rendering: pixelated;
-    }
-    .label-text {
-      flex: 0 0 auto;
-      display: flex; flex-direction: column; align-items: flex-start;
-      gap: 1.25mm;
-      width: 100%;
-      padding: 0 1mm;
-    }
-    .label-caption-row {
-      display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px;
-      line-height: 1.18; width: 100%; justify-content: center; text-align: center;
-    }
-    .label-caption-k {
-      font-size: ${captionK}; font-weight: 800;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      flex: 0 0 auto;
-      color: #111;
-    }
-    .label-caption-v {
-      font-size: ${captionV}; font-weight: 700;
-      text-transform: none;
-      letter-spacing: 0;
-      flex: 0 1 auto;
-      max-width: 100%;
-      word-break: break-word;
-      color: #000;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     @media print {
       .toolbar { display: none; }
@@ -272,9 +209,7 @@ function shelfLabelsHtmlShell(count, codeType, format) {
       }
       .label { border: 1px solid #000; }
       ${isWide200 && codeType === 'barcode' ? '.label.fmt-wide-200x99 { overflow: visible; }' : ''}
-      ${isWide200 && codeType === 'barcode'
-        ? '.label.fmt-wide-200x99 .label-codebox { min-height: 72mm; }'
-        : ''}
+      ${isWide200 && codeType === 'barcode' ? '.label.fmt-wide-200x99 .label-codebox { min-height: 86mm; }' : ''}
       ${isTsc ? '.label { border: 0; }' : ''}
     }
   </style>
@@ -319,8 +254,6 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
         ...l,
         printBarcodeValue: parts.barcodeValue,
         printDisplayPrimary: parts.displayPrimary,
-        printCaptionHall: parts.captionHall ?? null,
-        printCaptionShelf: parts.captionShelf ?? '',
       });
   }
 
@@ -418,10 +351,6 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
           return buildTspShelfLabelProgram({
             location_code: l.location_code,
             barcodeValue: parts.barcodeValue,
-            labelPrimary: parts.displayPrimary,
-            name: l.name,
-            captionHall: parts.captionHall ?? null,
-            captionShelf: parts.captionShelf,
             copies,
             codeType,
           });
@@ -441,8 +370,6 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
             name: l.name,
             barcodeValue: parts.barcodeValue,
             displayPrimary: parts.displayPrimary,
-            captionHall: parts.captionHall,
-            captionShelf: parts.captionShelf,
           };
         }),
         codeType,
@@ -458,8 +385,7 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
  *
  * Funkcionalnost (2026-05):
  *   - Multi-select (čekboks) — operater bira N polica → 1 batch otisak
- *   - Tip koda: barkod CODE128 (podrazumevano) ili QR
- *   - Format: **200×99 mm** podrazumevano | ostali A4 / TSC termalni
+ *   - Grafika štampa **`ŠIF_HALE - ŠIF_POLICE`** (kratko je i u barcode/QR i na skenu); još uvek prima i legacy **`LP:hala_uuid:polica_uuid`**.
  *   - Kopije po polici (1+)
  *   - Pretraga po šifri / nazivu / path-u
  *   - "Označi sve prikazane" / "Očisti izbor"
@@ -488,7 +414,7 @@ export async function openShelfLabelsPrintPicker() {
     <div class="kadr-modal-overlay" id="${id}" role="dialog" aria-modal="true">
       <div class="kadr-modal" style="max-width:640px">
         <div class="kadr-modal-title">Štampa nalepnica polica</div>
-        <div class="kadr-modal-subtitle">Označi jednu ili više polica. Podrazumevano <strong>barkod (CODE128)</strong> na nalepnici <strong>200×99&nbsp;mm</strong> (veliki trag za skeniranje čitačima) i tekst <strong>Hala</strong> / <strong>Polica</strong> ispod grafike.</div>
+        <div class="kadr-modal-subtitle">Označi jednu ili više polica. Grafika štampa najkraće moguće: <strong>npr. MAG-X - P-09</strong> (šifrom hale razmak crtica razmak šifrom police) samo u barkodu ili QR-u, bez dodatnog teksta na nalepnici. Podrazumevano barkod na formatu <strong>200×99&nbsp;mm</strong>.</div>
         <div class="kadr-modal-body">
           <label class="loc-filter-field" style="display:block;margin-bottom:10px">
             <span>Pretraga police</span>
