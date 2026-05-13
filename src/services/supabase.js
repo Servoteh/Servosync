@@ -108,12 +108,34 @@ export async function sbReq(path, method = 'GET', body = null, options = {}) {
         headers['Prefer'] = (headers['Prefer'] ? headers['Prefer'] + ',' : '') + 'count=exact';
       }
 
-      r = await fetch(SUPABASE_CONFIG.url + '/rest/v1/' + path, {
+      const url = SUPABASE_CONFIG.url + '/rest/v1/' + path;
+      const init = {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
-      });
-      txt = await r.text();
+      };
+      /*
+       * Transient „Failed to fetch“ (offline trenutni pad, flaky WiFi/CORS-proxy):
+       * ponovi samo idempotent GET da ne rizikuje dupli POST/PATCH ako je server zapravo obrađio.
+       */
+      const GET_RETRIES = 3;
+      const sleep = ms => new Promise(res => setTimeout(res, ms));
+      /* eslint-disable no-await-in-loop */
+      for (let fetchTry = 0; fetchTry < GET_RETRIES; fetchTry++) {
+        try {
+          r = await fetch(url, init);
+          txt = await r.text();
+          break;
+        } catch (fe) {
+          const canRetry = method === 'GET' && fetchTry < GET_RETRIES - 1;
+          if (canRetry) {
+            await sleep(180 * (fetchTry + 1));
+            continue;
+          }
+          throw fe;
+        }
+      }
+      /* eslint-enable no-await-in-loop */
 
       if (r.ok || attempt === 1) break;
       if (r.status === 401 && isJwtExpiredBody(txt)) {

@@ -891,11 +891,25 @@ export function openQuickMoveModal({ onSuccess } = {}) {
     if (ev.target === overlay) close();
   });
 
-  (async () => {
+  const failLoadMarkup = `
+        <div class="kadr-modal-empty" style="padding:16px 8px;text-align:center">
+          <p style="font-size:14px;color:var(--text2);margin:0 0 8px"><strong>Učitavanje lokacija nije uspelo.</strong></p>
+          <p style="font-size:13px;color:var(--text2);margin:0 0 14px">Tipični uzrok: kratak prekid mreže (VPN, WiFi), blokada prema Supabase ili istek sesije — provera u konzoli: <span class="loc-muted"><code>Failed to fetch</code></span>.</p>
+          <button type="button" class="btn btn-primary" id="locQmRetryLoad">Pokušaj ponovo</button>
+          <button type="button" class="btn" id="locQmCloseFailLoad" style="margin-left:8px">Zatvori</button>
+        </div>`;
+
+  async function runQuickMoveLoad() {
+    body.innerHTML =
+      '<p class="loc-muted" style="padding:24px 0; text-align:center">Učitavam lokacije…</p>';
     const locs = await fetchLocations();
     if (!Array.isArray(locs)) {
-      close();
-      showToast('⚠ Ne mogu da učitam lokacije');
+      body.innerHTML = failLoadMarkup;
+      body.querySelector('#locQmRetryLoad')?.addEventListener('click', () => void runQuickMoveLoad());
+      body.querySelector('#locQmCloseFailLoad')?.addEventListener('click', close);
+      showToast(
+        '⚠ Lista lokacija nije učitana — proverite mrežu ili ponovo pokrenite stranicu/prijavu.',
+      );
       return;
     }
 
@@ -1444,5 +1458,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
         submitBtn.disabled = false;
       }
     });
-  })();
+  }
+
+  void runQuickMoveLoad();
 }
