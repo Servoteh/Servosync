@@ -224,7 +224,6 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         ${pbTabBtn('analiza', 'Analiza', state.activeTab === 'analiza')}
         ${isAdmin() ? pbTabBtn('podesavanja', 'Podešavanja', state.activeTab === 'podesavanja') : ''}
       </nav>
-      </div>
       <div class="pb-context-card">
         <div class="pb-context-project-row">
           <span class="pb-context-label">Projekat</span>
@@ -237,6 +236,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
           <span class="pb-context-label">Inženjer</span>
           <div id="pbChipHost" class="pb-chip-list pb-chip-list--wrap"></div>
         </div>
+      </div>
       </div>`;
 
     root.querySelector('#pbBackBtn')?.addEventListener('click', () => onBackToHub?.());

@@ -194,6 +194,14 @@ body.module-projektni-biro {
   flex-shrink: 0;
 }
 
+/* U zalepljenom chrome-u: nastavlja tab traku, bez „lebdenja” ispod menija. */
+.pb-chrome-pinned .pb-context-card {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top: none;
+}
+
 .pb-context-project-row {
   display: flex;
   align-items: center;
@@ -297,6 +305,8 @@ body.module-projektni-biro {
 }
 
 .pb-chrome-pinned {
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
   background: var(--bg, #f8f9fa);
 }
