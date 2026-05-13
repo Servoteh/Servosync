@@ -1,5 +1,5 @@
 /**
- * Tab Plan — statistike, alarmi, opterećenost (collapsible), filter toolbar, tabela.
+ * Tab Plan — alarmi, opterećenost (collapsible), filter toolbar, tabela.
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
@@ -240,7 +240,6 @@ export function renderPlanTab(root, ctx) {
   let sortCol = 'datumi';
   let sortDir = 'asc';
   let _searchDebounceTimer = null;
-  let _statsScope = pbMod.moduleStatsScope || 'global'; // 'global' | 'filtered'
   let _delegationAttached = false;
   /** @type {Set<string>} Selektovani task ID-evi za bulk operacije. */
   const _selectedIds = new Set();
@@ -304,40 +303,6 @@ export function renderPlanTab(root, ctx) {
         }
       }
     }
-  }
-
-  /** Stat cards HTML (samo .pb-stats-grid sadržaj — bez header-a). */
-  function buildStatsCardsHtml(tasksFiltered) {
-    const statsBase = _statsScope === 'filtered' ? tasksFiltered : (ctx.tasks || []);
-    const total = statsBase.length;
-    const doneN = statsBase.filter(t => t.status === 'Završeno').length;
-    const pctDone = total ? Math.round((doneN / total) * 100) : 0;
-    const blockedN = statsBase.filter(t => t.status === 'Blokirano').length;
-    const inProgN = statsBase.filter(t => t.status === 'U toku').length;
-    const normSum = statsBase
-      .filter(t => t.status !== 'Završeno')
-      .reduce((s, t) => s + (Number(t.norma_sati_dan) || 0), 0);
-    return `
-      <div class="pb-stat-card">
-        <span>Zadaci</span>
-        <strong>${total}</strong>
-        <small class="pb-stat-sub">u toku: ${inProgN}</small>
-      </div>
-      <div class="pb-stat-card">
-        <span>Završeno</span>
-        <strong>${pctDone}%</strong>
-        <small class="pb-stat-sub">${doneN} / ${total}</small>
-      </div>
-      <div class="pb-stat-card">
-        <span>Norma Σ (h/dan)</span>
-        <strong>${normSum}</strong>
-        <small class="pb-stat-sub">h dnevni prosek</small>
-      </div>
-      <div class="pb-stat-card pb-stat-card--alert">
-        <span>Blokirano</span>
-        <strong style="color:${blockedN > 0 ? 'var(--risk-high,#EB5757)' : 'inherit'}">${blockedN}</strong>
-        <small class="pb-stat-sub">Akcije</small>
-      </div>`;
   }
 
   /** Body HTML (mobile cards ILI desktop table sadržaj .pb-plan-split). */
@@ -473,18 +438,13 @@ export function renderPlanTab(root, ctx) {
     return mobileBody + desktopBody;
   }
 
-  /** Targeted update — samo body i (po potrebi) stats. Ne menja filter toolbar. */
+  /** Targeted update — samo body. Ne menja filter toolbar. */
   function paintBody() {
     const split = root.querySelector('.pb-plan-split');
     if (!split) { paint(); return; }
     const tasks = filtered();
     const sorted = sortTasks(tasks, sortCol, sortDir);
     split.innerHTML = buildBodyHtml(sorted);
-    // Update stats samo ako scope = filtered (inače globalno se ne menja sa filter-om).
-    if (_statsScope === 'filtered') {
-      const grid = root.querySelector('.pb-stats-grid');
-      if (grid) grid.innerHTML = buildStatsCardsHtml(tasks);
-    }
     refreshBulkBar();
     // Re-attach sort listenere (jer su .pb-th elementi novi posle innerHTML zamene).
     attachSortListeners();
@@ -636,16 +596,6 @@ export function renderPlanTab(root, ctx) {
     const sorted = sortTasks(tasks, sortCol, sortDir);
     const alarms = buildAlarms(ctx.tasks || [], ctx.loadStats || []);
 
-    /* ── Stat cards ── */
-    const scopeLabel = _statsScope === 'filtered' ? 'filtrirano' : 'globalno';
-    const statsHtml = `
-      <div class="pb-stats-header">
-        <button type="button" class="pb-stats-scope-toggle" id="pbStatsScope" title="Promeni opseg statistike">
-          ${escHtml(scopeLabel)} ⇄
-        </button>
-      </div>
-      <div class="pb-stats-grid">${buildStatsCardsHtml(tasks)}</div>`;
-
     /* ── Alarms ── */
     const alarmHtml = alarms.length
       ? `<div class="pb-alarm-box" role="alert">
@@ -761,7 +711,6 @@ export function renderPlanTab(root, ctx) {
 
     preserveFocus(() => {
       root.innerHTML = `
-        ${statsHtml}
         ${alarmHtml}
         ${loadHtml}
         ${filterHtml}
@@ -779,12 +728,6 @@ export function renderPlanTab(root, ctx) {
       const chevron = root.querySelector('.pb-load-chevron');
       content?.classList.toggle('open', _loadOpen);
       chevron?.classList.toggle('open', _loadOpen);
-    });
-
-    root.querySelector('#pbStatsScope')?.addEventListener('click', () => {
-      _statsScope = _statsScope === 'global' ? 'filtered' : 'global';
-      syncPbModuleFilters({ moduleStatsScope: _statsScope });
-      paint();
     });
 
     root.querySelector('#pbSearch')?.addEventListener('input', e => {

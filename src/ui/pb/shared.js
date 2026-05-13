@@ -71,7 +71,6 @@ export function loadPbState() {
       moduleVrsta: o.moduleVrsta ?? 'all',
       moduleProblemOnly: o.moduleProblemOnly ?? false,
       moduleUnassignedOnly: o.moduleUnassignedOnly ?? false,
-      moduleStatsScope: o.moduleStatsScope ?? 'global',
       ganttStartDate: o.ganttStartDate ?? null,
       ganttZoom: o.ganttZoom ?? 'day',
     };
@@ -139,7 +138,6 @@ function defaultPbState() {
     moduleVrsta: 'all',
     moduleProblemOnly: false,
     moduleUnassignedOnly: false,
-    moduleStatsScope: 'global',
     ganttStartDate: null,
     ganttZoom: 'day',
   };
@@ -156,7 +154,6 @@ export function syncPbModuleFilters(patch) {
     'moduleVrsta',
     'moduleProblemOnly',
     'moduleUnassignedOnly',
-    'moduleStatsScope',
   ]) {
     if (k in patch) s[k] = patch[k];
   }

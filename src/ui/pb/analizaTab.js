@@ -41,15 +41,6 @@ export function renderAnaliza(root, ctx) {
     const pid = selectedPid;
     const list = pid ? projectTasks(ctx.tasks, pid) : [];
 
-    const stats = {
-      total: list.length,
-      done: list.filter(t => t.status === 'Završeno').length,
-      blocked: list.filter(t => t.status === 'Blokirano').length,
-      inProg: list.filter(t => t.status === 'U toku').length,
-      normSum: list.filter(t => t.status !== 'Završeno').reduce((s, t) => s + (Number(t.norma_sati_dan) || 0), 0),
-    };
-    const pctDone = stats.total ? Math.round((stats.done / stats.total) * 100) : 0;
-
     let minStart = null;
     let maxEnd = null;
     for (const t of list) {
@@ -168,13 +159,6 @@ export function renderAnaliza(root, ctx) {
         </label>
 
         ${pid ? `
-        <div class="pb-stats-grid pb-an-stats">
-          <div class="pb-stat-card"><span>Zadaci</span><strong>${stats.total}</strong><small>${stats.inProg} u toku</small></div>
-          <div class="pb-stat-card"><span>Završeno</span><strong>${stats.done} (${pctDone}%)</strong></div>
-          <div class="pb-stat-card"><span>Norma ∑</span><strong>${stats.normSum.toFixed(1)}</strong><small>h/dan ukupno</small></div>
-          <div class="pb-stat-card"><span>Blokirano</span><strong>${stats.blocked}</strong><small>${stats.blocked ? 'Akcija!' : 'OK'}</small></div>
-        </div>
-
         <section class="pb-an-sec"><h3 class="pb-section-title">Timeline projekta</h3>${timelineHtml}</section>
 
         <section class="pb-an-sec"><h3 class="pb-section-title">Inženjeri na projektu</h3>
