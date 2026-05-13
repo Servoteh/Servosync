@@ -26,7 +26,7 @@ import {
 import { STATUSES } from '../../lib/constants.js';
 import { parseDateLocal, today } from '../../lib/date.js';
 import { calcRisk, normalizePhaseType } from '../../lib/phase.js';
-import { buildDayRange, buildMonthsHeader, inferGanttBounds } from '../../lib/gantt.js';
+import { buildDayRange, buildMonthsHeader, inferGanttBounds, wireStickyGanttHorizontalScroll } from '../../lib/gantt.js';
 import { wireGanttDrag } from './ganttDrag.js';
 
 /* ── PUBLIC ──────────────────────────────────────────────────────────── */
@@ -43,7 +43,12 @@ export function ganttSectionHtml() {
   }
   return `
     ${_ganttToolbarHtml()}
-    <div class="gantt-wrap gantt-wrap--dock" id="ganttWrap"><div class="gantt-wrap-inner">${_ganttTableHtml()}</div></div>
+    <div class="gantt-wrap gantt-wrap--dock" id="ganttWrap">
+      <div class="gantt-x-scroll-main">
+        <div class="gantt-wrap-inner">${_ganttTableHtml()}</div>
+      </div>
+      <div class="gantt-scroll-mirror" aria-hidden="true"><div class="gantt-scroll-mirror-inner"></div></div>
+    </div>
   `;
 }
 
@@ -67,6 +72,7 @@ export function wireGanttSection(root, { onChange } = {}) {
   const wrapEl = root.querySelector('#ganttWrap');
   const innerEl = wrapEl?.querySelector('.gantt-wrap-inner') || wrapEl;
   wireGanttDrag(innerEl, { onChange });
+  wireStickyGanttHorizontalScroll(wrapEl);
 }
 
 /* ── INTERNAL: HTML ──────────────────────────────────────────────────── */

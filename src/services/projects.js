@@ -14,6 +14,7 @@
 import { sbReq } from './supabase.js';
 import { canEdit, getIsOnline, getCurrentUser } from '../state/auth.js';
 import { DEFAULT_LOCATIONS, NUM_CHECKS } from '../lib/constants.js';
+import { apiDateToYmd } from '../lib/date.js';
 import {
   ensurePrioritetHydrated,
   sortByPredmetPrioritet,
@@ -75,6 +76,12 @@ export function setPhaseDescriptionSchemaSupported(v) {
 let phaseLinkedDrawingsSchemaSupported = true;
 export function setPhaseLinkedDrawingsSchemaSupported(v) {
   phaseLinkedDrawingsSchemaSupported = !!v;
+}
+
+/* Kolone `actual_start_date` / `actual_end_date` na `phases` — migracija add_phases_actual_dates.sql */
+let phaseActualDatesSchemaSupported = true;
+export function setPhaseActualDatesSchemaSupported(v) {
+  phaseActualDatesSchemaSupported = !!v;
 }
 
 /* Isto za WP.assembly_drawing_no (migracija `add_wp_assembly_drawing.sql`).
@@ -156,6 +163,16 @@ export function mapDbPhase(d) {
     description: d.description || '',
     type: normalizePhaseType(rawType),
     linkedDrawings: ld,
+    actualStartDate: (() => {
+      if (!Object.prototype.hasOwnProperty.call(d, 'actual_start_date')) return undefined;
+      const y = apiDateToYmd(d.actual_start_date);
+      return y || null;
+    })(),
+    actualEndDate: (() => {
+      if (!Object.prototype.hasOwnProperty.call(d, 'actual_end_date')) return undefined;
+      const y = apiDateToYmd(d.actual_end_date);
+      return y || null;
+    })(),
   };
 }
 
@@ -233,6 +250,14 @@ export function buildPhasePayload(ph, projectId, wpId, sortOrder) {
       return acc;
     }, []);
   }
+  if (phaseActualDatesSchemaSupported) {
+    if (ph.actualStartDate !== undefined) {
+      base.actual_start_date = ph.actualStartDate || null;
+    }
+    if (ph.actualEndDate !== undefined) {
+      base.actual_end_date = ph.actualEndDate || null;
+    }
+  }
   return base;
 }
 
@@ -284,6 +309,9 @@ export async function loadPhasesFromDb(projectId, wpId) {
     }
     if (Object.prototype.hasOwnProperty.call(sample, 'phase_type') && !phaseTypeSchemaSupported) {
       phaseTypeSchemaSupported = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(sample, 'actual_start_date') && !phaseActualDatesSchemaSupported) {
+      phaseActualDatesSchemaSupported = true;
     }
   }
   return data.map(mapDbPhase);
@@ -352,6 +380,15 @@ export async function savePhaseToDb(ph, projectId, wpId, sortOrder) {
     res = await sbReq('phases', 'POST', payload);
     if (res !== null) {
       console.warn('[phase.linked_drawings] Column not present in DB; skipping for this call. Apply sql/migrations/add_phases_linked_drawings.sql to enable.');
+    }
+  }
+  if (res === null && (payload.actual_start_date !== undefined || payload.actual_end_date !== undefined)) {
+    const { actual_start_date, actual_end_date, ...rest } = payload;
+    payload = rest;
+    res = await sbReq('phases', 'POST', payload);
+    if (res !== null) {
+      phaseActualDatesSchemaSupported = false;
+      console.warn('[phase.actual_*] Columns not present in DB; skipping for this session. Apply sql/migrations/add_phases_actual_dates.sql to enable.');
     }
   }
   return res;

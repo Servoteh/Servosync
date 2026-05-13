@@ -41,6 +41,7 @@ import {
 import {
   calcDuration,
   dayDiffFromToday,
+  formatDate,
 } from '../../lib/date.js';
 import {
   calcReadiness,
@@ -348,6 +349,18 @@ function _planRowHtml(row, i) {
       </td>
       <td class="td-date ${dateErr ? 'date-error' : ''}">
         <input type="date" data-field="start" value="${escHtml(row.start || '')}" ${dis}>
+        <div class="phase-planned-dates">
+          <span class="date-label">Plan:</span>
+          <span>${escHtml(formatDate(row.start))}</span>
+          <span>–</span>
+          <span>${escHtml(formatDate(row.end))}</span>
+        </div>
+        <div class="phase-actual-dates">
+          <span class="date-label">Ostvaren:</span>
+          <span class="${row.actualStartDate ? '' : 'date-empty'}">${row.actualStartDate ? escHtml(formatDate(row.actualStartDate)) : '—'}</span>
+          <span>–</span>
+          <span class="${row.actualEndDate ? '' : 'date-empty'}">${row.actualEndDate ? escHtml(formatDate(row.actualEndDate)) : '—'}</span>
+        </div>
       </td>
       <td class="td-date ${dateErr ? 'date-error' : ''}">
         <input type="date" data-field="end" value="${escHtml(row.end || '')}" ${dis}>

@@ -28,11 +28,28 @@ import {
   deletePhaseModel,
 } from '../../state/planMontaze.js';
 import { applyBusinessRules, normalizePhaseType } from '../../lib/phase.js';
+import { dateToYMD, today } from '../../lib/date.js';
 import {
   queuePhaseSaveByIndex,
   queueCurrentWpSync,
   deletePhaseAndPersist,
 } from '../../services/plan.js';
+
+/* STATUSES[1] = 'U toku', STATUSES[2] = 'Završeno' (lib/constants.js) */
+const STATUS_IN_PROGRESS = 1;
+const STATUS_DONE = 2;
+
+/** Popunjava `actualStartDate` / `actualEndDate` kada status (posle pravila) odgovara. */
+export function applyPhaseActualDatesIfNeeded(row) {
+  if (!row) return;
+  const todayYmd = dateToYMD(today);
+  if (row.status === STATUS_IN_PROGRESS && !row.actualStartDate) {
+    row.actualStartDate = todayYmd;
+  }
+  if (row.status === STATUS_DONE && !row.actualEndDate) {
+    row.actualEndDate = todayYmd;
+  }
+}
 
 export function updatePhaseField(i, field, value) {
   if (!canEdit()) return;
@@ -45,6 +62,7 @@ export function updatePhaseField(i, field, value) {
   if (field === 'type') value = normalizePhaseType(value);
   row[field] = value;
   applyBusinessRules(row);
+  applyPhaseActualDatesIfNeeded(row);
   persistState();
   queuePhaseSaveByIndex(i);
 }

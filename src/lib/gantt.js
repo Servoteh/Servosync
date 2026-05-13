@@ -48,3 +48,42 @@ export function inferGanttBounds(rows, getStart, getEnd) {
   max.setDate(max.getDate() + 5);
   return { min, max };
 }
+
+/**
+ * Sinhroniše horizontalni scroll glavnog Gantt kontejnera sa tankim „mirror”
+ * trakom ispod (sticky dno panela). `wrapEl` je npr. `#ganttWrap` / `#totalGanttWrap`.
+ */
+export function wireStickyGanttHorizontalScroll(wrapEl) {
+  if (!wrapEl) return;
+  const main = wrapEl.querySelector('.gantt-x-scroll-main');
+  const mirror = wrapEl.querySelector('.gantt-scroll-mirror');
+  const mirrorInner = mirror?.querySelector('.gantt-scroll-mirror-inner');
+  if (!main || !mirror || !mirrorInner) return;
+
+  let syncing = false;
+  const syncMirrorWidth = () => {
+    mirrorInner.style.width = `${main.scrollWidth}px`;
+  };
+  const onMainScroll = () => {
+    if (syncing) return;
+    syncing = true;
+    mirror.scrollLeft = main.scrollLeft;
+    syncing = false;
+  };
+  const onMirrorScroll = () => {
+    if (syncing) return;
+    syncing = true;
+    main.scrollLeft = mirror.scrollLeft;
+    syncing = false;
+  };
+
+  main.addEventListener('scroll', onMainScroll);
+  mirror.addEventListener('scroll', onMirrorScroll);
+  window.addEventListener('resize', syncMirrorWidth);
+  let ro;
+  if (typeof ResizeObserver !== 'undefined') {
+    ro = new ResizeObserver(syncMirrorWidth);
+    ro.observe(main);
+  }
+  syncMirrorWidth();
+}
