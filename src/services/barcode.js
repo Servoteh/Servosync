@@ -11,7 +11,8 @@
  * Usage:
  *   const ctrl = await startScan(videoEl, {
  *     onResult: (text) => { ... },
- *     onError: (err) => { ... }
+ *     onError: (err) => { ... },
+ *     decodeProfile: 'location', // opciono: dodaje QR (nalepnica police LP:…)
  *   });
  *   ctrl.stop();
  */
@@ -30,9 +31,18 @@ function isLiveScanMobile() {
 /**
  * @param {{ tryHarder?: boolean }} [opts]
  */
+/**
+ * `decodeProfile: 'location'` uključuje QR kod (nova nalepnica police), uz 1D za starije etikete.
+ *
+ * @param {{ tryHarder?: boolean, decodeProfile?: 'item'|'location' }} [opts]
+ */
 function buildLiveScanHints(opts = {}) {
   const m = new Map();
-  m.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128, BarcodeFormat.CODE_39]);
+  const fmts =
+    opts.decodeProfile === 'location'
+      ? [BarcodeFormat.QR_CODE, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39]
+      : [BarcodeFormat.CODE_128, BarcodeFormat.CODE_39];
+  m.set(DecodeHintType.POSSIBLE_FORMATS, fmts);
   const tryHarder = typeof opts.tryHarder === 'boolean' ? opts.tryHarder : isLiveScanMobile();
   m.set(DecodeHintType.TRY_HARDER, tryHarder);
   return m;
@@ -55,6 +65,7 @@ function buildMobileCameraVideoConstraints() {
 
 const STILL_IMAGE_SCAN_HINTS = new Map();
 STILL_IMAGE_SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
+  BarcodeFormat.QR_CODE,
   BarcodeFormat.CODE_128,
   BarcodeFormat.CODE_39,
   BarcodeFormat.ITF,
@@ -385,10 +396,11 @@ function schedulePrimeAfterVideoReady(videoEl, getTrack, isAndroid) {
  *   onResult: (text: string, format?: string) => void,
  *   onError?: (err: Error) => void,
  *   forceDeviceId?: string,
+ *   decodeProfile?: 'item'|'location',
  * }} handlers
  * @returns {Promise<ScanController>}
  */
-export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
+export async function startScan(videoEl, { onResult, onError, forceDeviceId, decodeProfile } = {}) {
   if (!videoEl) throw new Error('Video element is required.');
   if (typeof onResult !== 'function') throw new Error('onResult handler is required.');
   if (!isScanSupported()) {
@@ -429,6 +441,11 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     }
   };
 
+  const barcodeDetectorFormats =
+    decodeProfile === 'location'
+      ? ['qr_code', 'code_128', 'code_39', 'itf']
+      : ['code_128', 'code_39', 'itf'];
+
   if (useBarcodeDetectorPath && mode !== 'ZXING_ONLY') {
     /** @type {MediaStream|null} */
     let nativeStream = null;
@@ -462,7 +479,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     let detector = null;
     try {
       detector = new window.BarcodeDetector({
-        formats: ['code_128', 'code_39', 'itf'],
+        formats: barcodeDetectorFormats,
       });
     } catch (e) {
       console.warn('[barcode] BarcodeDetector init failed, falling back to ZXing', e);
@@ -528,7 +545,7 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId }) {
     }
   }
 
-  const hints = buildLiveScanHints({});
+  const hints = buildLiveScanHints({ decodeProfile: decodeProfile === 'location' ? 'location' : 'item' });
   const readerOpts = isLiveScanMobile() ? ZXING_READER_OPTIONS_MOBILE : ZXING_READER_OPTIONS_DESKTOP;
   const reader = new BrowserMultiFormatReader(hints, readerOpts);
 
@@ -784,8 +801,9 @@ export async function decodeBarcodeFromFile(file) {
 
     const attempts = [];
 
-    attempts.push(() => reader128.decodeFromImageElement(img));
+    /* Prvo sve formate uključujući QR (nalepnice police), zatim ciljani gusti CODE128 za RNZ foliju. */
     attempts.push(() => readerAll.decodeFromImageElement(img));
+    attempts.push(() => reader128.decodeFromImageElement(img));
 
     const canvasFactories = [
       () => buildGrayscaleContrastCanvas(img, 1.28, { maxSide: 4400 }),

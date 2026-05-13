@@ -268,7 +268,7 @@ export async function openScanMoveModal({
 
       <div class="loc-scan-topbar">
         <button type="button" class="loc-scan-btn" data-act="close" aria-label="Zatvori">✕</button>
-        <div class="loc-scan-title" id="locScanTitleScan">Skeniraj barkod</div>
+        <div class="loc-scan-title" id="locScanTitleScan">Skeniraj barkod naloga</div>
         <button type="button" class="loc-scan-btn" data-act="torch" aria-label="Baterijska lampa">💡</button>
       </div>
 
@@ -359,22 +359,22 @@ export async function openScanMoveModal({
                 Na lokaciju *
                 <span class="loc-muted" id="locScanToHint" style="font-weight:400;font-size:12px"></span>
               </label>
-              <select id="locScanHallFilter" aria-label="Hala za odredište (police)"
+              <select id="locScanHallFilter" aria-label="Hala ako skenirate samo šifru police"
                 style="width:100%;max-width:100%;font-size:15px;padding:9px 10px;margin-bottom:8px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
-                <option value="">— izaberi halu za police (obavezno) —</option>
+                <option value="">— QR police: hala sama · inače najpre hala pa šifru —</option>
               </select>
               <select id="locScanTo" required></select>
               <div class="loc-scan-to-tools" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
                 <input type="text" id="locScanToCode" autocomplete="off" maxlength="80"
-                  placeholder="Šifru police (npr. A12), posle izbora hale"
+                  placeholder="QR / LP:… ili šifra police ako je HALA izabrana"
                   style="flex:1;min-width:140px;font-size:16px;padding:9px 10px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
-                <button type="button" class="btn" data-act="applyLocCode">Primeni šifru</button>
-                <button type="button" class="btn" data-act="pickLocImage">📷 Skeniraj lokaciju</button>
-                <button type="button" class="btn" data-act="pickLocCamera">📹 Kamera</button>
+                <button type="button" class="btn" data-act="applyLocCode">Primeni QR / šifru</button>
+                <button type="button" class="btn" data-act="pickLocImage">📷 Skeniraj QR police (slika)</button>
+                <button type="button" class="btn" data-act="pickLocCamera">📹 QR kamerom za policu</button>
               </div>
               <div class="loc-muted" style="font-size:11px;margin-top:4px;line-height:1.35">
-                Isti <strong>location_code</strong> police može da postoji u više hala — najpre izaberi halu iznad,
-                pa sken ili „Primeni šifru“. Hale / ostale lokacije su i dalje u listi ispod bez ovog pravila.
+                Nova nalepnica police je <strong>QR</strong> (<code style="font-size:11px">LP:…</code>): slika ili „QR kamerom“ obično sami podešavaju HALU i policu.
+                Ista <strong>šifra</strong> police u različitim halama — prvo HALA u listi, pa ručno ili foto starog 1D barkoda.
               </div>
             </div>
             <div class="emp-field col-full">
@@ -586,7 +586,7 @@ export async function openScanMoveModal({
     stageScan.hidden = true;
     stageForm.hidden = false;
     const tit = document.getElementById('locScanTitleScan');
-    if (tit) tit.textContent = 'Skeniraj barkod';
+    if (tit) tit.textContent = 'Skeniraj barkod naloga';
     setScanStatus('', 'info');
   }
 
@@ -606,7 +606,7 @@ export async function openScanMoveModal({
           stageScan.hidden = true;
           stageForm.hidden = false;
           const tit = document.getElementById('locScanTitleScan');
-          if (tit) tit.textContent = 'Skeniraj barkod';
+          if (tit) tit.textContent = 'Skeniraj barkod naloga';
           setScanStatus('', 'info');
           applyScanDestinationSuccess(res);
           if (navigator.vibrate) navigator.vibrate(60);
@@ -674,9 +674,9 @@ export async function openScanMoveModal({
 
     if (purpose === 'location') {
       const tit = document.getElementById('locScanTitleScan');
-      if (tit) tit.textContent = 'Skeniraj lokaciju';
+      if (tit) tit.textContent = 'Skeniraj QR police';
       setScanStatus(
-        '📐 Usmeri na barkod nalepnice police (nova: LP…) ili na šifru ako je halа već izabrana iznad',
+        '📐 Usmeri kameru na QR na nalepnici police (tekst LP:…) ili na 1D šifru ako je HALA već izabrana',
         'info',
       );
     } else {
@@ -689,7 +689,7 @@ export async function openScanMoveModal({
       leaveScanPresentation();
       setScanStatus(diag.blocker, 'error');
       const tit = document.getElementById('locScanTitleScan');
-      if (tit) tit.textContent = 'Skeniraj barkod';
+      if (tit) tit.textContent = 'Skeniraj barkod naloga';
       stageScan.hidden = true;
       stageForm.hidden = false;
       return;
@@ -701,19 +701,27 @@ export async function openScanMoveModal({
     try {
       attachIOSVisualViewportForScan();
       state.scanCtrl = await startScan(videoEl, {
+        decodeProfile: purpose === 'location' ? 'location' : 'item',
         onResult: onLiveScanResult,
         onError: err => {
           console.error('[scan] decode error', err);
         },
       });
 
-      setTimeout(() => reportCameraDiag(videoEl), 600);
+      setTimeout(() => reportCameraDiag(videoEl, purpose === 'location'), 600);
       setTimeout(() => setupZoomUI(), 800);
       if (isAndroidChromeBrowser()) {
         clearAndroidChromeHintTimer();
         state.androidChromeHintTimer = setTimeout(() => {
           state.androidChromeHintTimer = null;
           if (!state.scanCtrl || stageScan.hidden) return;
+          if (state.pickLocationMode) {
+            setScanStatus(
+              '💡 QR: drži ceo kvadrat u kadru · zum ako je sitan; stariji 1D barkod kao i RNZ kod.',
+              'info',
+            );
+            return;
+          }
           setScanStatus(
             '💡 Slika mutna ili folija? Tapnite na nalepnicu da kamera izoštri; nagnite papir da nestane odsjaj. Zoom 1.5×–2×. Probajte „iz slike”.',
             'info',
@@ -730,7 +738,7 @@ export async function openScanMoveModal({
       stageScan.hidden = true;
       stageForm.hidden = false;
       const tit = document.getElementById('locScanTitleScan');
-      if (tit) tit.textContent = 'Skeniraj barkod';
+      if (tit) tit.textContent = 'Skeniraj barkod naloga';
     }
   }
 
@@ -823,7 +831,7 @@ export async function openScanMoveModal({
   }
 
   /** Prikaži kratak info koji stream iOS dao (front/back + rezolucija). */
-  function reportCameraDiag(videoEl) {
+  function reportCameraDiag(videoEl, qrPoliceMode = false) {
     try {
       const stream = /** @type {MediaStream|null} */ (videoEl?.srcObject);
       if (!stream) return;
@@ -832,11 +840,12 @@ export async function openScanMoveModal({
       const s = track.getSettings?.() || {};
       const label = track.label || '(bez labele)';
       const looksFront = /front|user|face/i.test(label);
+      const tail = qrPoliceMode ? ' — drži QR u centru' : ' — drži kod u centru';
       const parts = [
         looksFront ? '⚠ FRONT kamera' : '✓ back kamera',
         `${s.width || '?'}×${s.height || '?'}`,
       ];
-      setScanStatus(parts.join(' · ') + ' — drži kod u centru', looksFront ? 'warn' : 'ok');
+      setScanStatus(parts.join(' · ') + tail, looksFront ? 'warn' : 'ok');
       /* Ako je front kamera, pokušaj ručno da prebacimo na back preko
        * enumerateDevices → deviceId. iOS Safari često ignoriše
        * `facingMode: ideal` i vrati front. */
@@ -867,13 +876,12 @@ export async function openScanMoveModal({
       }
       attachIOSVisualViewportForScan();
       state.scanCtrl = await startScan(videoEl, {
-        /* deviceId idemo pre nego facingMode, pa u startScan ovo mora i da bude
-         * podržano. Dodajemo treći argument — vidi barcode.js promene. */
         forceDeviceId: back.deviceId,
+        decodeProfile: state.pickLocationMode ? 'location' : 'item',
         onResult: onLiveScanResult,
         onError: err => console.error('[scan] decode error (back)', err),
       });
-      setTimeout(() => reportCameraDiag(videoEl), 600);
+      setTimeout(() => reportCameraDiag(videoEl, state.pickLocationMode), 600);
     } catch (e) {
       console.warn('[scan] force back camera failed', e);
     }
@@ -1222,7 +1230,7 @@ export async function openScanMoveModal({
     const savedHallFilter = hallFilterEl?.value || '';
     if (hallFilterEl) {
       hallFilterEl.innerHTML =
-        '<option value="">— najpre halu za police / sken šifru —</option>' +
+        '<option value="">— QR police: hala sama · inače najpre hala pa šifru —</option>' +
         halls
           .map(
             h =>
