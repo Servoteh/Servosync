@@ -9,6 +9,8 @@ import { getAuth, canEdit } from '../../state/auth.js';
 import {
   searchBigtehnItems,
   searchBigtehnWorkOrdersForItem,
+  fetchBigtehnItemRowById,
+  findOpenBigtehnWorkOrderByIdent,
   fetchLocations,
   fetchItemPlacements,
   locCreateMovement,
@@ -683,9 +685,11 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
    * Mapiranje: orderNo → broj_predmeta predmeta; tpRef → poslednji deo ident_broj-a TP-a.
    *
    * Tok:
-   *   1. `searchBigtehnItems(orderNo)` → pronaći predmet sa egzaktnim broj_predmeta
+   *   1. `searchBigtehnItems(orderNo)` → predmet sa egzaktnim `broj_predmeta` (npr. `9400`)
    *   2. Postaviti selectedPredmet (preskačemo `pickPredmet` da izbegnemo paralelni load TP-ova)
-   *   3. `searchBigtehnWorkOrdersForItem(item.id)` → pronaći TP sa `ident_broj === orderNo/tpRef`
+   *   3. `searchBigtehnWorkOrdersForItem(item.id)` → TP sa `ident_broj === orderNo/tpRef`
+   *   3b. Ako nema pogotka: `findOpenBigtehnWorkOrderByIdent(needle)` — RN može biti na
+   *       pod-predmetu (`9400/2`) dok RNZ i dalje nosi `orderNo=9400`, `tpRef=2/10`.
    *   4. `selectTp(matchedWo)` → koraci 1–3 popunjeni; operater samo pritisne „Štampaj"
    *
    * @param {{ orderNo: string, itemRefId: string }} parsed
@@ -701,7 +705,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
       await ensurePrioritetHydrated().catch(() => {});
       const { idSet: aktivniSet } = await loadAktivniPredmetPickerRows();
       const items = await searchBigtehnItems(orderNo, 50, { onlyActive: true });
-      const item =
+      let item =
         (Array.isArray(items) ? items : []).find(
           r => String(r.broj_predmeta || '').trim() === orderNo,
         ) || (Array.isArray(items) && items.length === 1 ? items[0] : null);
@@ -731,9 +735,29 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
 
       tpListEl.innerHTML = '<p class="sn-placeholder-muted">Učitavam tehnološke postupke…</p>';
       tpsCache = await searchBigtehnWorkOrdersForItem(item.id, { onlyOpen: true, limit: 1000 });
-      const matchedWo = (tpsCache || []).find(
-        w => String(w.ident_broj || '').trim() === needle,
-      );
+      let matchedWo = (tpsCache || []).find(w => String(w.ident_broj || '').trim() === needle);
+      if (!matchedWo) {
+        const woGlobal = await findOpenBigtehnWorkOrderByIdent(needle);
+        if (woGlobal && String(woGlobal.ident_broj || '').trim() === needle) {
+          const wid = Number(woGlobal.item_id);
+          if (wid !== Number(item.id)) {
+            const itemRight = await fetchBigtehnItemRowById(wid, { onlyActive: true });
+            if (!itemRight || !aktivniSet.has(wid)) {
+              showToast('⚠ Predmet za ovaj RN nije u aktivnom prikazu — uključi ga u Podeš. predmeta');
+              await renderTpList('');
+              refreshPreview();
+              return false;
+            }
+            item = itemRight;
+            selectedPredmet = item;
+            chipRow.innerHTML = `<span class="sn-chip"><span>${escHtml(item.broj_predmeta || '')} · ${escHtml(String(item.naziv_predmeta || '').slice(0, 42))}</span><button type="button" class="sn-chip-remove" data-x-chip aria-label="Ukloni">×</button></span>`;
+            chipRow.querySelector('[data-x-chip]')?.addEventListener('click', () => clearPredmet());
+            tpsCache = await searchBigtehnWorkOrdersForItem(item.id, { onlyOpen: true, limit: 1000 });
+          }
+          matchedWo =
+            (tpsCache || []).find(w => String(w.ident_broj || '').trim() === needle) || woGlobal;
+        }
+      }
       await renderTpList('');
       if (!matchedWo) {
         showToast(`⚠ TP ${needle} nije pronađen — odaberi ručno`);

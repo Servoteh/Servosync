@@ -636,6 +636,66 @@ export async function searchBigtehnItems(q, limit = 50, { onlyActive = true } = 
 }
 
 /**
+ * Jedan predmet (`bigtehn_items_cache`) po id-u, isti oblik kao red iz
+ * {@link searchBigtehnItems} (uključujući `customer_name`).
+ *
+ * @param {number|string} itemId
+ * @param {{ onlyActive?: boolean }} [opts]
+ * @returns {Promise<object|null>}
+ */
+export async function fetchBigtehnItemRowById(itemId, { onlyActive = true } = {}) {
+  const idNum = Number(itemId);
+  if (!Number.isFinite(idNum) || idNum <= 0) return null;
+  const sel =
+    'id,broj_predmeta,naziv_predmeta,opis,status,department_code,broj_ugovora,broj_narudzbenice,' +
+    'rok_zavrsetka,modified_at,datum_zakljucenja,customer_id';
+  const parts = [`select=${sel}`, `id=eq.${idNum}`, `limit=1`];
+  if (onlyActive) {
+    parts.push(`status=eq.U TOKU`);
+    parts.push(`datum_zakljucenja=is.null`);
+  }
+  const rows = await sbReq(`bigtehn_items_cache?${parts.join('&')}`);
+  if (!Array.isArray(rows) || !rows.length) return null;
+  const r = rows[0];
+  let customer_name = '';
+  if (r.customer_id != null) {
+    try {
+      const custRows = await sbReq(
+        `bigtehn_customers_cache?select=id,name,short_name&id=eq.${encodeURIComponent(r.customer_id)}&limit=1`,
+      );
+      if (Array.isArray(custRows) && custRows[0]) {
+        const c = custRows[0];
+        customer_name = c.short_name || c.name || '';
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return { ...r, customer_name };
+}
+
+/**
+ * Otvoren RN po punom `ident_broj` (npr. `9400/2/10`), bez filtra na `item_id`.
+ * Koristi se kada RNZ `orderNo` pogađa roditeljski predmet (`9400`), a TP je u
+ * kešu vezan za pod-predmet (`9400/2`).
+ *
+ * @param {string} identBroj
+ * @returns {Promise<object|null>}
+ */
+export async function findOpenBigtehnWorkOrderByIdent(identBroj) {
+  const s = typeof identBroj === 'string' ? identBroj.trim() : '';
+  if (!s) return null;
+  const sel =
+    'id,item_id,ident_broj,broj_crteza,naziv_dela,materijal,dimenzija_materijala,jedinica_mere,komada,tezina_obr,status_rn,revizija,rok_izrade,is_mes_active';
+  const enc = encodeURIComponent(s);
+  const rows = await sbReq(
+    `v_bigtehn_work_orders_with_mes_active?select=${sel}&ident_broj=eq.${enc}&status_rn=is.false&limit=1`,
+  );
+  if (!Array.isArray(rows) || !rows.length) return null;
+  return rows[0];
+}
+
+/**
  * Lista TP-ova (radnih naloga) za jedan Predmet — bez placement-a, namenjena
  * pickerima za **štampu nalepnica** i slične izbore gde treba ceo BigTehn
  * spisak otvorenih RN-ova za predmet, ne samo ručno MES-aktivni.

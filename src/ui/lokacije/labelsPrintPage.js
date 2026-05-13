@@ -35,6 +35,8 @@ import { escHtml, showToast } from '../../lib/dom.js';
 import {
   searchBigtehnItems,
   searchBigtehnWorkOrdersForItem,
+  findOpenBigtehnWorkOrderByIdent,
+  fetchBigtehnItemRowById,
 } from '../../services/lokacije.js';
 import { formatBigTehnRnzBarcode } from '../../lib/barcodeParse.js';
 import { printTechProcessLabelsBatch } from './labelsPrint.js';
@@ -296,11 +298,27 @@ async function fetchFullTpsForLabelsItem(itemId) {
 async function serverSearchTpsForLabelsItem(itemId, q) {
   const s = String(q || '').trim();
   if (!s) return [];
-  return searchBigtehnWorkOrdersForItem(itemId, {
+  const rows = await searchBigtehnWorkOrdersForItem(itemId, {
     onlyOpen: true,
     limit: 500,
     search: s,
   });
+  if (Array.isArray(rows) && rows.length) return rows;
+  const wo = await findOpenBigtehnWorkOrderByIdent(s);
+  if (!wo || Number(wo.item_id) === Number(itemId)) return Array.isArray(rows) ? rows : [];
+  let broj = '';
+  try {
+    const it = await fetchBigtehnItemRowById(wo.item_id, { onlyActive: false });
+    broj = it?.broj_predmeta ? String(it.broj_predmeta) : '';
+  } catch {
+    /* ignore */
+  }
+  showToast(
+    broj
+      ? `RN „${s}” je pod predmetom „${broj}” — izaberi taj predmet u tabeli gore.`
+      : `RN „${s}” je pod drugim predmetom — izaberi odgovarajući predmet u tabeli gore.`,
+  );
+  return [];
 }
 
 /**
