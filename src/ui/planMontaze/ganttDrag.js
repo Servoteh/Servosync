@@ -26,6 +26,7 @@ import { canEdit } from '../../state/auth.js';
 import { allData, persistState } from '../../state/planMontaze.js';
 import { parseDateLocal, dateToYMD, formatDate } from '../../lib/date.js';
 import { applyBusinessRules } from '../../lib/phase.js';
+import { applyPhaseActualDatesIfNeeded } from './planActions.js';
 import {
   queuePhaseSaveByIndex,
   queueCurrentWpSync,
@@ -177,6 +178,7 @@ function _onEnd() {
   ref.phase.start = d.pendingStartISO;
   ref.phase.end = d.pendingEndISO;
   applyBusinessRules(ref.phase);
+  applyPhaseActualDatesIfNeeded(ref.phase);
   persistState();
   /* Save: za faze u aktivnom WP-u koristimo phase index, inače full WP sync */
   /* (jednostavnije: uvek queueCurrentWpSync ako je projektu/wp drugi nego aktivni;
