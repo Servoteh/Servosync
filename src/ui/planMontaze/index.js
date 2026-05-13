@@ -2,6 +2,7 @@
  * Plan Montaže — root modula.
  *
  * Faza 5.1.a: header + project bar + WP tabs + view tabs + meta modali.
+ * U prikazu „Ukupan Gant“ project bar se ne renderuje (više prostora za gant).
  * Plan tabela / Gantt / Total se još uvek prikazuju kao "u izradi" placeholder
  * dok ne stignu naredne pod-faze.
  *
@@ -113,12 +114,16 @@ function _applyPredmetPrioritetProjectOrder() {
 function _renderShell() {
   if (!_mountEl) return;
 
+  const isTotalGantt = planMontazeState.activeView === 'total';
+  /* Ukupan Gant: bez gornjeg project bara (projekat/sklop/crtež) — više visine za dijagram. */
+  const contextCardHtml = isTotalGantt ? '' : projectContextCardHtml();
+
   _mountEl.innerHTML = `
     ${planHeaderHtml()}
     <div class="plan-shell-flex">
     <main class="plan-main" id="planMain">
       <section class="plan-toolbar" id="planToolbar">
-        ${projectContextCardHtml()}
+        ${contextCardHtml}
         ${viewTabsHtml(planMontazeState.activeView)}
       </section>
       <section class="plan-body" id="planBody">
@@ -130,10 +135,12 @@ function _renderShell() {
 
   const main = _mountEl.querySelector('#planMain');
   const body = _mountEl.querySelector('#planBody');
+  const toolbar = _mountEl.querySelector('#planToolbar');
   const isGanttView = planMontazeState.activeView === 'gantt' || planMontazeState.activeView === 'total';
   main?.classList.toggle('plan-main--full-gantt', isGanttView);
   body?.classList.toggle('plan-body--fill', isGanttView);
   _mountEl.classList.toggle('plan-module-mount--gantt', isGanttView);
+  toolbar?.classList.toggle('plan-toolbar--total-only', isTotalGantt);
 
   _wireHeader();
   _wireToolbar();

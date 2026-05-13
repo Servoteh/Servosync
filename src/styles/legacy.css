@@ -3012,6 +3012,8 @@ td.td-loc .loc-select { border-left: 3px solid transparent; }
   }
 }
 .plan-toolbar { display:flex; flex-direction:column; gap:12px; margin-bottom:18px; }
+/* Samo tabovi pogleda (bez project context kartice) — kompaktnije za Ukupan Gant. */
+.plan-toolbar.plan-toolbar--total-only { gap: 6px; margin-bottom: 10px; }
 .plan-body { display:flex; flex-direction:column; gap:12px; }
 
 /* ── Plan: jedna kartica konteksta (projekat + pozicije + crtež) ─────── */
