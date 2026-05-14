@@ -16,7 +16,7 @@ import { escHtml } from '../../lib/dom.js';
 import { toggleTheme } from '../../lib/theme.js';
 import { logout } from '../../services/auth.js';
 import { getAuth, canEdit, canEditSastanci } from '../../state/auth.js';
-import { getSastanciState, setActiveTab } from '../../state/sastanci.js';
+import { getSastanciState, setActiveTab, hydrateSastanciModuleTabFromSession, persistSastanciModuleTab } from '../../state/sastanci.js';
 import { navigateToAppPath } from '../router.js';
 import { buildSastanakDetaljPath } from '../../lib/appPaths.js';
 
@@ -54,14 +54,16 @@ export function navigateToSastanakDetalj(sastanakId, tab) {
 export function renderSastanciModule(mountEl, { onBackToHub, onLogout, sastanakId = null, sastanciTab = null } = {}) {
   const auth = getAuth();
   const editor = canEdit();
-  const state = getSastanciState();
 
-  // Deep link na specifičan tab (npr. /sastanci/podesavanja-notifikacija)
+  // Aktivni tab: URL ima prioritet, zatim sessionStorage (poslednji tab u sesiji).
   if (sastanciTab && TABS.some(t => t.id === sastanciTab)) {
     setActiveTab(sastanciTab);
+    persistSastanciModuleTab(sastanciTab);
+  } else if (!sastanakId) {
+    hydrateSastanciModuleTabFromSession();
   }
 
-  /* Deep link na /sastanci/<uuid> — prikaži detalj, bez main tab strip-a */
+  const state = getSastanciState();
   if (sastanakId) {
     mountEl.innerHTML = '';
     const container = document.createElement('div');
@@ -117,6 +119,7 @@ export function renderSastanciModule(mountEl, { onBackToHub, onLogout, sastanakI
         <button type="button" role="tab"
           class="kadrovska-tab${t.id === state.activeTab ? ' is-active' : ''}"
           data-tab="${t.id}"
+          title="${escHtml(t.desc)}"
           aria-selected="${t.id === state.activeTab ? 'true' : 'false'}">
           <span aria-hidden="true">${t.icon}</span> ${escHtml(t.label)}
         </button>
@@ -144,9 +147,11 @@ export function renderSastanciModule(mountEl, { onBackToHub, onLogout, sastanakI
   container.querySelectorAll('button[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
       const tabId = btn.dataset.tab;
-      if (tabId === state.activeTab) return;
+      const cur = getSastanciState().activeTab;
+      if (tabId === cur) return;
       teardownActiveTab();
       setActiveTab(tabId);
+      persistSastanciModuleTab(tabId);
       renderSastanciModule(mountEl, { onBackToHub, onLogout });
     });
   });
@@ -161,6 +166,7 @@ function renderTabBody(host, { canEdit }) {
     renderDashboardTab(host, { canEdit, onJumpToTab: (tab) => {
       teardownActiveTab();
       setActiveTab(tab);
+      persistSastanciModuleTab(tab);
       const mountEl = host.parentElement?.parentElement;
       if (mountEl) renderSastanciModule(mountEl, {});
     }});

@@ -228,16 +228,22 @@ export async function generateSastanakPdf(sast, options = {}) {
     ? String(sast.datum).split('-').reverse().join('.') : '—';
   const vremeFmt = sast.vreme ? String(sast.vreme).slice(0, 5) : '—';
 
-  const SASTANAK_TIPOVI = {
-    redovni: 'Redovni', vanredni: 'Vanredni', koordinacioni: 'Koordinacioni',
-    projektni: 'Projektni', prezentacija: 'Prezentacija', obuka: 'Obuka',
+  const TIP_LABEL_PDF = {
+    sedmicni: 'Sedmični',
+    projektni: 'Projektni',
+    tematski: 'Tematski',
+    redovni: 'Redovni',
+    vanredni: 'Vanredni',
+    koordinacioni: 'Koordinacioni',
+    prezentacija: 'Prezentacija',
+    obuka: 'Obuka',
     operativni: 'Operativni',
   };
 
   y = drawMetaRow(doc, y, 'Datum', datumFmt);
   y = drawMetaRow(doc, y, 'Vreme', vremeFmt);
   y = drawMetaRow(doc, y, 'Mesto', sast.mesto || '—');
-  y = drawMetaRow(doc, y, 'Tip', SASTANAK_TIPOVI[sast.tip] || sast.tip || '—');
+  y = drawMetaRow(doc, y, 'Tip', TIP_LABEL_PDF[sast.tip] || sast.tip || '—');
   y = drawMetaRow(doc, y, 'Vodio', sast.vodioLabel || sast.vodioEmail || '—');
   y = drawMetaRow(doc, y, 'Zaključio', sast.zakljucanByEmail || '—');
   y += 4;

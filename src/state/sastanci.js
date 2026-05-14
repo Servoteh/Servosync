@@ -7,6 +7,32 @@
 
 import { SESSION_KEYS } from '../lib/constants.js';
 
+function clearStoredModuleTab() {
+  try {
+    sessionStorage.removeItem(SESSION_KEYS.SAST_MODULE_TAB);
+  } catch { /* ignore */ }
+}
+
+/** Dozvoljeni id-jevi glavnih tabova modula (paritet sa index.js TABS). */
+const SAST_MODULE_TAB_IDS = new Set([
+  'dashboard',
+  'sastanci',
+  'pm-teme',
+  'pregled-projekti',
+  'draft-teme',
+  'akcioni-plan',
+  'arhiva',
+  'podesavanja-notif',
+]);
+
+/** Zapamti poslednji tab u sesiji (sessionStorage). */
+export function persistSastanciModuleTab(tabId) {
+  if (!tabId || !SAST_MODULE_TAB_IDS.has(tabId)) return;
+  try {
+    sessionStorage.setItem(SESSION_KEYS.SAST_MODULE_TAB, tabId);
+  } catch { /* ignore */ }
+}
+
 const state = {
   /* Cache projekata (lite verzija {id, label}) — koristi ga PM Teme select. */
   projektiCache: null,
@@ -41,6 +67,14 @@ export function clearProjektiCache() {
 
 export function setActiveTab(tab) {
   state.activeTab = tab;
+}
+
+/** Vrati zapamćeni glavni tab modula iz sessionStorage (ako je validan). */
+export function hydrateSastanciModuleTabFromSession() {
+  try {
+    const v = sessionStorage.getItem(SESSION_KEYS.SAST_MODULE_TAB);
+    if (v && SAST_MODULE_TAB_IDS.has(v)) setActiveTab(v);
+  } catch { /* ignore */ }
 }
 
 export function setOpenSastanak(id) {
@@ -91,4 +125,5 @@ export function resetSastanciState() {
   state.projektiCacheAt = 0;
   state.activeTab = 'dashboard';
   state.openSastanakId = null;
+  clearStoredModuleTab();
 }

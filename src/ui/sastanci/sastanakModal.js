@@ -2,7 +2,7 @@
  * Sastanak modal — pregled / vođenje pojedinačnog sastanka.
  *
  * Razgranava se po tipu:
- *   - 'sedmicni'  → meta + učesnici + dnevni red (PM teme) + akcioni plan
+ *   - 'sedmicni' | 'tematski' → meta + učesnici + dnevni red (PM teme) + akcioni plan
  *   - 'projektni' → meta + učesnici + presek aktivnosti (rich text + slike)
  *                   (S2 sloj — videti projektniContent.js)
  *
@@ -20,12 +20,13 @@ import { formatDate } from '../../lib/date.js';
 import {
   loadSastanak, loadUcesnici, saveSastanak, saveUcesnici,
   updateSastanakStatus, updateUcesnikPrisustvo,
-  SASTANAK_STATUSI, SASTANAK_STATUS_BOJE,
+  SASTANAK_STATUSI, SASTANAK_STATUS_BOJE, SASTANAK_TIP_BADGE_LABEL,
 } from '../../services/sastanci.js';
 import { loadPmTeme, dodeliTemuSastanku, saveTema } from '../../services/pmTeme.js';
 import { loadAkcije, saveAkcija, updateAkcijaStatus, deleteAkcija, AKCIJA_STATUSI, AKCIJA_STATUS_BOJE } from '../../services/akcioniPlan.js';
 import { arhivirajSastanak, loadArhiva, printZapisnik } from '../../services/sastanakArhiva.js';
 import { loadProjekat } from '../../services/projekti.js';
+import { loadUsersFromDb } from '../../services/users.js';
 import { getCurrentUser } from '../../state/auth.js';
 import { renderProjektniContent } from './projektniContent.js';
 
@@ -69,12 +70,14 @@ async function renderSastanak(overlay, sast, { canEdit, onClose }) {
   const isLocked = sast.status === 'zakljucan';
   const editable = canEdit && !isLocked;
 
-  /* Učitaj sve relacije. */
-  const [ucesnici, projekat, arhiva] = await Promise.all([
+  /* Učitaj sve relacije (+ lista korisnika za autocomplete učesnika kada je izmena dozvoljena). */
+  const [ucesnici, projekat, arhiva, rosterRaw] = await Promise.all([
     loadUcesnici(sast.id),
     sast.projekatId ? loadProjekat(sast.projekatId) : Promise.resolve(null),
     isLocked ? loadArhiva(sast.id) : Promise.resolve(null),
+    editable ? loadUsersFromDb() : Promise.resolve(null),
   ]);
+  const rosterUsers = Array.isArray(rosterRaw) ? rosterRaw : [];
 
   const statusColor = SASTANAK_STATUS_BOJE[sast.status] || '#666';
 
@@ -82,7 +85,7 @@ async function renderSastanak(overlay, sast, { canEdit, onClose }) {
     <header class="sast-modal-header sast-modal-header-rich">
       <div class="sast-mh-left">
         <div class="sast-mh-tip">
-          <span class="sast-tip-badge sast-tip-${escHtml(sast.tip)}">${sast.tip === 'projektni' ? 'Projektni' : 'Sedmični'}</span>
+          <span class="sast-tip-badge sast-tip-${escHtml(sast.tip)}">${escHtml(SASTANAK_TIP_BADGE_LABEL[sast.tip] || sast.tip)}</span>
           <span class="sast-status-pill" style="background:${statusColor}">${escHtml(SASTANAK_STATUSI[sast.status])}</span>
           ${isLocked ? '<span class="sast-lock-badge">🔒 Arhivirano</span>' : ''}
         </div>
@@ -100,10 +103,19 @@ async function renderSastanak(overlay, sast, { canEdit, onClose }) {
     </header>
 
     <div class="sast-modal-body sast-modal-body-tabs">
+      <details class="sast-flow-hint">
+        <summary>Kako ide tok statusa?</summary>
+        <ol class="sast-flow-steps">
+          <li><strong>Planiran</strong> — priprema učesnika, dnevnog reda i akcija.</li>
+          <li><strong>U toku</strong> — aktivno vođenje (prisustvo, beleške).</li>
+          <li><strong>Završen</strong> — spremno za zaključavanje zapisnika.</li>
+          <li><strong>Zaključan</strong> — arhiva i PDF su finalni; dalje samo čitanje.</li>
+        </ol>
+      </details>
       <nav class="sast-inner-tabs" id="sastInnerTabs">
         <button class="sast-inner-tab is-active" data-itab="meta">📝 Meta</button>
         <button class="sast-inner-tab" data-itab="ucesnici">👥 Učesnici (${ucesnici.length})</button>
-        ${sast.tip === 'sedmicni' ? '<button class="sast-inner-tab" data-itab="dnevni-red">📋 Dnevni red</button>' : ''}
+        ${(sast.tip === 'sedmicni' || sast.tip === 'tematski') ? '<button class="sast-inner-tab" data-itab="dnevni-red">📋 Dnevni red</button>' : ''}
         ${sast.tip === 'projektni' ? '<button class="sast-inner-tab" data-itab="presek">🏗 Presek stanja</button>' : ''}
         <button class="sast-inner-tab" data-itab="akcije">✅ Akcioni plan</button>
         ${arhiva ? '<button class="sast-inner-tab" data-itab="zapisnik">📄 Zapisnik</button>' : ''}
@@ -119,7 +131,7 @@ async function renderSastanak(overlay, sast, { canEdit, onClose }) {
   let activeITab = 'meta';
   const renderITab = async () => {
     if (activeITab === 'meta') renderMetaPanel(tabBody, sast, projekat, { editable });
-    if (activeITab === 'ucesnici') renderUcesniciPanel(tabBody, sast, ucesnici, { editable });
+    if (activeITab === 'ucesnici') renderUcesniciPanel(tabBody, sast, ucesnici, { editable, rosterUsers });
     if (activeITab === 'dnevni-red') await renderDnevniRedPanel(tabBody, sast, { editable });
     if (activeITab === 'presek') await renderProjektniContent(tabBody, sast, { editable });
     if (activeITab === 'akcije') await renderAkcijePanel(tabBody, sast, { editable });
@@ -252,14 +264,25 @@ function renderMetaPanel(host, sast, projekat, { editable }) {
   }
 }
 
-function renderUcesniciPanel(host, sast, ucesnici, { editable }) {
+function renderUcesniciPanel(host, sast, ucesnici, { editable, rosterUsers = [] }) {
   host.innerHTML = `
     <div class="sast-section">
-      <p style="margin:0 0 12px;color:var(--text2)">Lista učesnika sa označavanjem prisustva.</p>
+      <p style="margin:0 0 12px;color:var(--text2)">
+        Lista učesnika sa označavanjem prisustva.
+        ${editable ? ' Izaberi email iz liste (aktivni nalozi) ili unesi ručno.' : ''}
+      </p>
       ${editable ? `
         <div class="sast-add-row">
-          <input type="text" id="ucEmail" class="sast-input" placeholder="email@servoteh.com">
-          <input type="text" id="ucLabel" class="sast-input" placeholder="Ime Prezime (display)">
+          <input type="text" id="ucEmail" class="sast-input" placeholder="email@servoteh.com"
+            list="sastModalUcesniciList" autocomplete="off">
+          <datalist id="sastModalUcesniciList">
+            ${rosterUsers.map(u => {
+    const em = String(u.email || '').toLowerCase();
+    const fn = u.full_name || u.fullName || '';
+    return `<option value="${escHtml(em)}">${escHtml(fn ? `${fn} · ${em}` : em)}</option>`;
+  }).join('')}
+          </datalist>
+          <input type="text" id="ucLabel" class="sast-input" placeholder="Ime Prezime (opciono)">
           <button class="btn btn-primary" id="ucAddBtn">+ Dodaj</button>
         </div>
       ` : ''}
@@ -312,8 +335,10 @@ function renderUcesniciPanel(host, sast, ucesnici, { editable }) {
   if (editable) {
     host.querySelector('#ucAddBtn').addEventListener('click', async () => {
       const email = String(host.querySelector('#ucEmail').value || '').toLowerCase().trim();
-      const label = String(host.querySelector('#ucLabel').value || '').trim();
+      let label = String(host.querySelector('#ucLabel').value || '').trim();
       if (!email) { showToast('⚠ Unesi email'); return; }
+      const roster = rosterUsers.find(u => String(u.email || '').toLowerCase() === email);
+      if (!label && roster) label = roster.full_name || roster.fullName || roster.email || email;
       if (ucesnici.find(u => u.email === email)) { showToast('ℹ Učesnik već postoji'); return; }
       ucesnici.push({ email, label: label || email, prisutan: true, pozvan: true });
       const ok = await saveUcesnici(sast.id, ucesnici);
