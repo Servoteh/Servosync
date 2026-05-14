@@ -6,7 +6,7 @@ import { escHtml } from '../../lib/dom.js';
 import { formatDate } from '../../lib/date.js';
 import {
   loadDashboardStats, loadSastanci, loadNextPlaniranSastanak, loadUcesnici,
-  SASTANAK_TIPOVI,
+  SASTANAK_TIPOVI, SASTANAK_TIP_BADGE_LABEL,
 } from '../../services/sastanci.js';
 import { loadAkcije } from '../../services/akcioniPlan.js';
 import { loadPmTeme, TEMA_STATUS_BOJE } from '../../services/pmTeme.js';
@@ -297,7 +297,7 @@ function renderUpcoming(host, sastanci) {
           </div>
           <div class="sast-list-main">
             <div class="sast-list-title">
-              <span class="sast-tip-badge sast-tip-${escHtml(s.tip)}">${s.tip === 'projektni' ? 'Projektni' : 'Sedmični'}</span>
+              <span class="sast-tip-badge sast-tip-${escHtml(s.tip)}">${escHtml(SASTANAK_TIP_BADGE_LABEL[s.tip] || s.tip)}</span>
               ${escHtml(s.naslov)}
             </div>
             <div class="sast-list-meta">${s.vodioLabel ? '👤 ' + escHtml(s.vodioLabel) : ''} ${s.mesto ? ' · 📍 ' + escHtml(s.mesto) : ''}</div>
