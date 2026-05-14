@@ -461,7 +461,9 @@ export async function listAutoCooperationGroups() {
  *
  * @param {string} rnIdentBroj  npr. `"9000"` (prvi segment `ident_broj`)
  * @param {string|number|null} operacija  TP ref (npr. `522` ili `7-5-S1`); može biti null
- * @param {{ varijanta?: string|number }} [opts]  iz RNZ barkoda (segment posle TP)
+ * @param {{ varijanta?: string|number }} [opts]  iz RNZ/kompaktnog barkoda (segment posle TP).
+ *   Vrednost **0** se ignoriše pri upitu — u kešu je `varijanta` često NULL, a `eq.0`
+ *   ne matchuje NULL pa autofill crteža ne bi radio.
  * @returns {Promise<{
  *   rn_ident_broj: string,
  *   broj_crteza: string,
@@ -488,7 +490,9 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
   let varFilter = null;
   if (opts && opts.varijanta != null && String(opts.varijanta).trim() !== '') {
     const v = parseInt(String(opts.varijanta).trim(), 10);
-    if (Number.isFinite(v)) varFilter = v;
+    /* Samo nenulta varijanta suži red u BigTehn-u; 0 je „podrazumevani" segment
+     * barkoda i ne sme da mapira na varijanta=eq.0 nad NULL u bazi. */
+    if (Number.isFinite(v) && v !== 0) varFilter = v;
   }
 
   /* 1) Direktno iz aktivnog RN view-a — nezavisno od BigTehn open/closed statusa,

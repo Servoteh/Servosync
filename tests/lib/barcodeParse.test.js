@@ -74,6 +74,14 @@ describe('parseBigTehnBarcode — RNZ format (current production)', () => {
     });
   });
 
+  it('parsira nalog sa revizijskim sufiksom (9811-1/71, RNZ)', () => {
+    const r = parseBigTehnBarcode('RNZ:999:9811-1/71:0:12345');
+    expect(r?.format).toBe('rnz');
+    expect(r?.orderNo).toBe('9811-1');
+    expect(r?.itemRefId).toBe('71');
+    expect(r?.varijanta).toBe('0');
+  });
+
   it('izdvaja idrn, varijantu i field4', () => {
     const a = parseBigTehnBarcode('RNZ:1:5000/100:0:99999');
     expect(a?.orderNo).toBe('5000');
@@ -163,6 +171,14 @@ describe('parsePredmetTpFromLabelText — OCR sa nalepnice', () => {
     expect(parsePredmetTpFromLabelText('7351\\1088')?.itemRefId).toBe('1088');
   });
 
+  it('čuva crticu u broju predmeta (npr. Termička linija 9811-1/71)', () => {
+    expect(parsePredmetTpFromLabelText('9811-1/71')).toMatchObject({
+      orderNo: '9811-1',
+      itemRefId: '71',
+      format: 'ocr',
+    });
+  });
+
   it('vraća null bez validnog para', () => {
     expect(parsePredmetTpFromLabelText('')).toBeNull();
     expect(parsePredmetTpFromLabelText('samo tekst')).toBeNull();
@@ -202,6 +218,21 @@ describe('parseBigTehnBarcode — compact label (fallback bez RNZ:)', () => {
     });
   });
 
+  it('kompakt: nalog sa crticom u prvom segmentu (9811-1/71)', () => {
+    expect(parseBigTehnBarcode('9833:9811-1/71:0')).toMatchObject({
+      format: 'compact',
+      idrn: '9833',
+      orderNo: '9811-1',
+      itemRefId: '71',
+      varijanta: '0',
+    });
+    expect(parseBigTehnBarcode(']C19833:9811-1/71:0')).toMatchObject({
+      format: 'compact',
+      orderNo: '9811-1',
+      itemRefId: '71',
+    });
+  });
+
   it('RNZ i dalje ima prioritet (isti brojevi, drugačiji oblik)', () => {
     expect(parseBigTehnBarcode('RNZ:9833:9400/7-5:0:44963')).toMatchObject({
       format: 'rnz',
@@ -214,9 +245,17 @@ describe('parseBigTehnBarcode — compact label (fallback bez RNZ:)', () => {
     expect(parseBigTehnBarcode('9000/1091063')?.format).toBe('short');
   });
 
-  it('vraća null ako fali varijanta ili TP ima nedozvoljen znak', () => {
+  it('vraća null ako fali varijanta', () => {
     expect(parseBigTehnBarcode('9833:9400/7-5')).toBeNull();
-    expect(parseBigTehnBarcode('9833:9400/7_5:0')).toBeNull();
+  });
+
+  it('kompakt: donja crta u TP ref-u (labavi fallback)', () => {
+    expect(parseBigTehnBarcode('9833:9400/7_5:0')).toMatchObject({
+      format: 'compact',
+      orderNo: '9400',
+      itemRefId: '7_5',
+      varijanta: '0',
+    });
   });
 });
 
