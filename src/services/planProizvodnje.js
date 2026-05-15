@@ -1341,6 +1341,31 @@ export function plannedSeconds(row) {
   return Math.round((tpz + tk * k) * 60);
 }
 
+/** Lokalni statusi čija tehnološka sekunda ulaze u Σ planirano u tabu Po mašini. */
+export const OPEN_PLAN_SUM_LOCAL_STATUSES = new Set(['waiting', 'in_progress', 'blocked']);
+
+/**
+ * Suma `plannedSeconds` preko niza operacija. Ako je `onlyLocalStatuses` zadato, preskače
+ * redove čiji `local_status` ne upada u skup (fallback status = waiting).
+ */
+export function sumPlannedSecondsForRows(rows, { onlyLocalStatuses = OPEN_PLAN_SUM_LOCAL_STATUSES } = {}) {
+  if (!Array.isArray(rows)) return 0;
+  let sum = 0;
+  for (const row of rows) {
+    const st = row?.local_status || 'waiting';
+    if (onlyLocalStatuses != null && !onlyLocalStatuses.has(st)) continue;
+    sum += plannedSeconds(row);
+  }
+  return sum;
+}
+
+/** PP-C: „pušteno po skartu” — koristi eksplicitnu kolonu ako postoji u view-u; inače G4 `is_scrap`. */
+export function operationIsScrapRelease(row) {
+  if (row?.is_scrap_release === true) return true;
+  if (row?.is_scrap_release === false) return false;
+  return !!row?.is_scrap;
+}
+
 /**
  * Client-side filter za "RN ili crtež" u Planiranju proizvodnje.
  * Pretražuje BigTehn ident RN-a i broj crteža, case-insensitive contains.
@@ -1477,6 +1502,9 @@ export function nextWorkingDays(numWorkingDays = 5, fromDate = new Date()) {
  *         machineCode,
  *         totalOps,
  *         camReadyOps,
+ *         readyOps,
+ *         urgentOps,
+ *         scrapOps,           // PP-C: bar jedna operacija označena kao skart-puštenje
  *         buckets: {
  *           overdue: N,           // rok < danas
  *           '2026-04-21': N,      // rok je tog dana
@@ -1500,7 +1528,7 @@ export function buildDeadlineMatrix(rows, numWorkingDays = 5) {
     if (!mc) continue;
     let m = byMachine.get(mc);
     if (!m) {
-      m = { machineCode: mc, totalOps: 0, camReadyOps: 0, readyOps: 0, urgentOps: 0, buckets: {
+      m = { machineCode: mc, totalOps: 0, camReadyOps: 0, readyOps: 0, urgentOps: 0, scrapOps: 0, buckets: {
         overdue: 0, future: 0, noDeadline: 0,
       } };
       for (const d of days) m.buckets[d.date] = 0;
@@ -1510,6 +1538,7 @@ export function buildDeadlineMatrix(rows, numWorkingDays = 5) {
     if (r.cam_ready) m.camReadyOps += 1;
     if (r.is_ready_for_machine) m.readyOps += 1;
     if (r.is_urgent) m.urgentOps += 1;
+    if (operationIsScrapRelease(r)) m.scrapOps += 1;
     const rok = r.rok_izrade ? isoDay(new Date(r.rok_izrade)) : null;
     if (!rok) {
       m.buckets.noDeadline += 1;

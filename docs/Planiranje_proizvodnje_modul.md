@@ -36,9 +36,9 @@ Modul: `sessionStorage` / hub modul **`plan-proizvodnje`**, `src/ui/planProizvod
 
 | Tab | Svrha | Glavni fajl |
 |-----|--------|-------------|
-| **Po mašini** | Tabovi po **odeljenju** → lista mašina ili lista operacija; tabela: drag-drop, status, napomena, RN filter, CAM, spremnost, HITNO, pin, bulk REASSIGN, kooperacija „→ Kooperacija”, Σ planirano vreme, DORADA/SKART badge + filter | `poMasiniTab.js` |
+| **Po mašini** | Tabovi po **odeljenju** → lista mašina ili lista operacija; tabela: drag-drop, status, napomena, RN filter, CAM, spremnost, HITNO, pin, bulk REASSIGN, kooperacija „→ Kooperacija”, **UK agregati (broj operacija × Σ plan)** iznad liste, Σ u footeru, DORADA/SKART badge + žuta skart-linija ako `operationIsScrapRelease`, filter | `poMasiniTab.js` |
 | **Zauzetost mašina** | Zbirno po mašini; RN filter; agregati (uklj. G2/G3/G4 gde postoji) | `zauzetostTab.js` |
-| **Pregled svih** | Matrica mašina × dani; RN filter; badge-i | `pregledTab.js` |
+| **Pregled svih** | Matrica mašina × dani; RN filter; ako ima skart-puštene operacije — bedž / `pm-row-has-scrap` | `pregledTab.js` |
 | **Kooperacija** | Operacije sa `is_cooperation_effective` (auto RJ grupe iz `production_auto_cooperation_groups` + ručni `cooperation_status`); pretraga RN/crtež; akcije po izvoru (auto vs manual) | `kooperacijaTab.js` |
 
 Pomoćni moduli: **`departments.js`**, **`drawingManager.js`**, **`techProcedureModal.js`**.
@@ -65,6 +65,7 @@ Operacije za plan se čitaju iz **`public.v_production_operations_effective`**: 
 - **Čitanje:** `loadMachines()`, `loadOperationsForMachine`, `loadOperationsForDept`, `loadAllOpenOperations`, `listForCooperation`, `listAutoCooperationGroups` — iz `v_production_operations_effective` (operativni planovi isključuju efektivnu kooperaciju; vidi filter aktivacije iznad).
 - **Pisanje overlay-a:** `upsertOverlay()`, `reorderOverlays()`.
 - **G2 / PP-B:** `setUrgent()`, `clearUrgent()`, `pinToTop()`, `unpin()`, **`sortByUrgencyAndReady()`**, `urgencyReadyBucket()`, **`urgencyReadyBucketsAreNonDecreasing()`** (drag invariant); **`sortProductionOperations()`** je alias nad `sortByUrgencyAndReady`.
+- **PP-C:** `OPEN_PLAN_SUM_LOCAL_STATUSES`, **`sumPlannedSecondsForRows()`**, **`operationIsScrapRelease()`**, `buildDeadlineMatrix` polje **`scrapOps`** — dokumentacija `docs/migration/PP-C_analiza.md` i draft `sql/migrations/extend_v_production_operations_scrap.sql`.
 - **G3:** `setCamReady()` (i srodno u UI).
 - **G5:** `reassignLine()`, `bulkReassignLines()` → RPC `reassign_production_line` / `bulk_reassign_production_lines` (nema direktnog client UPSERT-a za dodelu mašine).
 - **G7:** `setCooperationManual()`, `clearCooperationManual()`, itd.
@@ -105,7 +106,7 @@ Spec v1.2 deli zahteve u **G1–G7**; **G8** (HITNO u QBigTehn) je **otkazan** �
 
 ### View
 
-- **`v_production_operations`** — višestruki rewrite kroz migracije; uključuje aktivne RN, tech routing agregate, G2, G3, G4, G7; wrapper **`v_production_operations_pre_g4`** ostaje ispod ako je G4 view sloj ugradio dodatne kolone — proveri trenutnu definiciju u poslednjoj `add_production_g4_rework_scrap_cache` migraciji. **`is_ready_for_machine`** (`boolean`): nema prijave u `bigtehn_tech_routing_cache` sa `operacija < tekuće.operacija` i `is_completed = false` (isti RN); prva TP operacija ⇒ `TRUE`; vidi `sql/migrations/fix_v_production_operations_ready.sql`. Koristiti **`security_invoker = true`** gde je traženo (security advisor).
+- **`v_production_operations`** — višestruki rewrite kroz migracije; uključuje aktivne RN, tech routing agregate, G2, G3, G4, G7; wrapper **`v_production_operations_pre_g4`** ostaje ispod ako je G4 view sloj ugradio dodatne kolone — proveri trenutnu definiciju u poslednjoj `add_production_g4_rework_scrap_cache` migraciji. **`is_ready_for_machine`** (`boolean`): nema prijave u `bigtehn_tech_routing_cache` sa `operacija < tekuće.operacija` i `is_completed = false` (isti RN); prva TP operacija ⇒ `TRUE`; vidi `sql/migrations/fix_v_production_operations_ready.sql`. **`is_scrap_release`**: eksplicitni draft dodatak u PP-C migracijskom snippetu (`sql/migrations/extend_v_production_operations_scrap.sql`); frontend i dalje radi preko **`operationIsScrapRelease`** koja pada nazad na G4 **`is_scrap`** dok kolona ne postoji. Koristiti **`security_invoker = true`** gde je traženo (security advisor).
 
 ### Funkcije (izbor)
 

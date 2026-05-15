@@ -55,6 +55,8 @@ import {
   rokUrgencyClass,
   formatSecondsHm,
   plannedSeconds,
+  sumPlannedSecondsForRows,
+  operationIsScrapRelease,
   filterOperationsByRnOrDrawing,
   sortProductionOperations,
   urgencyReadyBucketsAreNonDecreasing,
@@ -905,6 +907,27 @@ function renderTable({ allowDragDrop }) {
   updateBulkReassignButton();
   setCounter(filteredRows.length, { total: state.rows.length });
 
+  const aggBarBlock = (() => {
+    const aggN = filteredRows.length;
+    const aggPlannedHm = formatSecondsHm(sumPlannedSecondsForRows(filteredRows));
+    const moreHint = state.woHasMore
+      ? ' Još ima RN — lista se učitava po slajdu (Σ je samo za učitan deo).'
+      : '';
+    return `
+    <div class="pp-ops-agg-bar" role="status" aria-live="polite">
+      <span class="pp-ops-agg-line">
+        <span class="pp-ops-agg-k">Ukupno operacija:</span>
+        <span class="pp-ops-agg-v">${aggN}</span>
+      </span>
+      <span class="pp-ops-agg-dot" aria-hidden="true">·</span>
+      <span class="pp-ops-agg-line">
+        <span class="pp-ops-agg-k">Ukupno planirano vreme:</span>
+        <span class="pp-ops-agg-v">${escHtml(aggPlannedHm)}</span>
+      </span>
+      ${state.woHasMore ? `<span class="pp-ops-agg-more">${escHtml(moreHint.trim())}</span>` : ''}
+    </div>`;
+  })();
+
   if (filteredRows.length === 0) {
     const dept = getDepartment(state.selectedDeptSlug);
     let hint = 'Sve operacije su završene ili nisu još kreirane u BigTehn-u.';
@@ -929,6 +952,7 @@ function renderTable({ allowDragDrop }) {
       hint = 'Za trenutno izabrani prikaz nema operacija sa sistemskim DORADA/SKART signalom.';
     }
     wrap.innerHTML = `
+      ${aggBarBlock}
       <div class="pp-state">
         <div class="pp-state-icon">🛠</div>
         <div class="pp-state-title">${title}</div>
@@ -947,6 +971,7 @@ function renderTable({ allowDragDrop }) {
    *    (u drugom redu) — vidi `pp-drawing-cell` blok u rowHtml.
    */
   wrap.innerHTML = `
+    ${aggBarBlock}
     <table class="pp-table" data-readonly="${state.canEdit ? 'false' : 'true'}">
       <thead>
         <tr>
@@ -1046,6 +1071,8 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
     ? `<span class="pp-urgent-badge ${urgency === 'overdue' ? 'pp-urgent-overdue' : 'pp-urgent-today'}" title="${escHtml(urgentTitle)}" aria-label="${escHtml(urgentTitle)}">⚠</span>`
     : '';
 
+  const isScrapRelease = operationIsScrapRelease(r);
+
   const draggable = allowDragDrop && state.canEdit;
 
   return `
@@ -1053,7 +1080,7 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
       data-key="${escHtml(rowKey(r))}"
       data-wo="${r.work_order_id}"
       data-line="${r.line_id}"
-      class="${r.is_non_machining ? 'is-non-machining' : ''}${isReassigned ? ' is-reassigned' : ''}${urgentClass}${r.is_urgent ? ' is-g2-urgent' : ''}${isManualPinned ? ' is-manual-pinned' : ''}"
+      class="${r.is_non_machining ? 'is-non-machining' : ''}${isReassigned ? ' is-reassigned' : ''}${urgentClass}${r.is_urgent ? ' is-g2-urgent' : ''}${isManualPinned ? ' is-manual-pinned' : ''}${isScrapRelease ? ' pp-row-scrap' : ''}"
       ${draggable ? 'draggable="true"' : ''}>
       <td class="pp-cell-center">
         <input type="checkbox"
@@ -1077,6 +1104,9 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
       </td>
       <td class="pp-cell-muted pp-cell-drawing" title="${escHtml(brojTooltip)}">
         <div class="pp-drawing-cell">
+          ${isScrapRelease
+            ? `<span class="pp-scrap-release-flag" role="img" aria-label="Pušteno po skartu" title="Pušteno po skartu">⚠ <span class="pp-scrap-release-txt">skart</span></span>`
+            : ''}
           <span class="pp-drawing-no">${escHtml(brojDisplay)}</span>
           ${showPdfBtn
             ? `<button type="button"
@@ -1208,11 +1238,7 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
 }
 
 function renderPlanFooter(rows) {
-  const openStatuses = new Set(['waiting', 'in_progress', 'blocked']);
-  const plannedTotal = rows.reduce((sum, row) => {
-    const status = row.local_status || 'waiting';
-    return openStatuses.has(status) ? sum + plannedSeconds(row) : sum;
-  }, 0);
+  const plannedTotal = sumPlannedSecondsForRows(rows);
   const label = formatSecondsHm(plannedTotal);
   return `
     <tfoot>

@@ -322,6 +322,47 @@
   border-radius: 10px;
   background: var(--surface);
 }
+
+/* PP-C: zbir „Ukupno operacija / planirano vreme” iznad tabele „Po mašini” */
+.pp-ops-agg-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  row-gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface2) 65%, transparent);
+  font-size: 12px;
+  color: var(--text);
+}
+.pp-ops-agg-line {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.pp-ops-agg-k { color: var(--text2); font-weight: 600; }
+.pp-ops-agg-v {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.pp-ops-agg-dot { color: var(--text3); padding: 0 2px; }
+.pp-ops-agg-more {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.35;
+}
+@media (max-width: 560px) {
+  .pp-ops-agg-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pp-ops-agg-dot { display: none; }
+}
 .pp-table {
   width: 100%;
   border-collapse: separate;
@@ -366,6 +407,39 @@
 }
 .pp-table tbody tr.is-manual-pinned td:first-child {
   border-left: 3px solid #a78bfa;
+}
+
+/* PP-C: pozicija označena kao skart-puštenje (nezavisno od PP-B sorta) */
+.pp-table tbody tr.pp-row-scrap:not(.is-urgent-overdue):not(.is-urgent-today):not(.is-urgent) td {
+  background: color-mix(in srgb, #fff8e1 58%, transparent);
+}
+.pp-table tbody tr.pp-row-scrap td:first-child {
+  box-shadow: inset 4px 0 0 #f59e0b;
+}
+.pp-table tbody tr.pp-row-scrap.is-urgent td,
+.pp-table tbody tr.pp-row-scrap.is-urgent-overdue td,
+.pp-table tbody tr.pp-row-scrap.is-urgent-today td {
+  background: color-mix(
+    in srgb,
+    #fff8e1 32%,
+    color-mix(in srgb, #ef4444 12%, transparent)
+  );
+}
+.pp-scrap-release-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #d97706;
+  margin-bottom: 1px;
+  cursor: help;
+  line-height: 1.2;
+}
+.pp-scrap-release-txt {
+  font-weight: 700;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
 }
 
 .pp-cell-num    { text-align: right; white-space: nowrap; }
@@ -951,6 +1025,11 @@
 .zm-pill-cam     { background: color-mix(in srgb, #22c55e 22%, transparent); color: #86efac; }
 .zm-pill-ready   { background: color-mix(in srgb, #10b981 20%, transparent); color: #6ee7b7; }
 .zm-pill-hitno   { background: color-mix(in srgb, #ef4444 22%, transparent); color: #fecaca; }
+.zm-pill-scrap-row {
+  background: color-mix(in srgb, #f59e0b 24%, transparent);
+  color: #fde68a;
+  border: 1px solid color-mix(in srgb, #f59e0b 42%, transparent);
+}
 .zm-pill-coop-auto   { background: color-mix(in srgb, #64748b 24%, transparent); color: #cbd5e1; }
 .zm-pill-coop-manual { background: color-mix(in srgb, #3b82f6 22%, transparent); color: #93c5fd; }
 .pm-machine-badges {
@@ -1025,6 +1104,13 @@
 .pm-row { border-bottom: 1px solid var(--border); }
 .pm-row:last-child { border-bottom: 0; }
 .pm-row:hover { background: var(--surface2); }
+.pm-row.pm-row-has-scrap td.pm-td-machine {
+  background: color-mix(in srgb, #fff8e1 45%, transparent);
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+.pm-row.pm-row-has-scrap:hover td.pm-td-machine {
+  background: color-mix(in srgb, #fff8e1 55%, var(--surface2));
+}
 .pm-row-total {
   background: var(--surface2);
   font-weight: 600;

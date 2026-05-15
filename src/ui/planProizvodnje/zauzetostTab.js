@@ -60,6 +60,7 @@ const COLUMNS = [
   {
     key: 'totalOps',
     label: 'Otvoreno',
+    headerTitle: 'Broj otvorenih TP pozicija (operacija) na ovoj mašini',
     sortable: true,
     align: 'right',
     accessor: (r) => r.totalOps,
@@ -328,8 +329,11 @@ function renderTable() {
   const headHtml = COLUMNS.map(c => {
     const isActive = c.sortable && c.key === state.sortKey;
     const arrow = isActive ? (state.sortDir === 'asc' ? '▲' : '▼') : '';
+    const titleAttr = c.headerTitle
+      ? ` title="${escHtml(c.headerTitle)}"`
+      : '';
     return `<th class="zm-th zm-th-${c.align}${c.sortable ? ' zm-th-sortable' : ''}${isActive ? ' is-sorted' : ''}"
-              data-sort-key="${c.sortable ? c.key : ''}">
+              data-sort-key="${c.sortable ? c.key : ''}"${titleAttr}>
               <span>${escHtml(c.label)}</span>
               ${arrow ? `<span class="zm-sort-arrow">${arrow}</span>` : ''}
             </th>`;

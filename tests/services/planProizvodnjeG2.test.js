@@ -93,6 +93,36 @@ describe('urgencyReadyBucketsAreNonDecreasing', () => {
   });
 });
 
+describe('PP-C sumPlannedSecondsForRows + operationIsScrapRelease', () => {
+  it('sums planned seconds only for waiting/in_progress/blocked overlays', async () => {
+    const { sumPlannedSecondsForRows } = await import('../../src/services/planProizvodnje.js');
+    const rows = [
+      { local_status: 'waiting', tpz_min: 1, tk_min: 2, komada_total: 1 },
+      { local_status: 'completed', tpz_min: 9, tk_min: 9, komada_total: 9 },
+      { tpz_min: 0, tk_min: 1, komada_total: 1 },
+    ];
+    const expected = Math.round((1 + 2 * 1) * 60) + Math.round((0 + 1 * 1) * 60);
+    expect(sumPlannedSecondsForRows(rows)).toBe(expected);
+  });
+
+  it('operationIsScrapRelease honors explicit column over is_scrap fallback', async () => {
+    const { operationIsScrapRelease } = await import('../../src/services/planProizvodnje.js');
+    expect(operationIsScrapRelease({ is_scrap_release: false, is_scrap: true })).toBe(false);
+    expect(operationIsScrapRelease({ is_scrap_release: true })).toBe(true);
+    expect(operationIsScrapRelease({ is_scrap: true })).toBe(true);
+  });
+
+  it('buildDeadlineMatrix counts scrapOps using scrap fallback', async () => {
+    const { buildDeadlineMatrix } = await import('../../src/services/planProizvodnje.js');
+    const rows = [
+      { effective_machine_code: 'M1', rok_izrade: null },
+      { effective_machine_code: 'M1', rok_izrade: null, is_scrap: true },
+    ];
+    const m = buildDeadlineMatrix(rows).machines.find(x => x.machineCode === 'M1');
+    expect(m?.scrapOps).toBe(1);
+  });
+});
+
 describe('G2 writers', () => {
   beforeEach(() => {
     sbReqMock.mockReset();
