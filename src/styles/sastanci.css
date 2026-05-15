@@ -1493,6 +1493,8 @@ body.dark .sast-projekat-item.is-active {
 .zs-save-bar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-height: 40px;
   padding: 8px 12px;
   margin-bottom: 12px;
@@ -1502,6 +1504,13 @@ body.dark .sast-projekat-item.is-active {
   border: 1px solid var(--border, #d4d4d4);
   background: var(--surface2, #f0fdf4);
   color: var(--text, #14532d);
+}
+.zs-save-bar-text {
+  flex: 1;
+  min-width: 0;
+}
+.zs-save-now-btn {
+  flex-shrink: 0;
 }
 .zs-save-bar--pending {
   background: #eff6ff;

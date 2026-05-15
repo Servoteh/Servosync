@@ -4,6 +4,8 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { formatDate } from '../../lib/date.js';
+import { isAdminOrMenadzment } from '../../state/auth.js';
+import { otvojiPonovo } from '../../services/sastanciDetalj.js';
 import {
   loadSastanci, deleteSastanak, loadUcesniciForMany,
   SASTANAK_TIPOVI, SASTANAK_STATUSI,
@@ -251,6 +253,15 @@ async function renderRowsTable(host, canEdit) {
       }
       if (act === 'arh') {
         navigateToSastanakDetalj(id, 'arhiva');
+        return;
+      }
+      if (act === 'otvori-sast') {
+        if (!confirm('Otvoriti sastanak ponovo? Status se vraća na „U toku".')) return;
+        void otvojiPonovo(id).then(ok => {
+          if (ok) { showToast('🔓 Sastanak otvoren ponovo'); renderAll(host, canEdit); }
+          else showToast('⚠ Nije uspelo');
+        });
+        return;
       }
     });
   });
@@ -261,6 +272,14 @@ function handleRowAction(s, act, host, canEdit) {
   if (act === 'pripremi') { navigateToSastanakDetalj(s.id, 'pripremi'); return; }
   if (act === 'zap') { navigateToSastanakDetalj(s.id, 'zapisnik'); return; }
   if (act === 'arh') { navigateToSastanakDetalj(s.id, 'arhiva'); return; }
+  if (act === 'otvori-sast') {
+    if (!confirm('Otvoriti sastanak ponovo? Status se vraća na „U toku".')) return;
+    void otvojiPonovo(s.id).then(ok => {
+      if (ok) { showToast('🔓 Sastanak otvoren ponovo'); renderAll(host, canEdit); }
+      else showToast('⚠ Nije uspelo');
+    });
+    return;
+  }
   if (act === 'delete') {
     if (s.status === 'zakljucan') { showToast('🔒 Zaključan se ne može obrisati'); return; }
     if (!confirm(`Obriši sastanak "${s.naslov}"?`)) return;
@@ -287,6 +306,9 @@ function renderSastanakRow(s, canEdit, nP, nU) {
     actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="zap" data-id="${s.id}">Otvori zapisnik</button>`);
   } else if (st === 'zavrsen' || st === 'zakljucan') {
     actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="open" data-id="${s.id}">Otvori</button>`);
+    if (isAdminOrMenadzment()) {
+      actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="otvori-sast" data-id="${s.id}">Otvori ponovo</button>`);
+    }
     if (st === 'zakljucan' && canEdit) {
       actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="arh" data-id="${s.id}">Arhiviraj</button>`);
     }

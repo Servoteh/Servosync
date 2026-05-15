@@ -3,6 +3,7 @@
  */
 
 import { escHtml } from '../../lib/dom.js';
+import { isAdminOrMenadzment } from '../../state/auth.js';
 import { SASTANAK_TIPOVI, SASTANAK_STATUSI } from '../../services/sastanci.js';
 
 const MES = ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Jun', 'Jul', 'Avgust', 'Septembar', 'Oktobar', 'Novembar', 'Decembar'];
@@ -155,8 +156,14 @@ function openDayDrawer(ymd, list, { onRowAction, canEdit }) {
       addBtn(host, 'Zapisnik', () => { close(); onRowAction?.(s, 'zap'); });
     } else if (st === 'zavrsen') {
       addBtn(host, 'Otvori', () => { close(); onRowAction?.(s, 'open'); });
+      if (isAdminOrMenadzment()) {
+        addBtn(host, 'Otvori ponovo', () => { close(); onRowAction?.(s, 'otvori-sast'); });
+      }
     } else if (st === 'zakljucan') {
       addBtn(host, 'Otvori', () => { close(); onRowAction?.(s, 'open'); });
+      if (isAdminOrMenadzment()) {
+        addBtn(host, 'Otvori ponovo', () => { close(); onRowAction?.(s, 'otvori-sast'); });
+      }
       addBtn(host, 'Arhiva', () => { close(); onRowAction?.(s, 'arh'); });
     } else {
       addBtn(host, 'Otvori', () => { close(); onRowAction?.(s, 'open'); });

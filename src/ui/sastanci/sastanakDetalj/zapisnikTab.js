@@ -31,7 +31,11 @@ let dragState = null;
 
 /** @type {Map<string, { timer: ReturnType<typeof setTimeout>, exec: () => Promise<void> }>} */
 let pendingSaves = new Map();
-let saveBarEls = { root: /** @type {HTMLElement | null} */ (null), text: /** @type {HTMLElement | null} */ (null) };
+let saveBarEls = {
+  root: /** @type {HTMLElement | null} */ (null),
+  text: /** @type {HTMLElement | null} */ (null),
+  saveNow: /** @type {HTMLButtonElement | null} */ (null),
+};
 let activeSaving = 0;
 let saveHadError = false;
 /** @type {(() => void)[]} */
@@ -40,6 +44,7 @@ let zapisnikLifecycleCleanups = [];
 function refreshSaveBar() {
   const textEl = saveBarEls.text;
   const rootEl = saveBarEls.root;
+  const btn = saveBarEls.saveNow;
   if (!textEl || !rootEl) return;
   rootEl.classList.remove(
     'zs-save-bar--pending', 'zs-save-bar--saving', 'zs-save-bar--error', 'zs-save-bar--offline',
@@ -49,33 +54,50 @@ function refreshSaveBar() {
     rootEl.classList.add('zs-save-bar--offline');
     textEl.textContent =
       'Niste na mreži — izmene se ne mogu sačuvati dok se konekcija ne vrati.';
+    if (btn) btn.disabled = true;
     return;
   }
   if (saveHadError && activeSaving === 0 && pendingSaves.size === 0) {
     rootEl.classList.add('zs-save-bar--error');
     textEl.textContent =
       'Greška pri čuvanju — proveri mrežu, izmeni polje ponovo ili osveži stranicu.';
+    if (btn) btn.disabled = false;
     return;
   }
   if (activeSaving > 0) {
     rootEl.classList.add('zs-save-bar--saving');
     textEl.textContent = 'Čuvam u bazu…';
+    if (btn) btn.disabled = true;
     return;
   }
   if (pendingSaves.size > 0) {
     rootEl.classList.add('zs-save-bar--pending');
     textEl.textContent =
       'Ima nesačuvanih izmena — sačuvaću automatski uskoro (klik van polja čuva odmah).';
+    if (btn) btn.disabled = false;
     return;
   }
   textEl.textContent = 'Sačuvano · poslednje izmene su u bazi.';
+  if (btn) btn.disabled = false;
 }
 
 function bindSaveBar(host) {
   saveBarEls = {
     root: host.querySelector('#zsSaveBar'),
     text: host.querySelector('#zsSaveBarText'),
+    saveNow: host.querySelector('#zsSaveNowBtn'),
   };
+  saveBarEls.saveNow?.addEventListener('click', async () => {
+    if (!getIsOnline()) {
+      showToast('⚠ Nema mreže');
+      return;
+    }
+    const queued = pendingSaves.size;
+    await flushAllPendingSaves();
+    if (saveHadError) showToast('⚠ Čuvanje nije uspelo — proveri poruku iznad');
+    else if (queued > 0) showToast('✅ Sačuvano u bazu');
+    else showToast('ℹ Nema izmena na čekanju — sve je već u bazi');
+  });
   refreshSaveBar();
 }
 
@@ -216,6 +238,7 @@ function renderZapisnikContent(host, aktivnosti, slikeMap, sastanak, locked) {
       ${!locked ? `
         <div class="zs-save-bar" id="zsSaveBar" role="status" aria-live="polite">
           <span class="zs-save-bar-text" id="zsSaveBarText"></span>
+          <button type="button" class="btn btn-sm btn-primary zs-save-now-btn" id="zsSaveNowBtn">Sačuvaj sada</button>
         </div>
         ${pdfStaleHint}
       ` : ''}
@@ -549,6 +572,6 @@ export function teardownZapisnikTab() {
   }
   zapisnikLifecycleCleanups.forEach(fn => fn());
   zapisnikLifecycleCleanups = [];
-  saveBarEls = { root: null, text: null };
+  saveBarEls = { root: null, text: null, saveNow: null };
   dragState = null;
 }
