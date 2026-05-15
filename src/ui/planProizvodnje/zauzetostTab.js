@@ -20,6 +20,7 @@ import {
   summarizeByMachine,
   formatSecondsHm,
   filterOperationsByRnOrDrawing,
+  sortByUrgencyAndReady,
 } from '../../services/planProizvodnje.js';
 
 const STORAGE_KEY_SORT     = 'plan-proizvodnje:zauzetost:sort';
@@ -59,6 +60,7 @@ const COLUMNS = [
   {
     key: 'totalOps',
     label: 'Otvoreno',
+    headerTitle: 'Broj otvorenih TP pozicija (operacija) na ovoj mašini',
     sortable: true,
     align: 'right',
     accessor: (r) => r.totalOps,
@@ -285,7 +287,9 @@ function renderTable() {
     : '';
 
   /* Filter */
-  const filteredRows = filterOperationsByRnOrDrawing(state.rows, state.rnFilter);
+  const filteredRows = sortByUrgencyAndReady(
+    filterOperationsByRnOrDrawing(state.rows, state.rnFilter),
+  );
   let data = summarizeByMachine(filteredRows).map(s => {
     const meta = state.machinesMap?.get(s.machineCode);
     return {
@@ -325,8 +329,11 @@ function renderTable() {
   const headHtml = COLUMNS.map(c => {
     const isActive = c.sortable && c.key === state.sortKey;
     const arrow = isActive ? (state.sortDir === 'asc' ? '▲' : '▼') : '';
+    const titleAttr = c.headerTitle
+      ? ` title="${escHtml(c.headerTitle)}"`
+      : '';
     return `<th class="zm-th zm-th-${c.align}${c.sortable ? ' zm-th-sortable' : ''}${isActive ? ' is-sorted' : ''}"
-              data-sort-key="${c.sortable ? c.key : ''}">
+              data-sort-key="${c.sortable ? c.key : ''}"${titleAttr}>
               <span>${escHtml(c.label)}</span>
               ${arrow ? `<span class="zm-sort-arrow">${arrow}</span>` : ''}
             </th>`;

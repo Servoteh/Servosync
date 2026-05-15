@@ -24,6 +24,7 @@ import {
   loadMachines,
   buildDeadlineMatrix,
   filterOperationsByRnOrDrawing,
+  sortByUrgencyAndReady,
 } from '../../services/planProizvodnje.js';
 
 const state = {
@@ -161,7 +162,9 @@ function renderMatrix() {
     ? `<div class="pp-error">${escHtml(state.error)}</div>`
     : '';
 
-  const filteredRows = filterOperationsByRnOrDrawing(state.rows, state.rnFilter);
+  const filteredRows = sortByUrgencyAndReady(
+    filterOperationsByRnOrDrawing(state.rows, state.rnFilter),
+  );
   const matrix = buildDeadlineMatrix(filteredRows, 5);
   const { days } = matrix;
   let { machines } = matrix;
@@ -201,7 +204,7 @@ function renderMatrix() {
   /* Header: Mašina | Ukupno | Kasni | day1..dayN | Kasnije | Bez roka */
   const headHtml = `
     <th class="pm-th pm-th-machine">Mašina</th>
-    <th class="pm-th pm-th-total">Otvoreno</th>
+    <th class="pm-th pm-th-total" title="Broj otvorenih TP pozicija (operacija) za ovu mašinu">Otvoreno</th>
     <th class="pm-th pm-th-bucket pm-th-overdue">Kasni</th>
     ${days.map(d => `
       <th class="pm-th pm-th-bucket${d.isToday ? ' is-today' : ''}">
@@ -224,11 +227,14 @@ function renderMatrix() {
               </td>`;
     }).join('');
     return `
-      <tr class="pm-row" data-machine="${escHtml(m.machineCode)}">
+      <tr class="pm-row${m.scrapOps > 0 ? ' pm-row-has-scrap' : ''}" data-machine="${escHtml(m.machineCode)}">
         <td class="pm-td-machine">
           <div class="zm-machine-code">${escHtml(m.machineCode)}</div>
           <div class="zm-machine-name">${escHtml(m.machineName || '')}</div>
           <div class="pm-machine-badges">
+            ${m.scrapOps > 0
+              ? `<span class="zm-pill zm-pill-scrap-row" title="Bar jedna operacija puštena po skartu">⚠ skart</span>`
+              : ''}
             ${m.readyOps > 0
               ? `<span class="zm-pill zm-pill-ready" title="Spremno za obradu">${m.readyOps} spremno</span>`
               : ''}

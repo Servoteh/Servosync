@@ -89,22 +89,36 @@ function nonNullRows(data, context) {
   return data;
 }
 
+/** PP-B četvorosegmentni prioritet: hitno×spremnost (0 najviše). */
+export function urgencyReadyBucket(row) {
+  const urgent = !!row?.is_urgent;
+  const ready = !!row?.is_ready_for_machine;
+  return (urgent ? 0 : 2) + (ready ? 0 : 1);
+}
+
+/** Niz redova ima neopadajuće PP-B segmente po redu prikaza (za drag-drop invariant). */
+export function urgencyReadyBucketsAreNonDecreasing(rows) {
+  if (!Array.isArray(rows) || rows.length < 2) return true;
+  for (let i = 1; i < rows.length; i += 1) {
+    if (urgencyReadyBucket(rows[i]) < urgencyReadyBucket(rows[i - 1])) return false;
+  }
+  return true;
+}
+
 /**
- * G2 dvonivoski sort:
- * 1) ručni redosled/pin (`shift_sort_order`) uvek ide pre auto-sorta,
- * 2) zatim DB bucket spremnosti/hitnosti,
- * 3) rok, BigTehn prioritet i stabilni RN/op tie-breakeri.
+ * PP-B primarni redosled po `urgencyReadyBucket` (0→3), zatim unutar segmenta:
+ * `shift_sort_order` → rok → `work_order_id` → BigTehn prioritet → RN → `line_id` → `operacija`.
  */
-export function sortProductionOperations(rows) {
+export function sortByUrgencyAndReady(rows) {
   if (!Array.isArray(rows)) return [];
   return rows.slice().sort((a, b) => {
+    const ub = cmpNullableAsc(urgencyReadyBucket(a), urgencyReadyBucket(b));
+    if (ub !== 0) return ub;
+
     const aManual = numOrNull(a?.shift_sort_order);
     const bManual = numOrNull(b?.shift_sort_order);
     const manualCmp = cmpNullableAsc(aManual, bManual);
     if (manualCmp !== 0) return manualCmp;
-
-    const bucketCmp = cmpNullableAsc(numOrNull(a?.auto_sort_bucket), numOrNull(b?.auto_sort_bucket));
-    if (bucketCmp !== 0) return bucketCmp;
 
     const dateCmp = cmpNullableAsc(
       a?.rok_izrade ? Date.parse(a.rok_izrade) : null,
@@ -112,13 +126,28 @@ export function sortProductionOperations(rows) {
     );
     if (dateCmp !== 0) return dateCmp;
 
+    const woCmp = cmpNullableAsc(numOrNull(a?.work_order_id), numOrNull(b?.work_order_id));
+    if (woCmp !== 0) return woCmp;
+
     const priCmp = cmpNullableAsc(numOrNull(a?.prioritet_bigtehn), numOrNull(b?.prioritet_bigtehn));
     if (priCmp !== 0) return priCmp;
 
     const rnCmp = cmpTextAsc(a?.rn_ident_broj, b?.rn_ident_broj);
     if (rnCmp !== 0) return rnCmp;
+
+    const lineCmp = cmpNullableAsc(numOrNull(a?.line_id), numOrNull(b?.line_id));
+    if (lineCmp !== 0) return lineCmp;
+
     return cmpNullableAsc(numOrNull(a?.operacija), numOrNull(b?.operacija));
   });
+}
+
+/**
+ * G2/PP-B list sort (Plan operacije).
+ * Isto kao {@link sortByUrgencyAndReady} — zadržani naziv za postojeće pozive.
+ */
+export function sortProductionOperations(rows) {
+  return sortByUrgencyAndReady(rows);
 }
 
 export function machineGroupSlugForCode(rjCode) {
@@ -398,7 +427,7 @@ export async function loadAllOpenOperations() {
     'opis_rada',
     'operacija',
     'cam_ready',
-    'is_ready_for_processing',
+    'is_ready_for_machine',
     'is_urgent',
     'auto_sort_bucket',
   ].join(',');
@@ -1312,6 +1341,31 @@ export function plannedSeconds(row) {
   return Math.round((tpz + tk * k) * 60);
 }
 
+/** Lokalni statusi čija tehnološka sekunda ulaze u Σ planirano u tabu Po mašini. */
+export const OPEN_PLAN_SUM_LOCAL_STATUSES = new Set(['waiting', 'in_progress', 'blocked']);
+
+/**
+ * Suma `plannedSeconds` preko niza operacija. Ako je `onlyLocalStatuses` zadato, preskače
+ * redove čiji `local_status` ne upada u skup (fallback status = waiting).
+ */
+export function sumPlannedSecondsForRows(rows, { onlyLocalStatuses = OPEN_PLAN_SUM_LOCAL_STATUSES } = {}) {
+  if (!Array.isArray(rows)) return 0;
+  let sum = 0;
+  for (const row of rows) {
+    const st = row?.local_status || 'waiting';
+    if (onlyLocalStatuses != null && !onlyLocalStatuses.has(st)) continue;
+    sum += plannedSeconds(row);
+  }
+  return sum;
+}
+
+/** PP-C: „pušteno po skartu” — koristi eksplicitnu kolonu ako postoji u view-u; inače G4 `is_scrap`. */
+export function operationIsScrapRelease(row) {
+  if (row?.is_scrap_release === true) return true;
+  if (row?.is_scrap_release === false) return false;
+  return !!row?.is_scrap;
+}
+
 /**
  * Client-side filter za "RN ili crtež" u Planiranju proizvodnje.
  * Pretražuje BigTehn ident RN-a i broj crteža, case-insensitive contains.
@@ -1379,7 +1433,7 @@ export function summarizeByMachine(rows) {
     s.totalOps += 1;
     if (r.broj_crteza) s.drawingsSet.add(String(r.broj_crteza));
     if (r.cam_ready) s.camReadyOps += 1;
-    if (r.is_ready_for_processing) s.readyOps += 1;
+    if (r.is_ready_for_machine) s.readyOps += 1;
     if (r.is_urgent) s.urgentOps += 1;
     if (r.is_non_machining) s.nonMachiningOps += 1;
     if (r.assigned_machine_code) s.reassignedInOps += 1;
@@ -1448,6 +1502,9 @@ export function nextWorkingDays(numWorkingDays = 5, fromDate = new Date()) {
  *         machineCode,
  *         totalOps,
  *         camReadyOps,
+ *         readyOps,
+ *         urgentOps,
+ *         scrapOps,           // PP-C: bar jedna operacija označena kao skart-puštenje
  *         buckets: {
  *           overdue: N,           // rok < danas
  *           '2026-04-21': N,      // rok je tog dana
@@ -1471,7 +1528,7 @@ export function buildDeadlineMatrix(rows, numWorkingDays = 5) {
     if (!mc) continue;
     let m = byMachine.get(mc);
     if (!m) {
-      m = { machineCode: mc, totalOps: 0, camReadyOps: 0, readyOps: 0, urgentOps: 0, buckets: {
+      m = { machineCode: mc, totalOps: 0, camReadyOps: 0, readyOps: 0, urgentOps: 0, scrapOps: 0, buckets: {
         overdue: 0, future: 0, noDeadline: 0,
       } };
       for (const d of days) m.buckets[d.date] = 0;
@@ -1479,8 +1536,9 @@ export function buildDeadlineMatrix(rows, numWorkingDays = 5) {
     }
     m.totalOps += 1;
     if (r.cam_ready) m.camReadyOps += 1;
-    if (r.is_ready_for_processing) m.readyOps += 1;
+    if (r.is_ready_for_machine) m.readyOps += 1;
     if (r.is_urgent) m.urgentOps += 1;
+    if (operationIsScrapRelease(r)) m.scrapOps += 1;
     const rok = r.rok_izrade ? isoDay(new Date(r.rok_izrade)) : null;
     if (!rok) {
       m.buckets.noDeadline += 1;

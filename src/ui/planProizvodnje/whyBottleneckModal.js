@@ -34,7 +34,7 @@ export function buildWhyExplanation(row) {
 
   const status = row.local_status || 'waiting';
   const urgent = !!row.is_urgent;
-  const ready = !!row.is_ready_for_processing;
+  const ready = !!row.is_ready_for_machine;
   const prevSt = row.previous_operation_status || 'none';
   const rokClass = rokUrgencyClass(row.rok_izrade);
   const rokLabel = row.rok_izrade ? formatDate(row.rok_izrade) : null;
@@ -125,7 +125,7 @@ export function buildWhyExplanation(row) {
   }
 
   orderLines.push(
-    'Globalno sortiranje u aplikaciji: prvo ručni red, zatim bucket, pa **rok** (`rok_izrade`), pa BigTehn **prioritet** (`prioritet_bigtehn`), pa RN i broj operacije.',
+    'Globalno sortiranje u aplikaciji: najpre segment **HITNO × spremnost** (četiri grupe PP-B), zatim ručni red (`shift_sort_order`), pa **rok** (`rok_izrade`), pa BigTehn **prioritet** (`prioritet_bigtehn`), pa RN.',
   );
 
   orderLines.push(
@@ -204,7 +204,7 @@ function statusLabel(s) {
  */
 export function describeAutoSortBucket(row) {
   const st = row.local_status || 'waiting';
-  const prevDone = row.is_ready_for_processing;
+  const prevDone = row.is_ready_for_machine;
   const b = Number(row.auto_sort_bucket);
 
   if (st === 'blocked') return 'prioritet za operacije označene kao blokirane (bucket 7).';

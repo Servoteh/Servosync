@@ -21,50 +21,105 @@ vi.mock('../../src/services/drawings.js', () => ({
   absolutizeSupabaseStorageSignedPath: vi.fn(),
 }));
 
-describe('G2 sortProductionOperations', () => {
-  it('sorts unpinned rows by bucket, deadline and BigTehn priority', async () => {
-    const { sortProductionOperations } = await import('../../src/services/planProizvodnje.js');
+describe('PP-B sortByUrgencyAndReady', () => {
+  it('sorts strict 0→1→2→3 by hitno × spremno, then rok', async () => {
+    const { sortByUrgencyAndReady } = await import('../../src/services/planProizvodnje.js');
     const rows = [
-      { id: 'late', auto_sort_bucket: 5, rok_izrade: '2026-04-30', prioritet_bigtehn: 20, rn_ident_broj: 'RN3', operacija: 30 },
-      { id: 'urgent', auto_sort_bucket: 2, rok_izrade: '2026-05-02', prioritet_bigtehn: 30, rn_ident_broj: 'RN2', operacija: 20 },
-      { id: 'same-bucket-earlier', auto_sort_bucket: 5, rok_izrade: '2026-04-29', prioritet_bigtehn: 10, rn_ident_broj: 'RN1', operacija: 10 },
+      {
+        id: 'b3', is_urgent: false, is_ready_for_machine: false, rok_izrade: '2026-04-01', work_order_id: 40, line_id: 1,
+      },
+      {
+        id: 'b2', is_urgent: false, is_ready_for_machine: true, rok_izrade: '2026-06-01', work_order_id: 30, line_id: 1,
+      },
+      {
+        id: 'b1', is_urgent: true, is_ready_for_machine: false, rok_izrade: '2026-05-01', work_order_id: 20, line_id: 1,
+      },
+      {
+        id: 'b0', is_urgent: true, is_ready_for_machine: true, rok_izrade: '2026-07-01', work_order_id: 10, line_id: 1,
+      },
     ];
 
-    expect(sortProductionOperations(rows).map(r => r.id)).toEqual([
-      'urgent',
-      'same-bucket-earlier',
-      'late',
-    ]);
+    expect(sortByUrgencyAndReady(rows).map(r => r.id)).toEqual(['b0', 'b1', 'b2', 'b3']);
   });
 
-  it('keeps one pinned row before auto-sorted rows', async () => {
-    const { sortProductionOperations } = await import('../../src/services/planProizvodnje.js');
+  it('within urgent+ready bucket uses shift_sort_order before rok', async () => {
+    const { sortByUrgencyAndReady } = await import('../../src/services/planProizvodnje.js');
     const rows = [
-      { id: 'auto-best', auto_sort_bucket: 1, rok_izrade: '2026-04-29', prioritet_bigtehn: 10 },
-      { id: 'pinned', shift_sort_order: 10, auto_sort_bucket: 8, rok_izrade: '2026-05-10', prioritet_bigtehn: 99 },
-      { id: 'auto-next', auto_sort_bucket: 2, rok_izrade: '2026-04-30', prioritet_bigtehn: 20 },
+      {
+        id: 'late-shift', is_urgent: true, is_ready_for_machine: true, shift_sort_order: 2, rok_izrade: '2026-04-01',
+        work_order_id: 1, line_id: 1,
+      },
+      {
+        id: 'early-shift', is_urgent: true, is_ready_for_machine: true, shift_sort_order: 1, rok_izrade: '2026-05-01',
+        work_order_id: 1, line_id: 2,
+      },
+      {
+        id: 'pinned-null', is_urgent: true, is_ready_for_machine: true, shift_sort_order: null, rok_izrade: '2026-01-01',
+        work_order_id: 2, line_id: 1,
+      },
     ];
-
-    expect(sortProductionOperations(rows).map(r => r.id)).toEqual([
-      'pinned',
-      'auto-best',
-      'auto-next',
-    ]);
+    expect(sortByUrgencyAndReady(rows).map(r => r.id)).toEqual(['early-shift', 'late-shift', 'pinned-null']);
   });
 
-  it('sorts two pinned rows by shift_sort_order before auto rows', async () => {
-    const { sortProductionOperations } = await import('../../src/services/planProizvodnje.js');
+  it('lower-bucket pinned rows rank after urgent+ready block', async () => {
+    const { sortByUrgencyAndReady } = await import('../../src/services/planProizvodnje.js');
     const rows = [
-      { id: 'pinned-second', shift_sort_order: 2, auto_sort_bucket: 1 },
-      { id: 'auto', auto_sort_bucket: 1 },
-      { id: 'pinned-first', shift_sort_order: 1, auto_sort_bucket: 9 },
+      {
+        id: 'auto-hit-ready', is_urgent: true, is_ready_for_machine: true, shift_sort_order: null, rok_izrade: '2026-04-01',
+        work_order_id: 99, line_id: 1,
+      },
+      {
+        id: 'pinned-not-urg', is_urgent: false, is_ready_for_machine: true, shift_sort_order: 1, rok_izrade: '2026-03-01',
+        work_order_id: 1, line_id: 2,
+      },
     ];
+    expect(sortByUrgencyAndReady(rows).map(r => r.id)).toEqual(['auto-hit-ready', 'pinned-not-urg']);
+  });
+});
 
-    expect(sortProductionOperations(rows).map(r => r.id)).toEqual([
-      'pinned-first',
-      'pinned-second',
-      'auto',
-    ]);
+describe('urgencyReadyBucketsAreNonDecreasing', () => {
+  it('detects inversion across buckets', async () => {
+    const { urgencyReadyBucketsAreNonDecreasing } = await import('../../src/services/planProizvodnje.js');
+    const ok = [
+      { is_urgent: true, is_ready_for_machine: true },
+      { is_urgent: true, is_ready_for_machine: false },
+    ];
+    const bad = [
+      { is_urgent: false, is_ready_for_machine: false },
+      { is_urgent: true, is_ready_for_machine: true },
+    ];
+    expect(urgencyReadyBucketsAreNonDecreasing(ok)).toBe(true);
+    expect(urgencyReadyBucketsAreNonDecreasing(bad)).toBe(false);
+  });
+});
+
+describe('PP-C sumPlannedSecondsForRows + operationIsScrapRelease', () => {
+  it('sums planned seconds only for waiting/in_progress/blocked overlays', async () => {
+    const { sumPlannedSecondsForRows } = await import('../../src/services/planProizvodnje.js');
+    const rows = [
+      { local_status: 'waiting', tpz_min: 1, tk_min: 2, komada_total: 1 },
+      { local_status: 'completed', tpz_min: 9, tk_min: 9, komada_total: 9 },
+      { tpz_min: 0, tk_min: 1, komada_total: 1 },
+    ];
+    const expected = Math.round((1 + 2 * 1) * 60) + Math.round((0 + 1 * 1) * 60);
+    expect(sumPlannedSecondsForRows(rows)).toBe(expected);
+  });
+
+  it('operationIsScrapRelease honors explicit column over is_scrap fallback', async () => {
+    const { operationIsScrapRelease } = await import('../../src/services/planProizvodnje.js');
+    expect(operationIsScrapRelease({ is_scrap_release: false, is_scrap: true })).toBe(false);
+    expect(operationIsScrapRelease({ is_scrap_release: true })).toBe(true);
+    expect(operationIsScrapRelease({ is_scrap: true })).toBe(true);
+  });
+
+  it('buildDeadlineMatrix counts scrapOps using scrap fallback', async () => {
+    const { buildDeadlineMatrix } = await import('../../src/services/planProizvodnje.js');
+    const rows = [
+      { effective_machine_code: 'M1', rok_izrade: null },
+      { effective_machine_code: 'M1', rok_izrade: null, is_scrap: true },
+    ];
+    const m = buildDeadlineMatrix(rows).machines.find(x => x.machineCode === 'M1');
+    expect(m?.scrapOps).toBe(1);
   });
 });
 

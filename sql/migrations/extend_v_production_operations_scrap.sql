@@ -1,0 +1,20 @@
+-- PP-C — DRAFT (ne pokretati automatski na produkciji pre review-a)
+--
+-- Cilj: eksplicitna boolean kolona is_scrap_release na public.v_production_operations,
+-- bez menjanja bigtehn_* šeme.
+--
+-- Procedura: uzeti ceo CREATE VIEW blok iz najnovije produkcijske definicije
+--           (trenutno u sklopu PP-A drafta sql/migrations/fix_v_production_operations_ready.sql).
+--           U LISTI selektovanih kolona koja već ima:
+--               COALESCE(g4.is_scrap, false) AS is_scrap,
+--           dodati ODMAH IZA:
+--               COALESCE(g4.is_scrap, false) AS is_scrap_release,
+--
+-- Pretpostavka (potvrditi): „pušteno po skartu” = sistemski ŠKART na operaciji
+-- prema G4 rework/scrap cache (isto kao is_scrap dok se ne dobije stroža poslovna definicija).
+--
+-- Opciono nakon DEPLOY-a:
+--   COMMENT ON COLUMN public.v_production_operations.is_scrap_release IS
+--     'PP-C oznaka pozicije puštene po škartu — proveriti semantiku sa poslom.';
+--
+-- NOTIFY pgrst, 'reload schema';
