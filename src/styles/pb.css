@@ -1884,6 +1884,10 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
 
 /* == MODALI == */
 
+.modal-overlay.pb-modal {
+  z-index: 5000;
+}
+
 .pb-modal.pb-modal--sheet .modal-panel {
   position: fixed;
   bottom: 0;
@@ -1941,6 +1945,9 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   flex-shrink: 0;
   margin-top: 0;
   gap: 8px;
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
   padding: 12px var(--pb-task-modal-pad) calc(14px + env(safe-area-inset-bottom, 0px));
   background: var(--surface, #fff);
   border-top: 1px solid var(--border, #e5e7eb);
@@ -2008,6 +2015,10 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   flex-direction: column;
   gap: 4px;
   font-size: 0.85rem;
+}
+
+.pb-dates-grid input.pb-task-date-dmy {
+  font-variant-numeric: tabular-nums;
 }
 
 .pb-norm-row {

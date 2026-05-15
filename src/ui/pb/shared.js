@@ -31,6 +31,32 @@ export const PB_TASK_VRSTA = [
 ];
 export const PB_PRIORITET = ['Visok', 'Srednji', 'Nizak'];
 
+/** ISO yyyy-mm-dd → dd/mm/yyyy (forma modala). */
+function pbFormatIsoToDmy(iso) {
+  const s = String(iso || '').trim().slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return '';
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
+/**
+ * dd/mm/yyyy ili dd.mm.yyyy → ISO yyyy-mm-dd.
+ * @returns {string|null} null = prazno polje, '' = nevalidan unos
+ */
+function pbParseDmyToIso(s) {
+  const t = String(s || '').trim();
+  if (!t) return null;
+  const m = /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/.exec(t);
+  if (!m) return '';
+  const d = Number(m[1]);
+  const mo = Number(m[2]);
+  const y = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return '';
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
 /** Built-in presets (read-only — ne mogu se brisati). */
 export const PB_BUILTIN_VIEWS = [
   { name: 'Visok prioritet', filters: { prioritet: 'Visok' } },
@@ -295,10 +321,10 @@ export function openTaskEditorModal(opts) {
           </label>
         </div>
         <div class="pb-dates-grid">
-          <label><span>Plan početak</span><input type="date" id="pbTfDp" value="${escHtml((t.datum_pocetka_plan || '').slice(0, 10))}" ${canEdit ? '' : 'disabled'} /></label>
-          <label><span>Plan rok</span><input type="date" id="pbTfDr" value="${escHtml((t.datum_zavrsetka_plan || '').slice(0, 10))}" ${canEdit ? '' : 'disabled'} /></label>
-          <label><span>Ostvaren poč.</span><input type="date" id="pbTfRp" value="${escHtml((t.datum_pocetka_real || '').slice(0, 10))}" ${canEdit ? '' : 'disabled'} /></label>
-          <label><span>Ostvaren završetak</span><input type="date" id="pbTfRz" value="${escHtml((t.datum_zavrsetka_real || '').slice(0, 10))}" ${canEdit ? '' : 'disabled'} /></label>
+          <label><span>Plan početak</span><input type="text" class="pb-task-date-dmy" id="pbTfDp" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_pocetka_plan))}" ${canEdit ? '' : 'disabled'} /></label>
+          <label><span>Plan rok</span><input type="text" class="pb-task-date-dmy" id="pbTfDr" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_zavrsetka_plan))}" ${canEdit ? '' : 'disabled'} /></label>
+          <label><span>Ostvaren poč.</span><input type="text" class="pb-task-date-dmy" id="pbTfRp" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_pocetka_real))}" ${canEdit ? '' : 'disabled'} /></label>
+          <label><span>Ostvaren završetak</span><input type="text" class="pb-task-date-dmy" id="pbTfRz" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_zavrsetka_real))}" ${canEdit ? '' : 'disabled'} /></label>
         </div>
         <label class="pb-field"><span>Norma (h/dan)</span>
           <div class="pb-norm-row">
@@ -347,8 +373,8 @@ export function openTaskEditorModal(opts) {
           </div>`}
         </div>
         <div class="pb-modal-actions">
-          ${canEdit ? `<button type="button" class="btn btn-primary" id="pbTfSave">Sačuvaj</button>` : ''}
-          <button type="button" class="btn" id="pbTfCancel">Otkaži</button>
+          ${canEdit ? `<button type="button" class="btn btn-primary" id="pbTfSave" data-pb-task="save">Sačuvaj</button>` : ''}
+          <button type="button" class="btn" id="pbTfCancel" data-pb-task="cancel">Otkaži</button>
         </div>
       </div>
     </div>`;
@@ -357,8 +383,8 @@ export function openTaskEditorModal(opts) {
     wrap.remove();
   }
 
-  wrap.querySelector('.pb-close-modal')?.addEventListener('click', close);
-  wrap.querySelector('#pbTfCancel')?.addEventListener('click', close);
+  const panelEl = wrap.querySelector('.pb-task-panel');
+
   wrap.addEventListener('click', e => {
     if (e.target === wrap) close();
   });
@@ -367,6 +393,68 @@ export function openTaskEditorModal(opts) {
   const normN = wrap.querySelector('#pbTfNormN');
   normR?.addEventListener('input', () => { if (normN) normN.value = normR.value; });
   normN?.addEventListener('input', () => { if (normR) normR.value = normN.value; });
+
+  async function handleSave() {
+    const naziv = wrap.querySelector('#pbTfNaziv')?.value?.trim();
+    const projectId = wrap.querySelector('#pbTfProject')?.value || null;
+    if (!naziv || !projectId) {
+      showToast('Unesi naziv i projekat');
+      return;
+    }
+    /** @param {string} id */
+    const readD = (id) => {
+      const raw = wrap.querySelector(id)?.value?.trim() || '';
+      if (!raw) return { ok: true, iso: null };
+      const iso = pbParseDmyToIso(raw);
+      if (iso === '') return { ok: false, iso: null };
+      return { ok: true, iso };
+    };
+    const fDp = readD('#pbTfDp');
+    const fDr = readD('#pbTfDr');
+    const fRp = readD('#pbTfRp');
+    const fRz = readD('#pbTfRz');
+    if (!fDp.ok || !fDr.ok || !fRp.ok || !fRz.ok) {
+      showToast('Datum mora biti u formatu dd/mm/yyyy (npr. 15/05/2026) ili ostavi prazno.');
+      return;
+    }
+    const payload = {
+      naziv,
+      project_id: projectId,
+      employee_id: wrap.querySelector('#pbTfEng')?.value || null,
+      vrsta: wrap.querySelector('#pbTfVrsta')?.value,
+      prioritet: wrap.querySelector('#pbTfPrio')?.value,
+      status: wrap.querySelector('#pbTfStatus')?.value,
+      datum_pocetka_plan: fDp.iso,
+      datum_zavrsetka_plan: fDr.iso,
+      datum_pocetka_real: fRp.iso,
+      datum_zavrsetka_real: fRz.iso,
+      norma_sati_dan: Number(normN?.value) || 4,
+      procenat_zavrsenosti: Number(wrap.querySelector('#pbTfPct')?.value) || 0,
+    };
+    let ok;
+    if (isNew) ok = await createPbTask(payload);
+    else ok = await updatePbTask(t.id, payload);
+    if (ok) {
+      showToast('Sačuvano');
+      close();
+      onSaved?.();
+    } else showToast('Greška pri čuvanju');
+  }
+
+  panelEl?.addEventListener('click', (e) => {
+    const rawT = e.target;
+    const t = rawT instanceof Element ? rawT : rawT.parentElement;
+    if (!t || !(t instanceof Element)) return;
+    if (t.closest('.pb-close-modal') || t.closest('[data-pb-task="cancel"]')) {
+      e.preventDefault();
+      close();
+      return;
+    }
+    if (t.closest('[data-pb-task="save"]')) {
+      e.preventDefault();
+      void handleSave();
+    }
+  });
 
   /* ── Komentari (samo za postojeći task) ───────────────────────────── */
   if (!isNew) {
@@ -632,38 +720,16 @@ export function openTaskEditorModal(opts) {
     loadFiles();
   }
 
-  wrap.querySelector('#pbTfSave')?.addEventListener('click', async () => {
-    const naziv = wrap.querySelector('#pbTfNaziv')?.value?.trim();
-    const projectId = wrap.querySelector('#pbTfProject')?.value || null;
-    if (!naziv || !projectId) {
-      showToast('Unesi naziv i projekat');
-      return;
-    }
-    const payload = {
-      naziv,
-      project_id: projectId,
-      employee_id: wrap.querySelector('#pbTfEng')?.value || null,
-      vrsta: wrap.querySelector('#pbTfVrsta')?.value,
-      prioritet: wrap.querySelector('#pbTfPrio')?.value,
-      status: wrap.querySelector('#pbTfStatus')?.value,
-      datum_pocetka_plan: wrap.querySelector('#pbTfDp')?.value || null,
-      datum_zavrsetka_plan: wrap.querySelector('#pbTfDr')?.value || null,
-      datum_pocetka_real: wrap.querySelector('#pbTfRp')?.value || null,
-      datum_zavrsetka_real: wrap.querySelector('#pbTfRz')?.value || null,
-      norma_sati_dan: Number(normN?.value) || 4,
-      procenat_zavrsenosti: Number(wrap.querySelector('#pbTfPct')?.value) || 0,
-    };
-    let ok;
-    if (isNew) ok = await createPbTask(payload);
-    else ok = await updatePbTask(t.id, payload);
-    if (ok) {
-      showToast('Sačuvano');
-      close();
-      onSaved?.();
-    } else showToast('Greška pri čuvanju');
-  });
-
   document.body.appendChild(wrap);
+
+  panelEl?.querySelectorAll('.pb-task-date-dmy').forEach((inp) => {
+    inp.addEventListener('blur', () => {
+      const raw = inp.value.trim();
+      if (!raw) return;
+      const iso = pbParseDmyToIso(raw);
+      if (iso) inp.value = pbFormatIsoToDmy(iso);
+    });
+  });
 }
 
 export function openTextAreaModal({ title, initial, hint, canEdit, onSave }) {
