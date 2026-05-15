@@ -20,3 +20,5 @@ Be concise. Do not explain code unless asked. Use minimal tokens. Only focus on 
 6. **Performance** — Avoid N+1 RPC/API patterns.
 
 7. **Secrets** — Never put `service_role` or other secrets in frontend code.
+
+8. **Lokacije predmet 9400** — Kanonski `item_ref_id` za N–N granu je **`grana/tp`** (npr. `2/415`), **ne** `-2/415`. U cache-u ostaje `ident_broj` oblika `9400-2/415`; normalizacija i JOIN moraju to uskladiti (legacy `-grana/tp` samo za čitanje/migraciju, ne kao novi kanon).

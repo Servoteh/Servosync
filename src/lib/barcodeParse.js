@@ -132,20 +132,21 @@ function tryParseCompactLabelLoose(clean) {
  */
 export function normalizeLocMovementKeys(orderNo, itemRefId) {
   const o = String(orderNo ?? '').trim();
-  const r = String(itemRefId ?? '').trim();
+  let r = String(itemRefId ?? '').trim();
   if (!o || !r) return { orderNo: o, itemRefId: r };
   const m9400 = o.match(/^9400-(\d+)$/);
   if (m9400 && /^\d+$/.test(r)) {
-    return { orderNo: '9400', itemRefId: `-${m9400[1]}/${r}` };
+    return { orderNo: '9400', itemRefId: `${m9400[1]}/${r}` };
   }
-  if (o === '9400' && /^\d+\/\d+$/.test(r) && !r.startsWith('-')) {
-    return { orderNo: '9400', itemRefId: `-${r}` };
+  if (o === '9400' && /^-?\d+\/\d+$/.test(r)) {
+    r = r.replace(/^-/, '');
+    return { orderNo: '9400', itemRefId: r };
   }
   return { orderNo: o, itemRefId: r };
 }
 
 /**
- * RNZ „9400-2/415" → nalog **9400**, TP ref **-2/415** (podešavanja: predmet 9400).
+ * RNZ „9400-2/415" → nalog **9400**, TP ref **2/415** (podešavanja: predmet 9400).
  * Samo ako je drugi segment RNZ-a jedna numerička grana a TP čist broj.
  * Ostavlja npr. `9400-1/7-5-S1`.
  *
@@ -163,7 +164,7 @@ function applyPredmet9400BranchFold(parsed) {
   return {
     ...parsed,
     orderNo: '9400',
-    itemRefId: `-${m[1]}/${tp}`,
+    itemRefId: `${m[1]}/${tp}`,
   };
 }
 

@@ -36,12 +36,12 @@ describe('normalizeBarcodeText', () => {
 });
 
 describe('parseBigTehnBarcode — predmet 9400 RN ident (fold u lokacije)', () => {
-  it('RNZ 9400-2/415 → nalog 9400, TP -2/415', () => {
+  it('RNZ 9400-2/415 → nalog 9400, TP 2/415', () => {
     expect(parseBigTehnBarcode('RNZ:9833:9400-2/415:0:44963')).toEqual({
       format: 'rnz',
       idrn: '9833',
       orderNo: '9400',
-      itemRefId: '-2/415',
+      itemRefId: '2/415',
       drawingNo: '',
       raw: 'RNZ:9833:9400-2/415:0:44963',
       varijanta: '0',
@@ -49,17 +49,24 @@ describe('parseBigTehnBarcode — predmet 9400 RN ident (fold u lokacije)', () =
     });
   });
 
-  it('normalizeLocMovementKeys: 9400-2 + 415 → 9400 / -2/415', () => {
+  it('normalizeLocMovementKeys: 9400-2 + 415 → 9400 / 2/415', () => {
     expect(normalizeLocMovementKeys('9400-2', '415')).toEqual({
       orderNo: '9400',
-      itemRefId: '-2/415',
+      itemRefId: '2/415',
     });
   });
 
   it('normalizeLocMovementKeys: legacy 9400 + 2/415', () => {
     expect(normalizeLocMovementKeys('9400', '2/415')).toEqual({
       orderNo: '9400',
-      itemRefId: '-2/415',
+      itemRefId: '2/415',
+    });
+  });
+
+  it('normalizeLocMovementKeys: uklanja vodeću crticu iz starog zapisa', () => {
+    expect(normalizeLocMovementKeys('9400', '-2/415')).toEqual({
+      orderNo: '9400',
+      itemRefId: '2/415',
     });
   });
 

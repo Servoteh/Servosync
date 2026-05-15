@@ -1,4 +1,62 @@
--- Lokacije izveštaj: JOIN na RN za predmet 9400 — ident „9400-2/415” ↔ smeštaj 9400 + „2/415”; ostaje podrška za legacy „-2/415”.
+-- Kanonski TP ref za predmet 9400: „2/415” (ne „-2/415”). Prepis postojećih redova + funkcije za već deployovane baze.
+
+UPDATE public.loc_item_placements
+SET item_ref_id = regexp_replace(trim(item_ref_id), '^-([0-9]+/[0-9]+)$', '\1')
+WHERE trim(order_no) = '9400'
+  AND trim(item_ref_id) ~ '^-[0-9]+/[0-9]+$';
+
+UPDATE public.loc_location_movements
+SET item_ref_id = regexp_replace(trim(item_ref_id), '^-([0-9]+/[0-9]+)$', '\1')
+WHERE trim(order_no) = '9400'
+  AND trim(item_ref_id) ~ '^-[0-9]+/[0-9]+$';
+
+CREATE OR REPLACE FUNCTION public.loc_normalize_loc_movement_keys(p_order text, p_item_ref text)
+RETURNS TABLE(out_order text, out_item_ref text)
+LANGUAGE plpgsql
+IMMUTABLE
+AS $norm$
+DECLARE
+  o text := nullif(trim(both FROM coalesce(p_order, '')), '');
+  r text := nullif(trim(both FROM coalesce(p_item_ref, '')), '');
+BEGIN
+  IF o IS NULL THEN
+    o := '';
+  END IF;
+  IF r IS NULL THEN
+    r := '';
+  END IF;
+  IF o = '' OR r = '' THEN
+    out_order := o;
+    out_item_ref := r;
+    RETURN NEXT;
+    RETURN;
+  END IF;
+
+  IF o ~ '^9400-[0-9]+$' AND r ~ '^[0-9]+$' THEN
+    out_order := '9400';
+    out_item_ref := substring(o FROM '^9400-([0-9]+)$') || '/' || r;
+    RETURN NEXT;
+    RETURN;
+  END IF;
+
+  IF o = '9400' AND r ~ '^-?[0-9]+/[0-9]+$' THEN
+    out_order := '9400';
+    out_item_ref := regexp_replace(r, '^-', '');
+    RETURN NEXT;
+    RETURN;
+  END IF;
+
+  out_order := o;
+  out_item_ref := r;
+  RETURN NEXT;
+END;
+$norm$;
+
+COMMENT ON FUNCTION public.loc_normalize_loc_movement_keys(text, text) IS
+  'Kanonski nalog/TP za lokacije (npr. 9400-2 + 415 → 9400 / 2/415; uklanja vodeću crticu ako je ostala iz starog zapisa).';
+
+REVOKE ALL ON FUNCTION public.loc_normalize_loc_movement_keys(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.loc_normalize_loc_movement_keys(text, text) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.loc_report_parts_by_locations(
   p_drawing_no text DEFAULT NULL,

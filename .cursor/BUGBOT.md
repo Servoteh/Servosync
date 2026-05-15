@@ -25,3 +25,5 @@ Critical rules:
 6. **Performance** — Avoid N+1 RPC/API calls.
 
 7. **Secrets** — Never expose `service_role` keys or secrets in frontend code.
+
+8. **Lokacije predmet 9400** — Canonical `item_ref_id` for the N–N branch case is **`grana/tp`** (e.g. `2/415`), not `-2/415`. Cache `ident_broj` stays `9400-2/415`; normalize + report JOIN must bridge that. Treat leading-hyphen `item_ref` as legacy to migrate away, not as the canonical write shape.

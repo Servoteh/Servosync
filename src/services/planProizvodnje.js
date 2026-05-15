@@ -540,7 +540,7 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
   /* Primarni lookup: "nalog/tp_ref" (kombinovani ident_broj u BigTehn-u). */
   const candidates = [];
   if (opForIdent) {
-    /* Varianta „9400-2/415" — u lokacijama TP ref može biti „-2/415" ili legacy „2/415". */
+    /* Varianta „9400-2/415" — placement: nalog 9400 + TP ref „2/415"; u bazi može ostati legacy „-2/415" dok migracija ne očisti. */
     if (ident === '9400' && opHy) {
       candidates.push(`9400-${opHy[1]}/${opHy[2]}`);
     }
@@ -589,7 +589,7 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
   const workOrderId = wo.id != null ? Number(wo.id) : null;
   const total = wo.komada != null ? Number(wo.komada) : null;
 
-  /* 2) Numerički TP (uključ. 415 iz „-2/415") → komada_done iz tech routing cache-a. */
+  /* 2) Numerički TP (npr. 415 iz „2/415" ili „-2/415") → komada_done iz tech routing cache-a. */
   let done = null;
   if (opNumRoute != null && Number.isFinite(opNumRoute) && workOrderId != null) {
     try {

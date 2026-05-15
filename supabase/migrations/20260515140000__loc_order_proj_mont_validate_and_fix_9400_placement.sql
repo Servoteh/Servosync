@@ -1,4 +1,4 @@
--- Lokacije: validacija predmeta (N-N osnovica), kanonski ključ za 9400-2/415 → 9400 + TP -2/415,
+-- Lokacije: validacija predmeta (N-N osnovica), kanonski ključ za 9400-2/415 → 9400 + TP 2/415,
 -- loc_create_movement normalizacija + blokada neaktivnog predmeta, konsolidacija duplog smeštaja 1109298,
 -- loc_report join za TP ref sa vodećom crticom.
 
@@ -55,14 +55,14 @@ BEGIN
 
   IF o ~ '^9400-[0-9]+$' AND r ~ '^[0-9]+$' THEN
     out_order := '9400';
-    out_item_ref := '-' || substring(o FROM '^9400-([0-9]+)$') || '/' || r;
+    out_item_ref := substring(o FROM '^9400-([0-9]+)$') || '/' || r;
     RETURN NEXT;
     RETURN;
   END IF;
 
-  IF o = '9400' AND r ~ '^[0-9]+/[0-9]+$' AND substring(r FROM 1 FOR 1) <> '-' THEN
+  IF o = '9400' AND r ~ '^-?[0-9]+/[0-9]+$' THEN
     out_order := '9400';
-    out_item_ref := '-' || r;
+    out_item_ref := regexp_replace(r, '^-', '');
     RETURN NEXT;
     RETURN;
   END IF;
@@ -74,7 +74,7 @@ END;
 $norm$;
 
 COMMENT ON FUNCTION public.loc_normalize_loc_movement_keys(text, text) IS
-  'Kanonski nalog/TP za lokacije (npr. 9400-2 + 415 → 9400 / -2/415).';
+  'Kanonski nalog/TP za lokacije (npr. 9400-2 + 415 → 9400 / 2/415; uklanja vodeću crticu ako je ostala iz starog zapisa).';
 
 REVOKE ALL ON FUNCTION public.loc_normalize_loc_movement_keys(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.loc_normalize_loc_movement_keys(text, text) TO authenticated;
@@ -261,7 +261,7 @@ winner AS (
 UPDATE public.loc_item_placements p
 SET
   order_no = '9400',
-  item_ref_id = '-2/415',
+  item_ref_id = '2/415',
   location_id = w.location_id,
   quantity = w.quantity,
   updated_at = now()
