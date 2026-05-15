@@ -332,6 +332,35 @@ Ključna promena: danas je `bigtehn_*_cache` read-only cache iz MSSQL-a; u novoj
 
 ---
 
+## 5b. Lokacije modul — validan obrazac za Fazu 2 inventory domen
+
+Hardening sprintovi LOC-Härd-1 do Härd-4 (commits `33c6d7b`, `620e6ca`, `3e4ca5b`, `37454aa`, 2026-05-15) konsolidovali su **obrasce** koje treba primeniti i u Fazi 2 inventory domenu (`inventory.placements`, `inventory.movements` i ostatak):
+
+| Obrazac | Implementacija u Härd-1..H-4 | Primena u Fazi 2 |
+|---|---|---|
+| **RPC-only writes** | INSERT u `loc_location_movements` ide isključivo kroz `loc_create_movement(payload jsonb)` SECURITY DEFINER. RLS bez INSERT policy na movements. | Sva pisanja inventory pokreta moraju ići kroz RPC; klijenti nikad ne diraju tabelu direktno. |
+| **Client-generated idempotency UUID** | `client_event_uuid` UUID v4 — partial UNIQUE indeks; replay vraća `idempotent:true` umesto duplikata. | Svaki RPC koji prihvata payload sa klijenta dobija `client_event_uuid` polje (opcioni); RPC generiše ako klijent ne pošalje. Reversi i Štampa nalepnica koriste isti obrazac kroz wrapper u `services/lokacije.js`. |
+| **Advisory lock na bucket** | `pg_advisory_xact_lock(hashtextextended(item:order))` serijalizuje paralelne pozive za isti bucket. | Za inventory.movements bucket je `(sku × location × cost_center)` ili sl. domen-specifičan ključ. |
+| **Outbox + MSSQL sync** | `loc_sync_outbound_events` (PENDING → IN_PROGRESS → SYNCED/FAILED → DEAD_LETTER) sa FOR UPDATE SKIP LOCKED. Exp. backoff 2..360 min. Posle 10 attempts → DEAD_LETTER. | Faza 2 inventory može da zadrži isti pattern dok god MSSQL ostaje pisani write-back target. Kad MSSQL ode u arhivu, outbox postaje mrtav kod i briše se. |
+| **Worker heartbeat + DEAD_LETTER digest** | `loc_sync_worker_heartbeat` + pg_cron job `loc_sync_health_check_hourly` koji enqueue-uje mejlove admin-ima (`user_roles.role IN ('admin','menadzment')`). Dedup ključ po danu + worker_id. | Bilo koji backend worker u Fazi 2 (`inventory-sync-mssql`, `production-bridge`, itd.) dobija isti heartbeat obrazac. Admin emails se ne čuvaju u novoj konfiguracionoj tabeli — recikliraju se iz `user_roles`. |
+| **Hijerarhijski path_cached + cycle guard** | `loc_locations_guard_and_path` trigger sprečava cikluse (CTE do 200 nivoa), recompute path_cached i depth-a pri INSERT/UPDATE parent/name. AFTER trigger rekurzivno ažurira potomke. | Faza 2 inventory ima sličnu HALA → POLICA → SUB-LOKACIJA hijerarhiju (regal/red/polica). Pattern direktno primenljiv. |
+| **Business hierarchy enforcement** | `loc_locations_enforce_business_hierarchy` trigger forsira da HALA mora biti root, POLICA mora imati HALU za parent. Tipovi su u jednom enum-u (`loc_type_enum`), poslovna pravila u trigger-u. | Faza 2 — isti pattern: enum za sve tipove lokacija, trigger čuva business invariante. |
+| **Email-based role check** | `loc_can_create_movement()` koristi `lower(auth.jwt()->>'email') = lower(employees.email)` (a NE `auth.uid()` ili `employees.auth_user_id` — to polje ne postoji u šemi). Obrazac konzistentan sa pb4_rls, maint, sastanci. | Faza 2 isto. Ako se kasnije migrira na `auth_user_id`, treba migracioni helper koji bi popunio retroaktivno. |
+| **AbortController + signal kroz sbReq** | `sbReq` u `services/supabase.js` prihvata `options.signal`; `AbortError` se propagira pozivaocu. UI Predmet tab koristi `AbortController` sa 30s timeout-om. | Sva Faza 2 UI komponenta koja radi `Promise.all([...])` dobija isti pattern. |
+| **`escHtml` + CSV injection escape** | Konzistentan `escHtml` u svim UI render-ima; `toCsvField` prefiksuje `'` opasne stringove. | Faza 2 reuse-uje `src/lib/csv.js` i `src/lib/dom.js`. |
+| **Modul disposers** | `_lokDisposers` niz + `teardownModule` izvršava sve disposere. Sprečava listener kumulaciju pri SPA re-mount-u. | Svaki modul u Fazi 2 koji vezuje document/window listenere dobija isti pattern. |
+| **Migration order runbook** | `docs/migration/loc_migration_order.md` daje 21-step tabelu sa zavisnostima i rollback skriptama. | Svaki domen u Fazi 2 dobija svoj `XX-domain_migration_order.md`. |
+
+**Anti-pattern koje izbegavamo (iz Lokacije nauke):**
+- Direktni INSERT iz klijenta u write-tabele bez SECURITY DEFINER RPC-a (RLS-only nije dovoljan).
+- Tihi `WHEN others` u RPC-u — eksplicitno hvatamo `unique_violation`, `check_violation`.
+- `auth.uid()` only auth — uvek pratimo email obrazac da bi role check radio kroz `user_roles.email`.
+- "Admin emails" kao nova konfiguraciona tabela — koristimo `user_roles` filter.
+- Trigger AFTER da radi business validaciju — kapacitet check ide u RPC pod advisory lock-om, trigger samo upserts placement.
+- Long-lived setInterval/setTimeout bez clearAtCleanup-a — sve disposers idu u centralni niz.
+
+---
+
 ## 6. Sledeći konkretni koraci
 
 1. Proširiti parser da izvuče PK, FK i unique constraint-e u JSON/Markdown.

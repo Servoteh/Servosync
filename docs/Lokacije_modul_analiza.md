@@ -296,19 +296,25 @@ Sve neoznačene greške (npr. `CHECK(quantity > 0)`) padaju u `WHEN others` i pr
 
 ## 6. Reliability checklist pre produkcije / kritičnih izmena
 
-- [ ] **Idempotency**: dodati `client_event_uuid` u `loc_create_movement` payload, dedup u RPC-u (offline queue retry safe).
-- [ ] **Advisory lock** ili `SELECT ... FOR UPDATE` u RPC-u pre validacije kapaciteta i `v_existing_any`.
-- [ ] **Permission**: ograničiti `loc_create_movement` na konkretne uloge u RPC-u (ne samo `authenticated`).
-- [ ] **DEAD_LETTER monitor**: dodati admin notification (slack/email) kad event ide u DEAD_LETTER.
-- [ ] **Hala-deaktivacija**: rekurzivna provera predaka u RPC `loc_create_movement`.
-- [ ] **`drawing_no` regex** u trigger-u — strožije ili eliminisati (svi noviji klijenti šalju eksplicitno).
-- [ ] **Document listener cleanup** u `teardownLokacijeModule` (`mousedown`, `keydown`, `resize`, `scroll`).
-- [ ] **ESC listener leak fix** u `openLocationModal` (`try/finally` oko `fetchLocations`).
-- [ ] **CSV injection** test za `note` koji počinje sa `=`, `+`, `-`, `@`.
-- [ ] **Sync worker health endpoint** — banner ako worker ne radi.
-- [ ] **`loc_report_parts_by_locations` EXPLAIN ANALYZE** na ciljnoj zapremini (100K+ placements).
-- [ ] **AbortController** na export i predmet tab fetch-evima.
-- [ ] **Tests**: izolacioni test za concurrent INITIAL_PLACEMENT, concurrent TRANSFER, hala deactivacija.
+**Status:** Härd-1 → Härd-4 izvršeni 2026-05-15. Markeri ✅ uz commit hash. Ostavljeno ⏳ je prepoznato ali van skopa hardening sprintova (čeka Fazu 2 ili posebnu inicijativu).
+
+- [x] ✅ **Idempotency** (`33c6d7b`, Härd-1): `client_event_uuid` u `loc_create_movement` payload, partial UNIQUE indeks na movements, replay vraća `idempotent:true` (offline queue retry safe).
+- [x] ✅ **Advisory lock** (`33c6d7b`, Härd-1): `pg_advisory_xact_lock(hash(item_table, item_id, order_no))` u RPC-u pre validacije kapaciteta i `v_existing_any`.
+- [x] ✅ **Permission** (`620e6ca`, Härd-2): `loc_can_create_movement()` helper — admin/leadpm/pm/menadzment ili employees u Proizvodnji/Montaži/Magacinu.
+- [x] ✅ **DEAD_LETTER monitor** (`3e4ca5b`, Härd-3): pg_cron `loc_sync_health_check_hourly` enqueue-uje `dead_letter_digest` mejl admin-ima preko `loc_sync_alerts_outbox` + Edge funkcija `loc-sync-monitor-dispatch`.
+- [x] ✅ **Hala-deaktivacija** (`33c6d7b`, Härd-1): rekurzivni CTE u `loc_create_movement` → `parent_inactive` error.
+- [ ] ⏳ **`drawing_no` regex** u trigger-u — strožije ili eliminisati. **Status:** ostavljeno za posebnu intervenciju (svi noviji klijenti od v4 šalju eksplicitno; legacy podaci se backfill-uju regex-om iz `note`, što je prihvatljiv kompromis dok ne potvrdimo da nema više legacy redova).
+- [x] ✅ **Document listener cleanup** (`37454aa`, Härd-4): `_lokDisposers` niz + `teardownLokacijeModule` izvršava sve disposere (mousedown, keydown, resize, scroll).
+- [x] ✅ **ESC listener leak fix** (`37454aa`, Härd-4): `try/catch` oko async IIFE u `openLocationModal`; `close()` u catch grani oslobađa ESC listener.
+- [x] ✅ **CSV injection** (`620e6ca`, Härd-2): `src/lib/csv.js:toCsvField` prefiksuje opasne stringove apostrofom; 10 novih test slučajeva u `tests/lib/csv.test.js`.
+- [x] ✅ **Sync worker health endpoint** (`3e4ca5b`, Härd-3): `loc_sync_worker_heartbeat` tabela + UI banner `renderSyncWorkerBanner` na Dashboard tabu.
+- [ ] ⏳ **`loc_report_parts_by_locations` EXPLAIN ANALYZE** na 100K+ placements. **Status:** ostavljeno za odvojenu DB-perf inicijativu (zahteva produkcioni dataset za benchmark — nije bilo deo Härd skopa).
+- [x] ✅ **AbortController** (`37454aa`, Härd-4): 30s timeout u Predmet tabu; `sbReq` prihvata `options.signal` i propagira `AbortError`.
+- [x] ✅ **Tests**: pgTAP testovi za concurrent INITIAL_PLACEMENT, concurrent TRANSFER, parent_inactive, opcioni UUID, idempotent replay (`harden_loc_create_movement_v5_test.sql`, 15 assertion-a) + autorizacija (`harden_loc_create_movement_v5_roles_test.sql`, 11 assertion-a). Vitest: 308/308 prolaze posle svih izmena.
+
+**Preostalo (čeka inicijativu posebnu od hardening sprintova):**
+- `drawing_no` regex tightening — verovatno se ne isplati dok ne potvrdimo brisanje legacy redova.
+- Performance benchmark `loc_report_parts_by_locations` — pripremiti EXPLAIN ANALYZE skripte i sa pravim podacima na produkciji proceniti.
 
 ---
 
