@@ -1,13 +1,17 @@
 /**
  * Kadrovska — TAB Godišnji odmor (Faza K2 + Gantt redesign).
  *
- * Prikazi: tabela (default) i Gantt po odeljenjima.
- * Filteri: godina, pretraga, odeljenje (multi-select), status (aktivni/svi).
- * Stat kartice: Ukupno / Iskorišćeno / Preostalo / Prekoračilo.
+ * Prikaz: tabela (default) i Gantt po odeljenjima; filteri godina, pretraga,
+ * odeljenje (multi-select), status. Stat kartice: Ukupno / Iskorišćeno / Preostalo / Prekoračilo.
+ *
+ * Tabela: entitlement (dana pravo, preneto), saldo iz `v_vacation_balance`
+ * (iskorišćeno = veći od zbira grida GO i odsustva „godisnji“ kada oba postoje).
+ * Dugme 📋 otvara modal sa svim GO periodima iz mesečnog grida i zapisima
+ * „godisnji“ iz tabele odsustva. Dugme „Rešenje“ — štampa (poslednji GO segment ili prompt).
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { formatDate } from '../../lib/date.js';
+import { formatDate, daysInclusive } from '../../lib/date.js';
 import {
   compareEmployeesByLastFirst,
   employeeDisplayName,
@@ -16,11 +20,12 @@ import { canEditKadrovska, canViewEmployeePii } from '../../state/auth.js';
 import {
   kadrovskaState,
   kadrVacationState,
+  kadrAbsencesState,
 } from '../../state/kadrovska.js';
 import {
   ensureEmployeesLoaded,
   ensureVacationLoaded,
-  employeeNameById,
+  ensureAbsencesLoaded,
 } from '../../services/kadrovska.js';
 import {
   mapDbEntitlement,
@@ -29,6 +34,7 @@ import {
 } from '../../services/vacation.js';
 import {
   countGoDaysByEmployeeForYear,
+  goSegmentsForEmployeeYear,
   latestGoSegmentForEmployeeYear,
   allGoSegmentsForYear,
 } from '../../services/workHoursAbsenceReporting.js';
@@ -124,7 +130,7 @@ export function renderVacationTab() {
             <th>Preneto</th>
             <th>Iskorišćeno</th>
             <th>Preostalo</th>
-            <th class="col-actions">Rešenje</th>
+            <th class="col-actions" title="Pregled perioda i štampa rešenja">Akcije</th>
           </tr>
         </thead>
         <tbody id="vacTbody"></tbody>
@@ -298,9 +304,93 @@ function computeRows() {
   });
 }
 
-/* ── render stat cards ──────────────────────────────────────────────── */
+/** Odsustva tipa godisnji koja preklapaju kalendar godinu `year`. */
+function godisnjiAbsencesForEmployeeYear(employeeId, year) {
+  const out = [];
+  for (const a of kadrAbsencesState.items) {
+    if (a.employeeId !== employeeId || a.type !== 'godisnji') continue;
+    const df = String(a.dateFrom || '').slice(0, 10);
+    const dt = String(a.dateTo || a.dateFrom || '').slice(0, 10);
+    if (!df) continue;
+    const yStart = parseInt(df.slice(0, 4), 10);
+    const yEnd = parseInt(dt.slice(0, 4), 10);
+    if (!Number.isFinite(yStart) || !Number.isFinite(yEnd)) continue;
+    if (yStart > year || yEnd < year) continue;
+    out.push(a);
+  }
+  out.sort((x, y) => String(x.dateFrom).localeCompare(String(y.dateFrom)));
+  return out;
+}
 
-function renderStatCards(rows) {
+function absenceDisplayedDays(a) {
+  if (a.daysCount != null && !Number.isNaN(Number(a.daysCount))) return Number(a.daysCount);
+  return daysInclusive(a.dateFrom, a.dateTo || a.dateFrom);
+}
+
+function closeVacGoDetailModal() {
+  document.getElementById('vacGoDetailModal')?.remove();
+}
+
+async function openVacGoDetailModal(employeeId) {
+  const emp = kadrovskaState.employees.find(e => e.id === employeeId);
+  if (!emp) { showToast('⚠ Zaposleni nije pronađen'); return; }
+  const year = Number(panelRoot?.querySelector('#vacYear')?.value || new Date().getFullYear());
+  closeVacGoDetailModal();
+
+  const host = document.createElement('div');
+  host.innerHTML = `
+    <div class="emp-modal-overlay" id="vacGoDetailModal" role="dialog" aria-modal="true" aria-labelledby="vacGoDetailTitle">
+      <div class="emp-modal" style="max-width:640px">
+        <div class="emp-modal-title" id="vacGoDetailTitle">Korišćeni godišnji</div>
+        <div id="vacGoDetailInner"><p class="emp-sub" style="margin:0">Učitavanje…</p></div>
+        <div class="emp-modal-actions">
+          <button type="button" class="btn" id="vacGoDetailClose">Zatvori</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(host.firstElementChild);
+  const modal = document.getElementById('vacGoDetailModal');
+  const inner = modal.querySelector('#vacGoDetailInner');
+  modal.querySelector('#vacGoDetailClose')?.addEventListener('click', closeVacGoDetailModal);
+  modal.addEventListener('click', (ev) => { if (ev.target === modal) closeVacGoDetailModal(); });
+
+  await ensureAbsencesLoaded();
+  const segments = await goSegmentsForEmployeeYear(employeeId, year);
+  const absences = godisnjiAbsencesForEmployeeYear(employeeId, year);
+  const rowMeta = computeRows().find(r => r.emp.id === employeeId);
+  const saldoUsed = rowMeta ? rowMeta.daysUsed : 0;
+  const gridSum = segments.reduce((s, g) => s + (g.daysCount || 0), 0);
+  const absSum = absences.reduce((s, a) => s + absenceDisplayedDays(a), 0);
+
+  const segRows = segments.length
+    ? segments.map((g, i) => `<tr><td>${i + 1}</td><td>${formatDate(g.dateFrom)}</td><td>${formatDate(g.dateTo)}</td><td style="text-align:right;font-family:var(--mono)">${g.daysCount}</td><td>${escHtml(g.note || '—')}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="emp-sub">Nema dana sa šifrom GO u mesečnom gridu za ovu godinu.</td></tr>';
+  const absRows = absences.length
+    ? absences.map((a, i) => `<tr><td>${i + 1}</td><td>${formatDate(a.dateFrom)}</td><td>${formatDate(a.dateTo || a.dateFrom)}</td><td style="text-align:right;font-family:var(--mono)">${absenceDisplayedDays(a)}</td><td>${escHtml(String(a.note || '—').slice(0, 160))}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="emp-sub">Nema zapisa tipa „Godišnji odmor“ u odsustvima za ovu godinu.</td></tr>';
+
+  inner.innerHTML = `
+    <div class="emp-modal-subtitle" style="margin-bottom:10px">${escHtml(employeeDisplayName(emp) || '')} · godina ${year}</div>
+    <div style="max-height:48vh;overflow:auto">
+      <h4 style="margin:0 0 8px;font-size:13px;color:var(--text2)">Mesečni grid (šifra GO)</h4>
+      <table class="kadrovska-table" style="margin-bottom:18px">
+        <thead><tr><th>#</th><th>Od</th><th>Do</th><th>Dana</th><th>Napomena</th></tr></thead>
+        <tbody>${segRows}</tbody>
+      </table>
+      <h4 style="margin:0 0 8px;font-size:13px;color:var(--text2)">Odsustva (tip „Godišnji odmor“)</h4>
+      <table class="kadrovska-table">
+        <thead><tr><th>#</th><th>Od</th><th>Do</th><th>Dana</th><th>Napomena</th></tr></thead>
+        <tbody>${absRows}</tbody>
+      </table>
+    </div>
+    <p class="emp-sub" style="margin-top:14px;margin-bottom:0">
+      U glavnoj tabeli kolona <strong>Iskorišćeno</strong> = <strong>${saldoUsed}</strong> dana (pogled <code>v_vacation_balance</code>).
+      Zbir dana po grid segmentima = ${gridSum}; po odsustvima = ${absSum}.
+      Kada oba izvora postoje, saldo koristi veći od ta dva zbira.
+    </p>`;
+}
+
+/* ── render stat cards ──────────────────────────────────────────────── */
   const host = panelRoot.querySelector('#vacStatCards');
   if (!host) return;
   const totalTotal = rows.reduce((s, r) => s + r.daysTotal + r.daysCarried, 0);
@@ -376,7 +466,8 @@ function renderRows(rows) {
       <td><span style="font-family:var(--mono);font-weight:600;">${r.daysUsed}</span></td>
       <td><span class="kadr-type-badge t-${remCls}" style="font-family:var(--mono);font-weight:700;">${r.daysRemaining}</span></td>
       <td class="col-actions">
-        <button class="btn-row-act" data-act="resenje" data-emp-id="${escHtml(r.emp.id)}">📄 Rešenje</button>
+        <button type="button" class="btn-row-act" data-act="go-detail" data-emp-id="${escHtml(r.emp.id)}" title="Pregled korišćenih perioda">📋</button>
+        <button type="button" class="btn-row-act" data-act="resenje" data-emp-id="${escHtml(r.emp.id)}">📄 Rešenje</button>
       </td>
     </tr>`;
   }).join('');
@@ -396,6 +487,10 @@ function renderRows(rows) {
     };
     totalEl?.addEventListener('change', save);
     carryEl?.addEventListener('change', save);
+  });
+
+  tbody.querySelectorAll('button[data-act="go-detail"]').forEach(b => {
+    b.addEventListener('click', () => { void openVacGoDetailModal(b.dataset.empId); });
   });
 
   tbody.querySelectorAll('button[data-act="resenje"]').forEach(b => {
