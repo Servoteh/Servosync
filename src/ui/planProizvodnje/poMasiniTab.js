@@ -1016,7 +1016,7 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
   const rowNoLabel = String(Number(rowNo) || 0).padStart(2, '0');
   const priCell = `<span class="pp-pri" title="Redni broj u trenutnoj listi">${escHtml(rowNoLabel)}</span>`;
   const isManualPinned = r.shift_sort_order != null && r.shift_sort_order !== '';
-  const isReady = !!r.is_ready_for_processing;
+  const isReady = !!r.is_ready_for_machine;
   const prevOpLabel = r.previous_operation_operacija != null
     ? String(r.previous_operation_operacija).padStart(2, '0')
     : '?';

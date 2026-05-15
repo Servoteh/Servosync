@@ -34,7 +34,7 @@ export function buildWhyExplanation(row) {
 
   const status = row.local_status || 'waiting';
   const urgent = !!row.is_urgent;
-  const ready = !!row.is_ready_for_processing;
+  const ready = !!row.is_ready_for_machine;
   const prevSt = row.previous_operation_status || 'none';
   const rokClass = rokUrgencyClass(row.rok_izrade);
   const rokLabel = row.rok_izrade ? formatDate(row.rok_izrade) : null;
@@ -204,7 +204,7 @@ function statusLabel(s) {
  */
 export function describeAutoSortBucket(row) {
   const st = row.local_status || 'waiting';
-  const prevDone = row.is_ready_for_processing;
+  const prevDone = row.is_ready_for_machine;
   const b = Number(row.auto_sort_bucket);
 
   if (st === 'blocked') return 'prioritet za operacije označene kao blokirane (bucket 7).';
