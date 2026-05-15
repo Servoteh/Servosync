@@ -774,6 +774,7 @@ export async function searchBigtehnWorkOrdersForItem(itemId, opts = {}) {
  *   locationFilter?: 'all'|'with'|'without',
  *   limit?: number,
  *   offset?: number,
+ *   signal?: AbortSignal,  // Härd-4: omogućava da Predmet tab prekine fetch
  * }} [opts]
  * @returns {Promise<{ total: number, rows: object[] }|null>}
  */
@@ -795,7 +796,10 @@ export async function fetchTpsForPredmet(itemId, opts = {}) {
     p_limit: Math.max(1, Math.min(Number(opts.limit) || 100, 1000)),
     p_offset: Math.max(0, Number(opts.offset) || 0),
   };
-  const res = await sbReq('rpc/loc_tps_for_predmet', 'POST', body, { upsert: false });
+  const res = await sbReq('rpc/loc_tps_for_predmet', 'POST', body, {
+    upsert: false,
+    signal: opts.signal,
+  });
   if (!res || typeof res !== 'object') return null;
   const total = typeof res.total === 'number' ? res.total : Number(res.total) || 0;
   const rows = Array.isArray(res.rows) ? res.rows : [];

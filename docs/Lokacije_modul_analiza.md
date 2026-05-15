@@ -167,19 +167,29 @@ Migracija `add_loc_report_ident_broj_variant_match.sql` matchuje `order_no=9400,
 
 ### 4.4 Frontend race conditions
 
-**[H9] `decodeBusy` flag u scanModal.**
+**[H9] ✅ REŠENO (Härd-4, 2026-05-15, [src/ui/lokacije/scanModal.js](../src/ui/lokacije/scanModal.js#L548))** — Pre svake `decodeBusy = true` operacije proverava se `overlay?.isConnected`. Ako je modal već unmount-ovan (close između decode callback-a), handler izlazi tiho — bez dodirivanja DOM-a i bez stuck flag-a.
+
+`decodeBusy` flag u scanModal.
 [src/ui/lokacije/scanModal.js:544-580](../src/ui/lokacije/scanModal.js#L544) — sprečava double-decode dok je form modal mid-await. `try/finally` resetuje, ali ako modal bude zatvoren između `setTimeout` re-init-a, listener može da pokuša da postavi flag na obrisanom DOM elementu.
 
-**[H10] ESC key listener leak u `openLocationModal`.**
+**[H10] ✅ REŠENO (Härd-4, 2026-05-15, [src/ui/lokacije/modals.js](../src/ui/lokacije/modals.js#L225))** — Async IIFE u `openLocationModal` sad je obavijen `try/catch`-om. U catch grani poziva se `close()` koji garantovano oslobađa ESC listener (`unbindEsc`).
+
+ESC key listener leak u `openLocationModal`.
 [src/ui/lokacije/modals.js:196-214](../src/ui/lokacije/modals.js#L196) — listener se vezuje pre `await fetchLocations()`. Ako fetch baci exception, modal se ne otvori a `unbindEsc` ostaje `null` → listener zaglavljen na document-u.
 
-**[H11] `wireTabs` document listeneri nikad se ne uklanjaju.**
+**[H11] ✅ REŠENO (Härd-4, 2026-05-15, [src/ui/lokacije/index.js](../src/ui/lokacije/index.js))** — Modul-level `_lokDisposers` niz prikuplja disposere za svaki document/window listener koji `wireTabs` registruje (mousedown, keydown, resize, scroll). `teardownLokacijeModule()` izvršava sve disposere pre nego što resetuje state — listener kumulacija pri SPA re-mount-u eliminisana.
+
+`wireTabs` document listeneri nikad se ne uklanjaju.
 [src/ui/lokacije/index.js:2321-2335](../src/ui/lokacije/index.js#L2321) — `mousedown`/`keydown`/`resize`/`scroll` na document/window. `teardownLokacijeModule()` ih NE čisti. Pri SPA re-mount-u modula listeneri se dupliraju.
 
-**[M12] Tab strip se re-render-uje na svakoj promeni taba.**
+**[M12] ✅ VERIFIKOVANO (Härd-4, 2026-05-15)** — Click je delegiran na `container` koji se NE menja pri `nav.replaceWith(fresh)`. `replaceWith` ne ruši delegaciju. Nema bug-a; bez izmena koda.
+
+Tab strip se re-render-uje na svakoj promeni taba.
 [index.js:2285-2298](../src/ui/lokacije/index.js#L2285) — `nav.replaceWith(fresh)` briše DOM. Pošto je click delegiran na `container`, funkcionalno radi; ali ako bilo koji feature kasnije veže listener direktno na `.loc-tab`, biće tihо otkačen.
 
-**[M13] ERP lookup token race u modals.js `openQuickMoveModal`.**
+**[M13] ✅ VERIFIKOVANO (Härd-4, 2026-05-15)** — Detaljna analiza pokazuje da je sprint draft pretpostavio pogrešno ponašanje. Stvarno: `scheduleRefresh` koristi `clearTimeout` pre setovanja novog setTimeout-a, pa samo poslednji input pokreće `refreshItemState`. Token (`++lookupToken`) se uvećava PRE await-a unutar `refreshItemState`, i `if (myToken !== lookupToken) return` štiti od stale odgovora. Race ne postoji u praksi.
+
+ERP lookup token race u modals.js `openQuickMoveModal`.
 [modals.js:1141, 1222-1232](../src/ui/lokacije/modals.js#L1141) — `lookupToken` se inkrementuje POSLE debounce-a. Brzo pucanje order+TP polja može vratiti stari rezultat ako je novi debounce kasnije scheduledован. Idealno: token++ pre debounce.
 
 **[M14] In-memory queue za batch štampu se briše na reload.**
@@ -211,7 +221,9 @@ Bez pagination, bez cache-a. Pri 5–10K polica (10 hala × 1000 polica je reala
 **[M20] `loc_report_parts_by_locations` joinuje 5 tabela + LATERAL subselect.**
 Pri 100K placement-a + 50K BigTehn RN-ova upit može da bude spor (>5s). Bez analizovanog plana, idx-i nisu garancija. LATERAL sa UNION ALL po `match_rank` skenira `bigtehn_work_orders_cache` dvaput.
 
-**[L21] Predmet tab šalje 3 paralelna RPC poziva.**
+**[L21] ✅ REŠENO (Härd-4, 2026-05-15, [src/ui/lokacije/predmetTab.js](../src/ui/lokacije/predmetTab.js#L285))** — `AbortController` sa 30s timeout-om. Sva 3 paralelna fetcha dele isti `ctrl.signal`; ako jedan istekne, svi otpadnu. `sbReq` u `services/supabase.js` sad prihvata `options.signal` i propagira `AbortError` pozivaocu (nije više tiho squelched). UI prikazuje razlikujući toast: "Učitavanje predmeta predugo traje" za AbortError vs. "Greška: ..." za ostalo.
+
+Predmet tab šalje 3 paralelna RPC poziva.
 [predmetTab.js:285-288](../src/ui/lokacije/predmetTab.js#L285) — count(with) + count(without) + page rows. Promise.all bez timeout-a. Ako server visi, ekran ostaje na loading-u beskonačno.
 
 ### 4.7 Sigurnost / XSS

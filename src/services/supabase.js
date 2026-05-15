@@ -114,6 +114,12 @@ export async function sbReq(path, method = 'GET', body = null, options = {}) {
         headers,
         body: body ? JSON.stringify(body) : undefined,
       };
+      /* Härd-4 (L21): podrška za AbortController. Pozivaoc može da prosledi
+       * `options.signal` (npr. iz predmetTab-a sa 30s timeout-om). fetch baca
+       * `AbortError` koji se propagira kroz `throw` ispod. */
+      if (options.signal && typeof options.signal === 'object') {
+        init.signal = options.signal;
+      }
       /*
        * Transient „Failed to fetch“ (offline trenutni pad, flaky WiFi/CORS-proxy):
        * ponovi samo idempotent GET da ne rizikuje dupli POST/PATCH ako je server zapravo obrađio.
@@ -177,6 +183,12 @@ export async function sbReq(path, method = 'GET', body = null, options = {}) {
     }
     return parsed;
   } catch (e) {
+    /* Härd-4 (L21): AbortError mora da se propagira pozivaocu da može da
+     * prikaže razlikujući toast (timeout vs. mrežna greška). Ne loguje se
+     * kao "fetch failed" jer to nije failure nego eksplicitan otkaz. */
+    if (e && (e.name === 'AbortError' || e.code === 20)) {
+      throw e;
+    }
     console.error(`SB fetch failed ${method} ${path}: ${e instanceof Error ? e.message : String(e)}`);
     return options.withCount ? { rows: null, total: null } : null;
   }

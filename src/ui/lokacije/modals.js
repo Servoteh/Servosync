@@ -222,32 +222,41 @@ export function openLocationModal({ existing = null, onSuccess } = {}) {
     if (ev.target === overlay) close();
   });
 
+  /* Härd-4 (H10): try/catch oko async IIFE — bez toga, ako fetchLocations
+   * baci exception, IIFE Promise se rejecte-uje, `close()` se ne poziva, i
+   * ESC listener (`unbindEsc`) ostaje aktivan zauvek. */
   (async () => {
-    const locs = await fetchLocations({ activeOnly: false });
-    if (!Array.isArray(locs)) {
-      close();
-      showToast('⚠ Ne mogu da učitam lokacije');
-      return;
-    }
+    try {
+      const locs = await fetchLocations({ activeOnly: false });
+      if (!Array.isArray(locs)) {
+        close();
+        showToast('⚠ Ne mogu da učitam lokacije');
+        return;
+      }
 
-    if (isEdit) {
-      renderEditForm({
+      if (isEdit) {
+        renderEditForm({
+          overlay,
+          body,
+          existing,
+          close,
+          onSuccess,
+        });
+        return;
+      }
+
+      renderPickerStage({
         overlay,
         body,
-        existing,
+        locs,
         close,
         onSuccess,
       });
-      return;
+    } catch (err) {
+      console.error('[openLocationModal] init failed', err);
+      close();
+      showToast(`⚠ Greška pri učitavanju lokacija: ${err?.message || err}`);
     }
-
-    renderPickerStage({
-      overlay,
-      body,
-      locs,
-      close,
-      onSuccess,
-    });
   })();
 }
 

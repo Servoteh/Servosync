@@ -9,7 +9,7 @@
  * PDF ikonica uz crtež otvara signed URL iz Supabase Storage bucket-a.
  */
 
-import { escHtml } from '../../lib/dom.js';
+import { escHtml, showToast } from '../../lib/dom.js';
 import { rowsToCsv, CSV_BOM } from '../../lib/csv.js';
 import {
   searchBigtehnItems,
@@ -281,17 +281,36 @@ async function renderDataView(host, refresh) {
     drawingNo: f.drawingNo,
   };
 
+  /* Härd-4 (L21): 30s timeout sa AbortController-om. Bez ovog, ako server
+   * visi, ekran ostaje na loading-u beskonačno. Sva 3 paralelna fetcha
+   * dele isti signal pa kad jedan otpadne, svi otpadnu — ekonomično. */
+  const ctrl = new AbortController();
+  const timeoutId = setTimeout(() => ctrl.abort(), 30_000);
+
   let res, resWith, resWithout;
   try {
     [res, resWith, resWithout] = await Promise.all([
-      fetchTpsForPredmet(sel.id, { ...baseOpts, locationFilter: f.locationFilter, limit: pageSize, offset: page * pageSize }),
-      fetchTpsForPredmet(sel.id, { ...baseOpts, locationFilter: 'with', limit: 1, offset: 0 }),
-      fetchTpsForPredmet(sel.id, { ...baseOpts, locationFilter: 'without', limit: 1, offset: 0 }),
+      fetchTpsForPredmet(sel.id, { ...baseOpts, locationFilter: f.locationFilter, limit: pageSize, offset: page * pageSize, signal: ctrl.signal }),
+      fetchTpsForPredmet(sel.id, { ...baseOpts, locationFilter: 'with', limit: 1, offset: 0, signal: ctrl.signal }),
+      fetchTpsForPredmet(sel.id, { ...baseOpts, locationFilter: 'without', limit: 1, offset: 0, signal: ctrl.signal }),
     ]);
+    clearTimeout(timeoutId);
   } catch (err) {
-    console.error('[predmetTab] fetchTpsForPredmet failed', err);
+    clearTimeout(timeoutId);
+    /* AbortError = naš timeout. Drugi error-ovi = mreža/server/parsing. */
+    const isAbort = err?.name === 'AbortError';
+    if (isAbort) {
+      console.warn('[predmetTab] fetch timed out after 30s');
+      showToast('⚠ Učitavanje predmeta predugo traje — pokušaj ponovo.');
+    } else {
+      console.error('[predmetTab] fetchTpsForPredmet failed', err);
+    }
     host.querySelector('#lpRows').innerHTML =
-      `<tr><td colspan="8" style="padding:18px;color:#f87171;text-align:center">Greška pri učitavanju: ${escHtml(err?.message || String(err))}</td></tr>`;
+      `<tr><td colspan="8" style="padding:18px;color:#f87171;text-align:center">${
+        isAbort
+          ? 'Učitavanje prekinuto (timeout 30s). Pokušaj ponovo ili suzi filtere.'
+          : `Greška pri učitavanju: ${escHtml(err?.message || String(err))}`
+      }</td></tr>`;
     host.querySelector('#lpSummaryBar').textContent = '';
     host.querySelector('#lpStatGrid').innerHTML = renderStatSkeletonHtml();
     return;

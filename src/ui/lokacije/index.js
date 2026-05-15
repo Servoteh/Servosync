@@ -162,6 +162,11 @@ let historyUsersCache = null;
 let mountRef = null;
 /** @type {HTMLElement|null} */
 let locPanelHost = null;
+/* Härd-4 (H11): disposers za document/window listenere koje registruje
+ * `wireTabs`. `teardownLokacijeModule` ih izvršava, sprečavajući kumulaciju
+ * pri SPA re-mount-u modula (povratak iz drugog hub-a u Lokacije). */
+/** @type {Array<() => void>} */
+let _lokDisposers = [];
 /* UI state van state/lokacije.js jer je striktno vezan za trenutni mount. */
 let showInactiveLocations = false;
 /** @type {'table'|'tree'} */
@@ -2372,22 +2377,32 @@ function wireTabs(container, initialTabId) {
     }
   });
 
-  /* Outside click + Escape — zatvaranje dropdown menija. */
-  document.addEventListener('mousedown', ev => {
+  /* Outside click + Escape — zatvaranje dropdown menija.
+   * Härd-4 (H11): listenere se NE registrujemo direktno — kroz `_lokDisposers`
+   * niz, da `teardownLokacijeModule` može da ih makne pri re-mount-u modula. */
+  const onDocMouseDown = ev => {
     const t = ev.target;
     if (!(t instanceof Element)) return;
     if (t.closest('.loc-tab-group')) return; /* klik unutar group-a obrađen iznad */
     closeMenu();
-  });
-  document.addEventListener('keydown', ev => {
+  };
+  document.addEventListener('mousedown', onDocMouseDown);
+  _lokDisposers.push(() => document.removeEventListener('mousedown', onDocMouseDown));
+
+  const onDocKeyDown = ev => {
     if (ev.key === 'Escape') closeMenu();
-  });
+  };
+  document.addEventListener('keydown', onDocKeyDown);
+  _lokDisposers.push(() => document.removeEventListener('keydown', onDocKeyDown));
 
   /* Resize / scroll — `position: fixed` koordinata se ne menja automatski
    * pri scroll-u dokumenta, a wrap tab strip-a pomera trigger pri resize-u.
    * Re-pozicioniramo otvoren meni; passive da ne usporava scroll. */
   window.addEventListener('resize', repositionOpenMenu);
+  _lokDisposers.push(() => window.removeEventListener('resize', repositionOpenMenu));
+
   window.addEventListener('scroll', repositionOpenMenu, { passive: true });
+  _lokDisposers.push(() => window.removeEventListener('scroll', repositionOpenMenu));
 
   renderPanel(host, initialTabId);
 }
@@ -2436,6 +2451,18 @@ export function renderLokacijeModule(mountEl, { onBackToHub, onLogout } = {}) {
 }
 
 export function teardownLokacijeModule() {
+  /* Härd-4 (H11): ukloni sve document/window listenere koje je `wireTabs`
+   * registrovao. Bez ovog, svaki SPA re-mount modula bi duplirao listenere
+   * (mousedown, keydown, resize, scroll). */
+  for (const dispose of _lokDisposers) {
+    try {
+      dispose();
+    } catch (e) {
+      console.warn('[lokacije] disposer threw', e);
+    }
+  }
+  _lokDisposers = [];
+
   mountRef = null;
   locPanelHost = null;
   historyUsersCache = null;

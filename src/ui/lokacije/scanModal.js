@@ -549,6 +549,10 @@ export async function openScanMoveModal({
     if (state.pickLocationMode) return;
     if (!clean) return;
     if (decodeBusy) return;
+    /* Härd-4 (H9): ako je modal već zatvoren (close → DOM detach),
+     * preskoči — inače padaće na operacije nad unmount-ovanim elementima
+     * unutar showForm-a, a decodeBusy flag bi ostao true do GC-a closure-a. */
+    if (!overlay?.isConnected) return;
     const now = Date.now();
     if (clean === lastBarcodeClean && now - lastBarcodeAt < BARCODE_DEDUP_MS) {
       return;
