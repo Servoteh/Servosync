@@ -15,7 +15,7 @@ import {
   formatLocationDisplay,
 } from '../../services/lokacije.js';
 import { getLocationKind } from '../../lib/lokacijeTypes.js';
-import { formatBigTehnRnzBarcode, parseBigTehnBarcode } from '../../lib/barcodeParse.js';
+import { formatBigTehnRnzBarcode, parseBigTehnBarcode, normalizeLocMovementKeys } from '../../lib/barcodeParse.js';
 import {
   buildTechLabelHtmlBlock,
   printTechProcessLabelsBatch,
@@ -29,6 +29,19 @@ import {
 const FETCH_LIMIT = 200;
 const FIRST_PAGE = 20;
 const MAX_QTY = 999;
+
+/** RNZ nalog/TP (posle normalizacije) vs ident_broj u kešu, npr. 9400/2/357 i 9400-2/357. */
+function workOrderMatchesRnzIdent(wo, orderNo, tpRef) {
+  const idb = String(wo?.ident_broj || '').trim();
+  if (!idb) return false;
+  const norm = normalizeLocMovementKeys(orderNo, tpRef);
+  const needle = `${norm.orderNo}/${norm.itemRefId}`;
+  if (idb === needle) return true;
+  const m = idb.match(/^([^/]+)\/(.+)$/);
+  if (!m) return false;
+  const wNorm = normalizeLocMovementKeys(m[1], m[2]);
+  return wNorm.orderNo === norm.orderNo && wNorm.itemRefId === norm.itemRefId;
+}
 
 function debounce(fn, ms) {
   let t = null;
@@ -730,10 +743,8 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
       paintProgress();
 
       tpListEl.innerHTML = '<p class="sn-placeholder-muted">Učitavam tehnološke postupke…</p>';
-      tpsCache = await searchBigtehnWorkOrdersForItem(item.id, { onlyOpen: true, limit: 1000 });
-      const matchedWo = (tpsCache || []).find(
-        w => String(w.ident_broj || '').trim() === needle,
-      );
+      tpsCache = await searchBigtehnWorkOrdersForItem(item.id, { onlyOpen: false, limit: 1000 });
+      const matchedWo = (tpsCache || []).find(w => workOrderMatchesRnzIdent(w, orderNo, tpRef));
       await renderTpList('');
       if (!matchedWo) {
         showToast(`⚠ TP ${needle} nije pronađen — odaberi ručno`);
@@ -754,7 +765,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     if (!selectedPredmet) return;
     tpListEl.innerHTML = '<p class="sn-placeholder-muted">Učitavam tehnološke postupke…</p>';
     try {
-      tpsCache = await searchBigtehnWorkOrdersForItem(selectedPredmet.id, { onlyOpen: true, limit: 1000 });
+      tpsCache = await searchBigtehnWorkOrdersForItem(selectedPredmet.id, { onlyOpen: false, limit: 1000 });
       renderTpList('');
     } catch (e) {
       console.error('[sn/tp]', e);
@@ -787,7 +798,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
       tpListEl.innerHTML = '<p class="sn-placeholder-muted">Tražim u bazi…</p>';
       try {
         const serverRows = await searchBigtehnWorkOrdersForItem(selectedPredmet.id, {
-          onlyOpen: true,
+          onlyOpen: false,
           limit: 500,
           search: rawF,
         });
@@ -808,7 +819,7 @@ export function renderStampaNalepnicaModule(root, { onBackToHub, onLogout } = {}
     tpSearchWrap.style.display = tpsCache.length > 8 ? '' : 'none';
     if (!list.length) {
       tpListEl.innerHTML =
-        '<p class="sn-placeholder-muted">Nema otvorenih tehnoloških postupaka za ovaj predmet (ili filter ne pogađa).</p>';
+        '<p class="sn-placeholder-muted">Nema tehnoloških postupaka za ovaj predmet (ili filter ne pogađa).</p>';
       return;
     }
     tpListEl.innerHTML = list

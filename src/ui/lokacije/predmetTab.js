@@ -275,7 +275,6 @@ async function renderDataView(host, refresh) {
 
   /* 3 paralelna fetcha: glavna stranica + count sa lokacijom + count bez lokacije */
   const baseOpts = {
-    onlyOpen: true,
     includeAssembled: f.includeAssembled,
     tpNo: f.tpNo,
     drawingNo: f.drawingNo,
@@ -567,7 +566,6 @@ function attachFilterHandlers(host, refresh) {
       drawingNo: host.querySelector('#lpFiltDr')?.value || '',
       locationFilter: host.querySelector('#lpFiltLoc')?.value || 'all',
       includeAssembled: !!host.querySelector('#lpFiltAssembled')?.checked,
-      onlyOpen: true,
     });
     void refresh();
   };
@@ -682,7 +680,6 @@ async function fetchAllFiltered(sel, filters, onProgress) {
   let total = null;
   while (true) {
     const res = await fetchTpsForPredmet(sel.id, {
-      onlyOpen: true,
       includeAssembled: filters.includeAssembled,
       tpNo: filters.tpNo,
       drawingNo: filters.drawingNo,

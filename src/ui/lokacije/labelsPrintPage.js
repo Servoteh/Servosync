@@ -26,8 +26,8 @@
  *     `docs/labels/02-visual-spec.md` § 7), nego koristimo isti data
  *     source i zadržavamo tabularni render specifičan za ovu stranicu
  *     (potrebne su nam checkbox kolone + interakcija sa donjim panelom).
- *   - `searchBigtehnWorkOrdersForItem` — TP lista iz BigTehn keša (otvoreni RN),
- *     ne samo ručno MES-aktivni (vidi `lokacije.js`).
+ *   - `searchBigtehnWorkOrdersForItem` — TP lista iz BigTehn keša (svi RN za predmet),
+ *     uključ. završene u kešu dok je predmet aktivan u pickeru.
  *   - `printTechProcessLabelsBatch` — naš novi batch printer iz `labelsPrint.js`.
  */
 
@@ -289,7 +289,7 @@ function mergeTpsById(itemId, extra) {
 }
 
 async function fetchFullTpsForLabelsItem(itemId) {
-  const rows = await searchBigtehnWorkOrdersForItem(itemId, { onlyOpen: true, limit: 1000 });
+  const rows = await searchBigtehnWorkOrdersForItem(itemId, { onlyOpen: false, limit: 1000 });
   _state.tpsFullByItem.set(itemId, Array.isArray(rows) ? rows : []);
 }
 
@@ -297,7 +297,7 @@ async function serverSearchTpsForLabelsItem(itemId, q) {
   const s = String(q || '').trim();
   if (!s) return [];
   return searchBigtehnWorkOrdersForItem(itemId, {
-    onlyOpen: true,
+    onlyOpen: false,
     limit: 500,
     search: s,
   });

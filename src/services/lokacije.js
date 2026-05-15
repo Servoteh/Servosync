@@ -678,7 +678,7 @@ export async function searchBigtehnItems(q, limit = 50, { onlyActive = true } = 
  *
  * @param {number|string} itemId  bigtehn_items_cache.id
  * @param {{ onlyOpen?: boolean, search?: string, limit?: number }} [opts]
- *   - `onlyOpen` (default `true`) — `status_rn = false` (RN još otvoren u kešu)
+ *   - `onlyOpen` (default `false`) — ako je `true`, samo `status_rn = false` (otvoren u kešu)
  *   - `search` — ako je setovan, jedan upit sa `limit` (filter na serveru).
  *   - Bez `search`: stranica po stranica do **svih** otvorenih RN za predmet
  *     (lex sort `ident_broj` stavlja `9400-1/…` ispred `9400/755` — jedan
@@ -700,7 +700,7 @@ export async function searchBigtehnWorkOrdersForItem(itemId, opts = {}) {
       /* Stabilan redosled za offset paginaciju */
       `order=ident_broj.asc,id.asc`,
     ];
-    if (opts.onlyOpen !== false) parts.push('status_rn=is.false');
+    if (opts.onlyOpen === true) parts.push('status_rn=is.false');
     if (searchTrim) {
       const enc = encodeURIComponent(`*${searchTrim}*`);
       parts.push(
@@ -754,7 +754,7 @@ export async function searchBigtehnWorkOrdersForItem(itemId, opts = {}) {
  *
  * @param {number|string} itemId  bigtehn_items_cache.id
  * @param {{
- *   onlyOpen?: boolean, // legacy: RPC sada uvek koristi ručnu MES aktivnost
+ *   onlyOpen?: boolean, // ako true, RPC filtrira samo otvorene RN u kešu
  *   includeAssembled?: boolean,
  *   tpNo?: string,
  *   drawingNo?: string,
@@ -774,7 +774,7 @@ export async function fetchTpsForPredmet(itemId, opts = {}) {
     : 'all';
   const body = {
     p_item_id: idNum,
-    p_only_open: true,
+    p_only_open: opts.onlyOpen === true,
     p_include_assembled: !!opts.includeAssembled,
     p_tp_no: tp ? tp : null,
     p_drawing_no: dr ? dr : null,
