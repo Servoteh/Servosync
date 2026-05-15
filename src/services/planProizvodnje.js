@@ -89,22 +89,36 @@ function nonNullRows(data, context) {
   return data;
 }
 
+/** PP-B četvorosegmentni prioritet: hitno×spremnost (0 najviše). */
+export function urgencyReadyBucket(row) {
+  const urgent = !!row?.is_urgent;
+  const ready = !!row?.is_ready_for_machine;
+  return (urgent ? 0 : 2) + (ready ? 0 : 1);
+}
+
+/** Niz redova ima neopadajuće PP-B segmente po redu prikaza (za drag-drop invariant). */
+export function urgencyReadyBucketsAreNonDecreasing(rows) {
+  if (!Array.isArray(rows) || rows.length < 2) return true;
+  for (let i = 1; i < rows.length; i += 1) {
+    if (urgencyReadyBucket(rows[i]) < urgencyReadyBucket(rows[i - 1])) return false;
+  }
+  return true;
+}
+
 /**
- * G2 dvonivoski sort:
- * 1) ručni redosled/pin (`shift_sort_order`) uvek ide pre auto-sorta,
- * 2) zatim DB bucket spremnosti/hitnosti,
- * 3) rok, BigTehn prioritet i stabilni RN/op tie-breakeri.
+ * PP-B primarni redosled po `urgencyReadyBucket` (0→3), zatim unutar segmenta:
+ * `shift_sort_order` → rok → `work_order_id` → BigTehn prioritet → RN → `line_id` → `operacija`.
  */
-export function sortProductionOperations(rows) {
+export function sortByUrgencyAndReady(rows) {
   if (!Array.isArray(rows)) return [];
   return rows.slice().sort((a, b) => {
+    const ub = cmpNullableAsc(urgencyReadyBucket(a), urgencyReadyBucket(b));
+    if (ub !== 0) return ub;
+
     const aManual = numOrNull(a?.shift_sort_order);
     const bManual = numOrNull(b?.shift_sort_order);
     const manualCmp = cmpNullableAsc(aManual, bManual);
     if (manualCmp !== 0) return manualCmp;
-
-    const bucketCmp = cmpNullableAsc(numOrNull(a?.auto_sort_bucket), numOrNull(b?.auto_sort_bucket));
-    if (bucketCmp !== 0) return bucketCmp;
 
     const dateCmp = cmpNullableAsc(
       a?.rok_izrade ? Date.parse(a.rok_izrade) : null,
@@ -112,13 +126,28 @@ export function sortProductionOperations(rows) {
     );
     if (dateCmp !== 0) return dateCmp;
 
+    const woCmp = cmpNullableAsc(numOrNull(a?.work_order_id), numOrNull(b?.work_order_id));
+    if (woCmp !== 0) return woCmp;
+
     const priCmp = cmpNullableAsc(numOrNull(a?.prioritet_bigtehn), numOrNull(b?.prioritet_bigtehn));
     if (priCmp !== 0) return priCmp;
 
     const rnCmp = cmpTextAsc(a?.rn_ident_broj, b?.rn_ident_broj);
     if (rnCmp !== 0) return rnCmp;
+
+    const lineCmp = cmpNullableAsc(numOrNull(a?.line_id), numOrNull(b?.line_id));
+    if (lineCmp !== 0) return lineCmp;
+
     return cmpNullableAsc(numOrNull(a?.operacija), numOrNull(b?.operacija));
   });
+}
+
+/**
+ * G2/PP-B list sort (Plan operacije).
+ * Isto kao {@link sortByUrgencyAndReady} — zadržani naziv za postojeće pozive.
+ */
+export function sortProductionOperations(rows) {
+  return sortByUrgencyAndReady(rows);
 }
 
 export function machineGroupSlugForCode(rjCode) {

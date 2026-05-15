@@ -125,7 +125,7 @@ export function buildWhyExplanation(row) {
   }
 
   orderLines.push(
-    'Globalno sortiranje u aplikaciji: prvo ručni red, zatim bucket, pa **rok** (`rok_izrade`), pa BigTehn **prioritet** (`prioritet_bigtehn`), pa RN i broj operacije.',
+    'Globalno sortiranje u aplikaciji: najpre segment **HITNO × spremnost** (četiri grupe PP-B), zatim ručni red (`shift_sort_order`), pa **rok** (`rok_izrade`), pa BigTehn **prioritet** (`prioritet_bigtehn`), pa RN.',
   );
 
   orderLines.push(

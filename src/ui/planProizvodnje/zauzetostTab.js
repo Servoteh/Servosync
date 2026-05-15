@@ -20,6 +20,7 @@ import {
   summarizeByMachine,
   formatSecondsHm,
   filterOperationsByRnOrDrawing,
+  sortByUrgencyAndReady,
 } from '../../services/planProizvodnje.js';
 
 const STORAGE_KEY_SORT     = 'plan-proizvodnje:zauzetost:sort';
@@ -285,7 +286,9 @@ function renderTable() {
     : '';
 
   /* Filter */
-  const filteredRows = filterOperationsByRnOrDrawing(state.rows, state.rnFilter);
+  const filteredRows = sortByUrgencyAndReady(
+    filterOperationsByRnOrDrawing(state.rows, state.rnFilter),
+  );
   let data = summarizeByMachine(filteredRows).map(s => {
     const meta = state.machinesMap?.get(s.machineCode);
     return {
