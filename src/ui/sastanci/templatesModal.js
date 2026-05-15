@@ -7,7 +7,7 @@ import {
   listTemplates, createTemplate, updateTemplate, deleteTemplate, instantiateTemplate,
   nextOccurrence,
 } from '../../services/sastanciTemplates.js';
-import { SASTANAK_TIPOVI } from '../../services/sastanci.js';
+import { SASTANAK_TIPOVI, SAST_UCESNIK_PLANIRAN_POZIV_HINT } from '../../services/sastanci.js';
 
 const CADS = {
   none: 'Bez ponavljanja',
@@ -93,7 +93,7 @@ export function openTemplatesModal({ canEdit, onInstantiated }) {
         body.querySelector(`[data-z="${t.id}"]`)?.addEventListener('click', async () => {
           const s = await instantiateTemplate(t);
           if (s) {
-            showToast('📅 Sastanak zakazan');
+            showToast(`📅 Sastanak zakazan. ${SAST_UCESNIK_PLANIRAN_POZIV_HINT}`);
             onInstantiated?.(s);
             close();
           } else { showToast('⚠ Nije moguće kreirati sastanak (proveri šemu / RLS)'); }

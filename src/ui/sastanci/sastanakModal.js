@@ -20,6 +20,7 @@ import {
   loadSastanak, loadUcesnici, saveSastanak, saveUcesnici,
   updateSastanakStatus, updateUcesnikPrisustvo,
   SASTANAK_STATUSI, SASTANAK_STATUS_BOJE, SASTANAK_TIPOVI,
+  SAST_UCESNIK_PLANIRAN_POZIV_HINT,
 } from '../../services/sastanci.js';
 import { loadPmTeme, dodeliTemuSastanku, saveTema } from '../../services/pmTeme.js';
 import { loadAkcije, saveAkcija, updateAkcijaStatus, deleteAkcija, AKCIJA_STATUSI, AKCIJA_STATUS_BOJE } from '../../services/akcioniPlan.js';
@@ -299,9 +300,14 @@ function renderUcesniciPanel(host, sast, ucesnici, { editable }) {
     host.querySelectorAll('[data-action=remove]').forEach(b => {
       b.addEventListener('click', async () => {
         const email = b.closest('tr').dataset.email;
-        const idx = ucesnici.findIndex(u => u.email === email);
-        if (idx >= 0) ucesnici.splice(idx, 1);
-        await saveUcesnici(sast.id, ucesnici);
+        const next = ucesnici.filter(u => u.email !== email);
+        const ok = await saveUcesnici(sast.id, next);
+        if (!ok) {
+          showToast('⚠ Nije uspelo čuvanje učesnika');
+          return;
+        }
+        ucesnici.length = 0;
+        ucesnici.push(...next);
         renderList();
       });
     });
@@ -320,6 +326,14 @@ function renderUcesniciPanel(host, sast, ucesnici, { editable }) {
         host.querySelector('#ucEmail').value = '';
         host.querySelector('#ucLabel').value = '';
         renderList();
+        if (sast.status === 'planiran') {
+          showToast(`✅ Učesnik dodat. ${SAST_UCESNIK_PLANIRAN_POZIV_HINT}`);
+        } else {
+          showToast('✅ Učesnik dodat');
+        }
+      } else {
+        ucesnici.pop();
+        showToast('⚠ Nije uspelo čuvanje učesnika');
       }
     });
   }

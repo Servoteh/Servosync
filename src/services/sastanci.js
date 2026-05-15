@@ -42,6 +42,10 @@ export const SASTANAK_TIPOVI = {
 /** Tipovi gde PM teme / dnevni red imaju smisla (sve osim projektnog preseka). */
 export const SASTANAK_TIPOVI_SA_PM_TEMAMA = ['sedmicni', 'tematski', 'dnevni'];
 
+/** Toast tekst posle uspešnog dodavanja učesnika na planiran sastanak. */
+export const SAST_UCESNIK_PLANIRAN_POZIV_HINT =
+  'Pozivnica ide na mejl ako su notifikacije uključene (Podešavanja u modulu Sastanci).';
+
 export const SASTANAK_STATUSI = {
   planiran: 'Planiran',
   u_toku: 'U toku',

@@ -6,7 +6,7 @@ import { escHtml, showToast } from '../../../lib/dom.js';
 import { formatDate } from '../../../lib/date.js';
 import { SAVE_DEBOUNCE_MS } from '../../../lib/constants.js';
 import { sbReq } from '../../../services/supabase.js';
-import { saveSastanak, loadUcesnici, SASTANAK_TIPOVI } from '../../../services/sastanci.js';
+import { saveSastanak, loadUcesnici, SASTANAK_TIPOVI, SAST_UCESNIK_PLANIRAN_POZIV_HINT } from '../../../services/sastanci.js';
 import {
   loadPmTemeForSastanak,
   addUcesnik, removeUcesnik,
@@ -284,7 +284,9 @@ function wireAddUcesnik(host, sastanak, users) {
       label: user?.full_name || user?.email || emailVal,
     });
     if (ok) {
-      showToast('✅ Učesnik dodat');
+      showToast(sastanak.status === 'planiran'
+        ? `✅ Učesnik dodat. ${SAST_UCESNIK_PLANIRAN_POZIV_HINT}`
+        : '✅ Učesnik dodat');
       form.style.display = 'none';
       host.querySelector('#sdUcesnikEmail').value = '';
       const fresh = await loadUcesnici(sastanak.id);
