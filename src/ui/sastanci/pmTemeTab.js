@@ -21,7 +21,7 @@ import {
   setHitno, setZaRazmatranje, setAdminRang,
   TEMA_VRSTE, TEMA_OBLASTI, TEMA_STATUSI, TEMA_STATUS_BOJE, PRIORITETI,
 } from '../../services/pmTeme.js';
-import { loadSastanci } from '../../services/sastanci.js';
+import { loadSastanci, SASTANAK_TIPOVI_SA_PM_TEMAMA } from '../../services/sastanci.js';
 import { loadProjektiLite } from '../../services/projekti.js';
 import { getCurrentUser, canPrioritizeTeme, isTemaOwner } from '../../state/auth.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
@@ -312,12 +312,13 @@ async function handleTemaAction(host, action, tema, { canEdit, isAdmin }) {
   if (action === 'assign') {
     if (!isAdmin) { showToast('🔒 Samo admin može da dodeli temu sastanku'); return; }
     const sastanci = await loadSastanci({
-      tip: 'sedmicni', status: 'planiran',
+      tipIn: SASTANAK_TIPOVI_SA_PM_TEMAMA,
+      status: 'planiran',
       fromDate: new Date().toISOString().slice(0, 10),
       limit: 20,
     });
     if (!sastanci.length) {
-      showToast('ℹ Nema planiranih sedmičnih sastanaka. Kreiraj jedan u "Sastanci" tabu.');
+      showToast('ℹ Nema planiranih sastanaka (sedmični / tematski / dnevni). Kreiraj jedan u tabu „Sastanci”.');
       return;
     }
     const choices = sastanci.map((s, i) => `${i + 1}. ${formatDate(s.datum)} - ${s.naslov}`).join('\n');

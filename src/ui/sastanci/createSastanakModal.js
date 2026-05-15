@@ -1,7 +1,7 @@
 /**
  * Modal za kreiranje novog sastanka.
  *
- * Korak 1: izbor tipa (Sedmični vs Projektni).
+ * Korak 1: izbor tipa (sedmični / projektni / tematski / dnevni).
  * Korak 2: forma sa osnovnim podacima (naslov, datum, vreme, mesto, projekat).
  *
  * Posle uspešnog kreiranja → onCreated(sastanak) callback (obično otvori
@@ -39,13 +39,23 @@ export function openCreateSastanakModal({ projekti = [], onCreated } = {}) {
       <div class="sast-tip-choice">
         <button type="button" class="sast-tip-card" data-tip="sedmicni">
           <div class="sast-tip-icon">📅</div>
-          <div class="sast-tip-name">Sedmični sastanak</div>
-          <div class="sast-tip-desc">Standardni cross-project. PM teme, akcioni plan. Ide jednom nedeljno.</div>
+          <div class="sast-tip-name">Sedmični</div>
+          <div class="sast-tip-desc">Cross-project. PM teme, dnevni red, akcioni plan. Redovno jednom nedeljno.</div>
         </button>
         <button type="button" class="sast-tip-card" data-tip="projektni">
           <div class="sast-tip-icon">🏗</div>
-          <div class="sast-tip-name">Projektni sastanak</div>
-          <div class="sast-tip-desc">Per-projekat presek stanja. Hijerarhijski opis radova + slike sa terena.</div>
+          <div class="sast-tip-name">Projektni</div>
+          <div class="sast-tip-desc">Presek stanja po projektu. Hijerarhijski zapis + slike sa terena.</div>
+        </button>
+        <button type="button" class="sast-tip-card" data-tip="tematski">
+          <div class="sast-tip-icon">🎯</div>
+          <div class="sast-tip-name">Tematski</div>
+          <div class="sast-tip-desc">Npr. biro i tehnologija. Isti tok kao sedmični: dnevni red, akcije.</div>
+        </button>
+        <button type="button" class="sast-tip-card" data-tip="dnevni">
+          <div class="sast-tip-icon">⚡</div>
+          <div class="sast-tip-name">Dnevni operativni</div>
+          <div class="sast-tip-desc">Kratki dnevni sastanak (npr. sa proizvodnjom).</div>
         </button>
       </div>
     `;
@@ -57,9 +67,14 @@ export function openCreateSastanakModal({ projekti = [], onCreated } = {}) {
   function renderStepForm(host, tip) {
     const cu = getCurrentUser();
     const today = new Date().toISOString().slice(0, 10);
-    const defNaslov = tip === 'sedmicni'
-      ? `Sedmični sastanak — ${formatDateForTitle(today)}`
-      : `Presek stanja — `;
+    const defVreme = tip === 'dnevni' ? '08:00' : '09:00';
+    const defNaslov = (() => {
+      const d = formatDateForTitle(today);
+      if (tip === 'sedmicni') return `Sedmični sastanak — ${d}`;
+      if (tip === 'projektni') return 'Presek stanja — ';
+      if (tip === 'tematski') return `Tematski sastanak — ${d}`;
+      return `Dnevni operativni sastanak — ${d}`;
+    })();
 
     host.innerHTML = `
       <form id="csForm" class="sast-form">
@@ -87,7 +102,7 @@ export function openCreateSastanakModal({ projekti = [], onCreated } = {}) {
           </label>
           <label class="sast-form-row">
             <span>Vreme</span>
-            <input type="time" name="vreme" value="09:00">
+            <input type="time" name="vreme" value="${escHtml(defVreme)}">
           </label>
           <label class="sast-form-row">
             <span>Mesto</span>

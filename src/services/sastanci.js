@@ -1,7 +1,7 @@
 /**
  * Sastanci — Supabase REST service.
  *
- * Centralni CRUD za sve tipove sastanaka (sedmicni / projektni), učesnike
+ * Centralni CRUD za sve tipove sastanaka, učesnike
  * i utility helpere koje koriste svi tabovi (Dashboard, PM Teme, Akcioni
  * Plan, Sedmični, Projektni).
  *
@@ -35,7 +35,12 @@ const UCESNICI_COLUMNS = [
 export const SASTANAK_TIPOVI = {
   sedmicni: 'Sedmični sastanak',
   projektni: 'Projektni sastanak',
+  tematski: 'Tematski sastanak',
+  dnevni: 'Dnevni operativni sastanak',
 };
+
+/** Tipovi gde PM teme / dnevni red imaju smisla (sve osim projektnog preseka). */
+export const SASTANAK_TIPOVI_SA_PM_TEMAMA = ['sedmicni', 'tematski', 'dnevni'];
 
 export const SASTANAK_STATUSI = {
   planiran: 'Planiran',
@@ -94,7 +99,8 @@ export function mapDbUcesnik(d) {
 /**
  * Lista sastanaka sa filterima.
  * @param {object} filters
- * @param {'sedmicni'|'projektni'|null} filters.tip
+ * @param {'sedmicni'|'projektni'|'tematski'|'dnevni'|null} filters.tip
+ * @param {string[]|null} filters.tipIn — OR filter (PostgREST tip=in.(...)); samo ako `tip` nije zadat
  * @param {string|null} filters.status
  * @param {string|null} filters.fromDate  YYYY-MM-DD
  * @param {string|null} filters.toDate    YYYY-MM-DD
@@ -108,7 +114,12 @@ export async function loadSastanci(filters = {}) {
     : 'order=datum.desc,vreme.desc.nullslast';
   const params = [`select=${SASTANCI_COLUMNS}`, orderParam];
 
-  if (filters.tip) params.push(`tip=eq.${encodeURIComponent(filters.tip)}`);
+  if (filters.tip) {
+    params.push(`tip=eq.${encodeURIComponent(filters.tip)}`);
+  } else if (filters.tipIn?.length) {
+    const enc = filters.tipIn.map(t => encodeURIComponent(t)).join(',');
+    params.push(`tip=in.(${enc})`);
+  }
   if (filters.status) params.push(`status=eq.${encodeURIComponent(filters.status)}`);
   if (filters.fromDate) params.push(`datum=gte.${encodeURIComponent(filters.fromDate)}`);
   if (filters.toDate) params.push(`datum=lte.${encodeURIComponent(filters.toDate)}`);

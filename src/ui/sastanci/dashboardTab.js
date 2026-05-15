@@ -297,7 +297,7 @@ function renderUpcoming(host, sastanci) {
           </div>
           <div class="sast-list-main">
             <div class="sast-list-title">
-              <span class="sast-tip-badge sast-tip-${escHtml(s.tip)}">${s.tip === 'projektni' ? 'Projektni' : 'Sedmični'}</span>
+              <span class="sast-tip-badge sast-tip-${escHtml(s.tip)}">${escHtml(SASTANAK_TIPOVI[s.tip] || s.tip)}</span>
               ${escHtml(s.naslov)}
             </div>
             <div class="sast-list-meta">${s.vodioLabel ? '👤 ' + escHtml(s.vodioLabel) : ''} ${s.mesto ? ' · 📍 ' + escHtml(s.mesto) : ''}</div>

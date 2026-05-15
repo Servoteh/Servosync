@@ -11,6 +11,7 @@
 import { escHtml, showToast } from '../../lib/dom.js';
 import { formatDate } from '../../lib/date.js';
 import { loadSveArhive, printZapisnik } from '../../services/sastanakArhiva.js';
+import { SASTANAK_TIPOVI } from '../../services/sastanci.js';
 import { openSastanakModal } from './sastanakModal.js';
 
 let abortFlag = false;
@@ -81,7 +82,7 @@ function renderRows(host, { canEdit }) {
           return `
             <tr data-sid="${escHtml(s.id || '')}" data-aid="${escHtml(a.id || '')}">
               <td><strong>${escHtml(formatDate(s.datum))}</strong></td>
-              <td><span class="sast-tip-badge sast-tip-${escHtml(tip)}">${tip === 'projektni' ? 'Projektni' : 'Sedmični'}</span></td>
+              <td><span class="sast-tip-badge sast-tip-${escHtml(tip)}">${escHtml(SASTANAK_TIPOVI[tip] || tip)}</span></td>
               <td>${escHtml(s.naslov || '—')}</td>
               <td>${escHtml(s.vodioLabel || s.vodioEmail || '—')}</td>
               <td>${ucCount}</td>

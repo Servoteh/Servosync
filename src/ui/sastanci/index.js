@@ -5,7 +5,7 @@
  *   - dashboard      ✅ S1: Pregled (statistike + nadolazeći + akcije koje kasne)
  *   - pm-teme        ✅ S1: PM teme (predlog → usvojeno)
  *   - akcioni-plan   ✅ S1: Akcioni plan (svi otvoreni zadaci, filteri)
- *   - sastanci       ✅ S1+S2: Lista svih sastanaka (sedmični + projektni)
+ *   - sastanci       ✅ S1+S2: Lista svih sastanaka (svi tipovi)
  *   - arhiva         ✅ S3: Arhivirani (zaključani) sastanci sa zapisnicima
  *
  * Kreiranje sastanka i otvaranje pojedinačnog sastanka su modal-ovi —

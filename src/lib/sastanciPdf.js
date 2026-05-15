@@ -229,8 +229,15 @@ export async function generateSastanakPdf(sast, options = {}) {
   const vremeFmt = sast.vreme ? String(sast.vreme).slice(0, 5) : '—';
 
   const SASTANAK_TIPOVI = {
-    redovni: 'Redovni', vanredni: 'Vanredni', koordinacioni: 'Koordinacioni',
-    projektni: 'Projektni', prezentacija: 'Prezentacija', obuka: 'Obuka',
+    sedmicni: 'Sedmični sastanak',
+    projektni: 'Projektni sastanak',
+    tematski: 'Tematski sastanak',
+    dnevni: 'Dnevni operativni sastanak',
+    redovni: 'Redovni',
+    vanredni: 'Vanredni',
+    koordinacioni: 'Koordinacioni',
+    prezentacija: 'Prezentacija',
+    obuka: 'Obuka',
     operativni: 'Operativni',
   };
 

@@ -138,7 +138,7 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
         <button type="button" class="hub-card${canAccessSastanci() ? '' : ' is-disabled'}" data-module="sastanci" aria-label="Otvori Sastanke"${canAccessSastanci() ? '' : ' aria-disabled="true"'}>
           <div class="hub-card-icon" aria-hidden="true">📅</div>
           <div class="hub-card-title">Sastanci</div>
-          <div class="hub-card-desc">Sedmični i projektni sastanci sa dnevnim redom, učesnicima i zapisnicima. Akcioni plan sa rokovima i odgovornima, presek stanja sa slikama, arhiva starih sastanaka.</div>
+          <div class="hub-card-desc">Sedmični, tematski, dnevni i projektni sastanci — dnevni red, učesnici, zapisnici. Akcioni plan, presek stanja po projektu, arhiva.</div>
           <div class="hub-card-footer">
             <span class="hub-card-cta">${canAccessSastanci() ? (canEditSastanci() ? 'Otvori →' : 'Pregled (read-only)') : 'Pristup zaključan'}</span>
             <span class="hub-card-badge ${canAccessSastanci() ? 'badge-active' : ''}">${canAccessSastanci() ? 'Aktivno' : 'Zaključano'}</span>

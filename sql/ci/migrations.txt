@@ -53,6 +53,7 @@ sql/migrations/add_sastanci_notification_prefs.sql
 sql/migrations/add_sast_pm_teme_draft.sql
 sql/migrations/add_sast_draft_rls.sql
 sql/migrations/add_sast_zakljucaj_rpc.sql
+sql/migrations/extend_sastanci_tip_tematski_dnevni.sql
 
 sql/migrations/add_maint_machines_catalog.sql
 sql/migrations/add_maint_machine_responsible.sql
