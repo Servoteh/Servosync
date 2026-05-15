@@ -255,6 +255,7 @@ export function openTaskEditorModal(opts) {
         <button type="button" class="btn btn-ghost pb-close-modal" aria-label="Zatvori">✕</button>
       </div>
       <div class="pb-task-form">
+        <div class="pb-task-form-scroll">
         <label class="pb-field"><span>Naziv *</span>
           <input type="text" id="pbTfNaziv" required value="${escHtml(t.naziv || '')}" ${canEdit ? '' : 'disabled'} />
         </label>
@@ -344,6 +345,7 @@ export function openTaskEditorModal(opts) {
               <div class="pb-files-loading">Učitavanje…</div>
             </div>
           </div>`}
+        </div>
         <div class="pb-modal-actions">
           ${canEdit ? `<button type="button" class="btn btn-primary" id="pbTfSave">Sačuvaj</button>` : ''}
           <button type="button" class="btn" id="pbTfCancel">Otkaži</button>

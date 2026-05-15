@@ -1254,6 +1254,13 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   min-height: 50px;
 }
 
+/* Nadjačava .pb-textarea-lg (min-height 220px) u modalu zadatka. */
+.pb-comment-input-row textarea.pb-textarea-lg {
+  min-height: 52px;
+  max-height: 140px;
+  resize: vertical;
+}
+
 .pb-comment-input-row .btn {
   flex: 0 0 auto;
   align-self: stretch;
@@ -1888,26 +1895,72 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   margin: 0;
 }
 
-/* Izmena zadatka: .modal-panel ima max-height + overflow:hidden pa se donji deo odseče.
-   Jedan unutrašnji skrol u formi; sheet bez duplog skrola (header ostaje vidljiv). */
+/* Izmena zadatka: široko kao glavni sadržaj PB (~1400px), visoko ~celog prozora. */
+.modal-overlay.pb-modal:has(.pb-task-panel) {
+  padding: 12px;
+  align-items: center;
+  justify-content: center;
+}
+
 .modal-panel.pb-task-panel {
+  --pb-task-modal-pad: clamp(14px, 2vw, 22px);
   min-height: 0;
+  width: min(1400px, calc(100vw - 24px));
+  max-width: min(1400px, calc(100vw - 24px));
+  height: calc(100dvh - 24px);
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  box-sizing: border-box;
 }
 
 .pb-task-panel .pb-modal-head {
   flex-shrink: 0;
+  padding: var(--pb-task-modal-pad) var(--pb-task-modal-pad) 12px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border, #e5e7eb);
 }
 
 .pb-task-panel .pb-task-form {
   flex: 1 1 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.pb-task-panel .pb-task-form-scroll {
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 12px;
+  padding: 14px var(--pb-task-modal-pad) 8px;
+}
+
+.pb-task-panel .pb-modal-actions {
+  flex-shrink: 0;
+  margin-top: 0;
+  gap: 8px;
+  padding: 12px var(--pb-task-modal-pad) calc(14px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface, #fff);
+  border-top: 1px solid var(--border, #e5e7eb);
+  box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .pb-task-panel .pb-modal-actions {
+  box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.35);
 }
 
 .pb-modal.pb-modal--sheet .modal-panel.pb-task-panel {
   overflow: hidden;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: none;
+  height: calc(100dvh - 10px - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 10px - env(safe-area-inset-bottom, 0px));
+  border-radius: 14px 14px 0 0;
+  margin: 0;
 }
 
 .pb-modal-head {
