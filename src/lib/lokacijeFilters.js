@@ -90,3 +90,18 @@ export function filterPlacements(placements, locIdx, query) {
   if (!Array.isArray(placements)) return [];
   return placements.filter(p => placementMatches(p, locIdx, q));
 }
+
+/**
+ * Preostalo za INITIAL_PLACEMENT (komada sa RN − suma već smeštenog), kad je
+ * `komada_total` dostupan iz BigTehn keša.
+ *
+ * @param {{ komada_total?: unknown }|null|undefined} erpSnap
+ * @param {Array<{ quantity?: unknown }>|null|undefined} placements
+ * @returns {number|null} null ako nema pouzdanog komada_total
+ */
+export function computeLocInitialRemainder(erpSnap, placements) {
+  const total = Number(erpSnap?.komada_total);
+  if (!Number.isFinite(total) || total < 0) return null;
+  const placed = (placements || []).reduce((a, r) => a + Number(r?.quantity || 0), 0);
+  return Math.max(0, total - placed);
+}

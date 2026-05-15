@@ -24,6 +24,7 @@ import { fetchBigtehnOpSnapshotByRnAndTp } from '../../services/planProizvodnje.
 import { enqueueMovement } from '../../services/offlineQueue.js';
 import { getIsOnline } from '../../state/auth.js';
 import { compareLocationCodeNatural } from '../../lib/lokacijeSort.js';
+import { computeLocInitialRemainder } from '../../lib/lokacijeFilters.js';
 import {
   parseShelfCompositeBarcodeToken,
   resolveCompositeShelfScan,
@@ -1162,6 +1163,30 @@ export async function openScanMoveModal({
     return { ok: false, msg: 'Nejednoznačna šifra — kontakt IT (više pogodaka u istoj halu).' };
   }
 
+  function syncScanQtyLimitsFromFromSelect() {
+    const fromSel = /** @type {HTMLSelectElement|null} */ ($('#locScanFrom'));
+    const qtyEl = /** @type {HTMLInputElement|null} */ ($('#locScanQty'));
+    if (!fromSel || !qtyEl) return;
+    const fromId = fromSel.value || '';
+    const pl = state.currentPlacements;
+    const remainder = computeLocInitialRemainder(state.erpSnapshot, pl);
+
+    if (!fromId) {
+      qtyEl.removeAttribute('max');
+      if (remainder != null) qtyEl.max = String(remainder);
+      return;
+    }
+    const row = pl.find(r => String(r.location_id) === fromId);
+    const mq = row ? Number(row.quantity) : NaN;
+    if (Number.isFinite(mq) && mq > 0) {
+      qtyEl.max = String(mq);
+      const cur = Number(qtyEl.value);
+      if (Number.isFinite(cur) && cur > mq) qtyEl.value = String(mq);
+    } else {
+      qtyEl.removeAttribute('max');
+    }
+  }
+
   function populateFromSelect() {
     const sel = $('#locScanFrom');
     const pl = state.currentPlacements;
@@ -1172,21 +1197,41 @@ export async function openScanMoveModal({
         ? '<option value="">— prvo izaberi nalog —</option>'
         : '<option value="">— (INITIAL_PLACEMENT) —</option>';
       sel.disabled = true;
+      syncScanQtyLimitsFromFromSelect();
       return;
     }
     sel.disabled = false;
-    sel.innerHTML = pl
-      .map(r => {
-        const loc = state.locById.get(r.location_id);
-        const label = loc
-          ? `${shelfOrHallDisplayLabel(loc)} — ${loc.name || ''}`.replace(/\s+—\s*$/, '').trim()
-          : r.location_id;
-        return `<option value="${escHtml(r.location_id)}" data-qty="${escHtml(String(r.quantity))}">${escHtml(label)} (${escHtml(String(r.quantity))} kom.)</option>`;
-      })
-      .join('');
-    /* Default qty = all iz prve lokacije (radnik obično cela premešta). */
-    const first = pl[0];
-    if (first) $('#locScanQty').value = String(first.quantity);
+    const remainder = computeLocInitialRemainder(state.erpSnapshot, pl);
+    const initialOpt =
+      remainder != null
+        ? `— Uloži preostalo sa naloga (${remainder} kom; bez prenosa sa police) —`
+        : '— Uloži sa naloga (INITIAL; bez prenosa sa police) —';
+    sel.innerHTML =
+      `<option value="">${escHtml(initialOpt)}</option>` +
+      pl
+        .map(r => {
+          const loc = state.locById.get(r.location_id);
+          const label = loc
+            ? `${shelfOrHallDisplayLabel(loc)} — ${loc.name || ''}`.replace(/\s+—\s*$/, '').trim()
+            : r.location_id;
+          return `<option value="${escHtml(r.location_id)}" data-qty="${escHtml(String(r.quantity))}">${escHtml(label)} (${escHtml(String(r.quantity))} kom.)</option>`;
+        })
+        .join('');
+    sel.value = '';
+    const qtyEl = /** @type {HTMLInputElement|null} */ ($('#locScanQty'));
+    if (qtyEl) {
+      const rem = remainder;
+      if (rem != null && rem > 0) {
+        qtyEl.max = String(rem);
+        const cur = Number(qtyEl.value);
+        qtyEl.value = String(Number.isFinite(cur) && cur > 0 ? Math.min(cur, rem) : Math.min(1, rem));
+      } else {
+        qtyEl.removeAttribute('max');
+        const first = pl[0];
+        if (first) qtyEl.value = String(first.quantity);
+      }
+    }
+    syncScanQtyLimitsFromFromSelect();
   }
 
   function filterPlacementsByDrawingRows(rows, drawingTrim) {
@@ -1828,7 +1873,6 @@ export async function openScanMoveModal({
     let order_no = $('#locScanOrder').value.trim();
     const drawing_no = $('#locScanDrawing').value.trim();
     const to_location_id = $('#locScanTo').value;
-    const from_location_id = $('#locScanFrom').value || '';
     const qty = Number($('#locScanQty').value);
     const note_raw = $('#locScanNote').value.trim();
 
@@ -1877,8 +1921,9 @@ export async function openScanMoveModal({
       console.warn('[scan] refresh placements before submit', e);
     }
     state.currentPlacements = (rowsFresh || []).filter(r => Number(r.quantity) > 0);
-    /* INITIAL = nema nijednog placement-a za (TP, nalog) par (posle normalizacije). */
-    const isInitial = state.currentPlacements.length === 0;
+    const from_location_id = ($('#locScanFrom').value || '').trim();
+    /* INITIAL kad nema polazne police: prvi ulaz ili preostalo sa RN (server proverava komada_rn). */
+    const isInitial = !from_location_id;
 
     const toLoc = state.locById.get(to_location_id);
     const hallForShelves =
@@ -1901,8 +1946,14 @@ export async function openScanMoveModal({
       err.textContent = 'Količina mora biti veća od 0.';
       return;
     }
+    const remSubmit = computeLocInitialRemainder(state.erpSnapshot, state.currentPlacements);
+    if (isInitial && remSubmit != null && qty > remSubmit) {
+      err.textContent = `Količina (${qty}) premašuje preostalo za INITIAL (${remSubmit} kom).`;
+      return;
+    }
     if (!isInitial && !from_location_id) {
-      err.textContent = 'Izaberi polaznu lokaciju.';
+      err.textContent =
+        'Izaberi polaznu lokaciju (TRANSFER), ili prvu stavku u „Sa lokacije“ za uložaj preostatka sa naloga.';
       return;
     }
     if (from_location_id && from_location_id === to_location_id) {
@@ -2007,7 +2058,12 @@ export async function openScanMoveModal({
       insufficient_quantity: res.available != null
         ? `Tražena količina (${res.requested ?? '?'}) > raspoloživa (${res.available}).`
         : 'Tražena količina > raspoloživa.',
-      already_placed: 'Stavka već postoji — koristi TRANSFER.',
+      already_placed:
+        'Stavka već ima placement — za prenos sa police koristi TRANSFER; za novi deo sa naloga izaberi prvu opciju u „Sa lokacije“ (INITIAL).',
+      exceeds_order_quantity:
+        res.available != null
+          ? `Količina premašuje preostalo na nalogu (${res.available} kom; traženo ${res.requested ?? '?'}).`
+          : 'Količina premašuje preostalo na nalogu.',
       no_current_placement: 'Stavka nije nigde smeštena — ovo je INITIAL_PLACEMENT.',
       from_ambiguous: 'Stavka je na više lokacija — izaberi polaznu.',
       from_has_no_placement: 'Na polaznoj lokaciji nema komada ove stavke.',
@@ -2240,6 +2296,10 @@ export async function openScanMoveModal({
         void reloadPlacementsOnly();
       }, 350);
     }
+  });
+
+  overlay.addEventListener('change', ev => {
+    if (ev.target.id === 'locScanFrom') syncScanQtyLimitsFromFromSelect();
   });
 
   /* Preload lokacije odmah, paralelno sa kamerom. */

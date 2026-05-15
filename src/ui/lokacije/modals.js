@@ -28,6 +28,7 @@ import {
 } from '../../services/planProizvodnje.js';
 import { getIsOnline } from '../../state/auth.js';
 import { compareLocationCodeNatural } from '../../lib/lokacijeSort.js';
+import { computeLocInitialRemainder } from '../../lib/lokacijeFilters.js';
 
 /* TRANSFER je prvi jer je najčešći slučaj u svakodnevnom radu;
  * INITIAL_PLACEMENT je eksplicitno drugačiji tok (samo za nove stavke). */
@@ -111,7 +112,7 @@ function movementErrMsg(code, res) {
     bad_order_no: 'Broj naloga je predugačak (max 40 karaktera).',
     bad_drawing_no: 'Broj crteža je predugačak (max 40 karaktera).',
     already_placed:
-      'Stavka već ima postojeće placement-e — koristi TRANSFER (ili INVENTORY_ADJUSTMENT da dodaš još komada).',
+      'Placement već postoji, a RN nije u kešu za proveru preostatka — koristi TRANSFER ili INVENTORY_ADJUSTMENT.',
     no_current_placement:
       'Stavka nije trenutno nigde smeštena — prvo iskoristi INITIAL_PLACEMENT.',
     from_has_no_placement:
@@ -123,6 +124,10 @@ function movementErrMsg(code, res) {
       r.available != null
         ? `Tražena količina (${r.requested ?? '?'}) je veća od raspoložive na polaznoj lokaciji (${r.available}).`
         : 'Tražena količina je veća od raspoložive na polaznoj lokaciji.',
+    exceeds_order_quantity:
+      r.available != null
+        ? `Za INITIAL je najviše ${r.available} kom (traženo ${r.requested ?? '?'}).`
+        : 'Količina premašuje preostalo na nalogu za INITIAL.',
     inactive_predmet:
       'Predmet nije aktivan za montažu/projektovanje u Podešavanjima (posle normalizacije naloga, npr. 9400).',
     not_authenticated: 'Prijavi se ponovo.',
@@ -1138,9 +1143,29 @@ export function openQuickMoveModal({ onSuccess } = {}) {
 
     /* Stanje: trenutni placement-i za (bigtehn_rn, TP, predmet) — mapa location_id → qty. */
     let currentPlacements = [];
+    let qmErpSnap = null;
     let lookupToken = 0;
     let tpListToken = 0;
     let drawingLookupToken = 0;
+
+    function refreshInitialQtyHint() {
+      const rem = computeLocInitialRemainder(qmErpSnap, currentPlacements);
+      if (rem != null) {
+        qtyInput.max = rem;
+        fromHint.textContent =
+          rem > 0
+            ? `Za INITIAL: najviše ${rem} kom (nalog iz keša − već smešteno na police).`
+            : 'Nema preostatka na nalogu za INITIAL — koristi TRANSFER.';
+        const cur = Number(qtyInput.value);
+        if (Number.isFinite(rem) && rem >= 0 && Number.isFinite(cur) && cur > rem) {
+          qtyInput.value = String(rem > 0 ? rem : 1);
+        }
+      } else {
+        qtyInput.removeAttribute('max');
+        fromHint.textContent =
+          'Bez podataka o komadu iz keša — server validira; ako ne uspe, proveri mrežu ili koristi TRANSFER.';
+      }
+    }
 
     function refreshFromHint() {
       const locId = fromSel.value;
@@ -1164,7 +1189,11 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       const needsFrom = t !== 'INITIAL_PLACEMENT' && t !== 'INVENTORY_ADJUSTMENT';
       fromWrap.hidden = !needsFrom;
       fromSel.required = needsFrom;
-      refreshFromHint();
+      if (!needsFrom && t === 'INITIAL_PLACEMENT') {
+        refreshInitialQtyHint();
+      } else {
+        refreshFromHint();
+      }
     }
 
     function renderState(rows, { scoped }) {
@@ -1211,8 +1240,6 @@ export function openQuickMoveModal({ onSuccess } = {}) {
           }).join('');
       }
 
-      /* Default: TRANSFER (ako je već negde) — korisnik tipično prebacuje. */
-      if (typeSel.value === 'INITIAL_PLACEMENT') typeSel.value = 'TRANSFER';
       applyTypeMode();
     }
 
@@ -1231,6 +1258,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       );
       if (myToken !== lookupToken) return;
       renderState(rows || [], { scoped: !!order });
+      await refreshDrawingFromErp();
     }
 
     async function refreshTpDatalist() {
@@ -1260,11 +1288,15 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       const my = ++drawingLookupToken;
       if (!order || !tp) {
         drawingInput.value = '';
+        qmErpSnap = null;
+        if (typeSel.value === 'INITIAL_PLACEMENT') refreshInitialQtyHint();
         return;
       }
       const cached = qmGetDrawingCache(order, tp);
       if (!getIsOnline()) {
         drawingInput.value = cached || '';
+        qmErpSnap = null;
+        if (typeSel.value === 'INITIAL_PLACEMENT') refreshInitialQtyHint();
         return;
       }
       let snap = null;
@@ -1274,6 +1306,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
         console.warn('[quickMove] ERP snapshot failed', e);
       }
       if (my !== drawingLookupToken) return;
+      qmErpSnap = snap;
       const erp = snap?.broj_crteza ? String(snap.broj_crteza).trim() : '';
       const rev = snap?.revizija ? String(snap.revizija).trim() : '';
       drawingInput.value = (erp || cached || '').trim();
@@ -1286,6 +1319,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
           revHintEl.textContent = '';
         }
       }
+      if (typeSel.value === 'INITIAL_PLACEMENT') refreshInitialQtyHint();
     }
 
     /* Debounce da ne zovemo za svaki keypress. */
@@ -1376,6 +1410,13 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       if (!Number.isFinite(qty) || qty <= 0) {
         qmShowErr('Količina mora biti veća od 0.');
         return;
+      }
+      if (movement_type === 'INITIAL_PLACEMENT') {
+        const rem = computeLocInitialRemainder(qmErpSnap, currentPlacements);
+        if (rem != null && qty > rem) {
+          qmShowErr(`Za INITIAL je najviše ${rem} kom (preostalo na nalogu).`);
+          return;
+        }
       }
       if (needsFrom) {
         if (!currentPlacements.length) {

@@ -5,6 +5,7 @@ import {
   filterLocationsHierarchical,
   placementMatches,
   filterPlacements,
+  computeLocInitialRemainder,
 } from '../../src/lib/lokacijeFilters.js';
 
 /**
@@ -164,5 +165,17 @@ describe('placementMatches / filterPlacements', () => {
     const p = [{ item_ref_table: 'x', item_ref_id: 'y', location_id: 'nepoznata' }];
     expect(placementMatches(p[0], locIdx, 'x')).toBe(true);
     expect(placementMatches(p[0], locIdx, 'magacin')).toBe(false);
+  });
+});
+
+describe('computeLocInitialRemainder', () => {
+  it('null snap → null', () => {
+    expect(computeLocInitialRemainder(null, [])).toBe(null);
+  });
+  it('komada_total − suma placement-a', () => {
+    expect(computeLocInitialRemainder({ komada_total: 1500 }, [{ quantity: 1 }])).toBe(1499);
+  });
+  it('nema negativnog preostalog', () => {
+    expect(computeLocInitialRemainder({ komada_total: 3 }, [{ quantity: 5 }])).toBe(0);
   });
 });
