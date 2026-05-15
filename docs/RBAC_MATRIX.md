@@ -371,6 +371,15 @@ Legenda flag-ova:
 | `po_read_authenticated` | SELECT | `authenticated` | `TRUE` | `` | ⚠ USING(true) | `sql/migrations/add_plan_proizvodnje.sql` |
 | `po_update_admin_pm` | UPDATE | `authenticated` | `public.can_edit_plan_proizvodnje()` | `public.can_edit_plan_proizvodnje()` | ✅ | `sql/migrations/add_plan_proizvodnje.sql` |
 
+### `production_cooperation_ops` (PP-D)
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `pco_delete_plan_edit` | DELETE | `authenticated` | `public.can_edit_plan_proizvodnje()` | `` | ✅ | `supabase/migrations/20260515140000__pp_d_cooperation_ops_and_plan_views.sql` |
+| `pco_insert_plan_edit` | INSERT | `authenticated` | `` | `public.can_edit_plan_proizvodnje()` | ✅ | `supabase/migrations/20260515140000__pp_d_cooperation_ops_and_plan_views.sql` |
+| `pco_read_authenticated` | SELECT | `authenticated` | `TRUE` | `` | ⚠ USING(true) | `supabase/migrations/20260515140000__pp_d_cooperation_ops_and_plan_views.sql` |
+| `pco_update_plan_edit` | UPDATE | `authenticated` | `public.can_edit_plan_proizvodnje()` | `public.can_edit_plan_proizvodnje()` | ✅ | `supabase/migrations/20260515140000__pp_d_cooperation_ops_and_plan_views.sql` |
+
 ### `production_reassign_audit`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
