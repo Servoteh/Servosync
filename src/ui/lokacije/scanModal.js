@@ -1041,8 +1041,16 @@ export async function openScanMoveModal({
   function renderChips() {
     const el = $('#locScanChips');
     const pl = state.currentPlacements;
+    const tp = ($('#locScanItemId').value || '').trim();
+    const ord = ($('#locScanOrder').value || '').trim();
+    if (!tp || !ord) {
+      el.innerHTML =
+        '<span class="loc-muted" style="font-size:12px">Unesi <strong>nalog</strong> i <strong>TP</strong> — premeštanje je uvek po tehnološkom postupku; bez TP nema smeštaja „celog predmeta".</span>';
+      return;
+    }
     if (!pl.length) {
-      el.innerHTML = '<span class="loc-muted" style="font-size:12px">Crtež + nalog još nisu smešteni (novi unos = INITIAL_PLACEMENT).</span>';
+      el.innerHTML =
+        '<span class="loc-muted" style="font-size:12px">Za ovaj nalog/TP još nema police (novi unos = INITIAL_PLACEMENT).</span>';
       return;
     }
     const total = pl.reduce((a, r) => a + Number(r.quantity || 0), 0);
@@ -1190,12 +1198,19 @@ export async function openScanMoveModal({
   function populateFromSelect() {
     const sel = $('#locScanFrom');
     const pl = state.currentPlacements;
-    /* "Sa lokacije" ima smisla samo kada smo scope-ovali na jedan nalog;
-     * inače ne možemo sigurno odrediti bucket od kojeg oduzimamo. */
-    if (!state.scopedOrderNo || !pl.length) {
-      sel.innerHTML = pl.length
-        ? '<option value="">— prvo izaberi nalog —</option>'
-        : '<option value="">— (INITIAL_PLACEMENT) —</option>';
+    const tp = ($('#locScanItemId').value || '').trim();
+    const ord = (state.scopedOrderNo || ($('#locScanOrder').value || '')).trim();
+    /* „Sa lokacije" samo za konkretan nalog + TP — bez TP nema bucket-a (nije dozvoljeno „ceo predmet"). */
+    if (!ord || !tp || !pl.length) {
+      let html;
+      if (!ord) {
+        html = '<option value="">— prvo unesi broj naloga —</option>';
+      } else if (!tp) {
+        html = '<option value="">— unesi broj TP (obavezno) —</option>';
+      } else {
+        html = '<option value="">— nema police za ovaj TP —</option>';
+      }
+      sel.innerHTML = html;
       sel.disabled = true;
       syncScanQtyLimitsFromFromSelect();
       return;
@@ -2072,7 +2087,8 @@ export async function openScanMoveModal({
       bad_quantity: 'Količina mora biti > 0.',
       bad_order_no: 'Broj naloga je predugačak (max 40 karaktera).',
       not_authenticated: 'Prijavi se ponovo.',
-      missing_fields: 'Nedostaju obavezni podaci (lokacija, stavka ili tip). Osveži listu lokacija pa probaj ponovo.',
+      missing_fields:
+        'Nedostaju obavezni podaci (nalog, TP, lokacija ili tip). Premeštanje je uvek po TP-u — bez TP nije dozvoljeno.',
       bad_to_uuid: 'Odredišna lokacija nije validna — izaberi ponovo iz liste.',
       bad_from_uuid: 'Polazna lokacija nije validna — izaberi ponovo.',
       from_mismatch: 'Polazna lokacija ne odgovara trenutnom smeštaju stavke.',

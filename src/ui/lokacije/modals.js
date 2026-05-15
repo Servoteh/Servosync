@@ -103,7 +103,8 @@ function movementErrMsg(code, res) {
     return d ? `Greška na serveru: ${d}` : 'Greška na serveru (bez detalja).';
   }
   const m = {
-    missing_fields: 'Popuni sva obavezna polja.',
+    missing_fields:
+      'Popuni sva obavezna polja (uključujući broj TP — magacin radi po postupku, ne po „celom" nalogu bez TP).',
     bad_to_location: 'Odredišna lokacija nije validna ili nije aktivna.',
     bad_to_uuid: 'Odredišna lokacija ima neispravan ID.',
     bad_from_uuid: 'Polazna lokacija ima neispravan ID.',
@@ -883,7 +884,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
     id: modalId,
     title: 'Brzo premeštanje',
     subtitle:
-      'Unesi broj predmeta i TP; broj crteža se puni iz BigTehn keša. Za novu stavku <strong>INITIAL_PLACEMENT</strong>; za postojeći placement <strong>TRANSFER</strong> ili drugi tip.',
+      'Unesi broj predmeta i <strong>broj TP</strong> (obavezno); broj crteža se puni iz BigTehn keša. Bez TP nema premeštanja. Za novu stavku <strong>INITIAL_PLACEMENT</strong>; za postojeći placement <strong>TRANSFER</strong> ili drugi tip.',
   });
 
   let unbindEsc = null;
@@ -1149,6 +1150,11 @@ export function openQuickMoveModal({ onSuccess } = {}) {
     let drawingLookupToken = 0;
 
     function refreshInitialQtyHint() {
+      if (!tpInput.value.trim()) {
+        qtyInput.removeAttribute('max');
+        fromHint.textContent = 'Unesi broj TP — bez TP nema INITIAL ni prenosa „celog predmeta".';
+        return;
+      }
       const rem = computeLocInitialRemainder(qmErpSnap, currentPlacements);
       if (rem != null) {
         qtyInput.max = rem;
@@ -1210,7 +1216,16 @@ export function openQuickMoveModal({ onSuccess } = {}) {
     }
 
     function rebuildQmFromSelect() {
-      const scoped = !!orderInput.value.trim();
+      const order = orderInput.value.trim();
+      const tp = tpInput.value.trim();
+      if (!tp) {
+        fromSel.innerHTML = '<option value="">— unesi broj TP —</option>';
+        fromHint.textContent =
+          'Premeštanje je po tehnološkom postupku (TP). Bez TP nije dozvoljeno ni „ceo predmet".';
+        qtyInput.removeAttribute('max');
+        return;
+      }
+      const scoped = !!order;
       if (!scoped) return;
       const rem = computeLocInitialRemainder(qmErpSnap, currentPlacements);
       const un =
