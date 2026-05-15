@@ -15,7 +15,7 @@ import { escHtml } from '../../../lib/dom.js';
 import { formatDate } from '../../../lib/date.js';
 import { showToast } from '../../../lib/dom.js';
 import {
-  canEdit, canEditSastanci, getCurrentUser, isAdmin,
+  canEdit, canEditSastanci, getCurrentUser, isAdminOrMenadzment,
 } from '../../../state/auth.js';
 import { getSastDetaljTab, setSastDetaljTab } from '../../../state/sastanci.js';
 import {
@@ -77,7 +77,6 @@ export async function renderSastanakDetalj(host, { sastanakId, onBack, onNavigat
 
 function render(host, sastanak, { onBack, onNavigate }) {
   const canWrite = canEdit() && canEditSastanci();
-  const admin = isAdmin();
   const cu = getCurrentUser();
   const isLocked = sastanak.status === 'zakljucan' || sastanak.status === 'zavrsen';
   const isReadOnly = isLocked || sastanak.status === 'otkazan';
@@ -87,7 +86,7 @@ function render(host, sastanak, { onBack, onNavigate }) {
   const tipLabel = SASTANAK_TIPOVI[sastanak.tip] || sastanak.tip;
 
   const ucesniciHtml = renderUcesniciAvatars(sastanak.ucesnici || []);
-  const actionBtnsHtml = renderActionButtons(sastanak, canWrite, admin);
+  const actionBtnsHtml = renderActionButtons(sastanak, canWrite);
   const readOnlyBanner = isReadOnly ? `
     <div class="sast-detalj-readonly-banner">
       🔒 ${sastanak.status === 'zakljucan' || sastanak.status === 'zavrsen'
@@ -135,7 +134,7 @@ function render(host, sastanak, { onBack, onNavigate }) {
 
   host.querySelector('#sdBackBtn')?.addEventListener('click', () => onBack?.());
 
-  wireActionButtons(host, sastanak, canWrite, admin, () => {
+  wireActionButtons(host, sastanak, canWrite, () => {
     renderSastanakDetalj(host, { sastanakId: sastanak.id, onBack, onNavigate });
   });
 
@@ -204,7 +203,7 @@ function getInitials(name) {
   return parts[0].slice(0, 2).toUpperCase();
 }
 
-function renderActionButtons(sastanak, canWrite, admin) {
+function renderActionButtons(sastanak, canWrite) {
   if (!canWrite) return '';
   const s = sastanak.status;
   if (s === 'planiran') {
@@ -217,7 +216,7 @@ function renderActionButtons(sastanak, canWrite, admin) {
       <button type="button" class="btn btn-success sast-action-btn" data-action="zakljucaj">🔒 Zaključaj</button>
     `;
   }
-  if ((s === 'zakljucan' || s === 'zavrsen') && (admin || isAdmin())) {
+  if ((s === 'zakljucan' || s === 'zavrsen') && isAdminOrMenadzment()) {
     return `
       <button type="button" class="btn sast-action-btn" data-action="otvori">🔓 Otvori ponovo</button>
     `;
@@ -225,7 +224,7 @@ function renderActionButtons(sastanak, canWrite, admin) {
   return '';
 }
 
-function wireActionButtons(host, sastanak, canWrite, admin, onReload) {
+function wireActionButtons(host, sastanak, canWrite, onReload) {
   host.querySelectorAll('[data-action]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const action = btn.dataset.action;
