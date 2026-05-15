@@ -1888,6 +1888,28 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   margin: 0;
 }
 
+/* Izmena zadatka: .modal-panel ima max-height + overflow:hidden pa se donji deo odseče.
+   Jedan unutrašnji skrol u formi; sheet bez duplog skrola (header ostaje vidljiv). */
+.modal-panel.pb-task-panel {
+  min-height: 0;
+}
+
+.pb-task-panel .pb-modal-head {
+  flex-shrink: 0;
+}
+
+.pb-task-panel .pb-task-form {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 12px;
+}
+
+.pb-modal.pb-modal--sheet .modal-panel.pb-task-panel {
+  overflow: hidden;
+}
+
 .pb-modal-head {
   display: flex;
   justify-content: space-between;
