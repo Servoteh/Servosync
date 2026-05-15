@@ -1187,6 +1187,16 @@ export async function openScanMoveModal({
     }
   }
 
+  /** HTML `max` na number inputu ne sprečava ručni unos veći od max-a — pred RPC clamp. */
+  function clampLocScanQtyToMax() {
+    const qtyEl = /** @type {HTMLInputElement|null} */ ($('#locScanQty'));
+    if (!qtyEl?.max) return;
+    const m = Number(qtyEl.max);
+    if (!Number.isFinite(m) || m <= 0) return;
+    const cur = Number(qtyEl.value);
+    if (Number.isFinite(cur) && cur > m) qtyEl.value = String(Math.floor(m));
+  }
+
   function populateFromSelect() {
     const sel = $('#locScanFrom');
     const pl = state.currentPlacements;
@@ -1873,7 +1883,6 @@ export async function openScanMoveModal({
     let order_no = $('#locScanOrder').value.trim();
     const drawing_no = $('#locScanDrawing').value.trim();
     const to_location_id = $('#locScanTo').value;
-    const qty = Number($('#locScanQty').value);
     const note_raw = $('#locScanNote').value.trim();
 
     if (!item_ref_id) {
@@ -1925,6 +1934,16 @@ export async function openScanMoveModal({
     /* INITIAL kad je izabrana stavka „preostalo sa naloga“ (nije polazna polica). */
     const isInitial = isLocFromUnplacedOption(from_location_id_live);
 
+    syncScanQtyLimitsFromFromSelect();
+    const qtyBeforeClamp = Number($('#locScanQty').value);
+    clampLocScanQtyToMax();
+    const qty = Number($('#locScanQty').value);
+    if (Number.isFinite(qtyBeforeClamp) && Number.isFinite(qty) && qtyBeforeClamp > qty) {
+      showToast(
+        `⚠ Količina je smanjena na ${qty} kom (maksimum za izabrani izvor). Za više kom sa naloga (bez prenosa sa police) izaberi prvu stavku u „Sa lokacije”.`,
+      );
+    }
+
     const toLoc = state.locById.get(to_location_id);
     const hallForShelves =
       $('#locScanHallFilter') instanceof HTMLSelectElement
@@ -1955,6 +1974,18 @@ export async function openScanMoveModal({
       err.textContent =
         'Izaberi polaznu lokaciju (TRANSFER), ili prvu stavku u „Sa lokacije“ za uložaj preostatka sa naloga.';
       return;
+    }
+    if (
+      !isInitial &&
+      from_location_id_live &&
+      !isLocFromUnplacedOption(from_location_id_live)
+    ) {
+      const fromRow = state.currentPlacements.find(r => String(r.location_id) === from_location_id_live);
+      const maxQ = fromRow ? Number(fromRow.quantity) : NaN;
+      if (Number.isFinite(maxQ) && qty > maxQ) {
+        err.textContent = `Na izabranoj polici je ${maxQ} kom., a uneto je ${qty}. Smanji količinu ili u „Sa lokacije“ izaberi prvu stavku (preostalo sa naloga — ne prenos sa te police).`;
+        return;
+      }
     }
     if (from_location_id_live && from_location_id_live === to_location_id) {
       err.textContent = 'Polazna i odredišna lokacija moraju biti različite.';
@@ -2297,6 +2328,7 @@ export async function openScanMoveModal({
         void reloadPlacementsOnly();
       }, 350);
     }
+    if (ev.target.id === 'locScanQty') clampLocScanQtyToMax();
   });
 
   overlay.addEventListener('change', ev => {
@@ -2330,7 +2362,11 @@ export async function openScanMoveModal({
       }).then(() => {
         if (prefill.fromLocationId) {
           const fromEl = /** @type {HTMLSelectElement} */ ($('#locScanFrom'));
-          if (fromEl) fromEl.value = prefill.fromLocationId;
+          if (fromEl) {
+            fromEl.value = prefill.fromLocationId;
+            syncScanQtyLimitsFromFromSelect();
+            clampLocScanQtyToMax();
+          }
         }
         setTimeout(() => $('#locScanTo')?.focus(), 80);
       });
