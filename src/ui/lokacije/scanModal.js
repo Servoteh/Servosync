@@ -15,6 +15,7 @@ import { getLocationKind, isHallType, isShelfType } from '../../lib/lokacijeType
 import {
   fetchItemPlacements,
   fetchLocations,
+  fetchLocationsByIds,
   formatLocationDisplay,
   fetchLocOrderNoInActiveProjMont,
   locCreateMovement,
@@ -362,7 +363,7 @@ export async function openScanMoveModal({
               </label>
               <select id="locScanHallFilter" aria-label="Hala ako skenirate samo šifru police"
                 style="width:100%;max-width:100%;font-size:15px;padding:9px 10px;margin-bottom:8px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
-                <option value="">— Nalepnica sa kodom HALA - POLICA sama postavlja halu · samo kod police prvo halu ovde izaberi —</option>
+                <option value="">—HALA—</option>
               </select>
               <select id="locScanTo" required></select>
               <div class="loc-scan-to-tools" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%">
@@ -1188,6 +1189,74 @@ export async function openScanMoveModal({
     if (first) $('#locScanQty').value = String(first.quantity);
   }
 
+  function filterPlacementsByDrawingRows(rows, drawingTrim) {
+    const d = typeof drawingTrim === 'string' ? drawingTrim.trim() : '';
+    if (!d || !rows.length) return rows;
+    const narrowed = rows.filter(r => {
+      const dn = r.drawing_no != null ? String(r.drawing_no).trim() : '';
+      return !dn || dn === d;
+    });
+    return narrowed.length ? narrowed : rows;
+  }
+
+  async function ensurePlacementLocationsInState(placementRows) {
+    const ids = new Set();
+    for (const r of placementRows || []) {
+      if (r.location_id) ids.add(String(r.location_id));
+    }
+    let missing = [...ids].filter(id => !state.locById.has(id));
+    if (!missing.length) return;
+    let extra = await fetchLocationsByIds(missing);
+    for (const loc of extra || []) {
+      state.locById.set(loc.id, loc);
+      if (!state.locs.some(l => l.id === loc.id)) state.locs.push(loc);
+    }
+    const parentIds = new Set();
+    for (const loc of extra || []) {
+      if (loc.parent_id) parentIds.add(String(loc.parent_id));
+    }
+    missing = [...parentIds].filter(id => !state.locById.has(id));
+    if (missing.length) {
+      extra = await fetchLocationsByIds(missing);
+      for (const loc of extra || []) {
+        state.locById.set(loc.id, loc);
+        if (!state.locs.some(l => l.id === loc.id)) state.locs.push(loc);
+      }
+    }
+  }
+
+  async function reloadPlacementsOnly() {
+    const id = $('#locScanItemId').value.trim();
+    const order = $('#locScanOrder').value.trim();
+    const drawingFilter = $('#locScanDrawing')?.value.trim() || '';
+    state.scopedOrderNo = order;
+    if (!id) {
+      state.currentPlacements = [];
+      renderChips();
+      populateFromSelect();
+      return;
+    }
+    let rows = await fetchItemPlacements(state.item_ref_table, id, order ? order : undefined);
+    rows = (rows || []).filter(r => Number(r.quantity) > 0);
+    await ensurePlacementLocationsInState(rows);
+    rows = filterPlacementsByDrawingRows(rows, drawingFilter);
+    state.currentPlacements = rows;
+    renderChips();
+    populateFromSelect();
+
+    const snap = state.erpSnapshot;
+    if (snap && state.currentPlacements.length === 0) {
+      const total = Number(snap.komada_total);
+      const done = Number(snap.komada_done ?? 0);
+      if (Number.isFinite(total) && total > 0) {
+        const remaining = Math.max(0, total - (Number.isFinite(done) ? done : 0));
+        const q = remaining > 0 ? remaining : total;
+        const qtyEl = /** @type {HTMLInputElement|null} */ ($('#locScanQty'));
+        if (qtyEl) qtyEl.value = String(q);
+      }
+    }
+  }
+
   function tryApplyLocScanToCode() {
     const inp = /** @type {HTMLInputElement|null} */ ($('#locScanToCode'));
     const sel = /** @type {HTMLSelectElement|null} */ ($('#locScanTo'));
@@ -1242,7 +1311,7 @@ export async function openScanMoveModal({
     const savedHallFilter = hallFilterEl?.value || '';
     if (hallFilterEl) {
       hallFilterEl.innerHTML =
-        '<option value="">— Nalepnica HALA - POLICA sama postavlja halu · inače najpre halu ovde izaberi —</option>' +
+        '<option value="">—HALA—</option>' +
         halls
           .map(
             h =>
@@ -1310,7 +1379,7 @@ export async function openScanMoveModal({
     }
 
     $('#locScanTo').innerHTML =
-      '<option value="">— izaberi odredište —</option>' + grouped;
+      '<option value="">—POLICA / KAVEZ—</option>' + grouped;
 
     /* Kratak tekstualni ključ iznad selecta — pomaže da user razume zašto je
      * neka grupa prva (npr. kliknuo je "POLICA" prečicu sa home-a). */
@@ -1629,13 +1698,22 @@ export async function openScanMoveModal({
      * populateToSelect vidi prazan state.locs i ostane samo placeholder. */
     await locsReady;
     populateToSelect();
-    await refreshPlacements();
+    await refreshErpFromOrderTpFields({ skipErpLookup: true });
   }
 
   /**
    * Kad radnik ručno menja nalog ili TP — isti ERP lookup i autofill crteža kao posle skena.
+   * @param {{ skipErpLookup?: boolean }} [opts] — posle skena ERP je već učitan u `showForm`
    */
-  async function refreshErpFromOrderTpFields() {
+  async function refreshErpFromOrderTpFields(opts = {}) {
+    const skipErp = opts.skipErpLookup === true;
+    const drawingCur = $('#locScanDrawing')?.value.trim() || '';
+
+    if (skipErp) {
+      await reloadPlacementsOnly();
+      return;
+    }
+
     const rawOrder = $('#locScanOrder').value.trim();
     const rawItem = $('#locScanItemId').value.trim();
     const norm = rawOrder && rawItem ? normalizeLocMovementKeys(rawOrder, rawItem) : null;
@@ -1645,10 +1723,13 @@ export async function openScanMoveModal({
       $('#locScanOrder').value = norm.orderNo;
       $('#locScanItemId').value = norm.itemRefId;
     }
-    const drawingCur = $('#locScanDrawing')?.value.trim() || '';
 
     if (!orderNo || !itemRefId) {
       state.erpSnapshot = null;
+      state.scopedOrderNo = orderNo || '';
+      state.currentPlacements = [];
+      renderChips();
+      populateFromSelect();
       updateLocScanParsedHint({
         rawHint: '',
         orderNo,
@@ -1691,7 +1772,7 @@ export async function openScanMoveModal({
 
     const cachedDrawing = getDrawingCache(orderNo, itemRefId);
     const erpDrawing = erpSnap?.broj_crteza ? String(erpSnap.broj_crteza).trim() : '';
-    const finalDrawing = (erpDrawing || cachedDrawing || '').trim();
+    const finalDrawing = (erpDrawing || cachedDrawing || drawingCur || '').trim();
     const drawingEl = /** @type {HTMLInputElement|null} */ ($('#locScanDrawing'));
     if (drawingEl) drawingEl.value = finalDrawing;
 
@@ -1737,38 +1818,7 @@ export async function openScanMoveModal({
       cachedDrawing,
       predmetPolicyOk,
     });
-    const id = $('#locScanItemId').value.trim();
-    const order = $('#locScanOrder').value.trim();
-    state.scopedOrderNo = order;
-    if (!id) {
-      state.currentPlacements = [];
-      renderChips();
-      populateFromSelect();
-      return;
-    }
-    /* Ako je nalog unet → striktno scope (order_no=eq.'9000').
-     * Ako nije → undefined (vraća SVE naloge za taj crtež, i bucket bez naloga). */
-    const rows = await fetchItemPlacements(
-      state.item_ref_table,
-      id,
-      order ? order : undefined,
-    );
-    state.currentPlacements = (rows || []).filter(r => Number(r.quantity) > 0);
-    renderChips();
-    populateFromSelect();
-
-    /* Ako nema postojećih placement-a, predloži količinu iz ERP-a (preostalo za TP). */
-    const snap = state.erpSnapshot;
-    if (snap && state.currentPlacements.length === 0) {
-      const total = Number(snap.komada_total);
-      const done = Number(snap.komada_done ?? 0);
-      if (Number.isFinite(total) && total > 0) {
-        const remaining = Math.max(0, total - (Number.isFinite(done) ? done : 0));
-        const q = remaining > 0 ? remaining : total;
-        const qtyEl = /** @type {HTMLInputElement|null} */ ($('#locScanQty'));
-        if (qtyEl) qtyEl.value = String(q);
-      }
-    }
+    await reloadPlacementsOnly();
   }
 
   async function submit() {
@@ -1981,7 +2031,7 @@ export async function openScanMoveModal({
     const chipOrder = ev.target.closest?.('[data-chip-order]')?.getAttribute('data-chip-order');
     if (chipOrder) {
       $('#locScanOrder').value = chipOrder;
-      refreshPlacements();
+      void refreshErpFromOrderTpFields();
       return;
     }
 
@@ -2174,14 +2224,20 @@ export async function openScanMoveModal({
     }
   });
 
-  /* Debounce: ERP + placement-i kad ručno menja nalog / TP (isto kao posle skena). */
+  /* Debounce: ERP + placement-i kad ručno menja nalog / TP / crtež. */
   let debT = null;
+  let debDrawing = null;
   overlay.addEventListener('input', ev => {
     if (ev.target.id === 'locScanItemId' || ev.target.id === 'locScanOrder') {
       clearTimeout(debT);
       debT = setTimeout(async () => {
         await refreshErpFromOrderTpFields();
-        await refreshPlacements();
+      }, 350);
+    }
+    if (ev.target.id === 'locScanDrawing') {
+      clearTimeout(debDrawing);
+      debDrawing = setTimeout(() => {
+        void reloadPlacementsOnly();
       }, 350);
     }
   });
@@ -2200,7 +2256,7 @@ export async function openScanMoveModal({
    * nalog i trenutnu policu pa ga ne teramo da ponovo skenira. */
   if (prefill && (prefill.itemRefId || prefill.orderNo || prefill.drawingNo)) {
     if (prefill.itemRefTable) state.item_ref_table = prefill.itemRefTable;
-    /* Čekamo locsReady pre showForm-a jer showForm → refreshPlacements →
+    /* Čekamo locsReady pre showForm-a jer showForm → refresh placement-a →
      * populateFromSelect koristi state.locById za labele. Bez toga from-select
      * bi se na trenutak prikazao sa golim UUID-evima. */
     locsReady.then(() => {

@@ -15,6 +15,15 @@ export async function fetchLocations({ activeOnly = true } = {}) {
   return sbReq(q);
 }
 
+/** Dovlačenje lokacija po id (npr. neaktivne koje su još uvek na placement-u). */
+export async function fetchLocationsByIds(ids) {
+  const uniq = [...new Set((ids || []).map(String).filter(Boolean))];
+  if (!uniq.length) return [];
+  const inClause = uniq.map(x => encodeURIComponent(x)).join(',');
+  const rows = await sbReq(`loc_locations?select=*&id=in.(${inClause})`);
+  return Array.isArray(rows) ? rows : [];
+}
+
 /**
  * PATCH nad `loc_locations` (RLS: `loc_can_manage_locations()` — admin / leadpm / pm / menadzment).
  * @param {string} id UUID lokacije
