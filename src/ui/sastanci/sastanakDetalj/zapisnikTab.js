@@ -4,13 +4,14 @@
  * Svaka sekcija = jedan red presek_aktivnosti:
  *   - naslov, pod_rn, odgovoran, rok, status, sadrzaj (rich-text), slike
  * Drag-drop za reorder sekcija (redosled kolona).
- * Auto-save: debounce 800ms po polju.
+ * Auto-save: debounce (SAVE_DEBOUNCE_MS) po polju; blur / skrivanje taba flush-uje odmah.
  * Upload slika → Storage 'sastanak-slike' → presek_slike.
  */
 
 import { escHtml, showToast } from '../../../lib/dom.js';
 import { SAVE_DEBOUNCE_MS } from '../../../lib/constants.js';
 import { sanitizeHtml, htmlToText } from '../../../lib/htmlSanitize.js';
+import { getIsOnline, onAuthChange } from '../../../state/auth.js';
 import {
   loadPresekAktivnosti, savePresekAktivnost, deletePresekAktivnost,
   reorderPresekAktivnosti, loadPresekSlike,
@@ -26,8 +27,143 @@ const PRESEK_STATUSI = {
 };
 
 let abortFlag = false;
-let debounceTimers = {};
 let dragState = null;
+
+/** @type {Map<string, { timer: ReturnType<typeof setTimeout>, exec: () => Promise<void> }>} */
+let pendingSaves = new Map();
+let saveBarEls = { root: /** @type {HTMLElement | null} */ (null), text: /** @type {HTMLElement | null} */ (null) };
+let activeSaving = 0;
+let saveHadError = false;
+/** @type {(() => void)[]} */
+let zapisnikLifecycleCleanups = [];
+
+function refreshSaveBar() {
+  const textEl = saveBarEls.text;
+  const rootEl = saveBarEls.root;
+  if (!textEl || !rootEl) return;
+  rootEl.classList.remove(
+    'zs-save-bar--pending', 'zs-save-bar--saving', 'zs-save-bar--error', 'zs-save-bar--offline',
+  );
+
+  if (!getIsOnline()) {
+    rootEl.classList.add('zs-save-bar--offline');
+    textEl.textContent =
+      'Niste na mreži — izmene se ne mogu sačuvati dok se konekcija ne vrati.';
+    return;
+  }
+  if (saveHadError && activeSaving === 0 && pendingSaves.size === 0) {
+    rootEl.classList.add('zs-save-bar--error');
+    textEl.textContent =
+      'Greška pri čuvanju — proveri mrežu, izmeni polje ponovo ili osveži stranicu.';
+    return;
+  }
+  if (activeSaving > 0) {
+    rootEl.classList.add('zs-save-bar--saving');
+    textEl.textContent = 'Čuvam u bazu…';
+    return;
+  }
+  if (pendingSaves.size > 0) {
+    rootEl.classList.add('zs-save-bar--pending');
+    textEl.textContent =
+      'Ima nesačuvanih izmena — sačuvaću automatski uskoro (klik van polja čuva odmah).';
+    return;
+  }
+  textEl.textContent = 'Sačuvano · poslednje izmene su u bazi.';
+}
+
+function bindSaveBar(host) {
+  saveBarEls = {
+    root: host.querySelector('#zsSaveBar'),
+    text: host.querySelector('#zsSaveBarText'),
+  };
+  refreshSaveBar();
+}
+
+function registerZapisnikLifecycleListeners() {
+  const onVis = () => {
+    if (document.visibilityState === 'hidden') void flushAllPendingSaves();
+  };
+  const onBeforeUnload = (e) => {
+    if (pendingSaves.size > 0 || activeSaving > 0) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  };
+  document.addEventListener('visibilitychange', onVis);
+  window.addEventListener('beforeunload', onBeforeUnload);
+  const unsubAuth = onAuthChange(() => refreshSaveBar());
+  zapisnikLifecycleCleanups.push(() => {
+    document.removeEventListener('visibilitychange', onVis);
+    window.removeEventListener('beforeunload', onBeforeUnload);
+    unsubAuth();
+  });
+}
+
+function scheduleDebouncedSave(key, exec) {
+  const prev = pendingSaves.get(key);
+  if (prev) clearTimeout(prev.timer);
+  const timer = setTimeout(() => {
+    pendingSaves.delete(key);
+    void runSaveNow(key, exec);
+  }, SAVE_DEBOUNCE_MS);
+  pendingSaves.set(key, { timer, exec });
+  refreshSaveBar();
+}
+
+async function runSaveNow(key, exec) {
+  if (!getIsOnline()) {
+    saveHadError = true;
+    refreshSaveBar();
+    showToast('⚠ Nema mreže');
+    return;
+  }
+  activeSaving++;
+  refreshSaveBar();
+  try {
+    await exec();
+    saveHadError = false;
+  } catch (err) {
+    console.error('[ZapisnikTab] save', key, err);
+    saveHadError = true;
+    showToast('⚠ Čuvanje nije uspelo');
+  } finally {
+    activeSaving--;
+    refreshSaveBar();
+  }
+}
+
+function flushSaveKey(key) {
+  const st = pendingSaves.get(key);
+  if (!st) return;
+  clearTimeout(st.timer);
+  pendingSaves.delete(key);
+  void runSaveNow(key, st.exec);
+}
+
+async function flushAllPendingSaves() {
+  const entries = [...pendingSaves.entries()];
+  for (const [key, st] of entries) {
+    clearTimeout(st.timer);
+    pendingSaves.delete(key);
+    await runSaveNow(key, st.exec);
+  }
+}
+
+/**
+ * @param {HTMLElement} el
+ * @param {object} akt
+ */
+async function persistPresek(el, akt, patch) {
+  Object.assign(akt, patch);
+  const saved = await savePresekAktivnost(akt);
+  if (!saved) throw new Error('save failed');
+  Object.assign(akt, saved);
+  const ind = el.querySelector('.zs-save-ind');
+  if (ind) {
+    ind.style.visibility = 'visible';
+    setTimeout(() => { ind.style.visibility = 'hidden'; }, 1800);
+  }
+}
 
 export async function renderZapisnikTab(host, { sastanak, canWrite, isReadOnly }) {
   abortFlag = false;
@@ -68,8 +204,21 @@ export async function renderZapisnikTab(host, { sastanak, canWrite, isReadOnly }
 }
 
 function renderZapisnikContent(host, aktivnosti, slikeMap, sastanak, locked) {
+  const pdfStaleHint = !locked && sastanak.status === 'u_toku' && sastanak.arhiva?.zapisnikStoragePath
+    ? `<div class="zs-pdf-stale-hint" role="note">
+        Postoji PDF zapisnik od ranijeg zaključavanja. Posle dopune zapisnika,
+        <strong>ponovo zaključaj</strong> da se PDF uskladi sa bazom.
+      </div>`
+    : '';
+
   host.innerHTML = `
     <div class="sast-zapisnik">
+      ${!locked ? `
+        <div class="zs-save-bar" id="zsSaveBar" role="status" aria-live="polite">
+          <span class="zs-save-bar-text" id="zsSaveBarText"></span>
+        </div>
+        ${pdfStaleHint}
+      ` : ''}
       <div class="sast-zapisnik-sections" id="zsSekcije">
         ${aktivnosti.map(a => renderSekcija(a, slikeMap.get(a.id) || [], locked)).join('')}
       </div>
@@ -82,6 +231,8 @@ function renderZapisnikContent(host, aktivnosti, slikeMap, sastanak, locked) {
   `;
 
   if (!locked) {
+    bindSaveBar(host);
+    registerZapisnikLifecycleListeners();
     wireDragDrop(host, aktivnosti);
     host.querySelector('#zsAddSekcija')?.addEventListener('click', async () => {
       const nova = await savePresekAktivnost({
@@ -99,6 +250,7 @@ function renderZapisnikContent(host, aktivnosti, slikeMap, sastanak, locked) {
         host.querySelector('#zsSekcije')?.appendChild(sekcija);
         wireSekcijaEvents(sekcija, nova, slikeMap, sastanak, locked, aktivnosti);
         sekcija.querySelector('.zs-naslov')?.focus();
+        refreshSaveBar();
       } else {
         showToast('⚠ Nije uspelo');
       }
@@ -187,60 +339,68 @@ function wireSekcijaEvents(el, akt, slikeMap, sastanak, locked, aktivnosti) {
     return;
   }
 
-  const debounce = (key, fn) => {
-    clearTimeout(debounceTimers[key]);
-    debounceTimers[key] = setTimeout(fn, SAVE_DEBOUNCE_MS);
+  const saveHtmlFromDom = async () => {
+    const ed = el.querySelector('.zs-editor');
+    if (!ed) return;
+    let rawHtml = ed.innerHTML;
+    const clean = sanitizeHtml(rawHtml);
+    if (clean !== rawHtml) ed.innerHTML = clean;
+    await persistPresek(el, akt, { sadrzajHtml: clean, sadrzajText: htmlToText(clean) });
   };
 
-  const saveAkt = async (patch) => {
-    Object.assign(akt, patch);
-    await savePresekAktivnost(akt);
-    const ind = el.querySelector('.zs-save-ind');
-    if (ind) { ind.style.visibility = 'visible'; setTimeout(() => { ind.style.visibility = 'hidden'; }, 1800); }
-  };
-
-  el.querySelector('.zs-naslov')?.addEventListener('input', e => {
-    debounce('naslov_' + akt.id, () => saveAkt({ naslov: e.target.value }));
+  el.querySelector('.zs-naslov')?.addEventListener('input', () => {
+    scheduleDebouncedSave(`naslov_${akt.id}`, async () => {
+      const v = el.querySelector('.zs-naslov')?.value ?? '';
+      await persistPresek(el, akt, { naslov: v });
+    });
   });
+  el.querySelector('.zs-naslov')?.addEventListener('blur', () => flushSaveKey(`naslov_${akt.id}`));
 
-  el.querySelector('.zs-pod-rn')?.addEventListener('input', e => {
-    debounce('pod_rn_' + akt.id, () => saveAkt({ podRn: e.target.value }));
+  el.querySelector('.zs-pod-rn')?.addEventListener('input', () => {
+    scheduleDebouncedSave(`pod_rn_${akt.id}`, async () => {
+      const v = el.querySelector('.zs-pod-rn')?.value ?? '';
+      await persistPresek(el, akt, { podRn: v });
+    });
   });
+  el.querySelector('.zs-pod-rn')?.addEventListener('blur', () => flushSaveKey(`pod_rn_${akt.id}`));
 
-  el.querySelector('.zs-odg')?.addEventListener('input', e => {
-    debounce('odg_' + akt.id, () => saveAkt({ odgText: e.target.value, odgLabel: e.target.value }));
+  el.querySelector('.zs-odg')?.addEventListener('input', () => {
+    scheduleDebouncedSave(`odg_${akt.id}`, async () => {
+      const v = el.querySelector('.zs-odg')?.value ?? '';
+      await persistPresek(el, akt, { odgText: v, odgLabel: v });
+    });
   });
+  el.querySelector('.zs-odg')?.addEventListener('blur', () => flushSaveKey(`odg_${akt.id}`));
 
   el.querySelector('.zs-rok')?.addEventListener('change', e => {
-    saveAkt({ rok: e.target.value || null });
+    void runSaveNow(`rok_${akt.id}`, async () => {
+      await persistPresek(el, akt, { rok: e.target.value || null });
+    });
   });
 
   el.querySelector('.zs-status')?.addEventListener('change', e => {
-    saveAkt({ status: e.target.value });
+    void runSaveNow(`status_${akt.id}`, async () => {
+      await persistPresek(el, akt, { status: e.target.value });
+    });
   });
 
-  /* Rich-text toolbar */
+  const editor = el.querySelector('.zs-editor');
+
   el.querySelectorAll('.zs-tb').forEach(btn => {
     btn.addEventListener('mousedown', e => {
       e.preventDefault();
       document.execCommand(btn.dataset.cmd, false, null);
+      editor?.dispatchEvent(new Event('input', { bubbles: true }));
     });
   });
 
-  /* Rich-text editor auto-save */
-  const editor = el.querySelector('.zs-editor');
   if (editor) {
     editor.addEventListener('input', () => {
-      debounce('html_' + akt.id, () => {
-        const rawHtml = editor.innerHTML;
-        const clean = sanitizeHtml(rawHtml);
-        if (clean !== rawHtml) editor.innerHTML = clean;
-        saveAkt({ sadrzajHtml: clean, sadrzajText: htmlToText(clean) });
-      });
+      scheduleDebouncedSave(`html_${akt.id}`, saveHtmlFromDom);
     });
+    editor.addEventListener('blur', () => flushSaveKey(`html_${akt.id}`));
   }
 
-  /* Delete sekcija */
   el.querySelector('.zs-del')?.addEventListener('click', async () => {
     if (!confirm('Obrisati ovu tačku? Sve slike se brišu.')) return;
     const ok = await deletePresekAktivnost(akt.id);
@@ -252,7 +412,6 @@ function wireSekcijaEvents(el, akt, slikeMap, sastanak, locked, aktivnosti) {
     }
   });
 
-  /* Upload slika */
   el.querySelectorAll('.zs-file-input').forEach(inp => {
     inp.addEventListener('change', async () => {
       const file = inp.files[0];
@@ -347,6 +506,8 @@ function wireDragDrop(host, aktivnosti) {
     const targetSek = e.target.closest('.zs-sekcija');
     if (!targetSek || targetSek.dataset.id === dragState) { dragState = null; return; }
 
+    await flushAllPendingSaves();
+
     const before = targetSek.classList.contains('drop-target-above');
     container.querySelectorAll('.drop-target-above,.drop-target-below,.is-dragging').forEach(el => {
       el.classList.remove('drop-target-above', 'drop-target-below', 'is-dragging');
@@ -380,7 +541,14 @@ function wireDragDrop(host, aktivnosti) {
 
 export function teardownZapisnikTab() {
   abortFlag = true;
-  Object.values(debounceTimers).forEach(t => clearTimeout(t));
-  debounceTimers = {};
+  for (const [, st] of pendingSaves) clearTimeout(st.timer);
+  const toRun = [...pendingSaves.entries()];
+  pendingSaves.clear();
+  for (const [key, st] of toRun) {
+    void runSaveNow(key, st.exec);
+  }
+  zapisnikLifecycleCleanups.forEach(fn => fn());
+  zapisnikLifecycleCleanups = [];
+  saveBarEls = { root: null, text: null };
   dragState = null;
 }

@@ -1489,6 +1489,51 @@ body.dark .sast-projekat-item.is-active {
 
 /* ── Zapisnik tab ── */
 .sast-zapisnik { max-width: 860px; }
+
+.zs-save-bar {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.35;
+  border: 1px solid var(--border, #d4d4d4);
+  background: var(--surface2, #f0fdf4);
+  color: var(--text, #14532d);
+}
+.zs-save-bar--pending {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1e3a5f;
+}
+.zs-save-bar--saving {
+  background: #fefce8;
+  border-color: #fde047;
+  color: #713f12;
+}
+.zs-save-bar--error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #7f1d1d;
+}
+.zs-save-bar--offline {
+  background: #f4f4f5;
+  border-color: #d4d4d8;
+  color: #3f3f46;
+}
+.zs-pdf-stale-hint {
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: 1px solid #c4b5fd;
+  background: #f5f3ff;
+  color: #4c1d95;
+}
+
 .sast-zapisnik-sections { display: flex; flex-direction: column; gap: 16px; }
 .sast-add-sekcija { margin-top: 12px; }
 .zs-sekcija {
