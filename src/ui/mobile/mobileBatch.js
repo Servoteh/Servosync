@@ -348,9 +348,9 @@ export async function renderMobileBatch(mountEl, ctx) {
     let failed = 0;
     const errs = [];
 
-    /* Sekvencijalno, da server-side already_placed/from_ambiguous logika
-     * vidi prethodne insert-e pre sledećeg. Paralelno bi moglo da u sred
-     * batch-a sruši jedan od njih. */
+    /* Sekvencijalno (ne paralelno) — server-side advisory lock na bucket
+     * (item, order) bi inače serijalizovao paralelne pozive, ali sekvencijalno
+     * je predvidljivije za batch i ne maskira from_ambiguous. */
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       submitBtn.textContent = `⏳ Šaljem ${i + 1}/${rows.length}…`;
@@ -371,21 +371,14 @@ export async function renderMobileBatch(mountEl, ctx) {
       }
 
       try {
+        /* Härd-1: INITIAL_PLACEMENT akumulira (opcija B) — ako stavka već
+         * postoji na (item, order, location), trigger sabira quantity.
+         * Stari fallback INITIAL → TRANSFER (kad RPC vrati `already_placed`)
+         * uklonjen je: pod novom semantikom bi pogrešno menjao tip pokreta
+         * iako korisnik želi novo zaduženje na drugoj polici. */
         const res = await locCreateMovement(payload);
         if (res?.ok) {
           ok += 1;
-        } else if (res?.error === 'already_placed') {
-          /* Pokušaj kao TRANSFER bez from_id (server će probati auto-detect). */
-          const tr = await locCreateMovement({
-            ...payload,
-            movement_type: 'TRANSFER',
-          });
-          if (tr?.ok) {
-            ok += 1;
-          } else {
-            failed += 1;
-            errs.push(`${r.itemRefId} (${r.orderNo || '-'}): ${tr?.error || 'fail'}`);
-          }
         } else {
           failed += 1;
           errs.push(`${r.itemRefId} (${r.orderNo || '-'}): ${res?.error || 'fail'}`);

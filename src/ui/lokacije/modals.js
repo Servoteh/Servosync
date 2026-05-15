@@ -102,6 +102,10 @@ function movementErrMsg(code, res) {
     const d = r.detail != null ? String(r.detail) : '';
     return d ? `Greška na serveru: ${d}` : 'Greška na serveru (bez detalja).';
   }
+  if (code === 'constraint_violation') {
+    const d = r.detail != null ? String(r.detail) : '';
+    return d ? `Greška u podacima: ${d}` : 'Greška u podacima (constraint violation).';
+  }
   const m = {
     missing_fields: 'Popuni sva obavezna polja.',
     bad_to_location: 'Odredišna lokacija nije validna ili nije aktivna.',
@@ -111,6 +115,11 @@ function movementErrMsg(code, res) {
     bad_quantity: 'Količina mora biti veća od 0.',
     bad_order_no: 'Broj naloga je predugačak (max 40 karaktera).',
     bad_drawing_no: 'Broj crteža je predugačak (max 40 karaktera).',
+    bad_client_event_uuid: 'Interna greška: idempotency ključ nije validan UUID.',
+    parent_inactive:
+      'Hala (ili neki nadređeni prostor) je deaktivirana — premeštanje na policu unutar nje nije moguće.',
+    /* Härd-1 (opcija B): `already_placed` se više ne vraća za INITIAL_PLACEMENT
+     * jer akumulacija je dozvoljena. Ostavljamo poruku za eventualne stare klijente. */
     already_placed:
       'Placement već postoji, a RN nije u kešu za proveru preostatka — koristi TRANSFER ili INVENTORY_ADJUSTMENT.',
     no_current_placement:

@@ -456,10 +456,23 @@ export function formatLocationDisplay(loc) {
 
 /**
  * @param {object} payload — item_ref_table, item_ref_id, to_location_id, movement_type, opciono from_location_id, note, movement_reason
- * @returns {Promise<{ ok?: boolean, id?: string, error?: string }|null>}
+ * @returns {Promise<{ ok?: boolean, id?: string, error?: string, idempotent?: boolean }|null>}
+ *
+ * Härd-1: payload mutira ovde — ako poziv ne nosi `client_event_uuid`,
+ * generišemo ga jednom i upisujemo nazad u objekat. Razlog: ako mreža padne
+ * između RPC poziva i odgovora, call-site često stavlja ISTI payload objekat
+ * u `enqueueMovement` (offline queue). Retry će tada videti isti UUID i RPC
+ * vraća `{ ok:true, idempotent:true }` umesto da napravi duplikat.
+ *
+ * Reversi i Štampa nalepnica idu kroz isti wrapper, pa i oni automatski
+ * dobijaju idempotency bez dodatne izmene tih modula.
  */
 export async function locCreateMovement(payload) {
-  let row = await sbReq('rpc/loc_create_movement', 'POST', { payload: payload || {} });
+  const p = payload && typeof payload === 'object' ? payload : {};
+  if (!p.client_event_uuid && typeof crypto?.randomUUID === 'function') {
+    p.client_event_uuid = crypto.randomUUID();
+  }
+  let row = await sbReq('rpc/loc_create_movement', 'POST', { payload: p });
   /* PostgREST ponekad vrati jednorečni niz umesto jednog jsonb objekta. */
   if (Array.isArray(row) && row.length === 1 && row[0] && typeof row[0] === 'object') {
     row = row[0];

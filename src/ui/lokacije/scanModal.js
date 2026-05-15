@@ -2055,12 +2055,21 @@ export async function openScanMoveModal({
 
   function errMsg(res) {
     const code = res.error;
+    if (code === 'constraint_violation') {
+      const d = res.detail != null ? String(res.detail) : '';
+      return d ? `Greška u podacima: ${d}` : 'Greška u podacima (constraint violation).';
+    }
     const map = {
       insufficient_quantity: res.available != null
         ? `Tražena količina (${res.requested ?? '?'}) > raspoloživa (${res.available}).`
         : 'Tražena količina > raspoloživa.',
+      /* Härd-1 (opcija B): `already_placed` se više ne vraća za INITIAL_PLACEMENT
+       * (akumulacija je dozvoljena). Poruka ostaje za eventualne legacy odgovore. */
       already_placed:
         'Stavka već ima placement — za prenos sa police koristi TRANSFER; za novi deo sa naloga izaberi prvu opciju u „Sa lokacije“ (INITIAL).',
+      parent_inactive:
+        'Hala (ili neki nadređeni prostor) je deaktivirana — premeštanje nije moguće.',
+      bad_client_event_uuid: 'Interna greška: idempotency ključ nije validan UUID.',
       exceeds_order_quantity:
         res.available != null
           ? `Količina premašuje preostalo na nalogu (${res.available} kom; traženo ${res.requested ?? '?'}).`

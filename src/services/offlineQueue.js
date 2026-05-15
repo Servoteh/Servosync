@@ -22,15 +22,14 @@
  *     payload: { item_ref_table, item_ref_id, order_no, to_location_id, ... }
  *   }
  *
- * IDEMPOTENTNOST:
- *   Supabase RPC `loc_create_movement` NIJE idempotentna (svaki poziv kreira
- *   novi movement). Znači u slučaju retry-a posle mrežnog bug-a moramo paziti
- *   da isti zapis ne pošaljemo 2x. Rešavamo tako što red uklanjamo IZ queue-a
- *   ODMAH nakon `ok: true` odgovora — ako upload uspe ali odgovor ne stigne
- *   (WiFi pad u sred roundtrip-a), kreiraćemo duplikat. Za prvi deployment
- *   to je prihvatljivo (admin u istoriji vidi par duplikata i briše ih).
- *   Budućnost: dodati klijent-generisani `event_id` u payload i DB unique
- *   constraint na njega.
+ * IDEMPOTENTNOST (Härd-1, harden_loc_create_movement_v5.sql):
+ *   Klijent generiše `client_event_uuid` (UUID v4) i ubacuje ga u payload
+ *   PRE enqueue-a (radi se ovde u `enqueueMovement` ako payload već nema UUID).
+ *   RPC `loc_create_movement` drži partial UNIQUE indeks na
+ *   `loc_location_movements.client_event_uuid` i vraća `{ ok:true, idempotent:true }`
+ *   ako isti UUID već postoji. Posledica: ako mreža padne posle uspešnog
+ *   server-side insert-a a klijent ode u retry, drugi pokušaj NE pravi
+ *   duplikat — vraća se isti `id`.
  */
 
 import { locCreateMovement } from './lokacije.js';
@@ -95,13 +94,23 @@ function genId() {
 
 /**
  * Ubaci premestanje u queue. Vraća kreirani red (za UI feedback).
- * @param {MovementPayload} payload
+ *
+ * Härd-1: ako payload ne nosi `client_event_uuid`, generišemo ga ovde i
+ * mutiramo objekat. Retry će onda kroz `locCreateMovement` slati isti UUID
+ * i RPC prepoznaje već procesirane events kao idempotent replay.
+ *
+ * @param {MovementPayload & { client_event_uuid?: string }} payload
  * @returns {QueueEntry}
  */
 export function enqueueMovement(payload) {
   const queue = readQueue();
   if (queue.length >= MAX_QUEUE_SIZE) {
     throw new Error(`Queue pun (${MAX_QUEUE_SIZE}) — sinhronizuj prvo postojeće pre novog unosa.`);
+  }
+  if (payload && typeof payload === 'object' && !payload.client_event_uuid) {
+    if (typeof crypto?.randomUUID === 'function') {
+      payload.client_event_uuid = crypto.randomUUID();
+    }
   }
   const entry = {
     id: genId(),
