@@ -398,7 +398,7 @@ export async function loadAllOpenOperations() {
     'opis_rada',
     'operacija',
     'cam_ready',
-    'is_ready_for_processing',
+    'is_ready_for_machine',
     'is_urgent',
     'auto_sort_bucket',
   ].join(',');
@@ -1379,7 +1379,7 @@ export function summarizeByMachine(rows) {
     s.totalOps += 1;
     if (r.broj_crteza) s.drawingsSet.add(String(r.broj_crteza));
     if (r.cam_ready) s.camReadyOps += 1;
-    if (r.is_ready_for_processing) s.readyOps += 1;
+    if (r.is_ready_for_machine) s.readyOps += 1;
     if (r.is_urgent) s.urgentOps += 1;
     if (r.is_non_machining) s.nonMachiningOps += 1;
     if (r.assigned_machine_code) s.reassignedInOps += 1;
@@ -1479,7 +1479,7 @@ export function buildDeadlineMatrix(rows, numWorkingDays = 5) {
     }
     m.totalOps += 1;
     if (r.cam_ready) m.camReadyOps += 1;
-    if (r.is_ready_for_processing) m.readyOps += 1;
+    if (r.is_ready_for_machine) m.readyOps += 1;
     if (r.is_urgent) m.urgentOps += 1;
     const rok = r.rok_izrade ? isoDay(new Date(r.rok_izrade)) : null;
     if (!rok) {
