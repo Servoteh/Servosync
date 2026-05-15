@@ -121,6 +121,52 @@ function tryParseCompactLabelLoose(clean) {
  * @returns {ParsedBarcode | null}
  *   `null` ako ni jedan format ne odgovara.
  */
+
+/**
+ * Kanonski ključ za Lokacije (nalog + TP ref) — mora biti u skladu sa SQL
+ * `loc_normalize_loc_movement_keys` i `fetchBigtehnOpSnapshotByRnAndTp`.
+ *
+ * @param {string} orderNo
+ * @param {string} itemRefId
+ * @returns {{ orderNo: string, itemRefId: string }}
+ */
+export function normalizeLocMovementKeys(orderNo, itemRefId) {
+  const o = String(orderNo ?? '').trim();
+  const r = String(itemRefId ?? '').trim();
+  if (!o || !r) return { orderNo: o, itemRefId: r };
+  const m9400 = o.match(/^9400-(\d+)$/);
+  if (m9400 && /^\d+$/.test(r)) {
+    return { orderNo: '9400', itemRefId: `-${m9400[1]}/${r}` };
+  }
+  if (o === '9400' && /^\d+\/\d+$/.test(r) && !r.startsWith('-')) {
+    return { orderNo: '9400', itemRefId: `-${r}` };
+  }
+  return { orderNo: o, itemRefId: r };
+}
+
+/**
+ * RNZ „9400-2/415" → nalog **9400**, TP ref **-2/415** (podešavanja: predmet 9400).
+ * Samo ako je drugi segment RNZ-a jedna numerička grana a TP čist broj.
+ * Ostavlja npr. `9400-1/7-5-S1`.
+ *
+ * @param {ParsedBarcode|null} parsed
+ * @returns {ParsedBarcode|null}
+ */
+function applyPredmet9400BranchFold(parsed) {
+  if (!parsed || !parsed.orderNo || parsed.itemRefId == null || parsed.itemRefId === '') {
+    return parsed;
+  }
+  const m = String(parsed.orderNo).trim().match(/^9400-(\d+)$/);
+  if (!m) return parsed;
+  const tp = String(parsed.itemRefId).trim();
+  if (!/^\d+$/.test(tp)) return parsed;
+  return {
+    ...parsed,
+    orderNo: '9400',
+    itemRefId: `-${m[1]}/${tp}`,
+  };
+}
+
 export function parseBigTehnBarcode(raw) {
   const clean = normalizeBarcodeText(raw);
   if (!clean) return null;
@@ -135,7 +181,7 @@ export function parseBigTehnBarcode(raw) {
   );
   if (rnz) {
     const [, idrn, orderNo, itemRefId, varijanta, field4] = rnz;
-    return {
+    return applyPredmet9400BranchFold({
       orderNo,
       itemRefId,
       drawingNo: '',
@@ -144,7 +190,7 @@ export function parseBigTehnBarcode(raw) {
       idrn,
       varijanta,
       field4,
-    };
+    });
   }
 
   /* Short format — zadržavamo kao fallback za stare nalepnice ako ih
@@ -172,7 +218,7 @@ export function parseBigTehnBarcode(raw) {
     const compact = cand.match(compactRe);
     if (compact) {
       const [, idrn, orderNo, itemRefId, varijanta] = compact;
-      return {
+      return applyPredmet9400BranchFold({
         orderNo,
         itemRefId,
         drawingNo: '',
@@ -181,12 +227,12 @@ export function parseBigTehnBarcode(raw) {
         idrn,
         varijanta,
         field4: '',
-      };
+      });
     }
   }
 
   const looseCompact = tryParseCompactLabelLoose(clean);
-  if (looseCompact) return looseCompact;
+  if (looseCompact) return applyPredmet9400BranchFold(looseCompact);
 
   return null;
 }

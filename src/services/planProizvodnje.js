@@ -484,6 +484,19 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
   const opNum = opRaw === '' ? null : /^\d+$/.test(opRaw) ? parseInt(opRaw, 10) : null;
   const opFinite = Number.isFinite(opNum);
   const opForIdent = opRaw === '' ? '' : opFinite ? String(opNum) : opRaw;
+  const opHy = opRaw.match(/^-(\d+)\/(\d+)$/);
+  const opPairNoLead =
+    opRaw && !opRaw.startsWith('-') && /^(\d+)\/(\d+)$/.test(opRaw)
+      ? opRaw.match(/^(\d+)\/(\d+)$/)
+      : null;
+  let opNumRoute = opFinite ? opNum : null;
+  if (opHy) {
+    const n = parseInt(opHy[2], 10);
+    if (Number.isFinite(n)) opNumRoute = n;
+  } else if (ident === '9400' && opPairNoLead) {
+    const n = parseInt(opPairNoLead[2], 10);
+    if (Number.isFinite(n)) opNumRoute = n;
+  }
 
   let varFilter = null;
   if (opts && opts.varijanta != null && String(opts.varijanta).trim() !== '') {
@@ -527,10 +540,20 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
   /* Primarni lookup: "nalog/tp_ref" (kombinovani ident_broj u BigTehn-u). */
   const candidates = [];
   if (opForIdent) {
-    candidates.push(`${ident}/${opForIdent}`);
-    if (/^\d+$/.test(ident)) {
-      const normalized = String(parseInt(ident, 10));
-      if (normalized !== ident) candidates.push(`${normalized}/${opForIdent}`);
+    /* Varianta „9400-2/415" — u lokacijama TP ref može biti „-2/415" ili legacy „2/415". */
+    if (ident === '9400' && opHy) {
+      candidates.push(`9400-${opHy[1]}/${opHy[2]}`);
+    }
+    if (ident === '9400' && opPairNoLead) {
+      candidates.push(`9400-${opPairNoLead[1]}/${opPairNoLead[2]}`);
+    }
+    const skipGenericHyphanTp = ident === '9400' && !!opHy;
+    if (!skipGenericHyphanTp) {
+      candidates.push(`${ident}/${opForIdent}`);
+      if (/^\d+$/.test(ident)) {
+        const normalized = String(parseInt(ident, 10));
+        if (normalized !== ident) candidates.push(`${normalized}/${opForIdent}`);
+      }
     }
   }
   candidates.push(ident);
@@ -566,14 +589,14 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
   const workOrderId = wo.id != null ? Number(wo.id) : null;
   const total = wo.komada != null ? Number(wo.komada) : null;
 
-  /* 2) Samo numerički TP → komada_done iz tech routing cache-a. */
+  /* 2) Numerički TP (uključ. 415 iz „-2/415") → komada_done iz tech routing cache-a. */
   let done = null;
-  if (opFinite && workOrderId != null) {
+  if (opNumRoute != null && Number.isFinite(opNumRoute) && workOrderId != null) {
     try {
       const p = new URLSearchParams();
       p.set('select', 'komada,is_completed');
       p.set('work_order_id', `eq.${workOrderId}`);
-      p.set('operacija', `eq.${opNum}`);
+      p.set('operacija', `eq.${opNumRoute}`);
       p.set('limit', '200');
       const rows = await sbReq(`bigtehn_tech_routing_cache?${p.toString()}`);
       if (Array.isArray(rows) && rows.length) {
@@ -617,7 +640,12 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
     customer_name: customerName,
     customer_short: customerShort,
     work_order_id: workOrderId,
-    operacija: opFinite ? opNum : opRaw === '' ? null : opRaw,
+    operacija:
+      opNumRoute != null && Number.isFinite(opNumRoute)
+        ? opNumRoute
+        : opRaw === ''
+          ? null
+          : opRaw,
     revizija:
       wo.revizija != null && String(wo.revizija).trim() !== ''
         ? String(wo.revizija).trim()

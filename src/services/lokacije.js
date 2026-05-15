@@ -3,6 +3,7 @@
  * Zahteva primenjenu migraciju sql/migrations/add_loc_module.sql.
  */
 
+import { getIsOnline } from '../state/auth.js';
 import { sbReq, sbReqWithCount } from './supabase.js';
 
 /**
@@ -192,6 +193,28 @@ export async function fetchPlacementsByDrawing(drawingNo) {
   );
   if (!Array.isArray(rows)) return [];
   return rows;
+}
+
+/**
+ * Da li je uneti prikaz broja predmeta (npr. iz RNZ / ručno) u Podešavanjima
+ * među **aktivnim** predmetima sa uključenom **montažom i projektovanjem**.
+ * Koristi RPC `loc_order_no_in_active_proj_mont` (i pokušaj „osnovice" za oblik N-N).
+ *
+ * @param {string} orderNo
+ * @returns {Promise<boolean|null>} `true` / `false` ili `null` ako nema mreže / greška
+ */
+export async function fetchLocOrderNoInActiveProjMont(orderNo) {
+  if (!getIsOnline()) return null;
+  const q = typeof orderNo === 'string' ? orderNo.trim() : '';
+  if (!q) return null;
+  const res = await sbReq(
+    'rpc/loc_order_no_in_active_proj_mont',
+    'POST',
+    { p_order_no: q },
+    { upsert: false },
+  );
+  if (typeof res === 'boolean') return res;
+  return null;
 }
 
 /**

@@ -10,12 +10,13 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { parsePredmetTpFromLabelText } from '../../lib/barcodeParse.js';
+import { normalizeLocMovementKeys, parsePredmetTpFromLabelText } from '../../lib/barcodeParse.js';
 import { getLocationKind, isHallType, isShelfType } from '../../lib/lokacijeTypes.js';
 import {
   fetchItemPlacements,
   fetchLocations,
   formatLocationDisplay,
+  fetchLocOrderNoInActiveProjMont,
   locCreateMovement,
 } from '../../services/lokacije.js';
 import { fetchBigtehnOpSnapshotByRnAndTp } from '../../services/planProizvodnje.js';
@@ -1386,6 +1387,7 @@ export async function openScanMoveModal({
    *   finalDrawing: string,
    *   erpDrawing: string,
    *   cachedDrawing: string,
+   *   predmetPolicyOk: boolean|null,
    * }} p
    */
   function updateLocScanParsedHint(p) {
@@ -1400,6 +1402,7 @@ export async function openScanMoveModal({
       finalDrawing,
       erpDrawing,
       cachedDrawing,
+      predmetPolicyOk,
     } = p;
     const hint = $('#locScanParsed');
     if (!hint) return;
@@ -1459,6 +1462,14 @@ export async function openScanMoveModal({
       }
     }
 
+    let policyHtml = '';
+    if (predmetPolicyOk === false) {
+      policyHtml =
+        `<div class="loc-scan-diag" style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#3d2424;color:#fecaca;font-size:12px;line-height:1.35">` +
+        `<strong>Predmet nije u podešavanjima</strong> (aktivan + montaža/projektovanje). Proveri broj predmeta ili ga uključi u Podešavanjima.` +
+        `</div>`;
+    }
+
     let diagHtml = '';
     if (format === 'rnz' || format === 'ocr' || format === 'short' || format === 'compact' || (orderNo && itemRefId)) {
       const statusTxt =
@@ -1488,7 +1499,7 @@ export async function openScanMoveModal({
       : `Ručno: <strong>${escHtml(orderNo)}</strong> / <strong>${escHtml(itemRefId)}</strong>`;
     hint.innerHTML =
       `${badgeHtml}<span class="loc-scan-parsed-raw">${scanLine}</span> ` +
-      `<span class="loc-muted">→ nalog <strong>${escHtml(orderNo)}</strong>, TP <strong>${escHtml(itemRefId)}</strong>${drawingPart}</span>${erpExtra}${diagHtml}`;
+      `<span class="loc-muted">→ nalog <strong>${escHtml(orderNo)}</strong>, TP <strong>${escHtml(itemRefId)}</strong>${drawingPart}</span>${erpExtra}${policyHtml}${diagHtml}`;
   }
 
   /**
@@ -1522,6 +1533,12 @@ export async function openScanMoveModal({
       format = payload.format || '';
     } else if (typeof payload === 'string') {
       itemRefId = payload;
+    }
+
+    if (orderNo && itemRefId) {
+      const norm = normalizeLocMovementKeys(orderNo, itemRefId);
+      orderNo = norm.orderNo;
+      itemRefId = norm.itemRefId;
     }
 
     $('#locScanItemId').value = itemRefId;
@@ -1577,6 +1594,23 @@ export async function openScanMoveModal({
       }
     }
 
+    let predmetPolicyOk = null;
+    if (orderNo && getIsOnline()) {
+      try {
+        const pr = await fetchLocOrderNoInActiveProjMont(orderNo);
+        if (pr === false) {
+          predmetPolicyOk = false;
+          showToast(
+            '⚠ Broj predmeta nije među aktivnim predmetima sa montažom/projektovanjem (Podešavanja).',
+          );
+        } else if (pr === true) {
+          predmetPolicyOk = true;
+        }
+      } catch (e) {
+        console.warn('[scan] predmet policy check failed', e);
+      }
+    }
+
     updateLocScanParsedHint({
       rawHint,
       orderNo,
@@ -1588,6 +1622,7 @@ export async function openScanMoveModal({
       finalDrawing,
       erpDrawing,
       cachedDrawing,
+      predmetPolicyOk,
     });
 
     /* Čekaj fetch lokacija pre „Na lokaciju“ — na iOS sporijoj mreži inače
@@ -1601,8 +1636,15 @@ export async function openScanMoveModal({
    * Kad radnik ručno menja nalog ili TP — isti ERP lookup i autofill crteža kao posle skena.
    */
   async function refreshErpFromOrderTpFields() {
-    const orderNo = $('#locScanOrder').value.trim();
-    const itemRefId = $('#locScanItemId').value.trim();
+    const rawOrder = $('#locScanOrder').value.trim();
+    const rawItem = $('#locScanItemId').value.trim();
+    const norm = rawOrder && rawItem ? normalizeLocMovementKeys(rawOrder, rawItem) : null;
+    const orderNo = norm ? norm.orderNo : rawOrder;
+    const itemRefId = norm ? norm.itemRefId : rawItem;
+    if (norm && (norm.orderNo !== rawOrder || norm.itemRefId !== rawItem)) {
+      $('#locScanOrder').value = norm.orderNo;
+      $('#locScanItemId').value = norm.itemRefId;
+    }
     const drawingCur = $('#locScanDrawing')?.value.trim() || '';
 
     if (!orderNo || !itemRefId) {
@@ -1618,6 +1660,7 @@ export async function openScanMoveModal({
         finalDrawing: drawingCur,
         erpDrawing: '',
         cachedDrawing: '',
+        predmetPolicyOk: null,
       });
       if (!orderNo && !itemRefId) {
         const revHint = $('#locScanRevHint');
@@ -1664,6 +1707,23 @@ export async function openScanMoveModal({
       }
     }
 
+    let predmetPolicyOk = null;
+    if (orderNo && getIsOnline()) {
+      try {
+        const pr = await fetchLocOrderNoInActiveProjMont(orderNo);
+        if (pr === false) {
+          predmetPolicyOk = false;
+          showToast(
+            '⚠ Broj predmeta nije među aktivnim predmetima sa montažom/projektovanjem (Podešavanja).',
+          );
+        } else if (pr === true) {
+          predmetPolicyOk = true;
+        }
+      } catch (e) {
+        console.warn('[scan] predmet policy (manual) failed', e);
+      }
+    }
+
     updateLocScanParsedHint({
       rawHint: '',
       orderNo,
@@ -1675,10 +1735,8 @@ export async function openScanMoveModal({
       finalDrawing,
       erpDrawing,
       cachedDrawing,
+      predmetPolicyOk,
     });
-  }
-
-  async function refreshPlacements() {
     const id = $('#locScanItemId').value.trim();
     const order = $('#locScanOrder').value.trim();
     state.scopedOrderNo = order;
@@ -1716,15 +1774,13 @@ export async function openScanMoveModal({
   async function submit() {
     const err = $('#locScanErr');
     err.textContent = '';
-    const item_ref_id = $('#locScanItemId').value.trim();
-    const order_no = $('#locScanOrder').value.trim();
+    let item_ref_id = $('#locScanItemId').value.trim();
+    let order_no = $('#locScanOrder').value.trim();
     const drawing_no = $('#locScanDrawing').value.trim();
     const to_location_id = $('#locScanTo').value;
     const from_location_id = $('#locScanFrom').value || '';
     const qty = Number($('#locScanQty').value);
     const note_raw = $('#locScanNote').value.trim();
-    /* INITIAL = nema nijednog placement-a za (TP, nalog) par. */
-    const isInitial = state.currentPlacements.length === 0;
 
     if (!item_ref_id) {
       err.textContent = 'Broj TP (sa barkoda) je obavezan.';
@@ -1738,6 +1794,42 @@ export async function openScanMoveModal({
       err.textContent = 'Izaberi odredišnu lokaciju.';
       return;
     }
+
+    const normKeys = normalizeLocMovementKeys(order_no, item_ref_id);
+    order_no = normKeys.orderNo;
+    item_ref_id = normKeys.itemRefId;
+    $('#locScanOrder').value = order_no;
+    $('#locScanItemId').value = item_ref_id;
+
+    if (getIsOnline()) {
+      try {
+        const pr = await fetchLocOrderNoInActiveProjMont(order_no);
+        if (pr === false) {
+          err.textContent =
+            'Predmet nije aktivan za montažu/projektovanje u Podešavanjima (proveri broj naloga nakon normalizacije, npr. 9400 umesto 9400-2).';
+          showToast(`⚠ ${err.textContent}`);
+          return;
+        }
+        if (pr === null) {
+          err.textContent = 'Ne mogu da proverim predmet (mreža). Pokušaj ponovo.';
+          return;
+        }
+      } catch (e) {
+        err.textContent = e?.message || 'Provera predmeta nije uspela.';
+        return;
+      }
+    }
+
+    let rowsFresh = null;
+    try {
+      rowsFresh = await fetchItemPlacements(state.item_ref_table, item_ref_id, order_no || undefined);
+    } catch (e) {
+      console.warn('[scan] refresh placements before submit', e);
+    }
+    state.currentPlacements = (rowsFresh || []).filter(r => Number(r.quantity) > 0);
+    /* INITIAL = nema nijednog placement-a za (TP, nalog) par (posle normalizacije). */
+    const isInitial = state.currentPlacements.length === 0;
+
     const toLoc = state.locById.get(to_location_id);
     const hallForShelves =
       $('#locScanHallFilter') instanceof HTMLSelectElement
@@ -1877,7 +1969,8 @@ export async function openScanMoveModal({
       bad_to_uuid: 'Odredišna lokacija nije validna — izaberi ponovo iz liste.',
       bad_from_uuid: 'Polazna lokacija nije validna — izaberi ponovo.',
       from_mismatch: 'Polazna lokacija ne odgovara trenutnom smeštaju stavke.',
-      bad_movement_type: 'Neispravan tip pokreta.',
+      inactive_predmet:
+        'Broj predmeta nije u aktivnim predmetima za montažu/projektovanje — proveri Podešavanja ili unos (nakon normalizacije naloga).',
     };
     return map[code] || code || 'Operacija nije uspela.';
   }

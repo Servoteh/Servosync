@@ -123,6 +123,8 @@ function movementErrMsg(code, res) {
       r.available != null
         ? `Tražena količina (${r.requested ?? '?'}) je veća od raspoložive na polaznoj lokaciji (${r.available}).`
         : 'Tražena količina je veća od raspoložive na polaznoj lokaciji.',
+    inactive_predmet:
+      'Predmet nije aktivan za montažu/projektovanje u Podešavanjima (posle normalizacije naloga, npr. 9400).',
     not_authenticated: 'Prijavi se ponovo.',
   };
   return m[code] || String(code);
