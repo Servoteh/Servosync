@@ -33,7 +33,7 @@ import {
   setReportPageSize,
   toggleReportSort,
 } from '../../state/lokacije.js';
-import { filterLocationsHierarchical } from '../../lib/lokacijeFilters.js';
+import { filterLocationsHierarchical, sortPlacementsForDisplay } from '../../lib/lokacijeFilters.js';
 import { rowsToCsv, CSV_BOM } from '../../lib/csv.js';
 import {
   fetchAllMovements,
@@ -1514,8 +1514,10 @@ async function renderPanel(host, tabId) {
     const total = typeof placRes?.total === 'number' ? placRes.total : null;
     const locIdx = locationIndex(locs);
 
+    const placSorted = sortPlacementsForDisplay(Array.isArray(plac) ? plac : [], locIdx);
+
     const rows = Array.isArray(plac)
-      ? plac
+      ? placSorted
           .map(r => {
             const loc = r.location_id != null ? locIdx.get(String(r.location_id)) : null;
             const locCell = loc
@@ -1562,7 +1564,7 @@ async function renderPanel(host, tabId) {
       <div class="kadr-panel active loc-panel">
         ${err}
         ${locToolbarHtml({ extra: searchHtml })}
-        <p class="loc-muted">Klik na red otvara istoriju premeštanja. <strong>Nalog</strong> = broj predmeta (<code>order_no</code>). <strong>Tehnološki postupak</strong> = broj TP iz placement-a za <code>bigtehn_rn</code>. <strong>Crtež</strong> = <code>drawing_no</code> iz placement-a (prazno prikazuje „—“ dok se ne upiše). <strong>Lokacija</strong> = šifra police − šifra hale roditelja (<code>parent_id</code>).</p>
+        <p class="loc-muted">Klik na red otvara istoriju premeštanja. <strong>Nalog</strong> = broj predmeta (<code>order_no</code>). <strong>Tehnološki postupak</strong> = broj TP iz placement-a za <code>bigtehn_rn</code>. <strong>Crtež</strong> = <code>drawing_no</code> iz placement-a (prazno prikazuje „—“ dok se ne upiše). <strong>Lokacija</strong> = šifra police − šifra hale roditelja (<code>parent_id</code>). Isti crtež može imati više redova (različite police).</p>
         <div class="loc-table-wrap">
           <table class="loc-table">
             <thead><tr><th>Nalog</th><th>Tehnološki postupak</th><th>Crtež</th><th>Lokacija</th><th class="loc-qty-cell">Količina</th><th>Status</th></tr></thead>
@@ -1725,7 +1727,7 @@ async function renderPanel(host, tabId) {
             <button type="button" class="btn btn-xs" id="locRepExport" title="CSV trenutnog skupa filtera">Export CSV</button>
           </div>
         </div>
-        <p class="loc-muted">Klik na red otvara istoriju. „📋 RN/TP“ otvara tehnološki postupak (operacije + prijave) iz BigTehn cache-a. „TP“ štampa nalepnicu ako postoji prepoznatljiv barkod.</p>
+        <p class="loc-muted">Klik na red otvara istoriju. „📋 RN/TP“ otvara tehnološki postupak (operacije + prijave) iz BigTehn cache-a. „TP“ štampa nalepnicu ako postoji prepoznatljiv barkod. Isti crtež može imati više redova (različite police / količine po smeštaju).</p>
         <div class="loc-table-wrap">
           <table class="loc-table">
             <thead><tr>

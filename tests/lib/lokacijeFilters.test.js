@@ -6,6 +6,9 @@ import {
   placementMatches,
   filterPlacements,
   computeLocInitialRemainder,
+  LOC_FROM_UNPLACED_VALUE,
+  isLocFromUnplacedOption,
+  sortPlacementsForDisplay,
 } from '../../src/lib/lokacijeFilters.js';
 
 /**
@@ -177,5 +180,33 @@ describe('computeLocInitialRemainder', () => {
   });
   it('nema negativnog preostalog', () => {
     expect(computeLocInitialRemainder({ komada_total: 3 }, [{ quantity: 5 }])).toBe(0);
+  });
+});
+
+describe('isLocFromUnplacedOption', () => {
+  it('prazan string', () => {
+    expect(isLocFromUnplacedOption('')).toBe(true);
+  });
+  it('sentinel', () => {
+    expect(isLocFromUnplacedOption(LOC_FROM_UNPLACED_VALUE)).toBe(true);
+  });
+  it('UUID lokacije', () => {
+    expect(isLocFromUnplacedOption('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11')).toBe(false);
+  });
+});
+
+describe('sortPlacementsForDisplay', () => {
+  it('grupiše po crtežu pa šifri lokacije', () => {
+    const locIdx = new Map([
+      ['L1', { location_code: 'B' }],
+      ['L2', { location_code: 'A' }],
+    ]);
+    const rows = [
+      { drawing_no: '2', order_no: '9', item_ref_id: '1', location_id: 'L1' },
+      { drawing_no: '1', order_no: '9', item_ref_id: '1', location_id: 'L2' },
+      { drawing_no: '1', order_no: '9', item_ref_id: '1', location_id: 'L1' },
+    ];
+    const s = sortPlacementsForDisplay(rows, locIdx);
+    expect(s.map(r => r.location_id)).toEqual(['L2', 'L1', 'L1']);
   });
 });

@@ -256,7 +256,7 @@ async function renderDataView(host, refresh) {
               <th title="Broj tehnološkog postupka">TP #</th>
               <th title="Broj crteža iz BigTehn baze">Crtež</th>
               <th title="Naziv dela / pozicije">Naziv dela</th>
-              <th class="lp-td-center" title="Količina na lokaciji / ukupno po RN-u">Količina (lok / RN)</th>
+              <th class="lp-td-center" title="Količina na toj polici / ukupno smešteno za RN">Količina (lok / RN)</th>
               <th title="Lokacija dela">Lokacija</th>
               <th title="Materijal i dimenzija">Materijal</th>
               <th></th>
@@ -265,6 +265,7 @@ async function renderDataView(host, refresh) {
               <tr><td colspan="8" class="lp-empty" style="padding:32px;text-align:center;color:var(--lp-text2)">Učitavam tehnološke postupke…</td></tr>
             </tbody>
           </table>
+          <p style="margin:8px 0 0;font-size:12px;color:var(--lp-text2)">Isti crtež / RN može imati <strong>više redova</strong> — po jednoj za svaku policu i količinu na njoj; redovi bez lokacije su još neraspoređeni.</p>
         </div>
         <div id="lpPager"></div>
       </div>
@@ -296,7 +297,23 @@ async function renderDataView(host, refresh) {
     return;
   }
 
-  const rows = res?.rows || [];
+  const rowsRaw = res?.rows || [];
+  const rows = rowsRaw.slice().sort((a, b) => {
+    const dc = String(a.wo_broj_crteza || '').localeCompare(String(b.wo_broj_crteza || ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+    if (dc) return dc;
+    const lc = String(a.location_code || '').localeCompare(String(b.location_code || ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+    if (lc) return lc;
+    return String(a.wo_ident_broj || '').localeCompare(String(b.wo_ident_broj || ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  });
   const total = res?.total ?? 0;
   const totalWith = resWith?.total ?? 0;
   const totalWithout = resWithout?.total ?? 0;

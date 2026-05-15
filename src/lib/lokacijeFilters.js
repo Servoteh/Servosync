@@ -78,6 +78,18 @@ export function placementMatches(p, locIdx, q) {
 }
 
 /**
+ * Vrednost opcije „Sa lokacije“ za deo koji još nije na polici (INITIAL / preostalo RN).
+ * Mora biti stabilan string — nije UUID lokacije.
+ */
+export const LOC_FROM_UNPLACED_VALUE = '__UNPLACED__';
+
+/** @param {unknown} value */
+export function isLocFromUnplacedOption(value) {
+  const v = String(value ?? '').trim();
+  return v === '' || v === LOC_FROM_UNPLACED_VALUE;
+}
+
+/**
  * Filtrira listu placements-a koristeći pridruženi mapirani locIdx.
  *
  * @param {Array<object>} placements
@@ -104,4 +116,39 @@ export function computeLocInitialRemainder(erpSnap, placements) {
   if (!Number.isFinite(total) || total < 0) return null;
   const placed = (placements || []).reduce((a, r) => a + Number(r?.quantity || 0), 0);
   return Math.max(0, total - placed);
+}
+
+/**
+ * Sort za prikaz stavki / placement-a: isti crtež grupisan, zatim lokacija.
+ * @param {Array<{ drawing_no?: unknown, order_no?: unknown, item_ref_id?: unknown, location_id?: unknown }>} rows
+ * @param {Map<string, { location_code?: string }>} [locIdx]
+ */
+export function sortPlacementsForDisplay(rows, locIdx) {
+  if (!Array.isArray(rows) || rows.length < 2) return Array.isArray(rows) ? rows.slice() : [];
+  const code = id => {
+    if (!locIdx || id == null) return '';
+    const loc = locIdx.get(String(id));
+    return (loc && loc.location_code) || String(id);
+  };
+  return rows.slice().sort((a, b) => {
+    const dr = String(a?.drawing_no || '').localeCompare(String(b?.drawing_no || ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+    if (dr) return dr;
+    const or = String(a?.order_no || '').localeCompare(String(b?.order_no || ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+    if (or) return or;
+    const tr = String(a?.item_ref_id || '').localeCompare(String(b?.item_ref_id || ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+    if (tr) return tr;
+    return code(a?.location_id).localeCompare(code(b?.location_id), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  });
 }

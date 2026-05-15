@@ -24,7 +24,7 @@ import { fetchBigtehnOpSnapshotByRnAndTp } from '../../services/planProizvodnje.
 import { enqueueMovement } from '../../services/offlineQueue.js';
 import { getIsOnline } from '../../state/auth.js';
 import { compareLocationCodeNatural } from '../../lib/lokacijeSort.js';
-import { computeLocInitialRemainder } from '../../lib/lokacijeFilters.js';
+import { computeLocInitialRemainder, LOC_FROM_UNPLACED_VALUE, isLocFromUnplacedOption } from '../../lib/lokacijeFilters.js';
 import {
   parseShelfCompositeBarcodeToken,
   resolveCompositeShelfScan,
@@ -1171,7 +1171,7 @@ export async function openScanMoveModal({
     const pl = state.currentPlacements;
     const remainder = computeLocInitialRemainder(state.erpSnapshot, pl);
 
-    if (!fromId) {
+    if (!fromId || isLocFromUnplacedOption(fromId)) {
       qtyEl.removeAttribute('max');
       if (remainder != null) qtyEl.max = String(remainder);
       return;
@@ -1207,7 +1207,7 @@ export async function openScanMoveModal({
         ? `— Uloži preostalo sa naloga (${remainder} kom; bez prenosa sa police) —`
         : '— Uloži sa naloga (INITIAL; bez prenosa sa police) —';
     sel.innerHTML =
-      `<option value="">${escHtml(initialOpt)}</option>` +
+      `<option value="${LOC_FROM_UNPLACED_VALUE}">${escHtml(initialOpt)}</option>` +
       pl
         .map(r => {
           const loc = state.locById.get(r.location_id);
@@ -1217,7 +1217,7 @@ export async function openScanMoveModal({
           return `<option value="${escHtml(r.location_id)}" data-qty="${escHtml(String(r.quantity))}">${escHtml(label)} (${escHtml(String(r.quantity))} kom.)</option>`;
         })
         .join('');
-    sel.value = '';
+    sel.value = LOC_FROM_UNPLACED_VALUE;
     const qtyEl = /** @type {HTMLInputElement|null} */ ($('#locScanQty'));
     if (qtyEl) {
       const rem = remainder;
@@ -1921,9 +1921,9 @@ export async function openScanMoveModal({
       console.warn('[scan] refresh placements before submit', e);
     }
     state.currentPlacements = (rowsFresh || []).filter(r => Number(r.quantity) > 0);
-    const from_location_id = ($('#locScanFrom').value || '').trim();
-    /* INITIAL kad nema polazne police: prvi ulaz ili preostalo sa RN (server proverava komada_rn). */
-    const isInitial = !from_location_id;
+    const from_location_id_live = ($('#locScanFrom').value || '').trim();
+    /* INITIAL kad je izabrana stavka „preostalo sa naloga“ (nije polazna polica). */
+    const isInitial = isLocFromUnplacedOption(from_location_id_live);
 
     const toLoc = state.locById.get(to_location_id);
     const hallForShelves =
@@ -1951,12 +1951,12 @@ export async function openScanMoveModal({
       err.textContent = `Količina (${qty}) premašuje preostalo za INITIAL (${remSubmit} kom).`;
       return;
     }
-    if (!isInitial && !from_location_id) {
+    if (!isInitial && !from_location_id_live) {
       err.textContent =
         'Izaberi polaznu lokaciju (TRANSFER), ili prvu stavku u „Sa lokacije“ za uložaj preostatka sa naloga.';
       return;
     }
-    if (from_location_id && from_location_id === to_location_id) {
+    if (from_location_id_live && from_location_id_live === to_location_id) {
       err.textContent = 'Polazna i odredišna lokacija moraju biti različite.';
       return;
     }
@@ -1987,7 +1987,8 @@ export async function openScanMoveModal({
       order_no,
       drawing_no: drawing_no || undefined,
       to_location_id,
-      from_location_id: from_location_id || undefined,
+      from_location_id:
+        isInitial || !from_location_id_live ? undefined : from_location_id_live,
       movement_type: isInitial ? 'INITIAL_PLACEMENT' : 'TRANSFER',
       quantity: qty,
       note: note || undefined,

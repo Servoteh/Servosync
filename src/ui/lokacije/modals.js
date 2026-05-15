@@ -28,7 +28,7 @@ import {
 } from '../../services/planProizvodnje.js';
 import { getIsOnline } from '../../state/auth.js';
 import { compareLocationCodeNatural } from '../../lib/lokacijeSort.js';
-import { computeLocInitialRemainder } from '../../lib/lokacijeFilters.js';
+import { computeLocInitialRemainder, LOC_FROM_UNPLACED_VALUE, isLocFromUnplacedOption, sortPlacementsForDisplay } from '../../lib/lokacijeFilters.js';
 
 /* TRANSFER je prvi jer je najčešći slučaj u svakodnevnom radu;
  * INITIAL_PLACEMENT je eksplicitno drugačiji tok (samo za nove stavke). */
@@ -1169,6 +1169,19 @@ export function openQuickMoveModal({ onSuccess } = {}) {
 
     function refreshFromHint() {
       const locId = fromSel.value;
+      if (locId === LOC_FROM_UNPLACED_VALUE) {
+        const rem = computeLocInitialRemainder(qmErpSnap, currentPlacements);
+        if (rem != null && rem > 0) {
+          fromHint.textContent = `Biraš deo koji još nije na polici (najviše ${rem} kom).`;
+          qtyInput.max = rem;
+          const cur = Number(qtyInput.value);
+          if (Number.isFinite(cur) && cur > rem) qtyInput.value = String(rem);
+        } else {
+          fromHint.textContent = '';
+          qtyInput.removeAttribute('max');
+        }
+        return;
+      }
       const row = currentPlacements.find(r => r.location_id === locId);
       if (row) {
         fromHint.textContent = `Trenutno na izabranoj polaznoj lokaciji: ${row.quantity} kom.`;
@@ -1194,6 +1207,34 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       } else {
         refreshFromHint();
       }
+    }
+
+    function rebuildQmFromSelect() {
+      const scoped = !!orderInput.value.trim();
+      if (!scoped) return;
+      const rem = computeLocInitialRemainder(qmErpSnap, currentPlacements);
+      const un =
+        typeSel.value === 'TRANSFER' && rem != null && rem > 0
+          ? `<option value="${LOC_FROM_UNPLACED_VALUE}">Neraspoređeno na nalogu (${rem} kom)</option>`
+          : '';
+      if (!currentPlacements.length) {
+        fromSel.innerHTML =
+          '<option value="">— izaberi polaznu —</option>' +
+          (un || '<option value="" disabled>— nema smeštaja na police —</option>');
+        refreshFromHint();
+        return;
+      }
+      fromSel.innerHTML =
+        '<option value="">— izaberi polaznu —</option>' +
+        un +
+        currentPlacements
+          .map(r => {
+            const loc = locById.get(r.location_id);
+            const label = loc ? `${loc.location_code} — ${loc.name}` : r.location_id;
+            return `<option value="${escHtml(r.location_id)}">${escHtml(label)} (${escHtml(String(r.quantity))} kom.)</option>`;
+          })
+          .join('');
+      refreshFromHint();
     }
 
     function renderState(rows, { scoped }) {
@@ -1230,14 +1271,6 @@ export function openQuickMoveModal({ onSuccess } = {}) {
        * striktno da oduzmemo iz bucketa. */
       if (!scoped) {
         fromSel.innerHTML = '<option value="">— prvo unesi broj predmeta —</option>';
-      } else {
-        fromSel.innerHTML =
-          '<option value="">— izaberi polaznu —</option>' +
-          currentPlacements.map(r => {
-            const loc = locById.get(r.location_id);
-            const label = loc ? `${loc.location_code} — ${loc.name}` : r.location_id;
-            return `<option value="${escHtml(r.location_id)}">${escHtml(label)} (${escHtml(String(r.quantity))} kom.)</option>`;
-          }).join('');
       }
 
       applyTypeMode();
@@ -1259,6 +1292,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       if (myToken !== lookupToken) return;
       renderState(rows || [], { scoped: !!order });
       await refreshDrawingFromErp();
+      if (order && tp) rebuildQmFromSelect();
     }
 
     async function refreshTpDatalist() {
@@ -1357,7 +1391,10 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       refreshItemState();
       refreshDrawingFromErp();
     });
-    typeSel.addEventListener('change', applyTypeMode);
+    typeSel.addEventListener('change', () => {
+      applyTypeMode();
+      rebuildQmFromSelect();
+    });
     fromSel.addEventListener('change', refreshFromHint);
 
     /* Klik na chip sa predmetom u "svi nalozi" prikazu → popuni predmet. */
@@ -1382,14 +1419,19 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       const order_no = orderInput.value.trim();
       const drawing_no = drawingInput.value.trim();
       const to_location_id = overlay.querySelector('#locQmTo').value;
-      const movement_type = typeSel.value;
+      const movement_type_raw = typeSel.value;
       const note = overlay.querySelector('#locQmNote').value.trim();
       const qty = Number(qtyInput.value);
-      const needsFrom = movement_type !== 'INITIAL_PLACEMENT' && movement_type !== 'INVENTORY_ADJUSTMENT';
-      const from_location_id = needsFrom ? String(fromSel.value || '').trim() : '';
+      const rawFrom = String(fromSel.value || '').trim();
       const hallForShelves = hallFilterEl?.value.trim() ?? '';
 
-      if (!order_no || !item_ref_id || !to_location_id || !movement_type) {
+      const wantsFromField =
+        movement_type_raw !== 'INITIAL_PLACEMENT' && movement_type_raw !== 'INVENTORY_ADJUSTMENT';
+
+      let movement_type = movement_type_raw;
+      let from_location_id = '';
+
+      if (!order_no || !item_ref_id || !to_location_id || !movement_type_raw) {
         qmShowErr('Popuni obavezna polja: broj predmeta, broj TP i odredišna lokacija.');
         return;
       }
@@ -1411,41 +1453,47 @@ export function openQuickMoveModal({ onSuccess } = {}) {
         qmShowErr('Količina mora biti veća od 0.');
         return;
       }
+
+      if (wantsFromField) {
+        if (!rawFrom) {
+          qmShowErr(
+            'Polje „Sa lokacije“ je obavezno: izaberi policu sa koje premeštaš ili stavku „Neraspoređeno na nalogu“.',
+          );
+          return;
+        }
+        if (isLocFromUnplacedOption(rawFrom)) {
+          movement_type = 'INITIAL_PLACEMENT';
+        } else {
+          if (!currentPlacements.length) {
+            qmShowErr(
+              'Nema zabeleženog smeštaja na police za ovaj predmet/TP — koristi „Neraspoređeno na nalogu“ ili INITIAL_PLACEMENT.',
+            );
+            return;
+          }
+          const fromRow = currentPlacements.find(r => r.location_id === rawFrom);
+          if (!fromRow) {
+            qmShowErr(
+              'Polazna lokacija ne odgovara učitanom stanju. Sačekaj učitavanje ili ponovo izaberi „Sa lokacije“.',
+            );
+            return;
+          }
+          if (rawFrom === to_location_id) {
+            qmShowErr('Polazna i odredišna lokacija moraju biti različite.');
+            return;
+          }
+          const maxQ = Number(fromRow.quantity);
+          if (Number.isFinite(maxQ) && qty > maxQ) {
+            qmShowErr(`Količina ne sme biti veća od ${maxQ} kom. na izabranoj polaznoj lokaciji.`);
+            return;
+          }
+          from_location_id = rawFrom;
+        }
+      }
+
       if (movement_type === 'INITIAL_PLACEMENT') {
         const rem = computeLocInitialRemainder(qmErpSnap, currentPlacements);
         if (rem != null && qty > rem) {
-          qmShowErr(`Za INITIAL je najviše ${rem} kom (preostalo na nalogu).`);
-          return;
-        }
-      }
-      if (needsFrom) {
-        if (!currentPlacements.length) {
-          qmShowErr(
-            'Za izabrani tip pokreta mora postojati zabeležen smeštaj u Lokacijama (predmet + TP). ' +
-              'Nema smeštaja — koristi INITIAL_PLACEMENT za prvi unos, ili proveri predmet i TP.',
-          );
-          return;
-        }
-        if (!from_location_id) {
-          qmShowErr(
-            'Polje „Sa lokacije“ je obavezno: izaberi lokaciju sa koje premeštaš (ili prebaci tip na INITIAL_PLACEMENT ako je prvi smeštaj).',
-          );
-          return;
-        }
-        const fromRow = currentPlacements.find(r => r.location_id === from_location_id);
-        if (!fromRow) {
-          qmShowErr(
-            'Polazna lokacija ne odgovara učitanom stanju. Sačekaj učitavanje ili ponovo izaberi „Sa lokacije“.',
-          );
-          return;
-        }
-        if (from_location_id === to_location_id) {
-          qmShowErr('Polazna i odredišna lokacija moraju biti različite.');
-          return;
-        }
-        const maxQ = Number(fromRow.quantity);
-        if (Number.isFinite(maxQ) && qty > maxQ) {
-          qmShowErr(`Količina ne sme biti veća od ${maxQ} kom. na izabranoj polaznoj lokaciji.`);
+          qmShowErr(`Za ovaj unos je najviše ${rem} kom (preostalo na nalogu).`);
           return;
         }
       }
