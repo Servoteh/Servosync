@@ -52,5 +52,21 @@ export function createSupabaseWorkerClient(cfg) {
       if (error) throw new Error(`loc_mark_sync_failed failed: ${error.message}`);
       return Boolean(data);
     },
+    /**
+     * Härd-3: heartbeat — worker zove svakih 60s da signalizira da je živ.
+     * Migracija `add_loc_sync_health_monitor.sql` definiše tabelu i RPC;
+     * pg_cron job `loc_sync_health_check_hourly` zatim šalje alert ako
+     * `last_seen` postane stariji od 10 minuta.
+     *
+     * @param {string} workerId
+     * @param {object} [details]
+     */
+    async upsertHeartbeat(workerId, details) {
+      const { error } = await client.rpc('loc_sync_worker_heartbeat_upsert', {
+        p_worker_id: workerId,
+        p_details: details ?? null,
+      });
+      if (error) throw new Error(`loc_sync_worker_heartbeat_upsert failed: ${error.message}`);
+    },
   };
 }

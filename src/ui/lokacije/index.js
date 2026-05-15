@@ -46,6 +46,7 @@ import {
   fetchLocReportPartsByLocations,
   fetchAllLocReportPartsByLocations,
   fetchBridgeSyncStatus,
+  fetchLocSyncHealthSummary,
   fetchLocationDefinitionsAudit,
   fetchMovementsCountSince,
 } from '../../services/lokacije.js';
@@ -165,6 +166,53 @@ let locPanelHost = null;
 let showInactiveLocations = false;
 /** @type {'table'|'tree'} */
 let browseViewMode = 'table';
+
+/**
+ * Sync worker zdravstveni banner (Härd-3).
+ *
+ * Renderuje se na dashboard tabu paralelno sa `renderBridgeStaleBanner`. Prikazuje:
+ *  - Crveno upozorenje ako bilo koji worker nije slao heartbeat duže od 10 min
+ *    (`is_alive=false` iz `loc_sync_health_summary`).
+ *  - Žuto upozorenje ako u `loc_sync_outbound_events` ima DEAD_LETTER stavki
+ *    (sync događaja koji nisu stigli MSSQL strani posle 10 retry pokušaja).
+ *  - Prazan string ako je sve OK ili migracija `add_loc_sync_health_monitor`
+ *    još nije primenjena (`fetchLocSyncHealthSummary` tada vraća `{0, []}`).
+ *
+ * @param {{ dead_letter_count: number, workers: Array<{ worker_id: string, last_seen: string, age_seconds: number, is_alive: boolean }> }} summary
+ */
+function renderSyncWorkerBanner(summary) {
+  if (!summary || typeof summary !== 'object') return '';
+  const workers = Array.isArray(summary.workers) ? summary.workers : [];
+  const deadCount = Number(summary.dead_letter_count) || 0;
+  const downWorkers = workers.filter(w => w && w.is_alive === false);
+
+  if (downWorkers.length === 0 && deadCount === 0) return '';
+
+  const parts = [];
+  if (downWorkers.length > 0) {
+    const lines = downWorkers.map(w => {
+      const ageMin = Math.round(Number(w.age_seconds) / 60);
+      const ageStr = ageMin >= 60 ? `${Math.round(ageMin / 60)} h` : `${ageMin} min`;
+      return `<li><strong>${escHtml(String(w.worker_id))}</strong> — heartbeat pre ${escHtml(ageStr)}</li>`;
+    }).join('');
+    parts.push(
+      `<div style="margin-bottom:6px"><strong>Sync worker ne radi</strong> — premeštanja se i dalje beleže u Supabase, ali NE idu MSSQL strani dok worker ne bude restartovan.</div>`,
+      `<ul style="margin:0 0 0 18px">${lines}</ul>`,
+    );
+  }
+  if (deadCount > 0) {
+    if (parts.length) parts.push('<div style="margin-top:8px"></div>');
+    parts.push(
+      `<div><strong>DEAD_LETTER:</strong> ${escHtml(String(deadCount))} sync događaja nije stiglo do MSSQL-a posle 10 pokušaja worker-a. Admin treba da pregleda <code>loc_sync_outbound_events</code> u Supabase Studio-u.</div>`,
+    );
+  }
+
+  /* Klasa `loc-warn` se koristi i u BRIDGE banner-u — vizuelno usklađeno. */
+  return `
+    <div class="loc-warn" role="status" aria-live="polite" style="margin:8px 0">
+      ${parts.join('')}
+    </div>`;
+}
 
 /**
  * Banner upozorenje ako su BigTehn cache tabele zastarele.
@@ -1205,11 +1253,14 @@ async function renderPanel(host, tabId) {
     weekAgo.setDate(weekAgo.getDate() - 6); /* uključi i današnji dan = 7 kalendarskih dana */
     const weekAgoYMD = _ymd(weekAgo);
 
-    const [locs, plac, movs, syncStatus, users, movsTodayN, movsWeekN] = await Promise.all([
+    const [locs, plac, movs, syncStatus, syncHealth, users, movsTodayN, movsWeekN] = await Promise.all([
       fetchLocations(),
       fetchPlacements({ limit: 500 }),
       fetchRecentMovements(12),
       fetchBridgeSyncStatus().catch(() => []),
+      /* Härd-3: sync worker zdravlje + DEAD_LETTER count. Tih fallback ako
+       * migracija nije primenjena ili helper baci. */
+      fetchLocSyncHealthSummary().catch(() => ({ dead_letter_count: 0, workers: [] })),
       /* Users za prikaz „Korisnik" kolone — tih fallback ako endpoint nije dostupan. */
       loadUsersFromDb().catch(() => []),
       fetchMovementsCountSince(todayYMD).catch(() => null),
@@ -1289,6 +1340,7 @@ async function renderPanel(host, tabId) {
         : '';
 
     const bridgeBanner = renderBridgeStaleBanner(syncStatus);
+    const syncWorkerBanner = renderSyncWorkerBanner(syncHealth);
 
     /* Kad je first-run (sve prazno), KPI grid i tabela poslednjih premeštanja
      * nemaju šta da pokažu — sakrivamo ih da ne bi bili „0 svuda". Quick-actions
@@ -1300,6 +1352,7 @@ async function renderPanel(host, tabId) {
         ${err}
         ${locDashboardActionsHtml()}
         ${bridgeBanner}
+        ${syncWorkerBanner}
         ${firstRunHtml}
         ${showStats ? `<div class="loc-kpi-row loc-kpi-row--dashboard">
           <div class="loc-kpi loc-kpi--blue">

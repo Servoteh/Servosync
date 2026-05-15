@@ -31,6 +31,11 @@ sql/migrations/harden_loc_create_movement_v5.sql
 # Montaži (dept 3) ili sub_dept "Magacin i logistika".
 sql/migrations/harden_loc_create_movement_v5_roles.sql
 
+# Härd-3 (Sprint LOC-Härd-3): operativna vidljivost — worker heartbeat tabela
+# + DEAD_LETTER digest outbox + dispatch RPC-ovi. pg_cron schedule grana se
+# preskače u CI-u (handler hvata undefined_table).
+sql/migrations/add_loc_sync_health_monitor.sql
+
 # Faza 2 security / lokacije — potrebno za pgTAP (has_edit_role, RLS, audit, HALA↔POLICA pravila)
 sql/migrations/add_menadzment_full_edit_kadrovska.sql
 sql/migrations/enable_user_roles_rls_proper.sql

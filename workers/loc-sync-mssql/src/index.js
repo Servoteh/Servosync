@@ -17,9 +17,29 @@ const logger = createLogger(config.worker.logLevel);
 
 let shuttingDown = false;
 let mssql = null;
+/* Härd-3: heartbeat interval handle — clear-uje se u graceful shutdown-u. */
+let heartbeatTimer = null;
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
+}
+
+/**
+ * Härd-3: pošalji heartbeat ka Supabase-u (upsert u loc_sync_worker_heartbeat).
+ * Pozadinski tik — greške se loguju, ne ruše proces. Ako migracija
+ * `add_loc_sync_health_monitor.sql` nije primenjena, RPC vraća 404 i
+ * logger upozorava (worker svejedno radi posao).
+ */
+async function sendHeartbeat(supabase) {
+  try {
+    await supabase.upsertHeartbeat(config.worker.id, {
+      batch_size: config.worker.batchSize,
+      poll_ms: config.worker.pollIntervalMs,
+      node_version: process.version,
+    });
+  } catch (err) {
+    logger.warn('heartbeat failed', { error: err?.message || String(err) });
+  }
 }
 
 async function main() {
@@ -41,6 +61,15 @@ async function main() {
     logger.error('mssql connect failed', { error: err?.message || String(err) });
     process.exit(1);
   }
+
+  /* Härd-3: prvo „live" heartbeat odmah, pa svakih 60s. pg_cron job
+   * `loc_sync_health_check_hourly` posle 10 min tišine šalje admin alert. */
+  await sendHeartbeat(supabase);
+  heartbeatTimer = setInterval(() => {
+    if (shuttingDown) return;
+    void sendHeartbeat(supabase);
+  }, 60_000);
+  if (typeof heartbeatTimer.unref === 'function') heartbeatTimer.unref();
 
   /* Glavna petlja. Ne throw-uje — logujemo i spavamo pa probamo ponovo. */
   while (!shuttingDown) {
@@ -70,6 +99,10 @@ async function main() {
   }
 
   logger.info('shutdown: closing mssql');
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
   if (mssql) await mssql.close();
   logger.info('shutdown complete');
 }

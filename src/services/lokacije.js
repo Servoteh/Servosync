@@ -803,6 +803,34 @@ export async function fetchTpsForPredmet(itemId, opts = {}) {
 }
 
 /**
+ * Sync worker zdravstveni pregled (Härd-3 / M28 + H27).
+ *
+ * Vraća kombinovan summary iz `loc_sync_worker_heartbeat` (uploads worker svaki 60s)
+ * i broj DEAD_LETTER stavki u `loc_sync_outbound_events`. UI koristi za banner
+ * koji se prikazuje na Dashboard tabu pored postojećeg BRIDGE upozorenja.
+ *
+ * @returns {Promise<{
+ *   dead_letter_count: number,
+ *   workers: Array<{ worker_id: string, last_seen: string, age_seconds: number, is_alive: boolean, details: any }>
+ * }>}
+ */
+export async function fetchLocSyncHealthSummary() {
+  if (!getIsOnline()) return { dead_letter_count: 0, workers: [] };
+  try {
+    const res = await sbReq('rpc/loc_sync_health_summary', 'POST', {}, { upsert: false });
+    if (!res || typeof res !== 'object') return { dead_letter_count: 0, workers: [] };
+    return {
+      dead_letter_count: Number(res.dead_letter_count) || 0,
+      workers: Array.isArray(res.workers) ? res.workers : [],
+    };
+  } catch (err) {
+    /* Tihi fallback — ako migracija nije primenjena, UI ne pada. */
+    console.warn('[lokacije] fetchLocSyncHealthSummary failed', err?.message || err);
+    return { dead_letter_count: 0, workers: [] };
+  }
+}
+
+/**
  * Vraća `last_finished` po BRIDGE sync job-u — koristi se za banner upozorenja
  * (npr. „bigtehn_drawings_cache je star X dana”). Read-only nad `bridge_sync_log`,
  * koji je dostupan svim ulogovanim korisnicima.

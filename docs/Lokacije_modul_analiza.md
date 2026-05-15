@@ -230,19 +230,27 @@ Bez cross-tab sync. Manje važno jer su podaci ne-osetljivi.
 
 ### 4.8 Operacioni / out-of-band
 
-**[H26] pg_cron retencija pretpostavlja PAID Supabase tier.**
+**[H26] ✅ DOKUMENTOVANO (Härd-3, 2026-05-15, `docs/migration/loc_migration_order.md`)** — Runbook M30 dokumentuje pg_cron zavisnost; obe pg_cron migracije (`add_loc_step4_pgcron.sql`, `add_loc_sync_health_monitor.sql`) imaju `EXCEPTION WHEN undefined_table` handler tako da apply ne pada na CI/dev gde nema pg_cron-a. Health-check upit za verifikaciju oba job-a je u runbook-u.
+
+pg_cron retencija pretpostavlja PAID Supabase tier.
 Komentari u `add_loc_step4_pgcron.sql` priznaju da CREATE EXTENSION za pg_cron zahteva odgovarajuće privilegije. Na dev/lokal `loc_sync_outbound_events` raste bez ograničenja.
 
-**[H27] DEAD_LETTER stavke nisu vidljive operativnom korisniku.**
+**[H27] ✅ REŠENO (Härd-3, 2026-05-15, `add_loc_sync_health_monitor.sql` + `loc-sync-monitor-dispatch` Edge fn)** — Outbox `loc_sync_alerts_outbox` + pg_cron job `loc_sync_health_check_hourly` enqueue-uje `dead_letter_digest` mejl admin-ima (filter `user_roles.role IN ('admin','menadzment') AND is_active`) jednom dnevno. Edge funkcija šalje preko Resend API-ja. UI banner se prikazuje na Dashboard tabu (žuta poruka sa brojem DEAD_LETTER stavki).
+
+DEAD_LETTER stavke nisu vidljive operativnom korisniku.
 Posle 10 neuspeha sync event ide u DEAD_LETTER. Samo admin vidi `loc_sync_outbound_events` (RLS). Ne postoji UI alert „X događaja čeka ručnu intervenciju”. Premeštanje je primljeno u Supabase, ali MSSQL strana zauvek ne zna.
 
-**[M28] Nema worker health-check-a.**
+**[M28] ✅ REŠENO (Härd-3, 2026-05-15)** — Tabela `loc_sync_worker_heartbeat` + RPC `loc_sync_worker_heartbeat_upsert` (service_role only). Worker [workers/loc-sync-mssql/src/index.js](../workers/loc-sync-mssql/src/index.js) zove heartbeat svakih 60s preko `setInterval` (clear-uje se u graceful shutdown). Banner u UI prikazuje crveno upozorenje ako `last_seen` stariji od 10 minuta; pg_cron `loc_sync_health_check_hourly` enqueue-uje admin alert (dedup po danu + worker_id).
+
+Nema worker health-check-a.
 `fetchBridgeSyncStatus()` čita `bridge_sync_log` za BigTehn cache, ali NEMA pandant za `loc-sync-mssql` worker. Ako worker padne, sync queue se gomila tiho.
 
 **[M29] `approved_by` / `approved_at` su mrtve kolone.**
 [add_loc_module.sql:108-109](../sql/migrations/add_loc_module.sql#L108) — kolone postoje, nikad se ne setuju. Bilo je verovatno predviđeno za odobravanje pokreta. Ako se u budućnosti dodaje workflow odobravanja, treba paziti da postojeća istorija ima `approved_*` NULL.
 
-**[M30] Migracioni redosled nije auto-enforce-an.**
+**[M30] ✅ DOKUMENTOVANO (Härd-3, 2026-05-15, [docs/migration/loc_migration_order.md](migration/loc_migration_order.md))** — Runbook navodi tačan redosled 21 migracije sa zavisnostima, idempotentnost flag-om i rollback komandama. Sadrži i SQL upite za proveru da li je svaki sprint (v4, Härd-1, Härd-2, Härd-3) primenjen.
+
+Migracioni redosled nije auto-enforce-an.
 Komentari govore „Primeni NAKON xyz”. Supabase SQL editor ne validira. Ako neko pokrene v4 pre v3, pada na missing constraint.
 
 ### 4.9 UX / poslovni rizici
