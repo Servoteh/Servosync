@@ -26,6 +26,11 @@ sql/migrations/add_loc_v4_drawing_no.sql
 # Mora posle v4 jer prepiše loc_create_movement.
 sql/migrations/harden_loc_create_movement_v5.sql
 
+# Härd-2 (Sprint LOC-Härd-2): loc_can_create_movement() helper + RPC autorizacija.
+# Dozvoljava admin/leadpm/pm/menadzment ili employee u Proizvodnji (dept 2),
+# Montaži (dept 3) ili sub_dept "Magacin i logistika".
+sql/migrations/harden_loc_create_movement_v5_roles.sql
+
 # Faza 2 security / lokacije — potrebno za pgTAP (has_edit_role, RLS, audit, HALA↔POLICA pravila)
 sql/migrations/add_menadzment_full_edit_kadrovska.sql
 sql/migrations/enable_user_roles_rls_proper.sql

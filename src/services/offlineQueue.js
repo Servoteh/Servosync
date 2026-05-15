@@ -201,7 +201,11 @@ function isFatalError(code) {
     code === 'bad_to_location' ||
     code === 'bad_quantity' ||
     code === 'bad_order_no' ||
-    code === 'not_authenticated'
+    code === 'bad_drawing_no' ||
+    code === 'bad_client_event_uuid' ||
+    code === 'not_authenticated' ||
+    code === 'not_authorized' ||         /* Härd-2 — retry neće dati prava */
+    code === 'parent_inactive'            /* Härd-1 — deaktivirana hala neće postati aktivna sama */
   );
 }
 

@@ -9,7 +9,17 @@
  *  - `null`/`undefined` → prazno polje
  *  - `Date` → ISO 8601 string
  *  - objekti → `JSON.stringify` (rezerva za neočekivane vrednosti)
+ *  - **CSV injection escape (Härd-2 / L24)**: ako prvi karakter stringa je
+ *    `=`, `+`, `-`, `@`, `\t`, `\r` ili `\n` (vodeći whitespace ne računamo),
+ *    prefiksujemo apostrof `'`. Excel/LibreOffice taj prefiks tretiraju kao
+ *    „obični tekst" i NE pokreću formulu. Bez ovog escape-a, polje
+ *    `=cmd|'/c calc'!A1` može da pokrene komandu pri otvaranju CSV-a.
  */
+
+/* Karakteri koji u Excel-u/LibreOffice-u označavaju početak formule.
+ * Tab i CR/LF su tu jer mnogi parseri ignorišu vodeći whitespace pa
+ * "\t=cmd..." stigne do interpretera. */
+const CSV_INJECTION_PREFIXES = new Set(['=', '+', '-', '@', '\t', '\r', '\n']);
 
 /**
  * Formatiranje jednog polja.
@@ -19,6 +29,7 @@
 export function toCsvField(v) {
   if (v == null) return '';
   let s;
+  let isNumeric = false;  /* legitimni brojevi/bool-ovi ne smeju da dobiju ' prefiks */
   if (v instanceof Date) {
     s = Number.isFinite(v.getTime()) ? v.toISOString() : '';
   } else if (typeof v === 'object') {
@@ -27,8 +38,19 @@ export function toCsvField(v) {
     } catch {
       s = String(v);
     }
+  } else if (typeof v === 'number' || typeof v === 'bigint' || typeof v === 'boolean') {
+    s = String(v);
+    isNumeric = true;
   } else {
     s = String(v);
+  }
+  /* CSV injection escape (Härd-2 / L24): ako prvi karakter stringa je opasan
+   * (=, +, -, @, \t, \r, \n) i polje NIJE došlo iz primitivnog broja/bool-a,
+   * prefiksujemo `'`. Excel/LibreOffice tretiraju `'` kao indikator teksta.
+   * Negativni brojevi (-1) ostaju kao -1 (nisu napad — `isNumeric=true`).
+   * Stringovi koji počinju sa `-` (npr. user input "-foo") dobijaju escape. */
+  if (!isNumeric && s.length > 0 && CSV_INJECTION_PREFIXES.has(s.charAt(0))) {
+    s = "'" + s;
   }
   if (/[",\r\n]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`;

@@ -116,6 +116,8 @@ function movementErrMsg(code, res) {
     bad_order_no: 'Broj naloga je predugačak (max 40 karaktera).',
     bad_drawing_no: 'Broj crteža je predugačak (max 40 karaktera).',
     bad_client_event_uuid: 'Interna greška: idempotency ključ nije validan UUID.',
+    not_authorized:
+      'Nemate dovoljno prava za premeštanje delova. Obratite se administratoru ako mislite da treba da imate pristup.',
     parent_inactive:
       'Hala (ili neki nadređeni prostor) je deaktivirana — premeštanje na policu unutar nje nije moguće.',
     /* Härd-1 (opcija B): `already_placed` se više ne vraća za INITIAL_PLACEMENT

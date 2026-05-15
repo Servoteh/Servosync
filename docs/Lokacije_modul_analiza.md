@@ -142,7 +142,9 @@ Ako se klijentu ponovi `locCreateMovement` (npr. offline queue retry posle pada 
 
 ### 4.2 Permission gap
 
-**[H4] `loc_create_movement` je GRANT EXECUTE TO authenticated.**
+**[H4] ✅ REŠENO (Härd-2, 2026-05-15, `harden_loc_create_movement_v5_roles.sql`)** — Helper `loc_can_create_movement()` proverava (1) `user_roles` uloge admin/leadpm/pm/menadzment ili (2) `employees.is_active` sa `department_id IN (2, 3)` (Proizvodnja, Montaža) ili `sub_departments.name = 'Magacin i logistika'`. Mapping email-om iz JWT-a (konzistentno sa ostatkom kodbase-a — `employees.auth_user_id` ne postoji). RPC vraća `not_authorized` umesto da tiho obrađuje poziv neautorizovanog korisnika.
+
+`loc_create_movement` je GRANT EXECUTE TO authenticated.
 Bilo koji ulogovani korisnik (čak i bez bilo koje uloge u `user_roles`) može da izvrši premeštanje. Provera u RPC-u je samo `auth.uid() IS NOT NULL`. Trenutno `canEdit()` u JS proverava ulogu pre nego što prikaže dugmad, ali to je samo UI gate — direktan POST `/rest/v1/rpc/loc_create_movement` zaobilazi UI.
 **Mitigation:** Dodati u RPC `IF NOT (loc_auth_roles() && ARRAY['admin','leadpm','pm','menadzment','viewer']) THEN RETURN not_authorized` (sa eksplicitnom listom uloga koje smeju da skeniraju). Trenutno svako sa Supabase nalogom može da pokvari stanje.
 
@@ -218,7 +220,9 @@ Pri 100K placement-a + 50K BigTehn RN-ova upit može da bude spor (>5s). Bez ana
 
 **[L23] Smart quotes u Edit-u.** Iz memorije: Edit tool ranije ubacivao curly quotes u JS template literale što kvari HTML atribute. Aktuelno stanje: pažljivo proveriti diff svake izmene `*.js` u Lokacije modulu.
 
-**[L24] CSV injection.**
+**[L24] ✅ REŠENO (Härd-2, 2026-05-15, `src/lib/csv.js:toCsvField`)** — Vrednosti čiji prvi karakter je `=`, `+`, `-`, `@`, `\t`, `\r`, `\n` se prefiksuju apostrofom (osim ako su izvorni JS broj/bool, da `-1` ostane `-1`). Excel/LibreOffice tretiraju `'` kao indikator teksta i ne pokreću formulu. Pokriveno sa 10 novih test slučajeva u `tests/lib/csv.test.js`.
+
+CSV injection.
 `rowsToCsv` u `lib/csv.js` (nije pregledan ovde, ali pretpostavlja se da escape-uje navodnike). Ako neko unese `note` koji počinje sa `=cmd|...`, Excel može da pokrene formulu. Provera vredi.
 
 **[L25] localStorage `loc_drawing_cache_v1` deljen između scan i modal flow-a.**

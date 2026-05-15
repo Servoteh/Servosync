@@ -100,6 +100,56 @@ describe('CSV_BOM', () => {
   });
 });
 
+describe('CSV injection (Härd-2 / L24)', () => {
+  it('escape: vrednost koja počinje sa = dobija prefiks apostrofa', () => {
+    expect(toCsvField('=cmd|"/c calc"!A1')).toBe(`"'=cmd|""/c calc""!A1"`);
+  });
+
+  it('escape: vrednost koja počinje sa + dobija prefiks apostrofa', () => {
+    expect(toCsvField('+SUM(A1:A10)')).toBe("'+SUM(A1:A10)");
+  });
+
+  it('escape: vrednost koja počinje sa @ dobija prefiks apostrofa', () => {
+    expect(toCsvField('@SUM(A1)')).toBe("'@SUM(A1)");
+  });
+
+  it('escape: vodeći TAB (whitespace bypass) dobija prefiks', () => {
+    /* TAB pre = ide u quote-ovan oblik zbog \r\n regex... TAB nije u njemu,
+     * ali rezultat treba biti '\t=... bez quote-ovanja */
+    const out = toCsvField('\t=cmd');
+    expect(out.startsWith("'")).toBe(true);
+    expect(out).toContain('=cmd');
+  });
+
+  it('escape: string "-foo" (verovatno user input) dobija prefiks', () => {
+    expect(toCsvField('-foo')).toBe("'-foo");
+  });
+
+  it('NE escape: legitiman negativan broj -1 ostaje -1', () => {
+    expect(toCsvField(-1)).toBe('-1');
+    expect(toCsvField(-3.14)).toBe('-3.14');
+  });
+
+  it('NE escape: pozitivan broj se ne dira', () => {
+    expect(toCsvField(42)).toBe('42');
+  });
+
+  it('NE escape: prazan string ostaje prazan', () => {
+    expect(toCsvField('')).toBe('');
+  });
+
+  it('escape se kombinuje sa quote/dupliranje navodnika', () => {
+    /* Vrednost počinje sa = pa dobija ' prefiks. Sadrži " pa se ceo string
+     * quote-uje. Interni " se duplira. */
+    expect(toCsvField('=HYPERLINK("evil")')).toBe(`"'=HYPERLINK(""evil"")"`);
+  });
+
+  it('escape u rowsToCsv (header i ćelija)', () => {
+    const csv = rowsToCsv(['=H1'], [['+payload', 'safe']]);
+    expect(csv).toBe(`'=H1\r\n'+payload,safe`);
+  });
+});
+
 describe('parseCsv', () => {
   it('razbija header i redove', () => {
     const { headers, rows } = parseCsv('a,b\r\n1,2\r\n3,4');

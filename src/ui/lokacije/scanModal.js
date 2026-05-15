@@ -2070,6 +2070,8 @@ export async function openScanMoveModal({
       parent_inactive:
         'Hala (ili neki nadređeni prostor) je deaktivirana — premeštanje nije moguće.',
       bad_client_event_uuid: 'Interna greška: idempotency ključ nije validan UUID.',
+      not_authorized:
+        'Nemate prava za premeštanje. Obratite se administratoru.',
       exceeds_order_quantity:
         res.available != null
           ? `Količina premašuje preostalo na nalogu (${res.available} kom; traženo ${res.requested ?? '?'}).`
