@@ -1,0 +1,3 @@
+-- PP-D DRAFT: tabela + RLS za kooperaciju po operaciji.
+-- Kanonska verzija u jednom fajlu: supabase/migrations/20260515140000__pp_d_cooperation_ops_and_plan_views.sql
+-- (kopiraj od sekcije CREATE TABLE production_cooperation_ops do GRANT).

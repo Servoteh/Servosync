@@ -1,0 +1,2 @@
+-- PP-D DRAFT: helper funkcija + view-ovi + RPC.
+-- Kanonski deploy: supabase/migrations/20260515140000__pp_d_cooperation_ops_and_plan_views.sql

@@ -41,15 +41,11 @@ import {
   PLAN_PP_MACHINE_WO_PAGE,
   upsertOverlay,
   setCamReady,
-  setCooperationManual,
   setUrgent,
   clearUrgent,
   pinToTop,
   unpin,
   reassignLine,
-  bulkReassignLines,
-  machineGroupSlugForCode,
-  machineGroupLabel,
   reorderOverlays,
   STATUS_CYCLE_NEXT,
   rokUrgencyClass,
@@ -68,6 +64,8 @@ import {
 import { openDrawingManager } from './drawingManager.js';
 import { openTechProcedureModal } from './techProcedureModal.js';
 import { openWhyBottleneckModal, teardownWhyBottleneckModal } from './whyBottleneckModal.js';
+import { openPlanBulkReassignModal } from './bulkReassignModal.js';
+import { openCooperationPickModal } from './cooperationModal.js';
 import {
   DEPARTMENTS,
   DEPARTMENTS_ROW_1,
@@ -78,7 +76,6 @@ import {
   machineMatchesDept,
   machineFallsIntoOstalo,
 } from './departments.js';
-import { getCurrentRole } from '../../state/auth.js';
 
 /* ── LocalStorage ključevi (UX) ── */
 const LS_LAST_MACHINE = 'plan-proizvodnje:last-machine';
@@ -704,8 +701,8 @@ function renderBulkReassignButton() {
             class="pp-refresh-btn pp-bulk-reassign-btn"
             id="ppBulkReassignBtn"
             disabled
-            title="Premesti izabrane operacije">
-      Premesti izabrane (0)
+            title="Premesti izabrane operacije na drugu mašinu (ista vrsta)">
+      Premesti odabrane (0) na drugu mašinu
     </button>
   `;
 }
@@ -713,7 +710,19 @@ function renderBulkReassignButton() {
 function wireBulkReassignButton() {
   const btn = state.host?.querySelector('#ppBulkReassignBtn');
   if (!btn) return;
-  btn.addEventListener('click', () => openReassignDialog(getSelectedRows(), { bulk: true }));
+  btn.addEventListener('click', () => {
+    const rows = getSelectedRows();
+    openPlanBulkReassignModal({
+      selectedRows: rows,
+      allMachines: state.allMachines,
+      bulk: true,
+      onComplete: async () => {
+        rows.forEach(r => state.selectedRowKeys.delete(rowKey(r)));
+        await refreshAfterReassign();
+        renderTable({ allowDragDrop: canDragInCurrentView() });
+      },
+    });
+  });
   updateBulkReassignButton();
 }
 
@@ -991,6 +1000,7 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
   const urgency = rokUrgencyClass(r.rok_izrade);
   const rokLabel = r.rok_izrade ? formatDate(r.rok_izrade) : '—';
   const status = r.local_status || 'waiting';
+  const autoPrijava = !!r.tech_routing_started_at && status === 'in_progress';
   const planSec = plannedSeconds(r);
   const isReassigned = !!r.assigned_machine_code
     && r.assigned_machine_code !== r.original_machine_code;
@@ -1122,7 +1132,7 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
         <span class="pp-cell-sep">/</span>
         <span style="color:#86efac">${escHtml(formatSecondsHm(r.real_seconds))}</span>
       </td>
-      <td>
+      <td class="pp-status-cell">
         <button type="button"
                 class="pp-status s-${status}"
                 data-action="cycle-status"
@@ -1130,6 +1140,10 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
                 title="${state.canEdit ? 'Klikni za sledeći status' : 'Edit dostupan samo za pm/admin'}">
           ${statusLabel(status)}
         </button>
+        ${autoPrijava
+          ? `<span class="pp-status-auto-badge"
+                  title="Postoji aktivna ili zabeležena prijava rada u BigTehn-u (started_at); status U radu.">auto</span>`
+          : ''}
       </td>
       <td class="pp-cell-center">
         <button type="button"
@@ -1162,8 +1176,8 @@ function rowHtml(r, { allowDragDrop, rowNo }) {
                   class="pp-reassign-btn pp-coop-send-btn"
                   data-action="send-cooperation"
                   ${state.canEdit ? '' : 'disabled'}
-                  title="Ručno pošalji ovu operaciju u tab Kooperacija">
-            → Kooperacija
+                  title="Koje TP operacije ovog RN idu spolja (kooperacija)">
+            Kooperacija
           </button>
         </div>
       </td>
@@ -1339,7 +1353,7 @@ function updateBulkReassignButton() {
   const btn = state.host?.querySelector('#ppBulkReassignBtn');
   if (!btn) return;
   const count = getSelectedRows().length;
-  btn.textContent = `Premesti izabrane (${count})`;
+  btn.textContent = `Premesti odabrane (${count}) na drugu mašinu`;
   btn.disabled = !state.canEdit || count === 0;
 }
 
@@ -1375,26 +1389,15 @@ async function onSendCooperation(btn) {
   const row = state.rows.find(r => r.work_order_id === woId && r.line_id === lineId);
   if (!row) return;
 
-  const ok = window.confirm(
-    `Pošalji operaciju RN ${row.rn_ident_broj || '?'} / op. ${row.operacija || '?'} u Kooperaciju?`,
-  );
-  if (!ok) return;
-
-  btn.disabled = true;
-  const res = await setCooperationManual({
-    workOrderId: woId,
-    lineId,
-    status: 'external',
+  await openCooperationPickModal({
+    row,
+    canEdit: state.canEdit,
+    onSaved: async () => {
+      await refreshCurrentOperations();
+      state.selectedRowKeys.delete(rowKey(row));
+      renderTable({ allowDragDrop: canDragInCurrentView() });
+    },
   });
-  if (res === null) {
-    btn.disabled = false;
-    showToast('⚠ Kooperacija nije sačuvana');
-    return;
-  }
-
-  state.rows = state.rows.filter(r => !(r.work_order_id === woId && r.line_id === lineId));
-  showToast('✓ Operacija je poslata u Kooperaciju');
-  renderTable({ allowDragDrop: canDragInCurrentView() });
 }
 
 async function onToggleUrgent(btn) {
@@ -1647,164 +1650,14 @@ async function onReassign(btn) {
     return;
   }
 
-  await openReassignDialog([row], { bulk: false });
-}
-
-export function canShowForceReassign(role = getCurrentRole()) {
-  return role === 'admin' || role === 'menadzment';
-}
-
-function buildReassignCandidates(rows, force) {
-  const sourceGroups = new Set(rows.map(r => machineGroupSlugForCode(r.assigned_machine_code || r.original_machine_code)));
-  const sourceGroup = sourceGroups.size === 1 ? Array.from(sourceGroups)[0] : null;
-  const originalCodes = new Set(rows.map(r => r.original_machine_code).filter(Boolean));
-  return state.allMachines.filter(m => {
-    if (!m?.rj_code || originalCodes.has(m.rj_code)) return false;
-    if (force) return true;
-    return sourceGroup && machineGroupSlugForCode(m.rj_code) === sourceGroup;
+  openPlanBulkReassignModal({
+    selectedRows: [row],
+    allMachines: state.allMachines,
+    bulk: false,
+    onComplete: refreshAfterReassign,
   });
 }
 
-async function openReassignDialog(rows, { bulk }) {
-  if (!state.canEdit) return;
-  const selectedRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
-  if (selectedRows.length === 0) return;
-
-  const forceAllowed = canShowForceReassign();
-  const sourceGroups = new Set(selectedRows.map(r => machineGroupSlugForCode(r.assigned_machine_code || r.original_machine_code)));
-  const sourceGroup = sourceGroups.size === 1 ? Array.from(sourceGroups)[0] : null;
-  const mixedGroups = sourceGroups.size > 1;
-  const title = bulk
-    ? `Premesti ${selectedRows.length} operacija`
-    : `Premesti RN ${selectedRows[0].rn_ident_broj || '?'} / op. ${selectedRows[0].operacija || '?'}`;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'pp-reassign-modal-backdrop';
-  overlay.innerHTML = `
-    <div class="pp-reassign-modal" role="dialog" aria-modal="true" aria-label="${escHtml(title)}">
-      <div class="pp-reassign-modal-head">
-        <strong>${escHtml(title)}</strong>
-        <button type="button" class="pp-modal-close" data-action="close">×</button>
-      </div>
-      <div class="pp-reassign-modal-body">
-        <p class="pp-modal-hint">
-          Izvorna grupa:
-          <strong>${mixedGroups ? 'mešane grupe' : escHtml(machineGroupLabel(sourceGroup))}</strong>
-        </p>
-        ${mixedGroups
-          ? `<div class="pp-warning">Izabrane operacije su iz različitih vrsta mašina. Standardni bulk je blokiran; force mogu samo admin/menadžment uz razlog.</div>`
-          : ''}
-        ${forceAllowed
-          ? `<label class="pp-force-row">
-               <input type="checkbox" data-action="force-toggle">
-               Forsiraj drugu vrstu mašine
-             </label>`
-          : ''}
-        <label class="pp-reassign-field">
-          <span>Ciljna mašina</span>
-          <select data-action="target-machine"></select>
-        </label>
-        <label class="pp-reassign-field pp-force-reason" hidden>
-          <span>Razlog forsiranja</span>
-          <textarea data-action="force-reason" rows="3" placeholder="Npr. mašina nije dostupna, posao kompatibilan..."></textarea>
-        </label>
-        <div class="pp-modal-error" data-role="error"></div>
-      </div>
-      <div class="pp-reassign-modal-foot">
-        <button type="button" class="pp-refresh-btn" data-action="close">Otkaži</button>
-        <button type="button" class="pp-refresh-btn pp-modal-primary" data-action="submit">Premesti</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  const close = () => overlay.remove();
-  const forceToggle = overlay.querySelector('[data-action="force-toggle"]');
-  const select = overlay.querySelector('[data-action="target-machine"]');
-  const reasonWrap = overlay.querySelector('.pp-force-reason');
-  const reasonInput = overlay.querySelector('[data-action="force-reason"]');
-  const errorEl = overlay.querySelector('[data-role="error"]');
-  const submit = overlay.querySelector('[data-action="submit"]');
-
-  const renderOptions = () => {
-    const force = !!forceToggle?.checked;
-    const candidates = buildReassignCandidates(selectedRows, force);
-    select.innerHTML = `
-      <option value="">— izaberi mašinu —</option>
-      ${candidates.map(m => `
-        <option value="${escHtml(m.rj_code)}">
-          ${escHtml(m.name || '')} (${escHtml(m.rj_code)}) · ${escHtml(machineGroupLabel(machineGroupSlugForCode(m.rj_code)))}
-        </option>
-      `).join('')}
-    `;
-    if (reasonWrap) reasonWrap.hidden = !force;
-    if (mixedGroups && !force) {
-      errorEl.textContent = forceAllowed
-        ? 'Uključi force za mešane grupe ili izaberi operacije iz iste vrste mašine.'
-        : 'Bulk REASSIGN zahteva da sve izabrane operacije pripadaju istoj vrsti mašina.';
-      submit.disabled = true;
-    } else {
-      errorEl.textContent = '';
-      submit.disabled = false;
-    }
-  };
-
-  overlay.querySelectorAll('[data-action="close"]').forEach(btn => btn.addEventListener('click', close));
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay) close();
-  });
-  forceToggle?.addEventListener('change', renderOptions);
-  renderOptions();
-
-  submit.addEventListener('click', async () => {
-    const targetMachine = select.value || null;
-    const force = !!forceToggle?.checked;
-    const reason = String(reasonInput?.value || '').trim();
-    if (!targetMachine) {
-      errorEl.textContent = 'Izaberi ciljnu mašinu.';
-      return;
-    }
-    if (force && reason.length < 3) {
-      errorEl.textContent = 'Razlog forsiranja je obavezan (min 3 karaktera).';
-      return;
-    }
-    submit.disabled = true;
-    const res = bulk
-      ? await bulkReassignLines({
-          pairs: selectedRows.map(r => ({ wo: r.work_order_id, line: r.line_id })),
-          targetMachine,
-          force,
-          reason,
-        })
-      : await reassignLine({
-          workOrderId: selectedRows[0].work_order_id,
-          lineId: selectedRows[0].line_id,
-          targetMachine,
-          force,
-          reason,
-        });
-    if (res === null) {
-      submit.disabled = false;
-      errorEl.textContent = force
-        ? 'Premestanje nije uspelo. Proveri prava i razlog forsiranja.'
-        : 'Premestanje nije uspelo. Ciljna mašina verovatno nije ista vrsta.';
-      return;
-    }
-    selectedRows.forEach(r => state.selectedRowKeys.delete(rowKey(r)));
-    close();
-    showToast(bulk
-      ? `✓ Premešteno ${selectedRows.length} operacija na ${targetMachine}`
-      : `✓ Operacija premeštena na ${targetMachine}`);
-    await refreshAfterReassign();
-  });
-
-  select.focus();
-}
-
-/**
- * Posle REASSIGN-a (ili „vrati na original") osveži aktuelni view.
- * Operacija je možda nestala iz trenutne mašine ili dept-a.
- */
 async function refreshAfterReassign() {
   await refreshCurrentOperations();
 }
@@ -1950,4 +1803,6 @@ function setRefreshSpinner(on) {
  * Zauzetost / Pregled svih (postavlja LS_LAST_DEPT pre nego što renderuje
  * Po mašini tab).
  * ──────────────────────────────────────────────────────────────────────── */
+
+export { canShowForcePlanReassign as canShowForceReassign } from '../../services/planProizvodnje.js';
 export { findDeptForMachineCode };

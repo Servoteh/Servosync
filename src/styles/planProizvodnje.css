@@ -1988,3 +1988,71 @@
   font-weight: 600;
   border-color: color-mix(in srgb, var(--blue-bar, #4f9bff) 45%, var(--border2, #333842)) !important;
 }
+
+/* PP-D / PP-E / PP-F dopune */
+.pp-status-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pp-status-auto-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, #3b82f6 25%, transparent);
+  color: #93c5fd;
+  border: 1px solid color-mix(in srgb, #3b82f6 40%, transparent);
+  line-height: 1;
+}
+.pp-coop-op-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(420px, 55vh);
+  overflow: auto;
+  margin: 8px 0 12px;
+}
+.pp-coop-op-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 8px 12px;
+  align-items: start;
+  font-size: 13px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border2, #333842);
+}
+.pp-coop-op-row:last-child { border-bottom: none; }
+.pp-coop-meta { display: flex; flex-direction: column; gap: 2px; color: var(--text2); }
+.pp-coop-no { font-weight: 600; color: var(--text); }
+.pp-coop-m { font-size: 12px; }
+.pp-coop-desc { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-link-machine {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--blue-bar, #4f9bff);
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+}
+.pp-status-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border2, #333842);
+}
+.pp-status-mini.s-waiting { color: #d1d5db; background: color-mix(in srgb, #6b7280 18%, transparent); }
+.pp-status-mini.s-in_progress { color: #93c5fd; background: color-mix(in srgb, #3b82f6 18%, transparent); }
+.pp-status-mini.s-blocked { color: #fca5a5; background: color-mix(in srgb, #ef4444 18%, transparent); }
+.pp-status-mini.s-completed { color: #6ee7b7; background: color-mix(in srgb, #10b981 18%, transparent); }
+.pp-draw-tab-table { width: 100%; table-layout: auto; }
+.pp-draw-tab-row.pp-row-scrap {
+  background: #fff8e1;
+  border-left: 3px solid #f59e0b;
+}

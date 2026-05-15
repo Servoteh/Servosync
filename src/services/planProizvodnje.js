@@ -3,8 +3,8 @@
  *
  * Sve PostgREST queries za:
  *   - listu mašina (iz bigtehn_machines_cache)
- *   - listu otvorenih operacija po efektivnoj mašini (v_production_operations_effective;
- *     isključeni su RN-ovi sa završnom kontrolom 8.3 kucanom u BigTehn-u)
+ *   - listu otvorenih operacija po efektivnoj mašini (**v_production_operations_operational_plan**;
+ *     isključeni su RN-ovi sa završnom kontrolom 8.3 kucanom u BigTehn-u kao i operacije u kooperaciji)
  *   - upsert overlay-a (sort, status, napomena, REASSIGN)
  *   - bulk reorder (drag-drop)
  *
@@ -17,6 +17,7 @@ import { sbReq, getSupabaseUrl, getSupabaseAnonKey } from './supabase.js';
 import {
   canEditPlanProizvodnje,
   getCurrentUser,
+  getCurrentRole,
   getIsOnline,
 } from '../state/auth.js';
 import {
@@ -36,6 +37,11 @@ export { BIGTEHN_DRAWINGS_BUCKET };
 /** Po mašini: koliko različitih RN (work_order) učitava prvi poziv RPC-a; ostalo preko „Još RN". */
 export const PLAN_PP_MACHINE_WO_PAGE = 100;
 
+/** PostgREST: otvoreni plan (bez operacija u kooperaciji po PP-D). Moraju postojati migracije. */
+export const V_PP_OPERATIONAL_PLAN = 'v_production_operations_operational_plan';
+/** PostgREST: operacije koje su iz operativnog plana prebačene u kooperaciju. */
+export const V_PP_COOPERATION = 'v_production_operations_cooperation';
+
 export const LOCAL_STATUSES = ['waiting', 'in_progress', 'blocked'];
 /** Sledeći status u ciklusu klika na pill (NE uključuje 'completed' jer to
  *  dolazi iz BigTehn-a, ne pišemo ručno). */
@@ -44,6 +50,12 @@ export const STATUS_CYCLE_NEXT = {
   in_progress: 'blocked',
   blocked:     'waiting',
 };
+
+/** admin / menadžment: force REASSIGN izvan grupe mašina (G5). */
+export function canShowForcePlanReassign(role = getCurrentRole()) {
+  const r = typeof role === 'string' && role ? role : getCurrentRole();
+  return r === 'admin' || r === 'menadzment';
+}
 
 function numOrNull(v) {
   if (v == null || v === '') return null;
@@ -255,7 +267,6 @@ export async function loadOperationsForDept(dept) {
     p.set('select', '*');
     p.set('is_done_in_bigtehn', 'eq.false');
     p.set('rn_zavrsen', 'eq.false');
-    p.set('is_cooperation_effective', 'eq.false');
     p.set('or', '(local_status.is.null,local_status.neq.completed)');
     p.set('overlay_archived_at', 'is.null');
     p.set(
@@ -276,7 +287,7 @@ export async function loadOperationsForDept(dept) {
     const p = baseParams();
     /* Ostalo NE filtrira na effective_machine_code IS NOT NULL — operacije
        bez mašine sigurno spadaju u „Ostalo". */
-    const data = await sbReq(`v_production_operations_effective?${p.toString()}`);
+    const data = await sbReq(`${V_PP_OPERATIONAL_PLAN}?${p.toString()}`);
     const all = nonNullRows(data, 'v_production_operations_effective_ostalo');
     return sortProductionOperations(all.filter(op => operationFallsIntoOstalo(op)));
   }
@@ -327,7 +338,6 @@ export async function loadOperationsForDept(dept) {
   finalParams.set(
     'and',
     `(is_done_in_bigtehn.eq.false,rn_zavrsen.eq.false,overlay_archived_at.is.null,` +
-      `is_cooperation_effective.eq.false,` +
       `or(local_status.is.null,local_status.neq.completed),` +
       `or(${orParts.join(',')}))`,
   );
@@ -337,7 +347,7 @@ export async function loadOperationsForDept(dept) {
   );
   finalParams.set('limit', '5000');
 
-  const data = await sbReq(`v_production_operations_effective?${finalParams.toString()}`);
+  const data = await sbReq(`${V_PP_OPERATIONAL_PLAN}?${finalParams.toString()}`);
   let rows = nonNullRows(data, 'v_production_operations_effective_dept');
 
   /* Client-side strip-dijakritika provera za name patterns — pokriva slučaj
@@ -406,7 +416,6 @@ export async function loadAllOpenOperations() {
   params.set('select', cols);
   params.set('is_done_in_bigtehn', 'eq.false');
   params.set('rn_zavrsen', 'eq.false');
-  params.set('is_cooperation_effective', 'eq.false');
   params.set('or', '(local_status.is.null,local_status.neq.completed)');
   params.set('overlay_archived_at', 'is.null');
   /* Effective machine code mora postojati da bi se prikazalo u zbirnom
@@ -416,13 +425,13 @@ export async function loadAllOpenOperations() {
      ~3× headroom za naredne godine. */
   params.set('limit', '10000');
 
-  const data = await sbReq(`v_production_operations_effective?${params.toString()}`);
+  const data = await sbReq(`${V_PP_OPERATIONAL_PLAN}?${params.toString()}`);
   return sortProductionOperations(nonNullRows(data, 'v_production_operations_effective_all_open'));
 }
 
 /**
- * Vrati sve otvorene operacije koje su efektivno u kooperaciji
- * (auto grupa ili ručni overlay flag).
+ * Vrati sve otvorene operacije koje su izuzete iz operativnog plana
+ * (_pp_cooperation_excludes_from_plan — v_production_operations_cooperation).
  */
 export async function listForCooperation(searchText = '') {
   if (!getIsOnline()) return [];
@@ -430,13 +439,12 @@ export async function listForCooperation(searchText = '') {
   params.set('select', '*');
   params.set('is_done_in_bigtehn', 'eq.false');
   params.set('rn_zavrsen', 'eq.false');
-  params.set('is_cooperation_effective', 'eq.true');
   params.set('or', '(local_status.is.null,local_status.neq.completed)');
   params.set('overlay_archived_at', 'is.null');
   params.set('order', 'rok_izrade.asc.nullslast,rn_ident_broj.asc,operacija.asc');
   params.set('limit', '5000');
 
-  const data = await sbReq(`v_production_operations_effective?${params.toString()}`);
+  const data = await sbReq(`${V_PP_COOPERATION}?${params.toString()}`);
   const rows = nonNullRows(data, 'v_production_operations_effective_coop');
   return filterOperationsByRnOrDrawing(rows, searchText);
 }
@@ -843,6 +851,110 @@ export async function clearCooperationManual({ workOrderId, lineId }) {
       cooperation_set_at: null,
     },
   });
+}
+
+/** Stavke RN (TP linije) iz BigTehn keša — modal kooperacije. */
+export async function loadWorkOrderLinesBigtehn(workOrderId) {
+  if (!getIsOnline()) return [];
+  const id = Number(workOrderId);
+  if (!Number.isFinite(id)) return [];
+  const data = await sbReq(
+    `bigtehn_work_order_lines_cache?work_order_id=eq.${id}&select=id,operacija,machine_code,opis_rada,prioritet&order=operacija.asc`,
+  );
+  return nonNullRows(data, 'bigtehn_work_order_lines_cache_coop');
+}
+
+/** Aktivne kooperacije (cleared_at NULL) za RN. */
+export async function loadActiveCooperationOps(workOrderId) {
+  if (!getIsOnline()) return [];
+  const id = Number(workOrderId);
+  if (!Number.isFinite(id)) return [];
+  const data = await sbReq(
+    `production_cooperation_ops?work_order_id=eq.${id}&cleared_at=is.null&select=id,line_id,operacija,note,marked_at`,
+  );
+  return nonNullRows(data, 'production_cooperation_ops_active');
+}
+
+/**
+ * Čekiranje TP operacija u kooperacija modalu → sinhrono sa bazom (PP-D).
+ *
+ * @param {{ workOrderId: number, selections: { lineId: number, operacija: number }[], note?: string }} args
+ * @returns {Promise<boolean>}
+ */
+export async function syncCooperationSelections({ workOrderId, selections, note }) {
+  if (!getIsOnline() || !canEditPlanProizvodnje()) return false;
+  const wo = Number(workOrderId);
+  if (!Number.isFinite(wo) || wo <= 0) return false;
+  const email = getCurrentUser()?.email || null;
+  const desired = new Set(
+    (selections || []).map(s => `${Number(s.lineId)}:${Number(s.operacija)}`),
+  );
+
+  const active = await sbReq(
+    `production_cooperation_ops?work_order_id=eq.${wo}&cleared_at=is.null&select=id,line_id,operacija,cleared_at`,
+  );
+  if (!Array.isArray(active)) return false;
+
+  const activeRows = active.filter(r => r.cleared_at == null);
+  const nowIso = new Date().toISOString();
+
+  for (const row of activeRows) {
+    const k = `${Number(row.line_id)}:${Number(row.operacija)}`;
+    if (!desired.has(k)) {
+      const res = await sbReq(
+        `production_cooperation_ops?id=eq.${row.id}`,
+        'PATCH',
+        { cleared_at: nowIso, cleared_by: email },
+      );
+      if (res === null) return false;
+    }
+  }
+
+  const activeKeys = new Set(activeRows.map(r => `${Number(r.line_id)}:${Number(r.operacija)}`));
+  const path = 'production_cooperation_ops?on_conflict=work_order_id,line_id,operacija';
+  for (const k of desired) {
+    if (activeKeys.has(k)) continue;
+    const [ls, os] = k.split(':');
+    const lineId = Number(ls);
+    const operacija = Number(os);
+    if (!Number.isFinite(lineId) || !Number.isFinite(operacija)) continue;
+    const res = await sbReq(path, 'POST', {
+      work_order_id: wo,
+      line_id: lineId,
+      operacija,
+      marked_at: nowIso,
+      marked_by: email,
+      cleared_at: null,
+      cleared_by: null,
+      note: note != null && String(note).trim() !== '' ? String(note).trim() : null,
+    });
+    if (res === null) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Sve otvorene operacije u planu koje odgovaraju crtežu ili identu RN (PP-E).
+ */
+export async function loadOperationsByDrawingSearch(rawQuery) {
+  if (!getIsOnline()) return [];
+  const q = String(rawQuery || '').trim();
+  if (!q) return [];
+  const esc = q.replace(/"/g, '""');
+  const params = new URLSearchParams();
+  params.set('select', '*');
+  params.set(
+    'and',
+    `(is_done_in_bigtehn.eq.false,rn_zavrsen.eq.false,overlay_archived_at.is.null,` +
+      `or(local_status.is.null,local_status.neq.completed),` +
+      `or(broj_crteza.ilike.*${esc}*,rn_ident_broj.ilike.*${esc}*))`,
+  );
+  params.set('order', 'operacija.asc.nullslast,effective_machine_code.asc');
+  params.set('limit', '800');
+
+  const data = await sbReq(`${V_PP_OPERATIONAL_PLAN}?${params.toString()}`);
+  return sortProductionOperations(nonNullRows(data, 'pp_drawing_global'));
 }
 
 export async function setUrgent(workOrderId, reason = '') {
