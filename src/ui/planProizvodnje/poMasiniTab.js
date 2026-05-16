@@ -57,6 +57,7 @@ import {
   plannedSeconds,
   filterOperationsByRnOrDrawing,
   sortProductionOperations,
+  urgencyReadyBucketsAreNonDecreasing,
 } from '../../services/planProizvodnje.js';
 import {
   sanitizeDrawingNo,
@@ -1881,6 +1882,11 @@ function wireDragDrop(wrap) {
     const arr = state.rows.slice();
     const [moved] = arr.splice(fromIdx, 1);
     arr.splice(toIdx, 0, moved);
+    if (!urgencyReadyBucketsAreNonDecreasing(arr)) {
+      showToast('Ne može prevlačenje između grupa HITNO/spremnosti; red ostaje kao u Planu.');
+      renderTable({ allowDragDrop: canDragInCurrentView() });
+      return;
+    }
     state.rows = arr;
 
     /* Optimistic re-render */

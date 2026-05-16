@@ -24,6 +24,7 @@ import {
   loadMachines,
   buildDeadlineMatrix,
   filterOperationsByRnOrDrawing,
+  sortByUrgencyAndReady,
 } from '../../services/planProizvodnje.js';
 
 const state = {
@@ -161,7 +162,9 @@ function renderMatrix() {
     ? `<div class="pp-error">${escHtml(state.error)}</div>`
     : '';
 
-  const filteredRows = filterOperationsByRnOrDrawing(state.rows, state.rnFilter);
+  const filteredRows = sortByUrgencyAndReady(
+    filterOperationsByRnOrDrawing(state.rows, state.rnFilter),
+  );
   const matrix = buildDeadlineMatrix(filteredRows, 5);
   const { days } = matrix;
   let { machines } = matrix;

@@ -64,7 +64,7 @@ Operacije za plan se čitaju iz **`public.v_production_operations_effective`**: 
 
 - **Čitanje:** `loadMachines()`, `loadOperationsForMachine`, `loadOperationsForDept`, `loadAllOpenOperations`, `listForCooperation`, `listAutoCooperationGroups` — iz `v_production_operations_effective` (operativni planovi isključuju efektivnu kooperaciju; vidi filter aktivacije iznad).
 - **Pisanje overlay-a:** `upsertOverlay()`, `reorderOverlays()`.
-- **G2:** `setUrgent()`, `clearUrgent()`, `pinToTop()`, `unpin()`, `sortProductionOperations()`.
+- **G2 / PP-B:** `setUrgent()`, `clearUrgent()`, `pinToTop()`, `unpin()`, **`sortByUrgencyAndReady()`**, `urgencyReadyBucket()`, **`urgencyReadyBucketsAreNonDecreasing()`** (drag invariant); **`sortProductionOperations()`** je alias nad `sortByUrgencyAndReady`.
 - **G3:** `setCamReady()` (i srodno u UI).
 - **G5:** `reassignLine()`, `bulkReassignLines()` → RPC `reassign_production_line` / `bulk_reassign_production_lines` (nema direktnog client UPSERT-a za dodelu mašine).
 - **G7:** `setCooperationManual()`, `clearCooperationManual()`, itd.
