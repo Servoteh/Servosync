@@ -60,6 +60,37 @@ Drag-drop (`shift_sort_order`) samo u single-machine kontekstu.
 
 Operacije za plan se čitaju iz **`public.v_production_operations_effective`**: to je `v_production_operations` (otvoreni RN-ovi, BigTehn linije, overlay) **dodatno** filtrirano na predmete koji su u `production.predmet_aktivacija` sa `je_aktivan = true` — isključeni predmeti **ne** ulaze u prikaz, čak i sa aktivnim RN-ovima. Upravljanje: **Podešavanja → Podeš. predmeta** (admin + menadžment). U **Praćenju** lista aktivnih predmeta (`get_aktivni_predmeti()`) koristi **isti** kriterijum: samo `je_aktivan` (nije presek sa MES listom).
 
+## „Sakrij posle završne kontrole" (KK) — heuristika
+
+`v_production_operations` izlaže polje **`plan_rn_final_control_done`** (boolean). Kada je `TRUE`, RN se isključuje iz `v_production_operations_effective` (ne prikazuje se u Planu, ali ostaje u Praćenju i Lokacijama).
+
+**Heuristika** ([supabase/migrations/20260507100000__plan_final_qc_hide_fix_double_sum.sql](../supabase/migrations/20260507100000__plan_final_qc_hide_fix_double_sum.sql)):
+
+```text
+plan_rn_final_control_done := (
+  komada_total > 0
+  AND sum(KK prijave) >= komada_total           -- KK pokrila lot
+  AND sum(KK prijave) <= komada_total × 1.5     -- gornja granica
+)
+```
+
+`sum(KK prijave)` je agregat prijava iz `bigtehn_tech_routing_cache` za RN-ove čije je linija u „završnoj kontroli" — heuristika iz Praćenja, oslonjena na `production._pracenje_line_is_final_control(machine_code, machine_name, no_procedure)`.
+
+**Zašto gornja granica × 1.5?** Operater u BigTehn-u može da duplo prijavi istu količinu (klikne dvaput, ili greška u unosu). Bez gornje granice, duplikat bi RN sakrio iz plana sa 200%. Sa granicom × 1.5, duplikat ide preko praga i RN ostaje u planu — vidljiv signal da je nešto pogrešno.
+
+**Posledica:** ako operater duplo prijavi ali u istoj prijavi vrati negativnu količinu (net efekat 100%), RN nestaje iz plana. To je accepted trade-off — pravi greška se javi pre toga u Praćenju (gde svaka prijava ima poseban red).
+
+**Forenzika ako RN "nestane":** proveri prijave za taj RN:
+
+```sql
+SELECT machine_code, operacija, komada, started_at, is_completed
+FROM bigtehn_tech_routing_cache
+WHERE work_order_id = :wo_id
+ORDER BY operacija, started_at;
+```
+
+Ako sum komada na KK liniji prelazi `1.5 × komada_total`, prag je probijen → RN se vraća u plan. Ako je ispod, status je „validno završeno".
+
 ## Servisni sloj (`planProizvodnje.js`)
 
 - **Čitanje:** `loadMachines()`, `loadOperationsForMachine`, `loadOperationsForDept`, `loadAllOpenOperations`, `listForCooperation`, `listAutoCooperationGroups` — iz `v_production_operations_effective` (operativni planovi isključuju efektivnu kooperaciju; vidi filter aktivacije iznad).
