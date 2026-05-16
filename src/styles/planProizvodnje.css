@@ -767,6 +767,14 @@
 .pp-modal-error:empty {
   display: none;
 }
+/* H14: timeout banner za Pregled svih tab — koristi .pp-warning paletu */
+.pp-load-error {
+  text-align: center;
+  padding: 16px 12px;
+}
+.pp-load-error p {
+  margin: 0 0 12px;
+}
 .pp-force-row,
 .pp-reassign-field {
   display: grid;

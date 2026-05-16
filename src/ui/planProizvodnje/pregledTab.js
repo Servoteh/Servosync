@@ -37,7 +37,14 @@ const state = {
   rnFilter: '',
   rnFilterTimer: null,
   onJumpToPoMasini: null,
+  /* H14: token pattern + timeout guard za Promise.all u reload().
+     Token bump u teardown-u ili na novi reload() invalidira sve
+     in-flight rezultate (await koji se vrati posle se ignoriše). */
+  loadToken: 0,
+  loadTimeoutId: null,
 };
+
+const LOAD_TIMEOUT_MS = 15000;
 
 const STORAGE_KEY_FILTER = 'plan-proizvodnje:pregled:filter';
 const STORAGE_KEY_RN_FILTER = 'plan-proizvodnje:filter-rn:pregled';
@@ -115,6 +122,11 @@ export function teardownPregledTab() {
   state.error = null;
   if (state.rnFilterTimer) clearTimeout(state.rnFilterTimer);
   state.rnFilterTimer = null;
+  /* H14: invalidate in-flight load (token bump diskvalifikuje sve
+     await rezultate koji se vrate posle teardown-a). */
+  state.loadToken = (state.loadToken || 0) + 1;
+  if (state.loadTimeoutId) clearTimeout(state.loadTimeoutId);
+  state.loadTimeoutId = null;
   state.onJumpToPoMasini = null;
 }
 
@@ -122,25 +134,68 @@ export function teardownPregledTab() {
 
 async function reload() {
   if (!state.host) return;
+
+  /* H14: novi load dobija novi token; svi stariji await-i koji se
+     posle vrate (ili timeout iz prethodnog poziva) vide myToken
+     različit od state.loadToken i preskaču render. */
+  if (state.loadTimeoutId) {
+    clearTimeout(state.loadTimeoutId);
+    state.loadTimeoutId = null;
+  }
+  state.loadToken = (state.loadToken || 0) + 1;
+  const myToken = state.loadToken;
+
   state.loading = true;
   state.error = null;
   setRefreshSpinning(true);
+
+  state.loadTimeoutId = setTimeout(() => {
+    if (myToken !== state.loadToken) return;
+    state.loadTimeoutId = null;
+    renderLoadTimeoutError(state.host);
+  }, LOAD_TIMEOUT_MS);
+
   try {
     const [machines, rows] = await Promise.all([
       loadMachines(),
       loadAllOpenOperations(),
     ]);
+    if (myToken !== state.loadToken) return;
+    if (state.loadTimeoutId) {
+      clearTimeout(state.loadTimeoutId);
+      state.loadTimeoutId = null;
+    }
     state.machinesMap = new Map((machines || []).map(m => [m.rj_code, m]));
     state.rows = rows || [];
     renderMatrix();
   } catch (e) {
+    if (myToken !== state.loadToken) return;
+    if (state.loadTimeoutId) {
+      clearTimeout(state.loadTimeoutId);
+      state.loadTimeoutId = null;
+    }
     console.error('[pregled] reload failed', e);
     state.error = 'Greška pri učitavanju (' + (e?.message || e) + ')';
     renderMatrix();
   } finally {
+    if (myToken !== state.loadToken) return;
     state.loading = false;
     setRefreshSpinning(false);
   }
+}
+
+function renderLoadTimeoutError(host) {
+  if (!host) return;
+  host.innerHTML = `
+    <div class="pp-load-error pp-warning">
+      <p>Učitavanje predugo traje. Server može da bude opterećen.</p>
+      <button type="button" class="btn" data-action="retry-load">Pokušaj ponovo</button>
+    </div>
+  `;
+  host.querySelector('[data-action=retry-load]')?.addEventListener('click', () => {
+    void reload();
+  });
+  showToast?.('Učitavanje predugo traje.', 'error');
 }
 
 function setRefreshSpinning(on) {
