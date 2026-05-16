@@ -22,6 +22,10 @@ import {
   canEditPlanProizvodnje,
 } from '../../state/auth.js';
 import {
+  fetchPpBridgeSyncStatus,
+  PP_BRIDGE_LABELS,
+} from '../../services/planProizvodnje.js';
+import {
   renderPoMasiniTab,
   teardownPoMasiniTab,
 } from './poMasiniTab.js';
@@ -118,10 +122,17 @@ export function renderPlanProizvodnjeModule(mountEl, { onBackToHub, onLogout }) 
       `).join('')}
     </nav>
 
+    <div id="ppBridgeBanner" aria-live="polite"></div>
+
     <main class="kadrovska-tabpanel" id="ppTabBody" style="padding:24px;max-width:1600px;margin:0 auto"></main>
   `;
 
   mountEl.appendChild(container);
+
+  /* H28/M20: učitaj bridge sync stanje. Fire-and-forget — ne čekamo
+     da bismo renderovali glavni modul. Ako bridge_sync_log ne postoji
+     ili fetch fail-uje, banner ostaje skriven. */
+  void renderPpBridgeBanner(container.querySelector('#ppBridgeBanner'));
 
   /* Wire događaji */
   container.querySelector('#ppBackBtn').addEventListener('click', () => onBackToHub?.());
@@ -206,4 +217,68 @@ function teardownActiveTab() {
 
 export function teardownPlanProizvodnjeModule() {
   teardownActiveTab();
+}
+
+/**
+ * H28/M20: bridge health banner. Pokazuje upozorenje ako PP-relevantni
+ * BigTehn cache job-ovi nisu sveže sinhronizovani.
+ *
+ * Pragovi:
+ *   - < 30 min: skriveno
+ *   - 30 min – 2 h: žuti banner (pp-warning paleta, ⚠ ikona)
+ *   - > 2 h: crveni banner (pp-bridge-critical override, 🔴 ikona)
+ *
+ * Refresh: jednom po renderPlanProizvodnjeModule pozivu (tab switch
+ * trigger-uje re-render → svežiji status). Bez setInterval.
+ */
+async function renderPpBridgeBanner(host) {
+  if (!host) return;
+  host.innerHTML = '';
+
+  let status;
+  try {
+    status = await fetchPpBridgeSyncStatus();
+  } catch (_e) {
+    return;
+  }
+  if (!Array.isArray(status) || !status.length) return;
+
+  const now = Date.now();
+  const WARN_MS = 30 * 60 * 1000;
+  const CRITICAL_MS = 2 * 60 * 60 * 1000;
+
+  let worstAge = 0;
+  const staleParts = [];
+
+  for (const it of status) {
+    const t = it.last_finished ? Date.parse(it.last_finished) : NaN;
+    if (!Number.isFinite(t)) continue;
+    const ageMs = now - t;
+    if (ageMs <= WARN_MS) continue;
+    worstAge = Math.max(worstAge, ageMs);
+    const min = Math.round(ageMs / 60000);
+    const hours = Math.round(ageMs / 3600000);
+    const ageStr = min < 120 ? `${min} min` : `${hours} h`;
+    const label = PP_BRIDGE_LABELS[it.sync_job] || it.sync_job;
+    staleParts.push(`<strong>${escHtml(label)}</strong> · pre ${escHtml(ageStr)}`);
+  }
+
+  if (!staleParts.length) return;
+
+  const isCritical = worstAge > CRITICAL_MS;
+  const wrap = document.createElement('div');
+  wrap.className = isCritical
+    ? 'pp-warning pp-bridge-banner pp-bridge-critical'
+    : 'pp-warning pp-bridge-banner';
+  wrap.innerHTML = `
+    <span class="pp-bridge-icon" aria-hidden="true">${isCritical ? '🔴' : '⚠'}</span>
+    <span>
+      <strong>Bridge sync ${isCritical ? 'NE RADI' : 'kasni'}:</strong>
+      ${staleParts.join(' · ')}.
+      ${isCritical
+        ? 'Spremnost crteža i status u radu možda nisu tačni.'
+        : 'Podaci možda nisu sveži.'}
+    </span>
+  `;
+  host.appendChild(wrap);
 }

@@ -36,6 +36,25 @@ export { BIGTEHN_DRAWINGS_BUCKET };
 /** Po mašini: koliko različitih RN (work_order) učitava prvi poziv RPC-a; ostalo preko „Još RN". */
 export const PLAN_PP_MACHINE_WO_PAGE = 100;
 
+/**
+ * H28/M20: PP-relevantni sync job-ovi iz bridge_sync_log. RN, linije TP-a
+ * i prijave operatera — sve troje neophodno za spremnost crteža i G6
+ * auto-status. Ne uključuje catalog_items i drawings (sporo se menjaju,
+ * ne blokiraju plan).
+ */
+const PP_BRIDGE_JOBS = new Set([
+  'production_work_orders',
+  'production_work_order_lines',
+  'production_tech_routing',
+]);
+
+/** Ljudski naziv za UI banner (H28). */
+export const PP_BRIDGE_LABELS = {
+  production_work_orders: 'RN',
+  production_work_order_lines: 'Linije TP',
+  production_tech_routing: 'Prijave operatera',
+};
+
 export const LOCAL_STATUSES = ['waiting', 'in_progress', 'blocked'];
 /** Sledeći status u ciklusu klika na pill (NE uključuje 'completed' jer to
  *  dolazi iz BigTehn-a, ne pišemo ručno). */
@@ -1552,4 +1571,37 @@ function isoDay(d) {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/**
+ * H28/M20: vraća najnoviji finished_at po PP-relevantnom sync job-u
+ * (PP_BRIDGE_JOBS). Koristi se za bridge health banner u PP modulu.
+ *
+ * Tih fallback: ako bridge_sync_log ne postoji (fresh env), ako RLS odbije,
+ * ili ako network fail → vraća prazan array. Banner se onda ne prikazuje
+ * — feature je defense-in-depth, ne sme da pukne glavni modul.
+ *
+ * @returns {Promise<Array<{ sync_job: string, last_finished: string, status: string }>>}
+ */
+export async function fetchPpBridgeSyncStatus() {
+  try {
+    const rows = await sbReq(
+      `bridge_sync_log?select=sync_job,finished_at,status&order=finished_at.desc&limit=200`,
+    );
+    if (!Array.isArray(rows)) return [];
+    const seen = new Map();
+    for (const r of rows) {
+      if (!r || !PP_BRIDGE_JOBS.has(r.sync_job)) continue;
+      if (!seen.has(r.sync_job)) {
+        seen.set(r.sync_job, {
+          sync_job: r.sync_job,
+          last_finished: r.finished_at,
+          status: r.status,
+        });
+      }
+    }
+    return Array.from(seen.values());
+  } catch (_e) {
+    return [];
+  }
 }
