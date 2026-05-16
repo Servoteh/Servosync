@@ -935,6 +935,22 @@ export async function unpin(row) {
   });
 }
 
+/**
+ * H1 idempotency: generiše UUID v4 za client_event_uuid u G5 RPC pozivima.
+ * Ako crypto.randomUUID nije dostupan (vrlo stari browser-i), vraća null —
+ * RPC tretira NULL kao "bez idempotency-a" i INSERT u audit prolazi normalno
+ * (back-compat). Modul ionako zahteva moderne browser-e (ZXing, color-mix),
+ * pa je fallback samo defensive.
+ */
+function generateClientEventUuid() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch (_e) { /* ignore */ }
+  return null;
+}
+
 export async function reassignLine({
   workOrderId,
   lineId,
@@ -950,6 +966,10 @@ export async function reassignLine({
     p_target_machine: targetMachine || null,
     p_force: !!force,
     p_force_reason: reason || null,
+    /* H1: sprečava duplikat u production_reassign_audit kod retry-a
+       (timeout, network drop, double-click). Server radi ON CONFLICT
+       (client_event_uuid, line_id) DO NOTHING. */
+    p_client_event_uuid: generateClientEventUuid(),
   }, { upsert: false });
   return res;
 }
@@ -972,6 +992,9 @@ export async function bulkReassignLines({
     p_target_machine: targetMachine || null,
     p_force: !!force,
     p_force_reason: reason || null,
+    /* H1: svi parovi u bulk pozivu dele isti UUID; idempotency po
+       (uuid, line_id) u audit-u. Retry istog bulk-a → 0 novih audit redova. */
+    p_client_event_uuid: generateClientEventUuid(),
   }, { upsert: false });
   return res;
 }
