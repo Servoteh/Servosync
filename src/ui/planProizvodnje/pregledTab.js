@@ -292,17 +292,29 @@ function renderMatrix() {
     <th class="pm-th pm-th-bucket pm-th-none">Bez roka</th>
   `;
 
+  /* L33: helper za HITNO badge u ćeliji (vidi `urgentBuckets` u
+     buildDeadlineMatrix). Renderuje se inline pored broja, sa tooltip-om
+     koji prikazuje koliko od ukupnih operacija je HITNO. */
+  const urgentBadge = (urgentCount) =>
+    urgentCount > 0
+      ? `<span class="pm-cell-urgent" title="${urgentCount} HITNO u ovoj ćeliji" aria-label="${urgentCount} hitnih operacija">🔥</span>`
+      : '';
+
   /* Body */
   const bodyHtml = machines.map(m => {
     const cellsDays = days.map(d => {
       const n = m.buckets[d.date] || 0;
+      const u = m.urgentBuckets?.[d.date] || 0;
       const cls = bucketClass(d, n);
-      return `<td class="pm-cell ${cls}${n > 0 ? ' is-clickable' : ''}"
+      return `<td class="pm-cell ${cls}${n > 0 ? ' is-clickable' : ''}${u > 0 ? ' has-urgent' : ''}"
                   data-machine="${escHtml(m.machineCode)}"
                   data-bucket="${escHtml(d.date)}">
-                ${n > 0 ? `<span class="pm-cell-num">${n}</span>` : '<span class="pm-cell-empty">·</span>'}
+                ${n > 0 ? `<span class="pm-cell-num">${n}</span>${urgentBadge(u)}` : '<span class="pm-cell-empty">·</span>'}
               </td>`;
     }).join('');
+    const uOverdue    = m.urgentBuckets?.overdue    || 0;
+    const uFuture     = m.urgentBuckets?.future     || 0;
+    const uNoDeadline = m.urgentBuckets?.noDeadline || 0;
     return `
       <tr class="pm-row" data-machine="${escHtml(m.machineCode)}">
         <td class="pm-td-machine">
@@ -321,18 +333,18 @@ function renderMatrix() {
             : ''}
         </td>
         <td class="pm-td-total"><span class="zm-num zm-num-strong">${m.totalOps}</span></td>
-        <td class="pm-cell pm-cell-overdue${m.buckets.overdue > 0 ? ' is-clickable' : ''}"
+        <td class="pm-cell pm-cell-overdue${m.buckets.overdue > 0 ? ' is-clickable' : ''}${uOverdue > 0 ? ' has-urgent' : ''}"
             data-machine="${escHtml(m.machineCode)}" data-bucket="overdue">
-          ${m.buckets.overdue > 0 ? `<span class="pm-cell-num">${m.buckets.overdue}</span>` : '<span class="pm-cell-empty">·</span>'}
+          ${m.buckets.overdue > 0 ? `<span class="pm-cell-num">${m.buckets.overdue}</span>${urgentBadge(uOverdue)}` : '<span class="pm-cell-empty">·</span>'}
         </td>
         ${cellsDays}
-        <td class="pm-cell pm-cell-future${m.buckets.future > 0 ? ' is-clickable' : ''}"
+        <td class="pm-cell pm-cell-future${m.buckets.future > 0 ? ' is-clickable' : ''}${uFuture > 0 ? ' has-urgent' : ''}"
             data-machine="${escHtml(m.machineCode)}" data-bucket="future">
-          ${m.buckets.future > 0 ? `<span class="pm-cell-num">${m.buckets.future}</span>` : '<span class="pm-cell-empty">·</span>'}
+          ${m.buckets.future > 0 ? `<span class="pm-cell-num">${m.buckets.future}</span>${urgentBadge(uFuture)}` : '<span class="pm-cell-empty">·</span>'}
         </td>
-        <td class="pm-cell pm-cell-none${m.buckets.noDeadline > 0 ? ' is-clickable' : ''}"
+        <td class="pm-cell pm-cell-none${m.buckets.noDeadline > 0 ? ' is-clickable' : ''}${uNoDeadline > 0 ? ' has-urgent' : ''}"
             data-machine="${escHtml(m.machineCode)}" data-bucket="none">
-          ${m.buckets.noDeadline > 0 ? `<span class="pm-cell-num">${m.buckets.noDeadline}</span>` : '<span class="pm-cell-empty">·</span>'}
+          ${m.buckets.noDeadline > 0 ? `<span class="pm-cell-num">${m.buckets.noDeadline}</span>${urgentBadge(uNoDeadline)}` : '<span class="pm-cell-empty">·</span>'}
         </td>
       </tr>
     `;

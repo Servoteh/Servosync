@@ -1536,10 +1536,18 @@ export function buildDeadlineMatrix(rows, numWorkingDays = 5) {
     if (!mc) continue;
     let m = byMachine.get(mc);
     if (!m) {
-      m = { machineCode: mc, totalOps: 0, camReadyOps: 0, readyOps: 0, urgentOps: 0, buckets: {
-        overdue: 0, future: 0, noDeadline: 0,
-      } };
-      for (const d of days) m.buckets[d.date] = 0;
+      m = {
+        machineCode: mc, totalOps: 0, camReadyOps: 0, readyOps: 0, urgentOps: 0,
+        buckets: { overdue: 0, future: 0, noDeadline: 0 },
+        /* L33: paralelna mapa sa istim ključevima kao `buckets`, samo broji
+           operacije sa is_urgent=TRUE. UI prikazuje HITNO badge u ćeliji
+           ako je urgentBuckets[key] > 0. */
+        urgentBuckets: { overdue: 0, future: 0, noDeadline: 0 },
+      };
+      for (const d of days) {
+        m.buckets[d.date] = 0;
+        m.urgentBuckets[d.date] = 0;
+      }
       byMachine.set(mc, m);
     }
     m.totalOps += 1;
@@ -1547,19 +1555,22 @@ export function buildDeadlineMatrix(rows, numWorkingDays = 5) {
     if (r.is_ready_for_machine) m.readyOps += 1;
     if (r.is_urgent) m.urgentOps += 1;
     const rok = r.rok_izrade ? isoDay(new Date(r.rok_izrade)) : null;
+    let bucketKey;
     if (!rok) {
-      m.buckets.noDeadline += 1;
+      bucketKey = 'noDeadline';
     } else if (rok < todayStr) {
-      m.buckets.overdue += 1;
+      bucketKey = 'overdue';
     } else if (lastDay && rok > lastDay) {
-      m.buckets.future += 1;
+      bucketKey = 'future';
     } else if (m.buckets[rok] !== undefined) {
-      m.buckets[rok] += 1;
+      bucketKey = rok;
     } else {
       /* Vikend pao između prikazanih radnih dana → broj kao "future"
          (prikazaće se u koloni "Sledeća sedmica+"). */
-      m.buckets.future += 1;
+      bucketKey = 'future';
     }
+    m.buckets[bucketKey] += 1;
+    if (r.is_urgent) m.urgentBuckets[bucketKey] += 1;
   }
 
   return { days, machines: Array.from(byMachine.values()) };
