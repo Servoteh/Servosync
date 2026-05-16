@@ -1254,61 +1254,66 @@ function statusLabel(s) {
  * ──────────────────────────────────────────────────────────────────────── */
 
 function wireRows(wrap, { allowDragDrop }) {
-  wrap.querySelectorAll('input[data-action="select-row"]').forEach(input => {
-    input.addEventListener('change', () => onToggleRowSelection(input));
-  });
+  /* H13: idempotentan bind. Listeneri se vežu SAMO JEDNOM po wrap mount-u
+     (flag u dataset). Naredni renderTable() pozivi (filter, refresh,
+     status toggle) zamenjuju wrap.innerHTML, ali sam wrap element ostaje
+     — pa listeneri vezani na wrap preživljavaju re-render. Eliminisali
+     smo per-element bind petlje (13 vrsta × N redova × ~10 render-a/min). */
+  if (wrap.dataset.handlersAttached !== '1') {
+    wrap.dataset.handlersAttached = '1';
 
-  wrap.querySelectorAll('input[data-action="select-all-rows"]').forEach(input => {
-    input.addEventListener('change', () => onToggleAllRowsSelection(input));
-  });
+    /* Click dispatcher — 9 action-a */
+    wrap.addEventListener('click', e => {
+      const el = e.target.closest('[data-action]');
+      if (!el || !wrap.contains(el)) return;
+      switch (el.dataset.action) {
+        case 'cycle-status':         return onCycleStatus(el);
+        case 'reassign-open':        return onReassign(el);
+        case 'send-cooperation':     return onSendCooperation(el);
+        case 'toggle-urgent':        return onToggleUrgent(el);
+        case 'toggle-pin':           return onTogglePin(el);
+        case 'open-drawings':        return onOpenDrawings(el);
+        case 'open-bigtehn-drawing': return onOpenBigtehnDrawing(el);
+        case 'open-tech-procedure':  return onOpenTechProcedure(el);
+        case 'why-bottleneck':       return onWhyBottleneck(el);
+        default: return;
+      }
+    });
 
-  wrap.querySelectorAll('button[data-action="cycle-status"]').forEach(btn => {
-    btn.addEventListener('click', () => onCycleStatus(btn));
-  });
+    /* Change dispatcher — 3 input akcija (checkbox-i) */
+    wrap.addEventListener('change', e => {
+      const el = e.target.closest('[data-action]');
+      if (!el || !wrap.contains(el)) return;
+      switch (el.dataset.action) {
+        case 'select-row':       return onToggleRowSelection(el);
+        case 'select-all-rows':  return onToggleAllRowsSelection(el);
+        case 'toggle-cam-ready': return onToggleCamReady(el);
+        default: return;
+      }
+    });
 
-  wrap.querySelectorAll('input[data-action="toggle-cam-ready"]').forEach(input => {
-    input.addEventListener('change', () => onToggleCamReady(input));
-  });
+    /* Focusout (bubbles, za razliku od blur) — save napomene na izlazak
+       iz textarea. originalVal čitamo iz state.rows umesto da kapturišemo
+       closure na focusin — eliminisali smo intermediate state. */
+    wrap.addEventListener('focusout', e => {
+      const ta = e.target;
+      if (!(ta instanceof HTMLTextAreaElement)) return;
+      if (ta.dataset?.action !== 'edit-note') return;
+      const tr = ta.closest('tr');
+      const woId = Number(tr?.dataset.wo);
+      const lineId = Number(tr?.dataset.line);
+      const row = state.rows.find(r => r.work_order_id === woId && r.line_id === lineId);
+      onSaveNote(ta, row?.shift_note || '');
+    });
+  }
 
-  wrap.querySelectorAll('textarea[data-action="edit-note"]').forEach(ta => {
-    let originalVal = ta.value;
-    ta.addEventListener('focus', () => { originalVal = ta.value; });
-    ta.addEventListener('blur',  () => onSaveNote(ta, originalVal));
-  });
-
-  wrap.querySelectorAll('button[data-action="reassign-open"]').forEach(btn => {
-    btn.addEventListener('click', () => onReassign(btn));
-  });
-
-  wrap.querySelectorAll('button[data-action="send-cooperation"]').forEach(btn => {
-    btn.addEventListener('click', () => onSendCooperation(btn));
-  });
-
-  wrap.querySelectorAll('button[data-action="toggle-urgent"]').forEach(btn => {
-    btn.addEventListener('click', () => onToggleUrgent(btn));
-  });
-
-  wrap.querySelectorAll('button[data-action="toggle-pin"]').forEach(btn => {
-    btn.addEventListener('click', () => onTogglePin(btn));
-  });
-
-  wrap.querySelectorAll('button[data-action="open-drawings"]').forEach(btn => {
-    btn.addEventListener('click', () => onOpenDrawings(btn));
-  });
-
-  wrap.querySelectorAll('button[data-action="open-bigtehn-drawing"]').forEach(btn => {
-    btn.addEventListener('click', () => onOpenBigtehnDrawing(btn));
-  });
-
-  wrap.querySelectorAll('button[data-action="open-tech-procedure"]').forEach(btn => {
-    btn.addEventListener('click', () => onOpenTechProcedure(btn));
-  });
-
-  wrap.querySelectorAll('button[data-action="why-bottleneck"]').forEach(btn => {
-    btn.addEventListener('click', () => onWhyBottleneck(btn));
-  });
-
-  if (allowDragDrop && state.canEdit) {
+  /* allowDragDrop je rendering hint (kontroliše draggable atribut u
+     rowHtml). Drag-drop listeneri se vežu jednom, takođe idempotentno;
+     ako trenutni red nema draggable="true" (npr. filter aktivan ili
+     read-only korisnik), dragstart handler vraća early jer selector
+     tr[draggable="true"] ne hvata. */
+  void allowDragDrop;
+  if (state.canEdit) {
     wireDragDrop(wrap);
   }
 }
@@ -1821,32 +1826,36 @@ async function refreshCurrentOperations() {
 /* ── Drag-drop reorder ── */
 
 function wireDragDrop(wrap) {
-  const tbody = wrap.querySelector('tbody');
-  if (!tbody) return;
+  /* H13: idempotentno bind-uje 4 drag listenera na wrap (ne na tbody,
+     koji se zamenjuje pri svakom renderTable). Selector tr[draggable="true"]
+     u dragstart prirodno filtrira redove koji nisu draggable (filter
+     aktivan ili read-only) — bezbedno je vezati listenere uvek. */
+  if (wrap.dataset.dragdropAttached === '1') return;
+  wrap.dataset.dragdropAttached = '1';
 
-  tbody.addEventListener('dragstart', e => {
+  wrap.addEventListener('dragstart', e => {
     const tr = e.target.closest('tr[draggable="true"]');
-    if (!tr) return;
+    if (!tr || !wrap.contains(tr)) return;
     state.dragRowKey = tr.dataset.key;
     tr.classList.add('is-dragging');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', state.dragRowKey);
   });
 
-  tbody.addEventListener('dragend', () => {
-    tbody.querySelectorAll('tr.is-dragging').forEach(t => t.classList.remove('is-dragging'));
-    tbody.querySelectorAll('.drop-target-above,.drop-target-below').forEach(t => {
+  wrap.addEventListener('dragend', () => {
+    wrap.querySelectorAll('tr.is-dragging').forEach(t => t.classList.remove('is-dragging'));
+    wrap.querySelectorAll('.drop-target-above,.drop-target-below').forEach(t => {
       t.classList.remove('drop-target-above', 'drop-target-below');
     });
     state.dragRowKey = null;
   });
 
-  tbody.addEventListener('dragover', e => {
+  wrap.addEventListener('dragover', e => {
     if (!state.dragRowKey) return;
     const tr = e.target.closest('tr');
-    if (!tr || tr.dataset.key === state.dragRowKey) return;
+    if (!tr || !wrap.contains(tr) || tr.dataset.key === state.dragRowKey) return;
     e.preventDefault();
-    tbody.querySelectorAll('.drop-target-above,.drop-target-below').forEach(t => {
+    wrap.querySelectorAll('.drop-target-above,.drop-target-below').forEach(t => {
       t.classList.remove('drop-target-above', 'drop-target-below');
     });
     const rect = tr.getBoundingClientRect();
@@ -1855,11 +1864,11 @@ function wireDragDrop(wrap) {
     else                 tr.classList.add('drop-target-below');
   });
 
-  tbody.addEventListener('drop', async e => {
+  wrap.addEventListener('drop', async e => {
     e.preventDefault();
     if (!state.dragRowKey) return;
     const targetTr = e.target.closest('tr');
-    if (!targetTr || targetTr.dataset.key === state.dragRowKey) {
+    if (!targetTr || !wrap.contains(targetTr) || targetTr.dataset.key === state.dragRowKey) {
       state.dragRowKey = null;
       return;
     }
@@ -1868,7 +1877,7 @@ function wireDragDrop(wrap) {
     state.dragRowKey = null;
 
     const before = targetTr.classList.contains('drop-target-above');
-    tbody.querySelectorAll('.drop-target-above,.drop-target-below').forEach(t => {
+    wrap.querySelectorAll('.drop-target-above,.drop-target-below').forEach(t => {
       t.classList.remove('drop-target-above', 'drop-target-below');
     });
 
