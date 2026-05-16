@@ -13,7 +13,7 @@
  * (admin / pm / menadzment), RLS na production_overlays će odbiti write.
  */
 
-import { sbReq, getSupabaseUrl, getSupabaseAnonKey } from './supabase.js';
+import { sbReq, sbReqWithCount, getSupabaseUrl, getSupabaseAnonKey } from './supabase.js';
 import {
   canEditPlanProizvodnje,
   getCurrentUser,
@@ -367,6 +367,9 @@ export async function loadOperationsForDept(dept) {
   return sortProductionOperations(rows);
 }
 
+/** Hard cap broja redova vraćenih iz loadAllOpenOperations. */
+export const ALL_OPS_LIMIT = 10000;
+
 /**
  * Vraća SVE otvorene operacije (sve mašine), samo kolone potrebne za
  * agregirane prikaze (Zauzetost mašina, Pregled svih).
@@ -376,9 +379,17 @@ export async function loadOperationsForDept(dept) {
  *
  * Filteri: aktivne, ne-arhivirane overlay, RN nije završen, ne-završene
  * u BigTehn-u, ne lokalno označene 'completed'.
+ *
+ * Return shape (M22 — banner za 10K cap):
+ *   { rows: Array, total: number, truncated: boolean, limit: number }
+ * `total` je iz Content-Range (count=exact) — broj svih operacija pre
+ * limit-a. `truncated = total > limit` znači da UI mora da prikaže
+ * upozorenje da set nije kompletan.
  */
 export async function loadAllOpenOperations() {
-  if (!getIsOnline()) return [];
+  if (!getIsOnline()) {
+    return { rows: [], total: 0, truncated: false, limit: ALL_OPS_LIMIT };
+  }
   const cols = [
     'line_id',
     'work_order_id',
@@ -412,12 +423,24 @@ export async function loadAllOpenOperations() {
   /* Effective machine code mora postojati da bi se prikazalo u zbirnom
      pregledu. (Ako tehnolog nije dodelio mašinu i nema reassign, ne brojimo.) */
   params.set('effective_machine_code', 'not.is.null');
-  /* Sigurnosni limit: ukupno otvorenih je trenutno ~3000. 10000 daje
-     ~3× headroom za naredne godine. */
-  params.set('limit', '10000');
+  params.set('limit', String(ALL_OPS_LIMIT));
 
-  const data = await sbReq(`v_production_operations_effective?${params.toString()}`);
-  return sortProductionOperations(nonNullRows(data, 'v_production_operations_effective_all_open'));
+  const { rows, total } = await sbReqWithCount(
+    `v_production_operations_effective?${params.toString()}`,
+  );
+  if (rows === null) {
+    const e = new Error('Supabase čitanje nije uspelo (v_production_operations_effective_all_open)');
+    e.code = 'SUPABASE_READ_FAILED';
+    throw e;
+  }
+  const sorted = sortProductionOperations(Array.isArray(rows) ? rows : []);
+  const safeTotal = Number.isFinite(total) ? total : sorted.length;
+  return {
+    rows: sorted,
+    total: safeTotal,
+    truncated: safeTotal > ALL_OPS_LIMIT,
+    limit: ALL_OPS_LIMIT,
+  };
 }
 
 /**

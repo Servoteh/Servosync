@@ -156,7 +156,7 @@ async function reload() {
   }, LOAD_TIMEOUT_MS);
 
   try {
-    const [machines, rows] = await Promise.all([
+    const [machines, opsResult] = await Promise.all([
       loadMachines(),
       loadAllOpenOperations(),
     ]);
@@ -166,8 +166,13 @@ async function reload() {
       state.loadTimeoutId = null;
     }
     state.machinesMap = new Map((machines || []).map(m => [m.rj_code, m]));
-    state.rows = rows || [];
+    state.rows = opsResult.rows || [];
     renderMatrix();
+    renderTruncationBanner(state.host, {
+      truncated: !!opsResult.truncated,
+      shown: state.rows.length,
+      total: opsResult.total || 0,
+    });
   } catch (e) {
     if (myToken !== state.loadToken) return;
     if (state.loadTimeoutId) {
@@ -182,6 +187,26 @@ async function reload() {
     state.loading = false;
     setRefreshSpinning(false);
   }
+}
+
+/**
+ * M22: prikaz upozorenja kada loadAllOpenOperations hit-uje 10K cap.
+ * Idempotentno — uvek ukloni postojeći banner pre umetanja novog.
+ * Banner ide kao prvo dete host-a, iznad pp-toolbar (prepend).
+ */
+function renderTruncationBanner(host, { truncated, shown, total }) {
+  if (!host) return;
+  host.querySelector('.pp-truncation-banner')?.remove();
+  if (!truncated) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'pp-warning pp-truncation-banner';
+  wrap.innerHTML = `
+    <span class="pp-truncation-icon" aria-hidden="true">⚠</span>
+    <span>Prikazano prvih <strong>${shown.toLocaleString('sr-RS')}</strong>
+    od <strong>${total.toLocaleString('sr-RS')}</strong> otvorenih operacija.
+    Filtriraj po RN ili odeljenju za precizniju sliku.</span>
+  `;
+  host.prepend(wrap);
 }
 
 function renderLoadTimeoutError(host) {
