@@ -65,7 +65,7 @@ function tryParseCompactLabelLoose(clean) {
   const orderNo = mid.slice(0, si).trim();
   const itemRefId = mid.slice(si + 1).trim();
   if (!/^\d{1,8}$/.test(orderNo)) return null;
-  if (!itemRefId || !/^[A-Za-z0-9._-]+$/.test(itemRefId)) return null;
+  if (!itemRefId || !/^[-A-Za-z0-9.]+$/.test(itemRefId)) return null;
   return {
     orderNo,
     itemRefId,
@@ -211,7 +211,7 @@ export function parseBigTehnBarcode(raw) {
 
   /* Kompaktna nalepnica: `interni:nalog/tp:var` (čitač često šalje `|` umesto `:`). */
   const compactRe =
-    /^(\d{1,10})\s*[:;]\s*(\d{1,8})\s*[/\\]\s*([A-Za-z0-9._-]+)\s*[:;]\s*(\d+)\s*$/i;
+    /^(\d{1,10})\s*[:;]\s*(\d{1,8})\s*[/\\]\s*([-A-Za-z0-9.]+)\s*[:;]\s*(\d+)\s*$/i;
   const seen = new Set();
   for (const cand of [clean, normalizeNonRnzSeparators(clean)]) {
     if (!cand || seen.has(cand)) continue;

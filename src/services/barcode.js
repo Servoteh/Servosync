@@ -7,6 +7,10 @@
  *   zato `jsQR` nad snapshotima canvasa (QR pouzdano na iPhone-u); retko ZXing nad istim canvason za 1D (šifra police).
  * - Folija / odsjaj: best-effort tamniji kadar (`exposureCompensation`) + kontrast pri „iz slike”.
  * - Gusti Code128 (npr. kratki `9000/365`): „iz slike” — Code128-only hintovi + više upscale pokušaja.
+ * - Android Chrome + `ZXING_ONLY` (podrazumevano): ZXing ostaje glavni put za A4;
+ *   u pozadini se throttl-uje `BarcodeDetector` (ML Kit) na istom `<video>` —
+ *   pomaže na sitnim Code128 nalepnicama (kompakt `9833:9400/7-5:0`) koje ZXing
+ *   često ne „uhvati“.
  * - Debug: `sessionStorage.loc_scan_decode_mode` = `AUTO` | `ZXING_ONLY` | `BARCODE_DETECTOR_ONLY`
  *
  * Usage:
@@ -636,6 +640,62 @@ async function startIosLocationShelfQrHybrid(videoEl, constraintsWithVideo, hand
 }
 
 /**
+ * Na Android Chrome-u podrazumevano je `ZXING_ONLY` (bolji AF od čistog ML Kit-a).
+ * Sitni kompaktni Code128 ponekad prolazi samo kroz `BarcodeDetector`. Ovde ga
+ * ne zamenjujemo ZXing-om — samo dopunjujemo sporijim tick-om da ne dupliramo
+ * CPU sa ZXing-ovim ~28 ms petljom.
+ *
+ * @param {HTMLVideoElement} videoEl
+ * @param {(text: string, format?: string) => void} onResult
+ * @returns {() => void}
+ */
+function startAndroidZxingSupplementBarcodeDetector(videoEl, onResult) {
+  if (typeof window === 'undefined' || typeof window.BarcodeDetector !== 'function') {
+    return () => {};
+  }
+  /** @type {InstanceType<typeof window.BarcodeDetector>|null} */
+  let detector = null;
+  try {
+    detector = new window.BarcodeDetector({
+      formats: ['code_128', 'code_39', 'itf'],
+    });
+  } catch (e) {
+    console.warn('[barcode] supplement BarcodeDetector init failed', e);
+    return () => {};
+  }
+  if (!detector) return () => {};
+
+  let stopped = false;
+  let busy = false;
+  const tickMs = 95;
+  const iv = window.setInterval(async () => {
+    if (stopped || busy) return;
+    if (!videoEl || videoEl.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+    busy = true;
+    try {
+      const codes = await detector.detect(videoEl);
+      if (!stopped && codes && codes.length > 0) {
+        const b = codes[0];
+        const text = b.rawValue != null ? String(b.rawValue) : '';
+        const fmt = b.format != null ? String(b.format) : undefined;
+        if (text) onResult(text, fmt ? `supplement:${fmt}` : 'supplement');
+      }
+    } catch (e) {
+      if (!stopped && e && /** @type {any} */ (e).name !== 'InvalidStateError') {
+        console.warn('[barcode] supplement BarcodeDetector.detect failed', e);
+      }
+    } finally {
+      busy = false;
+    }
+  }, tickMs);
+
+  return () => {
+    stopped = true;
+    window.clearInterval(iv);
+  };
+}
+
+/**
  * @param {{
  *   onResult: (text: string, format?: string) => void,
  *   onError?: (err: Error) => void,
@@ -837,8 +897,14 @@ export async function startScan(videoEl, { onResult, onError, forceDeviceId, dec
 
   schedulePrimeAfterVideoReady(videoEl, getTrack, isAndroid);
 
+  let stopSupplementBarcodeDetector = () => {};
+  if (isAndroidChromeBrowser() && mode === 'ZXING_ONLY') {
+    stopSupplementBarcodeDetector = startAndroidZxingSupplementBarcodeDetector(videoEl, onResult);
+  }
+
   return buildController({
     stop: () => {
+      stopSupplementBarcodeDetector();
       try {
         controls.stop();
       } catch (e) {
