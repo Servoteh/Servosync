@@ -108,8 +108,9 @@ export function effectiveRoleFromMatches(matches) {
 export async function loadAndApplyUserRole() {
   const matches = await loadUserRoleMatchesFromDb();
   const role = effectiveRoleFromMatches(matches);
-  setRole(role);
   const primary = matches.find(r => String(r.role || '').toLowerCase() === role);
+  /* Pre setRole: onAuthChange slušaoci vide ažuriran managed_departments zajedno sa rolom. */
   setManagedDepartments(primary?.managed_departments ?? null);
+  setRole(role);
   return { role, matches };
 }

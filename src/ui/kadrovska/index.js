@@ -13,12 +13,17 @@
  *   renderKadrovskaModule(rootEl);
  */
 
-import { canAccessKadrovska, canAccessSalary, canManageVacationRequests } from '../../state/auth.js';
+import {
+  canAccessKadrovska,
+  canAccessSalary,
+  canManageVacationRequests,
+  onAuthChange,
+} from '../../state/auth.js';
 import { showToast } from '../../lib/dom.js';
 import { logout } from '../../services/auth.js';
 import { toggleTheme } from '../../lib/theme.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
-import { ssSet } from '../../lib/storage.js';
+import { ssGet } from '../../lib/storage.js';
 import {
   installKadrAutoFlush,
   countKadrPending,
@@ -29,7 +34,9 @@ import {
   kadrovskaHeaderHtml,
   kadrTabsHtml,
   KADROVSKA_TAB_DEFS,
+  kadrVisibleTabDefs,
 } from './shared.js';
+import { renderKadrovskaDashboard } from './dashboardTab.js';
 import { renderKadrovskaGridToolbarHtml, renderGridPanelBody, wireGridTab } from './gridTab.js';
 import { kadrovskaState, setActiveKadrTab } from '../../state/kadrovska.js';
 import {
@@ -67,6 +74,8 @@ import { renderVacationRequestsTab, wireVacationRequestsTab, refreshVacReqBadge 
 let rootEl = null;
 let onBackToHubCb = null;
 let onLogoutCb = null;
+/** Pretplata: osvežava GO badge kad se ponovo učita uloga/scope (loadAndApplyUserRole). */
+let _kadrAuthUnsub = null;
 
 /**
  * Mount Kadrovska modul u dati root element.
@@ -85,12 +94,18 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
     return;
   }
 
-  /* UX odluka: pri ulasku u Kadrovsku UVEK otvori Mesečni grid (najčešća radnja).
-     Unutar iste sesije korisnik dalje može menjati tab — to se pamti u sessionStorage,
-     ali na svaki fresh mount resetujemo na 'grid'. */
-  kadrovskaState.activeTab = 'grid';
-  setActiveKadrTab('grid');
-  const activeTab = 'grid';
+  /* Aktivni tab: session restore ako je vidljiv za rolu; inače Pregled.
+     Nov login (resetKadrovskaState uklanja KADR_TAB) → default dashboard. */
+  const visibleTabs = kadrVisibleTabDefs();
+  const visibleIds = new Set(visibleTabs.map(t => t.id));
+  const savedTab = ssGet(SESSION_KEYS.KADR_TAB, null);
+  let activeTab = 'dashboard';
+  if (savedTab && visibleIds.has(savedTab)) {
+    activeTab = savedTab;
+  } else {
+    setActiveKadrTab('dashboard');
+  }
+  kadrovskaState.activeTab = activeTab;
 
   root.innerHTML = `
     <section id="module-kadrovska" class="kadrovska-section" aria-label="Modul Kadrovska">
@@ -137,6 +152,16 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
   });
 
   mountTabBody(activeTab);
+
+  _kadrAuthUnsub?.();
+  _kadrAuthUnsub = onAuthChange(() => {
+    if (!document.getElementById('module-kadrovska')) return;
+    if (canManageVacationRequests()) refreshVacReqBadge();
+    else {
+      const b = document.getElementById('kadrTabCountVacReq');
+      if (b) b.textContent = '0';
+    }
+  });
 
   /* Badge za pending GO zahteve — učitaj u pozadini samo za upravljačke role */
   if (canManageVacationRequests()) {
@@ -205,6 +230,12 @@ function mountTabBody(id, opts = {}) {
   }
 
   const tabImpl = {
+    dashboard: {
+      render: () => '',
+      wire: p => {
+        renderKadrovskaDashboard(p, { onOpenTab: id => switchTab(id) });
+      },
+    },
     employees: { render: renderEmployeesTab, wire: wireEmployeesTab },
     vacation: { render: renderVacationTab, wire: wireVacationTab },
     grid: {
@@ -230,10 +261,10 @@ function mountTabBody(id, opts = {}) {
 
   const impl = tabImpl[id];
   if (impl?.adminOnly && !canAccessSalary()) {
-    /* Neovlašćen pokušaj (stari aktivni tab u storage-u) — fallback na grid. */
-    kadrovskaState.activeTab = 'grid';
-    setActiveKadrTab('grid');
-    mountTabBody('grid');
+    /* Neovlašćen pokušaj (stari aktivni tab u storage-u) — fallback na Pregled. */
+    kadrovskaState.activeTab = 'dashboard';
+    setActiveKadrTab('dashboard');
+    mountTabBody('dashboard');
     return;
   }
   if (impl) {

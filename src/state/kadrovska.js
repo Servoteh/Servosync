@@ -12,7 +12,7 @@
  * UI sloj (Faza 4) treba da zove `ensure*Loaded()` pre rendera.
  */
 
-import { lsGetJSON, lsSetJSON, ssGet, ssSet } from '../lib/storage.js';
+import { lsGetJSON, lsSetJSON, ssGet, ssSet, ssRemove } from '../lib/storage.js';
 import { STORAGE_KEYS, SESSION_KEYS } from '../lib/constants.js';
 
 /* ── Sub-states ── */
@@ -20,8 +20,8 @@ export const kadrovskaState = {
   employees: [],
   loaded: false,
   _schemaSupported: true,
-  /** Trenutno aktivan tab (sync sa session storage; default 'grid' — Mesečni grid). */
-  activeTab: ssGet(SESSION_KEYS.KADR_TAB, 'grid'),
+  /** Trenutno aktivan tab (sessionStorage; default 'dashboard' — Pregled). */
+  activeTab: ssGet(SESSION_KEYS.KADR_TAB, 'dashboard'),
 };
 
 export const kadrAbsencesState = {
@@ -104,7 +104,7 @@ export const kadrHolidaysState = {
 
 /* ── Aktivni tab (sessionStorage, traje koliko i tab browsera) ── */
 export function getActiveKadrTab() {
-  return ssGet(SESSION_KEYS.KADR_TAB, 'grid');
+  return ssGet(SESSION_KEYS.KADR_TAB, 'dashboard');
 }
 
 export function setActiveKadrTab(tab) {
@@ -142,6 +142,7 @@ export function saveContractsCache(list) {
 
 /* ── Resetovanje na logout (security: ne curiti podatke između naloga) ── */
 export function resetKadrovskaState() {
+  ssRemove(SESSION_KEYS.KADR_TAB);
   kadrovskaState.employees = [];
   kadrovskaState.loaded = false;
   kadrAbsencesState.items = [];

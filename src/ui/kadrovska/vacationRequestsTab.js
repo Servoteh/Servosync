@@ -2,17 +2,19 @@
  * Kadrovska — TAB Zahtevi GO (Faza K5).
  *
  * HR/admin/menadžment/leadpm/pm pregled i odobravanje zahteva za GO.
- * Tabela: svi zahtevi sortirani po datumu kreiranja (noviji gore).
- * Filter: status (svi / na čekanju / odobreni / odbijeni) + pretraga po imenu.
- * Akcije: Odobri / Odbij (za pending zahteve).
+ * Scope po managed_departments za menadžment (null = legacy pun prikaz; niz uključujući [] = filter).
+ * Nema pickera „za koga podnosim” — koristi se Moj profil.
  *
- * Badge na tabu prikazuje broj pending zahteva.
+ * Badge na tabu prikazuje broj pending zahteva (posle scope filtera).
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { formatDate, daysInclusive } from '../../lib/date.js';
 import {
   canManageVacationRequests,
+  canManageEmployee,
+  getManagedDepartments,
+  getCurrentRole,
   getIsOnline,
 } from '../../state/auth.js';
 import { hasSupabaseConfig } from '../../lib/constants.js';
@@ -23,7 +25,6 @@ import {
   updateVacationRequestStatusInDb,
   deleteVacationRequestFromDb,
   queueVacationNotification,
-  mapDbVacReq,
 } from '../../services/vacationRequests.js';
 import { mapDbAbsence, saveAbsenceToDb } from '../../services/absences.js';
 import { triggerHrDispatch } from '../../services/hrNotifications.js';
@@ -72,8 +73,8 @@ export function renderVacationRequestsTab() {
         <tbody id="vacReqTbody"></tbody>
       </table>
       <div class="kadrovska-empty" id="vacReqEmpty" style="display:none;margin-top:16px;">
-        <div class="kadrovska-empty-title">Nema zahteva</div>
-        <div>Zaposleni podnose zahteve iz modula <strong>Moj profil</strong>.</div>
+        <div class="kadrovska-empty-title" id="vacReqEmptyTitle">Nema zahteva</div>
+        <div id="vacReqEmptyBody">Zaposleni podnose zahteve iz modula <strong>Moj profil</strong>.</div>
       </div>
     </main>`;
 }
@@ -132,13 +133,23 @@ async function _loadRequests(force = false) {
 
 /* ── Render ──────────────────────────────────────────────────────── */
 
-function _applyFilters() {
-  if (!panelRoot) return kadrVacReqState.items;
+/** Scope kao mojProfil ~214: null = bez filtera; niz (uključujući []) = canManageEmployee po redu. */
+function _itemsInScope(items) {
+  const managed = getManagedDepartments();
+  if (managed == null) return items;
+  return items.filter(r => {
+    const emp = kadrovskaState.employees.find(e => e.id === r.employeeId);
+    return canManageEmployee(emp || {});
+  });
+}
+
+function _applyFilters(fromList) {
+  if (!panelRoot) return fromList;
   const statusF = panelRoot.querySelector('#vacReqStatusFilter')?.value || '';
   const yearF   = Number(panelRoot.querySelector('#vacReqYear')?.value || new Date().getFullYear());
   const q       = (panelRoot.querySelector('#vacReqSearch')?.value || '').trim().toLowerCase();
 
-  return kadrVacReqState.items.filter(r => {
+  return fromList.filter(r => {
     if (statusF && r.status !== statusF) return false;
     if (yearF && r.year !== yearF) return false;
     if (q) {
@@ -156,14 +167,16 @@ function _renderRows() {
   const tbody   = panelRoot.querySelector('#vacReqTbody');
   const empty   = panelRoot.querySelector('#vacReqEmpty');
   const countEl = panelRoot.querySelector('#vacReqCount');
+  const managed = getManagedDepartments();
 
-  const filtered = _applyFilters();
-  const total    = kadrVacReqState.items.length;
-  const pending  = kadrVacReqState.items.filter(r => r.status === 'pending').length;
-  const approved = kadrVacReqState.items.filter(r => r.status === 'approved').length;
-  const rejected = kadrVacReqState.items.filter(r => r.status === 'rejected').length;
+  const itemsScoped = _itemsInScope(kadrVacReqState.items);
+  const filtered = _applyFilters(itemsScoped);
+  const total    = itemsScoped.length;
+  const pending  = itemsScoped.filter(r => r.status === 'pending').length;
+  const approved = itemsScoped.filter(r => r.status === 'approved').length;
+  const rejected = itemsScoped.filter(r => r.status === 'rejected').length;
 
-  /* Badge na tabu */
+  /* Badge na tabu — posle scope filtera */
   const badge = document.getElementById('kadrTabCountVacReq');
   if (badge) badge.textContent = pending > 0 ? String(pending) : '0';
 
@@ -182,18 +195,44 @@ function _renderRows() {
 
   if (!filtered.length) {
     tbody.innerHTML = '';
-    if (empty) empty.style.display = 'block';
+    if (empty) {
+      const tEl = empty.querySelector('#vacReqEmptyTitle');
+      const bEl = empty.querySelector('#vacReqEmptyBody');
+      const hasGlobal = kadrVacReqState.items.length > 0;
+      if (managed !== null && managed.length === 0) {
+        if (tEl) tEl.textContent = 'Nema zahteva za prikaz';
+        if (bEl) {
+          bEl.textContent = 'Nije podešen opseg odeljenja. Obratite se HR-u / administraciji.';
+        }
+      } else if (managed !== null && managed.length > 0 && itemsScoped.length === 0 && hasGlobal) {
+        if (tEl) tEl.textContent = 'Nema zahteva za prikaz';
+        if (bEl) bEl.textContent = 'Nema zahteva za zaposlene u dodeljenim odeljenjima.';
+      } else if (hasGlobal) {
+        if (tEl) tEl.textContent = 'Nema zahteva za prikaz';
+        if (bEl) bEl.textContent = 'Pokušajte drugi status, godinu ili pretragu.';
+      } else {
+        if (tEl) tEl.textContent = 'Nema zahteva';
+        if (bEl) {
+          bEl.innerHTML = 'Zaposleni podnose zahteve iz modula <strong>Moj profil</strong>.';
+        }
+      }
+      empty.style.display = 'block';
+    }
     return;
   }
   if (empty) empty.style.display = 'none';
 
   const canManage = canManageVacationRequests();
+  const role = getCurrentRole();
   tbody.innerHTML = filtered.map(r => {
     const emp  = kadrovskaState.employees.find(e => e.id === r.employeeId);
+    const rowManage = canManageEmployee(emp || {});
     const days = r.daysCount || daysInclusive(r.dateFrom, r.dateTo);
     const stClass = STATUS_CLASS[r.status] || '';
     const stLabel = STATUS_LABEL[r.status] || r.status;
     const id = escHtml(r.id);
+    const showDelete = canManage && r.status !== 'pending' && role !== 'menadzment';
+    // TODO Sprint 4: odluka o vr_delete RLS scope-u.
     return `<tr data-id="${id}" data-status="${escHtml(r.status)}">
       <td><div class="emp-name">${escHtml(employeeNameById(r.employeeId))}</div></td>
       <td class="col-hide-sm">${escHtml(emp?.department || '—')}</td>
@@ -204,11 +243,11 @@ function _renderRows() {
       <td class="col-hide-sm" style="font-size:.82rem;color:var(--text2);">${escHtml(r.submittedBy || '—')}</td>
       <td class="col-hide-sm">${escHtml(r.note || '—')}</td>
       <td class="col-actions" style="white-space:nowrap;">
-        ${r.status === 'pending' && canManage ? `
+        ${r.status === 'pending' && canManage && rowManage ? `
           <button class="btn-row-act" data-act="approve" data-id="${id}" title="Odobri zahtev">✔ Odobri</button>
           <button class="btn-row-act danger" data-act="reject"  data-id="${id}" title="Odbij zahtev">✘ Odbij</button>
         ` : ''}
-        ${canManage && r.status !== 'pending' ? `
+        ${showDelete ? `
           <button class="btn-row-act" style="opacity:.6;" data-act="delete" data-id="${id}" title="Obriši zahtev">Obriši</button>
         ` : ''}
         ${!canManage ? '<span style="color:var(--text3,var(--text2));font-size:.8rem;">—</span>' : ''}
@@ -233,6 +272,8 @@ async function _approveRequest(id) {
   if (!canManageVacationRequests()) return;
   const req = kadrVacReqState.items.find(r => r.id === id);
   if (!req) return;
+  const emp = kadrovskaState.employees.find(e => e.id === req.employeeId);
+  if (!canManageEmployee(emp || {})) return;
 
   if (!confirm(`Odobriti zahtev za GO zaposlenog ${employeeNameById(req.employeeId)} (${formatDate(req.dateFrom)} – ${formatDate(req.dateTo)})?`)) return;
 
@@ -266,6 +307,8 @@ async function _approveRequest(id) {
 function _openRejectModal(id) {
   const req = kadrVacReqState.items.find(r => r.id === id);
   if (!req) return;
+  const empReject = kadrovskaState.employees.find(e => e.id === req.employeeId);
+  if (!canManageEmployee(empReject || {})) return;
 
   document.getElementById('vacReqRejectModal')?.remove();
 
@@ -324,7 +367,10 @@ function _openRejectModal(id) {
 /* ── Obriši ──────────────────────────────────────────────────────── */
 
 async function _deleteRequest(id) {
-  if (!canManageVacationRequests()) return;
+  if (!canManageVacationRequests() || getCurrentRole() === 'menadzment') return;
+  const reqDel = kadrVacReqState.items.find(r => r.id === id);
+  const empDel = reqDel ? kadrovskaState.employees.find(e => e.id === reqDel.employeeId) : null;
+  if (!canManageEmployee(empDel || {})) return;
   if (!confirm('Obrisati ovaj zahtev?')) return;
   const ok = await deleteVacationRequestFromDb(id);
   if (!ok) { showToast('⚠ Brisanje nije uspelo'); return; }
@@ -335,7 +381,8 @@ async function _deleteRequest(id) {
 
 /** Reload badge iz state-a (zove index.js pri mount-u modula). */
 export function refreshVacReqBadge() {
-  const pending = kadrVacReqState.items.filter(r => r.status === 'pending').length;
+  const itemsScoped = _itemsInScope(kadrVacReqState.items);
+  const pending = itemsScoped.filter(r => r.status === 'pending').length;
   const badge = document.getElementById('kadrTabCountVacReq');
   if (badge) badge.textContent = pending > 0 ? String(pending) : '0';
 }

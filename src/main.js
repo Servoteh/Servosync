@@ -10,6 +10,7 @@ import './styles/mobile.css';
 /* Reversi na kraju — preklapa deljene stilove bez !important gde god je moguće */
 import './styles/reversi.css';
 import './styles/lokacije.css';
+import './styles/kadrovska.css';
 
 import { APP_DOCUMENT_TITLE, hasSupabaseConfig } from './lib/constants.js';
 

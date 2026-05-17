@@ -10,7 +10,14 @@
  */
 
 import { escHtml } from '../../lib/dom.js';
-import { getAuth, canEdit, canAccessSalary, canAccessOdsustvaPregled, canManageVacationRequests } from '../../state/auth.js';
+import {
+  getAuth,
+  canEdit,
+  canAccessSalary,
+  canAccessOdsustvaPregled,
+  canManageVacationRequests,
+  canAccessKadrovska,
+} from '../../state/auth.js';
 import { kadrovskaState } from '../../state/kadrovska.js';
 import {
   compareEmployeesByLastFirst,
@@ -92,12 +99,42 @@ export function employeeOptionsHtml({
   return opts.join('');
 }
 
+/** Kartice podmodula na Pregledu — tabId mora odgovarati `tabImpl` u index.js */
+export const KADR_SUBMODULES = [
+  { tabId: 'employees', label: 'Zaposleni', icon: '👥', description: 'Lista, profili, ugovori', requires: 'canAccessKadrovska' },
+  { tabId: 'odsustva', label: 'Odsustva', icon: '📅', description: 'GO, bolovanje, slobodni dani', requires: 'canAccessKadrovska' },
+  { tabId: 'grid', label: 'Mesečni grid', icon: '📊', description: 'Excel-style unos sati', requires: 'canAccessKadrovska' },
+  { tabId: 'vacation', label: 'Godišnji odmor', icon: '🏖️', description: 'Entitlementi, saldo', requires: 'canAccessKadrovska' },
+  { tabId: 'vac-requests', label: 'Zahtevi GO', icon: '✋', description: 'Odobravanje i odbijanje', requires: 'canManageVacationRequests' },
+  { tabId: 'hours', label: 'Sati', icon: '⏱️', description: 'Pojedinačni unos', requires: 'canAccessKadrovska' },
+  { tabId: 'contracts', label: 'Ugovori', icon: '📄', description: 'Ugovori o radu', requires: 'canAccessKadrovska' },
+  { tabId: 'salary', label: 'Zarade', icon: '💰', description: 'Uslovi i obračun', requires: 'canAccessSalary' },
+  { tabId: 'notifications', label: 'Notifikacije', icon: '🔔', description: 'HR alerti, queue', requires: 'canAccessKadrovska' },
+  { tabId: 'reports', label: 'Izveštaji', icon: '📈', description: 'Demografija, GO, obračun', requires: 'canAccessKadrovska' },
+];
+
+const authHelpers = {
+  canAccessKadrovska,
+  canManageVacationRequests,
+  canAccessSalary,
+};
+
+/** Podmoduli dostupni trenutnoj roli (paritet sa RLS / auth helperima). */
+export function visibleSubmodules() {
+  return KADR_SUBMODULES.filter(s => {
+    const check = authHelpers[s.requires];
+    return typeof check === 'function' ? check() : false;
+  });
+}
+
 /**
  * Definicije tabova (redosled = strip).
  *   adminOnly    — prikazuje se samo ako canAccessSalary()
  *   pregledOnly  — prikazuje se samo ako canAccessOdsustvaPregled()
+ *   noBadge      — sakrij brojač u tab strip-u
  */
 export const KADROVSKA_TAB_DEFS = [
+  { id: 'dashboard', label: 'Pregled', icon: '🏠', noBadge: true },
   { id: 'grid', label: 'Mesecni grid', badgeId: 'kadrTabCountGrid' },
   { id: 'odsustva', label: 'Odsustva', badgeId: 'kadrTabCountAbsences', pregledOnly: true },
   { id: 'employees', label: 'Zaposleni', badgeId: 'kadrTabCountEmployees' },
@@ -112,6 +149,7 @@ export const KADROVSKA_TAB_DEFS = [
 
 export function kadrVisibleTabDefs() {
   return KADROVSKA_TAB_DEFS.filter(t => {
+    if (t.id === 'dashboard') return canAccessKadrovska();
     if (t.adminOnly)    return canAccessSalary();
     if (t.pregledOnly)  return canAccessOdsustvaPregled();
     if (t.requestsOnly) return canManageVacationRequests();
@@ -127,7 +165,7 @@ export function kadrTabsHtml(activeTab) {
       ${tabs.map(t => `
         <button class="kadrovska-tab${t.id === activeTab ? ' active' : ''}" role="tab"
                 aria-selected="${t.id === activeTab}" data-kadr-tab="${t.id}">
-          ${escHtml(t.label)} <span class="kadr-tab-badge" id="${t.badgeId}">0</span>
+          ${t.icon ? `<span class="kadrovska-tab-icon" aria-hidden="true">${t.icon}</span> ` : ''}${escHtml(t.label)}${t.noBadge ? '' : ` <span class="kadr-tab-badge" id="${t.badgeId}">0</span>`}
         </button>
       `).join('')}
     </div>`;

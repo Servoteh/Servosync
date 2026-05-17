@@ -308,6 +308,29 @@ export function canManageVacationRequests() {
 }
 
 /**
+ * Paritet sa `public.current_user_manages_employee` — da li sme akciju nad zaposlenim
+ * (npr. GO zahtev) uz već učitan scope iz `getManagedDepartments()`.
+ * @param {string | { department?: string, departmentName?: string }} employeeOrDept
+ */
+export function canManageEmployee(employeeOrDept) {
+  if (!state.user) return false;
+  if (state.role === 'admin' || state.role === 'hr') return true;
+  if (state.role === 'leadpm' || state.role === 'pm') return true;
+  if (state.role === 'menadzment') {
+    const managed = getManagedDepartments();
+    if (managed == null) return true;
+    if (managed.length === 0) return false;
+    const dept =
+      typeof employeeOrDept === 'string'
+        ? employeeOrDept
+        : String(employeeOrDept?.department ?? employeeOrDept?.departmentName ?? '').trim();
+    if (!dept) return false;
+    return managed.includes(dept);
+  }
+  return false;
+}
+
+/**
  * Ko može da podnese zahtev za GO u ime drugog zaposlenog?
  * Iste role kao canManageVacationRequests.
  * Viewer podnosi SAMO ZA SEBE (employee_id = sopstveni).

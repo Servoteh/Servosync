@@ -181,6 +181,8 @@ function _toolbarHtml() {
     </div>
     <div style="font-size:11px;color:var(--text3);margin:-6px 0 14px">
       ℹ Novi nalozi se dodaju kroz <strong>Supabase SQL Editor</strong> — INSERT u tabelu user_roles.
+      Polje <code>managed_departments</code> ovde nije u formi; kad bude (Sprint 2.3), samo za ulogu menadžment —
+      za HR ga ne prikazivati (canManageEmployee ignoriše scope za hr).
     </div>
   `;
 }
