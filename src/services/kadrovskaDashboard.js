@@ -84,6 +84,19 @@ export async function loadDashboardKpis({ year, month, forceRefresh = false } = 
   return result;
 }
 
+export async function loadMiniReports({ year, month, forceRefresh = false } = {}) {
+  if (!getIsOnline()) return null;
+  const fullKey = `${CACHE_KEY}__mini__${year ?? 'curr'}_${month ?? 'curr'}`;
+  if (!forceRefresh) {
+    const cached = readSessionCache(fullKey);
+    if (cached) return cached;
+  }
+  const body = { p_year: year ?? null, p_month: month ?? null };
+  const result = await sbReq('rpc/kadr_dashboard_mini_reports', 'POST', body, { upsert: false });
+  if (result && typeof result === 'object') writeSessionCache(fullKey, result);
+  return result;
+}
+
 async function employeeRowsQuery(queryWithoutTable) {
   let rows = await sbReq(`v_employees_safe?${queryWithoutTable}`);
   if (!Array.isArray(rows)) {

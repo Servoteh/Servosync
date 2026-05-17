@@ -13,8 +13,22 @@ import { visibleSubmodules } from './shared.js';
 import {
   loadDashboardKpis,
   loadActionStack,
+  loadMiniReports,
   publishKadrDashIntent,
 } from '../../services/kadrovskaDashboard.js';
+import {
+  destroyChart,
+  destroyMiniReportCharts,
+  renderAbsencesByTypeChart,
+  renderEmployeesByDepartmentChart,
+  renderHoursPerDayChart,
+} from './dashboardCharts.js';
+
+/** Pre zamene panela (npr. promena taba) — sprečava curenje Chart.js instanci. */
+export function teardownKadrovskaDashboard(panelEl) {
+  if (!panelEl) return;
+  destroyMiniReportCharts(panelEl);
+}
 
 const DOC_HREF =
   'https://github.com/Servoteh/Servosync/blob/main/docs/Kadrovska_modul.md';
@@ -79,6 +93,41 @@ function _setKpiLoading(rootEl, loading) {
   });
 }
 
+function _setMiniReportsLoading(rootEl, loading) {
+  rootEl.querySelectorAll('[data-kadr-chart-wrap]').forEach(el => {
+    el.classList.toggle('kadr-chart-container--loading', loading);
+  });
+}
+
+function _applyMiniReports(rootEl, mini) {
+  const employeesCanvas = rootEl.querySelector('#chartEmployeesByDept');
+  const hoursCanvas = rootEl.querySelector('#chartHoursPerDay');
+  const absencesCanvas = rootEl.querySelector('#chartAbsencesByType');
+  for (const c of [employeesCanvas, hoursCanvas, absencesCanvas]) {
+    destroyChart(c);
+  }
+
+  const emp = mini?.employees_by_department;
+  const hours = mini?.hours_per_day;
+  const abs = mini?.absences_by_type;
+
+  const setSlot = (canvas, emptyEl, data, render) => {
+    if (!canvas || !emptyEl) return;
+    if (!Array.isArray(data) || data.length === 0) {
+      canvas.hidden = true;
+      emptyEl.hidden = false;
+      return;
+    }
+    emptyEl.hidden = true;
+    canvas.hidden = false;
+    render(canvas, data);
+  };
+
+  setSlot(employeesCanvas, rootEl.querySelector('[data-kadr-chart-empty="employees"]'), emp, renderEmployeesByDepartmentChart);
+  setSlot(hoursCanvas, rootEl.querySelector('[data-kadr-chart-empty="hours"]'), hours, renderHoursPerDayChart);
+  setSlot(absencesCanvas, rootEl.querySelector('[data-kadr-chart-empty="absences"]'), abs, renderAbsencesByTypeChart);
+}
+
 function _applyKpi(rootEl, kpi) {
   const v = (key, fallback = '—') => {
     if (!kpi || kpi[key] == null) return fallback;
@@ -129,10 +178,13 @@ function _renderActions(rootEl, items, onOpenTab) {
 async function _hydrate(rootEl, opts, { forceRefresh } = { forceRefresh: false }) {
   const onOpenTab = opts.onOpenTab;
   _setKpiLoading(rootEl, true);
+  _setMiniReportsLoading(rootEl, true);
+  destroyMiniReportCharts(rootEl);
   try {
-    const [kpi, actions] = await Promise.all([
+    const [kpi, actions, miniReports] = await Promise.all([
       loadDashboardKpis({ forceRefresh }),
       loadActionStack({ forceRefresh }),
+      loadMiniReports({ forceRefresh }),
     ]);
     if (kpi && typeof kpi === 'object') {
       _applyKpi(rootEl, kpi);
@@ -141,11 +193,14 @@ async function _hydrate(rootEl, opts, { forceRefresh } = { forceRefresh: false }
       _applyKpi(rootEl, null);
     }
     _renderActions(rootEl, Array.isArray(actions) ? actions : [], onOpenTab);
+    _applyMiniReports(rootEl, miniReports && typeof miniReports === 'object' ? miniReports : null);
   } catch (e) {
     console.error('[kadrovska] dashboard hydrate', e);
     showToast('⚠ Greška pri učitavanju pregleda');
+    _applyMiniReports(rootEl, null);
   } finally {
     _setKpiLoading(rootEl, false);
+    _setMiniReportsLoading(rootEl, false);
   }
 }
 
@@ -222,11 +277,30 @@ export function renderKadrovskaDashboard(rootEl, opts = {}) {
         </div>
       </section>
 
-      <section class="kadr-dashboard__mini-reports" aria-label="Izveštaji (uskoro)">
-        <h2 class="kadr-dashboard__section-title kadr-dashboard__section-title--muted">Mini izveštaji</h2>
-        <div class="kadr-dashboard__mini-reports-row">
-          <div class="kadr-dashboard__mini-report-placeholder">Sprint 3.3 — mini grafikon odeljenja</div>
-          <div class="kadr-dashboard__mini-report-placeholder">Sprint 3.3 — sati po danu (trenutni mesec)</div>
+      <section class="kadr-dashboard__mini-section" aria-label="Mini izveštaji">
+        <h2 class="kadr-dashboard__section-title">Mini izveštaji</h2>
+        <div class="kadr-dashboard__mini-reports">
+          <div class="kadr-chart-container kadr-chart-container--loading" data-kadr-chart-wrap>
+            <div class="kadr-chart-container__skeleton" aria-hidden="true"></div>
+            <canvas id="chartEmployeesByDept"></canvas>
+            <p class="kadr-chart-container__empty" data-kadr-chart-empty="employees" hidden>
+              Nema podataka za prikaz
+            </p>
+          </div>
+          <div class="kadr-chart-container kadr-chart-container--loading" data-kadr-chart-wrap>
+            <div class="kadr-chart-container__skeleton" aria-hidden="true"></div>
+            <canvas id="chartHoursPerDay"></canvas>
+            <p class="kadr-chart-container__empty" data-kadr-chart-empty="hours" hidden>
+              Nema podataka za prikaz
+            </p>
+          </div>
+          <div class="kadr-chart-container kadr-chart-container--loading" data-kadr-chart-wrap>
+            <div class="kadr-chart-container__skeleton" aria-hidden="true"></div>
+            <canvas id="chartAbsencesByType"></canvas>
+            <p class="kadr-chart-container__empty" data-kadr-chart-empty="absences" hidden>
+              Nema podataka za prikaz
+            </p>
+          </div>
         </div>
       </section>
 

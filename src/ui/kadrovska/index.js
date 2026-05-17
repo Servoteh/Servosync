@@ -36,7 +36,7 @@ import {
   KADROVSKA_TAB_DEFS,
   kadrVisibleTabDefs,
 } from './shared.js';
-import { renderKadrovskaDashboard } from './dashboardTab.js';
+import { renderKadrovskaDashboard, teardownKadrovskaDashboard } from './dashboardTab.js';
 import { renderKadrovskaGridToolbarHtml, renderGridPanelBody, wireGridTab } from './gridTab.js';
 import { kadrovskaState, setActiveKadrTab } from '../../state/kadrovska.js';
 import {
@@ -212,6 +212,9 @@ function switchTab(id, opts = {}) {
 function mountTabBody(id, opts = {}) {
   const host = rootEl?.querySelector('#kadrPanelHost');
   if (!host) return;
+
+  const prevPanel = host.querySelector('.kadr-panel');
+  if (prevPanel?.id === 'kadrPanel-dashboard') teardownKadrovskaDashboard(prevPanel);
 
   host.innerHTML = `<div class="kadr-panel active" id="kadrPanel-${id}" role="tabpanel" aria-label="${id}"></div>`;
   const panel = host.firstElementChild;
