@@ -834,6 +834,63 @@ export async function fetchBigtehnOpStatus(workOrderId) {
 }
 
 /**
+ * BigTehn ingest worker — admin status snapshot. RPC vraća
+ * `{ ok, state: { armed, watermark, last_run_at, last_run_summary }, heartbeat }`.
+ * Migracija: `sql/migrations/add_loc_bigtehn_ingest_status_rpc.sql`.
+ *
+ * @returns {Promise<{ ok: boolean, state?: object, heartbeat?: object|null, error?: string }|null>}
+ */
+export async function fetchBigtehnIngestStatus() {
+  if (!getIsOnline()) return null;
+  try {
+    const res = await sbReq(
+      'rpc/loc_get_bigtehn_ingest_status',
+      'POST',
+      {},
+      { upsert: false },
+    );
+    if (!res || typeof res !== 'object') return null;
+    return res;
+  } catch (err) {
+    console.warn('[lokacije] fetchBigtehnIngestStatus failed', err?.message || err);
+    return { ok: false, error: 'fetch_failed' };
+  }
+}
+
+/**
+ * Admin-only: toggle `armed` flag worker-a. `true` = pravi TRANSFER pokrete,
+ * `false` = dry-run (samo loguje samples).
+ * RPC: `loc_bigtehn_ingest_arm(boolean)`.
+ *
+ * @param {boolean} armed
+ * @returns {Promise<{ ok: boolean, armed?: boolean, error?: string }|null>}
+ */
+export async function setBigtehnIngestArmed(armed) {
+  const flag = armed === true;
+  return sbReq(
+    'rpc/loc_bigtehn_ingest_arm',
+    'POST',
+    { p_armed: flag },
+    { upsert: false },
+  );
+}
+
+/**
+ * Admin-only: ručno pokretanje `loc_bigtehn_ingest_run()` (umesto čekanja
+ * 5-min pg_cron slota). Vraća isti shape kao automatska invokacija.
+ *
+ * @returns {Promise<{ ok: boolean, armed?: boolean, mode?: string, processed?: number, by_action?: object, error?: string }|null>}
+ */
+export async function runBigtehnIngestNow() {
+  return sbReq(
+    'rpc/loc_bigtehn_ingest_run_now',
+    'POST',
+    {},
+    { upsert: false },
+  );
+}
+
+/**
  * Sync worker zdravstveni pregled (Härd-3 / M28 + H27).
  *
  * Vraća kombinovan summary iz `loc_sync_worker_heartbeat` (uploads worker svaki 60s)

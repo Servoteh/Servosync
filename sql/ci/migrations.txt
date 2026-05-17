@@ -143,3 +143,8 @@ sql/migrations/add_loc_movement_source_column.sql
 # Faza 2B parser dopuna — dash konvencija (revizija/sub-batch). „9400-1/430"
 # → predmet=„9400", tp=„1/430" (Pass 2 grana). Idempotent CREATE OR REPLACE.
 # sql/migrations/add_loc_phase2b_smart_ident_parser_dash.sql
+
+# Faza 2C — admin status RPC + manual trigger za UI panel (Sync tab).
+# Zavisi od Faza 2A state tabele + loc_is_admin() + loc_sync_worker_heartbeat.
+# Preskočeno u CI jer zavisi od Faza 2A worker funkcije; primeni ručno.
+# sql/migrations/add_loc_bigtehn_ingest_status_rpc.sql

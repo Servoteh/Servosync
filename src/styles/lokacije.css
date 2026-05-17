@@ -859,6 +859,32 @@ tr:hover .lp-ext-btn {
 /* ——— Mono helper ——— */
 .lp-mono { font-family: var(--lp-mono); font-size: 12px; }
 
+/* ——— BigTehn ingest worker admin panel (Sync tab) ——— */
+.loc-ingest-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+.loc-ingest-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border2, #e5e7eb);
+  border-radius: 6px;
+  background: var(--card2, transparent);
+}
+.loc-ingest-stat .lbl {
+  font-size: 11px;
+  color: var(--text3, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.loc-ingest-stat .val {
+  font-size: 15px;
+  font-weight: 600;
+}
+
 @media print {
   .module-lokacije .lp-btn,
   .module-lokacije .lp-pager,

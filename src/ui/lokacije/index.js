@@ -3,7 +3,7 @@
  * SQL: sql/migrations/add_loc_module.sql
  */
 
-import { escHtml } from '../../lib/dom.js';
+import { escHtml, showToast } from '../../lib/dom.js';
 import { toggleTheme } from '../../lib/theme.js';
 import {
   getLocationKind,
@@ -49,6 +49,9 @@ import {
   fetchLocSyncHealthSummary,
   fetchLocationDefinitionsAudit,
   fetchMovementsCountSince,
+  fetchBigtehnIngestStatus,
+  setBigtehnIngestArmed,
+  runBigtehnIngestNow,
 } from '../../services/lokacije.js';
 import { loadUsersFromDb } from '../../services/users.js';
 import { hasSupabaseConfig } from '../../services/supabase.js';
@@ -1861,28 +1864,323 @@ async function renderPanel(host, tabId) {
       host.innerHTML = `<div class="kadr-panel active loc-panel"><p class="loc-warn">Sync monitor je dostupan samo administratorima.</p></div>`;
       return;
     }
-    const ev = await fetchSyncOutboundEvents(100);
-    const rows = Array.isArray(ev)
-      ? ev
-          .map(
-            r =>
-              `<tr><td>${escHtml(String(r.status || ''))}</td><td>${escHtml(String(r.source_record_id || '').slice(0, 8))}…</td><td>${escHtml((r.created_at || '').replace('T', ' ').slice(0, 19))}</td><td class="loc-path">${escHtml((r.last_error || '—').slice(0, 80))}</td></tr>`,
-          )
-          .join('')
-      : '';
-    const err = ev === null ? `<p class="loc-warn">Nema pristupa ili tabela nije kreirana.</p>` : '';
-    host.innerHTML = `
-      <div class="kadr-panel active loc-panel">
-        ${err}
-        <p class="loc-muted">Redovi čekaju Node worker na infrastrukturi (MSSQL write-back).</p>
-        <div class="loc-table-wrap">
-          <table class="loc-table">
-            <thead><tr><th>Status</th><th>Movement ID</th><th>Kreirano</th><th>Greška</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="4" class="loc-muted">Nema događaja.</td></tr>'}</tbody>
-          </table>
-        </div>
-      </div>`;
+    await renderSyncTab(host);
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Sync tab — admin only
+   ──────────────────────────────────────────────────────────────────────────
+   Dva panela:
+     1. BigTehn ingest worker (Faza 2A/2B) — armed flag, watermark,
+        last_run_summary samples, dugmad ARM/DISARM/POKRENI SADA.
+     2. Sync outbound events (MSSQL write-back) — postojeća tabela.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+async function renderSyncTab(host) {
+  const [ingestStatus, ev] = await Promise.all([
+    fetchBigtehnIngestStatus(),
+    fetchSyncOutboundEvents(100),
+  ]);
+
+  const ingestHtml = renderBigtehnIngestPanelHtml(ingestStatus);
+
+  const outboundRows = Array.isArray(ev)
+    ? ev
+        .map(
+          r =>
+            `<tr><td>${escHtml(String(r.status || ''))}</td><td>${escHtml(String(r.source_record_id || '').slice(0, 8))}…</td><td>${escHtml((r.created_at || '').replace('T', ' ').slice(0, 19))}</td><td class="loc-path">${escHtml((r.last_error || '—').slice(0, 80))}</td></tr>`,
+        )
+        .join('')
+    : '';
+  const outboundErr = ev === null ? `<p class="loc-warn">Nema pristupa ili tabela nije kreirana.</p>` : '';
+
+  host.innerHTML = `
+    <div class="kadr-panel active loc-panel">
+      ${ingestHtml}
+
+      <h3 style="margin:24px 0 8px;font-size:15px">Outbound sync (MSSQL write-back)</h3>
+      ${outboundErr}
+      <p class="loc-muted">Redovi čekaju Node worker na infrastrukturi (MSSQL write-back).</p>
+      <div class="loc-table-wrap">
+        <table class="loc-table">
+          <thead><tr><th>Status</th><th>Movement ID</th><th>Kreirano</th><th>Greška</th></tr></thead>
+          <tbody>${outboundRows || '<tr><td colspan="4" class="loc-muted">Nema događaja.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  attachBigtehnIngestHandlers(host);
+}
+
+/**
+ * HTML za BigTehn ingest worker panel. Render-uje:
+ *   - Status badge (ARMED / DRY-RUN) + heartbeat indikator (zelena tačka ako
+ *     je worker pulsirao u poslednjih 10 min).
+ *   - Stat kartice (last_run_at, watermark, processed, armed_executed).
+ *   - by_action histogram (compact pills).
+ *   - Samples tabela (do 25 redova iz `last_run_summary.samples`).
+ *   - Dugmad: ARM/DISARM toggle, „Pokreni dry-run sada", Refresh.
+ *
+ * @param {object|null} statusRes  rezultat `fetchBigtehnIngestStatus()`.
+ */
+function renderBigtehnIngestPanelHtml(statusRes) {
+  const headerBase = `<h3 style="margin:0 0 8px;font-size:15px">BigTehn ingest worker</h3>`;
+
+  if (!statusRes) {
+    return `${headerBase}<p class="loc-warn">Učitavanje statusa worker-a nije uspelo (mreža?).</p>`;
+  }
+  if (statusRes.ok === false) {
+    const code = String(statusRes.error || 'unknown');
+    const hint = code === 'state_missing'
+      ? ' Primeni migraciju <code>add_loc_phase2a_bigtehn_ingest_dryrun.sql</code>.'
+      : code === 'not_admin'
+        ? ' Samo administratori vide ovaj panel.'
+        : '';
+    return `${headerBase}<p class="loc-warn">Status worker-a: <code>${escHtml(code)}</code>.${hint}</p>`;
+  }
+
+  const state = statusRes.state || {};
+  const hb = statusRes.heartbeat || null;
+  const armed = !!state.armed;
+  const summary = state.last_run_summary || {};
+  const byAction = summary.by_action || {};
+  const samples = Array.isArray(summary.samples) ? summary.samples : [];
+
+  const armedBadge = armed
+    ? `<span class="lp-pill lp-pill--green" style="font-size:12px;padding:3px 10px">ARMED — auto TRANSFER aktivan</span>`
+    : `<span class="lp-pill" style="background:#fef3c7;color:#92400e;font-size:12px;padding:3px 10px">DRY-RUN — samo loguje</span>`;
+
+  const hbDot = (() => {
+    if (!hb) return `<span style="color:var(--lp-text2);font-size:12px">heartbeat: —</span>`;
+    const ageMin = Math.max(0, Math.round(Number(hb.age_seconds || 0) / 60));
+    const isAlive = !!hb.is_alive;
+    const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${isAlive ? '#16a34a' : '#dc2626'};margin-right:6px"></span>`;
+    return `<span style="font-size:12px;color:var(--lp-text2)">${dot}heartbeat pre ${escHtml(String(ageMin))} min ${isAlive ? '' : '(WORKER NE RADI)'}</span>`;
+  })();
+
+  const lastRun = state.last_run_at ? formatRelativeAge(state.last_run_at) : '—';
+  const watermark = state.watermark != null ? String(state.watermark) : '0';
+  const processedTotal = summary.processed_total != null ? String(summary.processed_total) : '0';
+  const armedExecuted = byAction.armed_executed != null ? String(byAction.armed_executed) : '0';
+  const armedErrors = byAction.armed_errors != null ? Number(byAction.armed_errors) : 0;
+  const parserFallback = byAction.parser_fallback != null ? Number(byAction.parser_fallback) : 0;
+
+  const statsHtml = `
+    <div class="loc-ingest-stats">
+      <div class="loc-ingest-stat"><span class="lbl">Poslednje pokretanje</span><span class="val">${escHtml(lastRun)}</span></div>
+      <div class="loc-ingest-stat"><span class="lbl">Watermark (signal id)</span><span class="val">${escHtml(watermark)}</span></div>
+      <div class="loc-ingest-stat"><span class="lbl">Obrađeno u poslednjem run-u</span><span class="val">${escHtml(processedTotal)}</span></div>
+      <div class="loc-ingest-stat"><span class="lbl">Armed executed / errors</span><span class="val">${escHtml(armedExecuted)} <span style="color:${armedErrors > 0 ? '#dc2626' : 'var(--lp-text2)'};font-size:12px">/ ${escHtml(String(armedErrors))}</span></span></div>
+    </div>`;
+
+  const actionPills = renderByActionPillsHtml(byAction);
+  const fallbackWarn = parserFallback > 0
+    ? `<p class="loc-muted" style="margin-top:4px;font-size:12px">⚠ Parser fallback: ${parserFallback} ident-i nisu mečovali aktivan predmet u keš-u (split 1 / split 2 fallback). Pogledaj sample-ove dole.</p>`
+    : '';
+
+  const samplesHtml = renderIngestSamplesHtml(samples);
+
+  const armBtnLabel = armed ? 'DISARM (vrati u dry-run)' : 'ARM (aktiviraj auto TRANSFER)';
+  const armBtnClass = armed ? 'btn' : 'btn btn-primary';
+  const armBtnConfirm = armed
+    ? 'Sigurno da gasiš worker? Auto-generisanje TRANSFER pokreta će prestati.'
+    : 'Sigurno da aktiviraš worker? Od ovog trenutka će automatski praviti TRANSFER pokrete iz BigTehn prijava.';
+
+  return `
+    ${headerBase}
+    <div class="loc-ingest-panel" style="border:1px solid var(--lp-border,#e5e7eb);border-radius:8px;padding:14px;margin-bottom:8px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:10px">
+        ${armedBadge}
+        ${hbDot}
+        <div style="flex:1"></div>
+        <button type="button" class="btn btn-xs" id="locIngestRefresh">↻ Osveži</button>
+        <button type="button" class="btn btn-xs" id="locIngestRunNow" title="Ručno pokreni worker odmah (umesto da čekaš 5-min pg_cron)">▶ Pokreni sada</button>
+        <button type="button" class="${armBtnClass} btn-xs" id="locIngestArmToggle"
+          data-armed="${armed ? '1' : '0'}"
+          data-confirm="${escHtml(armBtnConfirm)}">${escHtml(armBtnLabel)}</button>
+      </div>
+
+      ${statsHtml}
+
+      <div style="margin-top:10px">
+        <div style="font-size:12px;color:var(--lp-text2);margin-bottom:4px">Klasifikacija prijava (by_action):</div>
+        ${actionPills || '<span class="loc-muted">— bez podataka, worker još nije pokrenut —</span>'}
+        ${fallbackWarn}
+      </div>
+
+      <div style="margin-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <strong style="font-size:13px">Sample-ovi iz poslednjeg run-a (do 25)</strong>
+          <span class="loc-muted" style="font-size:11px">izvor: <code>loc_bigtehn_ingest_state.last_run_summary.samples</code></span>
+        </div>
+        ${samplesHtml}
+      </div>
+    </div>`;
+}
+
+function renderByActionPillsHtml(byAction) {
+  if (!byAction || typeof byAction !== 'object') return '';
+  const order = [
+    ['initial_placement', 'initial', 'lp-pill--blue'],
+    ['chain_transfer',    'chain',   'lp-pill--blue'],
+    ['shelf_transfer',    'shelf→m', 'lp-pill--blue'],
+    ['skip_already',      'skip:tu', null],
+    ['skip_zero_qty',     'skip:qty=0', null],
+    ['skip_bad_ident',    'skip:ident', null],
+    ['no_machine_loc',    'no loc',  null],
+    ['no_rn_in_cache',    'no RN',   null],
+    ['too_old',           'staro',   null],
+    ['armed_executed',    'exec ✓',  'lp-pill--green'],
+    ['armed_errors',      'errors',  null],
+    ['parser_fallback',   'fb parser', null],
+  ];
+  const parts = [];
+  for (const [key, label, cls] of order) {
+    const v = Number(byAction[key] || 0);
+    if (v === 0) continue;
+    const klass = cls || (key === 'armed_errors' || key === 'parser_fallback' ? '' : '');
+    const colorStyle = key === 'armed_errors'
+      ? 'background:#fee2e2;color:#991b1b'
+      : key === 'parser_fallback'
+        ? 'background:#fef3c7;color:#92400e'
+        : '';
+    const styleAttr = colorStyle ? ` style="${colorStyle};font-size:11px;padding:2px 8px;margin:2px"` : ` style="font-size:11px;padding:2px 8px;margin:2px"`;
+    parts.push(`<span class="lp-pill ${klass}"${styleAttr}>${escHtml(label)}: <strong>${v}</strong></span>`);
+  }
+  return parts.join(' ');
+}
+
+function renderIngestSamplesHtml(samples) {
+  if (!Array.isArray(samples) || samples.length === 0) {
+    return `<div class="loc-muted" style="padding:8px 0">Nema sample-ova — worker još nije pokrenut, ili nije bilo novih prijava od poslednjeg watermark-a.</div>`;
+  }
+  const rows = samples.map(s => {
+    const action = String(s.action || '');
+    const actionPill = (() => {
+      if (action === 'initial_placement') return `<span class="lp-pill lp-pill--blue" style="font-size:11px">initial</span>`;
+      if (action === 'chain_transfer')   return `<span class="lp-pill lp-pill--blue" style="font-size:11px">chain</span>`;
+      if (action === 'shelf_transfer')   return `<span class="lp-pill lp-pill--blue" style="font-size:11px">shelf→m</span>`;
+      if (action === 'skip_already_there') return `<span class="lp-pill" style="background:#e5e7eb;color:#374151;font-size:11px">skip: već tu</span>`;
+      if (action && action.startsWith('skip_'))
+        return `<span class="lp-pill" style="background:#e5e7eb;color:#374151;font-size:11px">${escHtml(action)}</span>`;
+      if (action === 'no_machine_loc' || action === 'no_rn_in_cache' || action === 'too_old')
+        return `<span class="lp-pill" style="background:#fee2e2;color:#991b1b;font-size:11px">${escHtml(action)}</span>`;
+      return `<span class="lp-pill" style="font-size:11px">${escHtml(action || '—')}</span>`;
+    })();
+    const armed = s.armed_executed === true
+      ? `<span class="lp-pill lp-pill--green" style="font-size:11px">✓</span>`
+      : '';
+    const armedErr = s.armed_error
+      ? `<br><span style="color:#dc2626;font-size:11px">${escHtml(String(s.armed_error).slice(0, 80))}</span>`
+      : '';
+    const fb = s.parser_fallback ? ` <span style="color:#92400e;font-size:11px" title="parser fallback">⚠fb</span>` : '';
+    const fromCell = s.from_loc
+      ? `${escHtml(String(s.from_loc))}${s.from_type ? `<br><span style="color:var(--lp-text2);font-size:10px">${escHtml(String(s.from_type))}</span>` : ''}`
+      : '<span class="loc-muted">—</span>';
+    const qtyCell = s.transfer_qty != null
+      ? `<strong>${escHtml(String(s.transfer_qty))}</strong>${s.rn_total != null ? `<span style="color:var(--lp-text2);font-size:11px"> / ${escHtml(String(s.rn_total))}</span>` : ''}`
+      : '<span class="loc-muted">—</span>';
+    const started = s.started_at ? formatRelativeAge(s.started_at) : '—';
+    return `<tr>
+      <td class="loc-mov-when">${escHtml(String(s.signal_id != null ? s.signal_id : ''))}</td>
+      <td class="loc-path">${escHtml(String(s.ident || ''))}${fb}<br><span style="font-size:11px;color:var(--lp-text2)">${escHtml(String(s.predmet || ''))} / ${escHtml(String(s.tp || ''))}</span></td>
+      <td>${escHtml(String(s.op || ''))}</td>
+      <td>${escHtml(String(s.machine || ''))}</td>
+      <td>${fromCell}</td>
+      <td class="loc-qty-cell">${qtyCell}</td>
+      <td>${actionPill} ${armed}${armedErr}</td>
+      <td style="font-size:11px;color:var(--lp-text2)">${escHtml(started)}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="loc-table-wrap" style="max-height:360px;overflow:auto">
+    <table class="loc-table" style="font-size:12px">
+      <thead><tr>
+        <th>Sig #</th>
+        <th>Ident → predmet / tp</th>
+        <th>Op</th>
+        <th>Mašina</th>
+        <th>Trenutna lok.</th>
+        <th class="loc-qty-cell">Qty</th>
+        <th>Akcija</th>
+        <th>Prijavljeno</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function attachBigtehnIngestHandlers(host) {
+  host.querySelector('#locIngestRefresh')?.addEventListener('click', () => {
+    void renderSyncTab(host);
+  });
+
+  host.querySelector('#locIngestRunNow')?.addEventListener('click', async ev => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = '⏳ Pokrećem…';
+    try {
+      const res = await runBigtehnIngestNow();
+      if (!res || res.ok === false) {
+        showToast(`Worker greška: ${escHtml(res?.error || 'unknown')}`, 'error');
+      } else {
+        const proc = res.processed != null ? res.processed : 0;
+        const mode = res.mode || (res.armed ? 'armed' : 'dry-run');
+        showToast(`Worker pokrenut (${mode}) — obrađeno ${proc}.`, 'success');
+      }
+    } catch (err) {
+      showToast(`Greška: ${escHtml(err?.message || String(err))}`, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prev;
+      await renderSyncTab(host);
+    }
+  });
+
+  host.querySelector('#locIngestArmToggle')?.addEventListener('click', async ev => {
+    const btn = ev.currentTarget;
+    const currentlyArmed = btn.getAttribute('data-armed') === '1';
+    const confirmMsg = btn.getAttribute('data-confirm') || 'Potvrdi promenu armed flag-a.';
+    if (!window.confirm(confirmMsg)) return;
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = '⏳…';
+    try {
+      const next = !currentlyArmed;
+      const res = await setBigtehnIngestArmed(next);
+      if (!res || res.ok === false) {
+        showToast(`Toggle greška: ${escHtml(res?.error || 'unknown')}`, 'error');
+      } else {
+        showToast(next ? 'Worker je AKTIVIRAN (armed=TRUE).' : 'Worker je vraćen u dry-run (armed=FALSE).', 'success');
+      }
+    } catch (err) {
+      showToast(`Greška: ${escHtml(err?.message || String(err))}`, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prev;
+      await renderSyncTab(host);
+    }
+  });
+}
+
+/**
+ * „pre 2h", „pre 3 min", „pre 4 dana" — formati za panel.
+ * @param {string} iso
+ */
+function formatRelativeAge(iso) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '—';
+  const diffMs = Date.now() - t;
+  const sec = Math.max(0, Math.round(diffMs / 1000));
+  if (sec < 60) return `pre ${sec} s`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `pre ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `pre ${h} h`;
+  const d = Math.round(h / 24);
+  return `pre ${d} dan${d === 1 ? '' : 'a'}`;
 }
 
 /**
