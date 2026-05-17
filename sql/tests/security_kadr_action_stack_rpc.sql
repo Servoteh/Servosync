@@ -15,7 +15,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT extensions.plan(7);
+SELECT extensions.plan(8);
 
 CREATE OR REPLACE FUNCTION test_as_set_jwt_email(p_email text)
 RETURNS void LANGUAGE sql AS $$
@@ -173,8 +173,20 @@ SELECT is(
   'mgr full → oba pending GO'
 );
 
--- admin → uključuje missing_grid za AS Missing Grid
+-- admin → nema missing_grid (vodi HR; izbegnut šum za ceo korpus)
 SELECT test_as_set_jwt_email('kadr-as-admin@test.local');
+SELECT ok(
+  NOT EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(public.kadr_dashboard_action_stack(200)) t
+    WHERE t->>'type' = 'missing_grid_prev_month'
+      AND t->>'id' = 'missing_grid_aaaaaaaa-3333-3333-3333-333333333303'
+  ),
+  'admin → nema missing_grid za seed zaposlenog'
+);
+
+-- HR → uključuje missing_grid za AS Missing Grid
+SELECT test_as_set_jwt_email('kadr-as-hr@test.local');
 SELECT ok(
   EXISTS (
     SELECT 1
@@ -182,7 +194,7 @@ SELECT ok(
     WHERE t->>'type' = 'missing_grid_prev_month'
       AND t->>'id' = 'missing_grid_aaaaaaaa-3333-3333-3333-333333333303'
   ),
-  'admin → missing_grid za zaposlenog bez sati u prošlom mesecu'
+  'HR → missing_grid za zaposlenog bez sati u prošlom mesecu'
 );
 
 -- posle unosa sati u prošlom mesecu — nema te stavke
@@ -199,7 +211,7 @@ VALUES (
 );
 SET LOCAL row_security = on;
 
-SELECT test_as_set_jwt_email('kadr-as-admin@test.local');
+SELECT test_as_set_jwt_email('kadr-as-hr@test.local');
 SELECT ok(
   NOT EXISTS (
     SELECT 1
@@ -207,7 +219,7 @@ SELECT ok(
     WHERE t->>'type' = 'missing_grid_prev_month'
       AND t->>'id' = 'missing_grid_aaaaaaaa-3333-3333-3333-333333333303'
   ),
-  'admin → missing_grid nestaje kad postoje sati u prošlom mesecu'
+  'HR → missing_grid nestaje kad postoje sati u prošlom mesecu'
 );
 
 -- HR ima bar pending stavke (ista semantika kao admin za GO deo)

@@ -100,12 +100,26 @@ COMMENT ON FUNCTION public.current_user_manages_employee(uuid) IS
 REVOKE ALL ON FUNCTION public.current_user_manages_employee(uuid) FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.current_user_manages_employee(uuid) TO authenticated, service_role;
 
--- Produkcioni scope za tri aktivna menadžera (ID pododeljenja u skladu sa živom šemom).
-UPDATE public.user_roles
-SET managed_sub_department_ids = ARRAY[20, 21, 22, 23]
-WHERE lower(email) = lower('dusko.kostic@servoteh.com')
-  AND role = 'menadzment'
-  AND is_active IS TRUE;
+-- D. Kostić — scope po imenima pododeljenja (izbegava pogrešne SERIAL id-jeve).
+UPDATE public.user_roles ur
+SET managed_sub_department_ids = s.ids
+FROM (
+  SELECT array_agg(sd.id ORDER BY sd.department_id, sd.sort_order) AS ids
+  FROM public.sub_departments sd
+  WHERE (sd.department_id = 8 AND sd.name IN (
+    'Rukovodstvo infrastrukture',
+    'Nabavka',
+    'Magacin i logistika',
+    'Objekti i bezbednost'
+  ))
+  OR (sd.department_id = 9 AND sd.name = 'Održavanje opreme')
+) s
+WHERE lower(ur.email) = lower('dusko.kostic@servoteh.com')
+  AND ur.role = 'menadzment'
+  AND ur.is_active IS TRUE
+  AND s.ids IS NOT NULL;
+
+-- Ostala dva menadžera (stabilni ID-jevi u uobičajenom seed-u — zadržati ručno po potrebi).
 
 UPDATE public.user_roles
 SET managed_sub_department_ids = ARRAY[1, 3, 4, 5]
