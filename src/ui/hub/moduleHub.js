@@ -34,6 +34,8 @@ import {
   canAccessLokacije,
   canAccessReversi,
   canAccessSelfService,
+  isMagacioner,
+  canAccessMagacionerHubModule,
 } from '../../state/auth.js';
 
 export function renderModuleHub({ onModuleSelect, onLogout }) {
@@ -201,6 +203,8 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
     <footer class="hub-footer"><strong>SERVOTEH</strong> · Interni sistem · v5.1 · <span style="opacity:.6">Vite migration build</span></footer>
   `;
 
+  applyMagacionerHubLayout(container);
+
   /* Wire događaji */
   container.querySelector('#hubThemeToggle').addEventListener('click', toggleTheme);
   container.querySelector('#hubLogoutBtn').addEventListener('click', async () => {
@@ -211,6 +215,10 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
   function trySelectModule(moduleId) {
     if (moduleId === 'moj-profil') {
       onModuleSelect?.('moj-profil');
+      return;
+    }
+    if (!canAccessMagacionerHubModule(moduleId)) {
+      showToast('🔒 Magacioner nema pristup ovom modulu.');
       return;
     }
     if (moduleId === 'kadrovska' && !canAccessKadrovska()) {
@@ -244,4 +252,28 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
   });
 
   return container;
+}
+
+function applyMagacionerHubLayout(container) {
+  if (!isMagacioner()) return;
+  const p = container.querySelector('.hub-intro p');
+  if (p) {
+    p.textContent = 'Pristup: Lokacije delova, Reversi i Moj profil.';
+  }
+  const nav = container.querySelector('.hub-quick-links');
+  if (nav) {
+    nav.innerHTML = `
+          <span class="hub-quick-links-label">Brzo:</span>
+          <a href="/lokacije-delova" class="hub-quick-link hub-quick-link--primary" data-module="lokacije-delova">Lokacije</a>
+          <span class="hub-quick-links-sep" aria-hidden="true">·</span>
+          <a href="/reversi" class="hub-quick-link" data-module="reversi">Reversi</a>
+          <span class="hub-quick-links-sep" aria-hidden="true">·</span>
+          <a href="/moj-profil" class="hub-quick-link" data-module="moj-profil">Moj profil</a>`;
+  }
+  container.querySelectorAll('button[data-module]').forEach(btn => {
+    const mid = btn.dataset.module;
+    if (mid && !canAccessMagacionerHubModule(mid)) {
+      btn.style.display = 'none';
+    }
+  });
 }

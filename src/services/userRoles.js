@@ -47,7 +47,7 @@ export async function loadUserRoleMatchesFromDb() {
   let anyQuerySucceeded = false;
 
   for (let fi = 0; fi < filters.length; fi++) {
-    const path = 'user_roles?is_active=eq.true&' + filters[fi] + '&select=email,role,project_id,managed_departments';
+    const path = 'user_roles?is_active=eq.true&' + filters[fi] + '&select=email,role,project_id,managed_departments,must_change_password';
     const data = await sbReq(path);
     if (data === null) {
       console.error('[user_roles] Filter ' + fi + ' failed (HTTP/parse error). Trying next filter.', { path });
@@ -112,4 +112,9 @@ export async function loadAndApplyUserRole() {
   const primary = matches.find(r => String(r.role || '').toLowerCase() === role);
   setManagedDepartments(primary?.managed_departments ?? null);
   return { role, matches };
+}
+
+/** Posle uspešne promene lozinke (sesija već ima JWT). Best-effort. */
+export async function ackUserRolesPasswordChanged() {
+  await sbReq('rpc/ack_user_roles_password_changed', 'POST', {}, { upsert: false });
 }
