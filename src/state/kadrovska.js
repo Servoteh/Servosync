@@ -12,9 +12,23 @@
  * UI sloj (Faza 4) treba da zove `ensure*Loaded()` pre rendera.
  */
 
-import { lsGetJSON, lsSetJSON, ssGet, ssSet, ssRemove } from '../lib/storage.js';
+import { lsGetJSON, lsSetJSON, lsRemove, ssGet, ssSet, ssRemove } from '../lib/storage.js';
 import { STORAGE_KEYS, SESSION_KEYS } from '../lib/constants.js';
 import { clearDashboardCache } from '../services/kadrovskaDashboard.js';
+
+/* ── Reset subscribers ── Tab moduli (gridTab, vacationTab, …) drže
+   module-level cache (npr. dirty map, selektovana odeljenja). Da bismo
+   sprečili curenje između naloga, oni se subscribe-uju ovde i pozivaju se
+   pri svakom logout / switch user. Izbegava cirkularni import jer
+   state modul ne zna o UI modulima. */
+const _resetSubscribers = new Set();
+
+/** Registruj callback koji se zove iz `resetKadrovskaState`. Vraća unsubscribe fn. */
+export function subscribeKadrReset(cb) {
+  if (typeof cb !== 'function') return () => {};
+  _resetSubscribers.add(cb);
+  return () => _resetSubscribers.delete(cb);
+}
 
 /* ── Sub-states ── */
 export const kadrovskaState = {
@@ -189,6 +203,12 @@ export function resetKadrovskaState() {
   ssRemove(SESSION_KEYS.KADR_DASH_INTENT);
   ssRemove(SESSION_KEYS.KADR_PENDING_FILTER);
   clearDashboardCache();
+  /* PII cache u localStorage MORA da se obriše — inače sledeći korisnik
+     u istom browseru vidi prethodne JMBG/adrese/bank/decu dok mreža ne stigne. */
+  lsRemove(STORAGE_KEYS.KADROVSKA);
+  lsRemove(STORAGE_KEYS.KADR_ABS);
+  lsRemove(STORAGE_KEYS.KADR_WH);
+  lsRemove(STORAGE_KEYS.KADR_CON);
   kadrovskaState.employees = [];
   kadrovskaState.loaded = false;
   kadrAbsencesState.items = [];
@@ -212,4 +232,9 @@ export function resetKadrovskaState() {
   kadrHolidaysState.loadedYears.clear();
   kadrVacReqState.items = [];
   kadrVacReqState.loaded = false;
+  /* Pozovi tab module da očiste svoj module-level state (gridState.dirty,
+     selektovana odeljenja, gantt segmente itd.). */
+  for (const cb of _resetSubscribers) {
+    try { cb(); } catch (e) { console.warn('[kadrovska] reset subscriber failed', e); }
+  }
 }

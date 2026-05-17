@@ -23,12 +23,13 @@ import { showToast } from '../../lib/dom.js';
 import { logout } from '../../services/auth.js';
 import { toggleTheme } from '../../lib/theme.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
-import { ssGet } from '../../lib/storage.js';
+import { ssGet, ssSet } from '../../lib/storage.js';
 import {
   installKadrAutoFlush,
   countKadrPending,
   flushKadrPending,
 } from '../../services/kadrOfflineQueue.js';
+import { installModalA11y } from '../../lib/modalA11y.js';
 
 import {
   kadrovskaHeaderHtml,
@@ -127,6 +128,10 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
     await logout();
     onLogoutCb?.();
   });
+
+  /* Modal a11y: ESC zatvara najgornji modal + body scroll lock dok je modal otvoren.
+     Idempotentno — bezbedno na svakom mount-u modula. */
+  installModalA11y();
 
   /* Offline queue: auto-flush + badge. Klik na badge = ručni retry. */
   installKadrAutoFlush();

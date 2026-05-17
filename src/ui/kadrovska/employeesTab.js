@@ -608,7 +608,6 @@ function closeEmployeeModal() {
 }
 
 async function openEmployeeModal(id) {
-  console.error('[D3] openEmployeeModal id:', id, 'canEdit:', canEditKadrovska(), 'total:', kadrovskaState.employees.length);
   if (!canEditKadrovska()) {
     showToast('⚠ Nemate prava za izmenu');
     return;

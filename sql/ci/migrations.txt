@@ -54,6 +54,8 @@ sql/migrations/update_dashboard_rpcs_for_sub_dept_scope.sql
 sql/migrations/fix_kadr_dashboard_active_employees_scope.sql
 sql/migrations/fix_kadr_action_stack_missing_grid_hr_only.sql
 sql/migrations/backfill_dusko_kostic_managed_sub_departments.sql
+sql/migrations/backfill_zoran_jarakovic_managed_odrzavanje.sql
+sql/migrations/backfill_nikola_ninkovic_masinska_obrada.sql
 sql/migrations/harden_kadr_select_scope_menadzment.sql
 sql/migrations/add_audit_log.sql
 sql/migrations/add_audit_actor_attribution.sql

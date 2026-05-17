@@ -17,6 +17,7 @@ import {
   kadrovskaState,
   kadrVacationState,
   consumePendingFilter,
+  subscribeKadrReset,
 } from '../../state/kadrovska.js';
 import {
   ensureEmployeesLoaded,
@@ -46,6 +47,19 @@ let _viewMode = 'table';
 let _collapsedDepts = new Set();
 let _deptDropOpen = false;
 let _selectedDepts = new Set(); // empty = sve
+
+/** Reset module-level state (poziva se iz resetKadrovskaState — logout / switch user). */
+subscribeKadrReset(() => {
+  panelRoot = null;
+  vacGoCache.year = null;
+  vacGoCache.byEmp = new Map();
+  _ganttSegments = new Map();
+  _ganttVacReqByEmp = new Map();
+  _viewMode = 'table';
+  _collapsedDepts = new Set();
+  _deptDropOpen = false;
+  _selectedDepts = new Set();
+});
 
 /* ── dept color palette ─────────────────────────────────────────────── */
 

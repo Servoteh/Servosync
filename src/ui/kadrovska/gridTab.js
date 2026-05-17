@@ -28,7 +28,7 @@ import {
 } from '../../lib/employeeNames.js';
 import { canEditKadrovskaGrid, getIsOnline } from '../../state/auth.js';
 import { hasSupabaseConfig, sbReq } from '../../services/supabase.js';
-import { kadrovskaState, orgStructureState, consumePendingFilter } from '../../state/kadrovska.js';
+import { kadrovskaState, orgStructureState, consumePendingFilter, subscribeKadrReset } from '../../state/kadrovska.js';
 import { ensureEmployeesLoaded, ensureOrgStructureLoaded, employeeNameById } from '../../services/kadrovska.js';
 import { loadGridMonth, batchUpsertGrid } from '../../services/grid.js';
 import { renderSummaryChips } from './shared.js';
@@ -71,6 +71,17 @@ const gridState = {
   /** YMD državnih neradnih dana (keš posle loadHolidaysForRange) */
   holidayYmdSet: new Set(),
 };
+
+/** Reset module-level state (poziva se iz resetKadrovskaState — logout / switch user). */
+subscribeKadrReset(() => {
+  gridState.monthKey = '';
+  gridState.loaded = false;
+  gridState.rowsByEmpDate.clear();
+  gridState.dirty.clear();
+  gridState.saving = false;
+  gridState.searchQuery = '';
+  gridState.holidayYmdSet = new Set();
+});
 
 let panelRoot = null;
 /** Sticky toolbar (mesec/odeljenje/pretraga/dugmad) u #kadrGridToolbarSlot. */

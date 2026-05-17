@@ -100,26 +100,49 @@ COMMENT ON FUNCTION public.current_user_manages_employee(uuid) IS
 REVOKE ALL ON FUNCTION public.current_user_manages_employee(uuid) FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.current_user_manages_employee(uuid) TO authenticated, service_role;
 
--- D. Kostić — scope po imenima pododeljenja (izbegava pogrešne SERIAL id-jeve).
+-- D. Kostić — infrastruktura / logistika / nabavka (bez sektora „Održavanje i servis”).
 UPDATE public.user_roles ur
 SET managed_sub_department_ids = s.ids
 FROM (
   SELECT array_agg(sd.id ORDER BY sd.department_id, sd.sort_order) AS ids
   FROM public.sub_departments sd
-  WHERE (sd.department_id = 8 AND sd.name IN (
+  WHERE sd.department_id = 8 AND sd.name IN (
     'Rukovodstvo infrastrukture',
     'Nabavka',
     'Magacin i logistika',
     'Objekti i bezbednost'
-  ))
-  OR (sd.department_id = 9 AND sd.name = 'Održavanje opreme')
+  )
 ) s
 WHERE lower(ur.email) = lower('dusko.kostic@servoteh.com')
   AND ur.role = 'menadzment'
   AND ur.is_active IS TRUE
   AND s.ids IS NOT NULL;
 
--- Ostala dva menadžera (stabilni ID-jevi u uobičajenom seed-u — zadržati ručno po potrebi).
+-- Z. Jaraković (COO) — Proizvodnja + Montaža + Održavanje i servis (ceo nadređeni obuhvat).
+UPDATE public.user_roles ur
+SET managed_sub_department_ids = s.ids
+FROM (
+  SELECT array_agg(sd.id ORDER BY sd.department_id, sd.sort_order) AS ids
+  FROM public.sub_departments sd
+  WHERE sd.department_id IN (2, 3, 9)
+) s
+WHERE lower(ur.email) = lower('zoran.jarakovic@servoteh.com')
+  AND ur.role = 'menadzment'
+  AND ur.is_active IS TRUE
+  AND s.ids IS NOT NULL;
+
+-- N. Ninković — šef mašinske obrade (samo pododeljenje „Mašinska obrada”).
+UPDATE public.user_roles ur
+SET managed_sub_department_ids = s.ids
+FROM (
+  SELECT array_agg(sd.id ORDER BY sd.id) AS ids
+  FROM public.sub_departments sd
+  WHERE sd.department_id = 2 AND sd.name = 'Mašinska obrada'
+) s
+WHERE lower(ur.email) = lower('nikola.ninkovic@servoteh.com')
+  AND ur.role = 'menadzment'
+  AND ur.is_active IS TRUE
+  AND s.ids IS NOT NULL;
 
 UPDATE public.user_roles
 SET managed_sub_department_ids = ARRAY[1, 3, 4, 5]
