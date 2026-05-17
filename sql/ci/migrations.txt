@@ -133,3 +133,7 @@ sql/migrations/add_loc_movement_source_column.sql
 # protiv bigtehn_items_cache: „9400/1/165" → predmet=„9400/1" tp=„165" ako je
 # „9400/1" aktivan predmet. Inače fallback na (split 1 / split 2).
 # sql/migrations/add_loc_phase2b_smart_ident_parser.sql
+
+# Faza 2B parser dopuna — dash konvencija (revizija/sub-batch). „9400-1/430"
+# → predmet=„9400", tp=„1/430" (Pass 2 grana). Idempotent CREATE OR REPLACE.
+# sql/migrations/add_loc_phase2b_smart_ident_parser_dash.sql
