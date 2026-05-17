@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { sbReqMock, roleState } = vi.hoisted(() => ({
   sbReqMock: vi.fn(),
@@ -41,9 +41,17 @@ describe('G5 machine group helpers', () => {
 });
 
 describe('G5 reassign RPC writers', () => {
+  const CLIENT_EVENT_UUID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
+  let randomUuidSpy;
+
   beforeEach(() => {
     sbReqMock.mockReset();
     roleState.role = 'admin';
+    randomUuidSpy = vi.spyOn(crypto, 'randomUUID').mockReturnValue(CLIENT_EVENT_UUID);
+  });
+
+  afterEach(() => {
+    randomUuidSpy.mockRestore();
   });
 
   it('calls single reassign RPC with force metadata', async () => {
@@ -67,6 +75,7 @@ describe('G5 reassign RPC writers', () => {
         p_target_machine: '4.1',
         p_force: true,
         p_force_reason: 'Mašina nije dostupna',
+        p_client_event_uuid: CLIENT_EVENT_UUID,
       },
       { upsert: false },
     );
@@ -95,6 +104,7 @@ describe('G5 reassign RPC writers', () => {
         p_target_machine: '3.21',
         p_force: false,
         p_force_reason: null,
+        p_client_event_uuid: CLIENT_EVENT_UUID,
       },
       { upsert: false },
     );
