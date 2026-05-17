@@ -29,12 +29,16 @@ import {
   kadrovskaState,
   kadrVacationState,
   kadrChildrenState,
+  kadrAbsencesState,
+  kadrContractsState,
   orgStructureState,
 } from '../../state/kadrovska.js';
 import {
   ensureEmployeesLoaded,
   ensureVacationLoaded,
   ensureOrgStructureLoaded,
+  ensureAbsencesLoaded,
+  ensureContractsLoaded,
 } from '../../services/kadrovska.js';
 import {
   bolovanjeListFromWorkHours,
@@ -148,6 +152,7 @@ export function renderReportsTab() {
           ${showChildren ? '<button type="button" class="report-tab" data-report-tab="medical" role="tab" aria-selected="false">🩺 Lekarski</button>' : ''}
           ${showChildren ? '<button type="button" class="report-tab" data-report-tab="certs" role="tab" aria-selected="false">📜 Sertifikati</button>' : ''}
           ${showChildren ? '<button type="button" class="report-tab" data-report-tab="children" role="tab" aria-selected="false">👶 Deca</button>' : ''}
+          ${showChildren ? '<button type="button" class="report-tab" data-report-tab="risk" role="tab" aria-selected="false">🎯 Rizik</button>' : ''}
           ${showAudit ? '<button type="button" class="report-tab" data-report-tab="audit" role="tab" aria-selected="false">📒 Audit log</button>' : ''}
         </div>
       </div>
@@ -467,6 +472,66 @@ export function renderReportsTab() {
           </table>
         </div>
         <div id="repMedEmpty" class="kadr-empty" style="display:none">Nema podataka o lekarskim pregledima.</div>
+      </div>
+      ` : ''}
+
+      ${showChildren ? `
+      <div class="report-panel" id="reportPanel-risk" role="tabpanel" hidden>
+        <div class="kadr-toolbar">
+          <div class="kadr-toolbar-row">
+            <label class="kadr-field">
+              <span>Status</span>
+              <select id="repRiskStatus">
+                <option value="active" selected>Samo aktivni</option>
+                <option value="all">Svi</option>
+              </select>
+            </label>
+            <label class="kadr-field">
+              <span>Period (meseci unazad)</span>
+              <select id="repRiskMonths">
+                <option value="6">6 meseci</option>
+                <option value="12" selected>12 meseci</option>
+                <option value="24">24 meseca</option>
+              </select>
+            </label>
+            <label class="kadr-field">
+              <span>Min. nivo</span>
+              <select id="repRiskLevel">
+                <option value="all" selected>Svi</option>
+                <option value="medium">Srednji i visok</option>
+                <option value="high">Samo visok</option>
+              </select>
+            </label>
+            <button type="button" class="btn btn-ghost" id="repRiskExport" title="Izvoz u Excel">📊 Excel</button>
+            <span class="kadr-count" id="repRiskCount">0 zaposlenih</span>
+          </div>
+        </div>
+        <div class="kadr-summary-strip" id="repRiskSummary"></div>
+        <div class="kadr-heatmap-section" id="repRiskHeatmap"></div>
+        <div class="kadr-table-wrap">
+          <table class="kadr-table" id="repRiskTable">
+            <thead>
+              <tr>
+                <th>Zaposleni</th>
+                <th class="col-hide-sm">Odeljenje</th>
+                <th title="Broj dana bolovanja u izabranom periodu">BO dana</th>
+                <th class="col-hide-sm" title="Broj evidencija bolovanja">BO evid.</th>
+                <th title="Lekarski pregled — kad ističe">Lekarski</th>
+                <th class="col-hide-sm" title="Aktivni ugovor — kad ističe">Ugovor</th>
+                <th>Rizik</th>
+                <th class="col-hide-sm">Razlog</th>
+              </tr>
+            </thead>
+            <tbody id="repRiskTbody"></tbody>
+          </table>
+        </div>
+        <div id="repRiskEmpty" class="kadr-empty" style="display:none">Nema zaposlenih sa indikatorima rizika za izabrane filtere.</div>
+        <div class="kadr-risk-note">
+          <strong>Napomena:</strong> Risk skor je prediktivni indikator zasnovan na istorijskim podacima i blizini isteka dokumenata.
+          Visok rizik = >7 dana bolovanja u periodu ILI istekli dokumenti.
+          Srednji = 4–7 dana bolovanja ILI dokumenti ističu ≤30 dana.
+          Niski = manje od 4 dana bolovanja i sve uredu.
+        </div>
       </div>
       ` : ''}
 
@@ -1915,6 +1980,290 @@ function _renderAuditDiff(row) {
   return list + more;
 }
 
+/* ═════════════════════════════════════════════════════════════════════
+   RISK REPORT (C3.4) — predviđanje + ranjivost
+   ═════════════════════════════════════════════════════════════════════ */
+
+let _riskCache = []; // [{ emp, boDays, boCount, medExpDays, conExpDays, level, reasons }]
+
+/** Vraća broj dana između dva YMD-a (uključuje oba kraja), 0 ako je nevalidno. */
+function _daysBetweenSafe(fromYmd, toYmd) {
+  if (!fromYmd || !toYmd) return 0;
+  return daysInclusive(fromYmd, toYmd);
+}
+
+/** Broj dana koji se preklapa između [absFrom..absTo] i [pFrom..pTo]. */
+function _overlapDays(absFrom, absTo, pFrom, pTo) {
+  if (!absFrom || !absTo) return 0;
+  const f = absFrom < pFrom ? pFrom : absFrom;
+  const t = absTo > pTo ? pTo : absTo;
+  if (f > t) return 0;
+  return daysInclusive(f, t);
+}
+
+/** Broj dana do isteka iz YMD-a do danas; null ako nema datuma. */
+function _daysUntilExpiry(ymd) {
+  if (!ymd) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(ymd + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.round((d - today) / 86400000);
+}
+
+function _riskExpiryBadge(days) {
+  if (days == null) return { label: '—', cls: 'muted' };
+  if (days < 0) return { label: `Istekao (${Math.abs(days)} d)`, cls: 'danger' };
+  if (days === 0) return { label: 'Danas', cls: 'warn' };
+  if (days <= 30) return { label: `za ${days} d`, cls: 'warn' };
+  if (days <= 90) return { label: `za ${days} d`, cls: 'accent' };
+  return { label: `za ${days} d`, cls: 'ok' };
+}
+
+/** Skor risk-a po pravilima (vidi notu ispod tabele u HTML-u). */
+function _computeRiskLevel({ boDays, medExpDays, conExpDays }) {
+  const reasons = [];
+  let level = 'low';
+  /* High triggers */
+  if (boDays > 7) { reasons.push(`>7 dana bolovanja (${boDays} d)`); level = 'high'; }
+  if (medExpDays != null && medExpDays < 0) { reasons.push('Lekarski istekao'); level = 'high'; }
+  if (conExpDays != null && conExpDays < 0) { reasons.push('Ugovor istekao'); level = 'high'; }
+  if (level === 'high') return { level, reasons };
+  /* Medium triggers */
+  if (boDays >= 4 && boDays <= 7) { reasons.push(`${boDays} dana bolovanja`); level = 'medium'; }
+  if (medExpDays != null && medExpDays >= 0 && medExpDays <= 30) { reasons.push('Lekarski ističe ≤30 d'); level = 'medium'; }
+  if (conExpDays != null && conExpDays >= 0 && conExpDays <= 30) { reasons.push('Ugovor ističe ≤30 d'); level = 'medium'; }
+  if (level === 'medium') return { level, reasons };
+  /* Else low — i dalje navedi šta je registrovano kao osnov */
+  if (boDays > 0) reasons.push(`${boDays} dana bolovanja`);
+  if (medExpDays != null) reasons.push('Lekarski OK');
+  if (conExpDays != null) reasons.push('Ugovor OK');
+  if (!reasons.length) reasons.push('Bez evidencija u periodu');
+  return { level, reasons };
+}
+
+async function _renderRiskReport() {
+  if (!panelRoot || !canViewEmployeePii()) return;
+  const tbody = panelRoot.querySelector('#repRiskTbody');
+  const empty = panelRoot.querySelector('#repRiskEmpty');
+  const countEl = panelRoot.querySelector('#repRiskCount');
+  const heatmapEl = panelRoot.querySelector('#repRiskHeatmap');
+  if (!tbody) return;
+
+  /* Učitaj zavisne podatke (cache se ako su već učitani) */
+  try {
+    await Promise.all([
+      ensureAbsencesLoaded(),
+      ensureContractsLoaded(),
+    ]);
+  } catch (e) {
+    console.warn('[reports] risk load', e);
+  }
+
+  const statusF = panelRoot.querySelector('#repRiskStatus')?.value || 'active';
+  const monthsBack = Number(panelRoot.querySelector('#repRiskMonths')?.value || 12);
+  const levelF = panelRoot.querySelector('#repRiskLevel')?.value || 'all';
+
+  /* Period za bolovanja */
+  const today = new Date();
+  const periodEnd = today.toISOString().slice(0, 10);
+  const startDt = new Date(today);
+  startDt.setMonth(startDt.getMonth() - monthsBack);
+  const periodStart = startDt.toISOString().slice(0, 10);
+
+  /* Lista zaposlenih */
+  let emps = kadrovskaState.employees.slice();
+  if (statusF === 'active') emps = emps.filter(e => e.isActive);
+  emps.sort(compareEmployeesByLastFirst);
+
+  /* Map<empId, Array<absence>> samo za bolovanja u periodu */
+  const boByEmp = new Map();
+  for (const a of (kadrAbsencesState.items || [])) {
+    if (a.type !== 'bolovanje') continue;
+    if (!a.dateFrom || !a.dateTo) continue;
+    if (a.dateTo < periodStart || a.dateFrom > periodEnd) continue;
+    if (!boByEmp.has(a.employeeId)) boByEmp.set(a.employeeId, []);
+    boByEmp.get(a.employeeId).push(a);
+  }
+
+  /* Aktivni ugovor po zaposlenom — najnoviji aktivan red */
+  const activeConByEmp = new Map();
+  for (const c of (kadrContractsState.items || [])) {
+    if (c.isActive === false) continue;
+    const existing = activeConByEmp.get(c.employeeId);
+    if (!existing || (c.dateFrom || '') > (existing.dateFrom || '')) {
+      activeConByEmp.set(c.employeeId, c);
+    }
+  }
+
+  /* Računaj risk za svakog zaposlenog */
+  _riskCache = emps.map(emp => {
+    const bos = boByEmp.get(emp.id) || [];
+    const boDays = bos.reduce((sum, a) => sum + _overlapDays(a.dateFrom, a.dateTo, periodStart, periodEnd), 0);
+    const boCount = bos.length;
+    const medExpDays = _daysUntilExpiry(emp.medicalExamExpires);
+    const con = activeConByEmp.get(emp.id);
+    const conExpDays = con ? _daysUntilExpiry(con.dateTo) : null;
+    const { level, reasons } = _computeRiskLevel({ boDays, medExpDays, conExpDays });
+    return { emp, boDays, boCount, medExpDays, conExpDays, level, reasons };
+  });
+
+  /* Filter po nivou */
+  let filtered = _riskCache;
+  if (levelF === 'high') filtered = filtered.filter(r => r.level === 'high');
+  else if (levelF === 'medium') filtered = filtered.filter(r => r.level === 'high' || r.level === 'medium');
+
+  /* Summary chips */
+  const cHigh = _riskCache.filter(r => r.level === 'high').length;
+  const cMed = _riskCache.filter(r => r.level === 'medium').length;
+  const cLow = _riskCache.filter(r => r.level === 'low').length;
+  const medSoon = _riskCache.filter(r => r.medExpDays != null && r.medExpDays >= 0 && r.medExpDays <= 60).length;
+  const conSoon = _riskCache.filter(r => r.conExpDays != null && r.conExpDays >= 0 && r.conExpDays <= 60).length;
+  const totalBoDays = _riskCache.reduce((s, r) => s + r.boDays, 0);
+
+  renderSummaryChips('repRiskSummary', [
+    { label: 'Visok rizik', value: cHigh, tone: cHigh > 0 ? 'warn' : 'muted' },
+    { label: 'Srednji rizik', value: cMed, tone: cMed > 0 ? 'accent' : 'muted' },
+    { label: 'Nizak rizik', value: cLow, tone: 'ok' },
+    { label: `Σ BO dana (${monthsBack}m)`, value: totalBoDays, tone: 'muted' },
+    { label: 'Lekarski ističu ≤60 d', value: medSoon, tone: medSoon > 0 ? 'warn' : 'muted' },
+    { label: 'Ugovori ističu ≤60 d', value: conSoon, tone: conSoon > 0 ? 'warn' : 'muted' },
+  ]);
+
+  /* Heatmap — koliko zaposlenih ima lekarski/ugovor koji ističe u svakom narednom mesecu (12 meseci) */
+  _renderRiskHeatmap(heatmapEl);
+
+  if (countEl) countEl.textContent = `${filtered.length} ${filtered.length === 1 ? 'zaposleni' : 'zaposlenih'}`;
+
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  /* Sort: high → medium → low; unutar grupe po BO dana opadajuće */
+  const order = { high: 0, medium: 1, low: 2 };
+  filtered.sort((a, b) => {
+    const d = (order[a.level] ?? 9) - (order[b.level] ?? 9);
+    if (d !== 0) return d;
+    return b.boDays - a.boDays;
+  });
+
+  tbody.innerHTML = filtered.map(r => {
+    const medBadge = _riskExpiryBadge(r.medExpDays);
+    const conBadge = _riskExpiryBadge(r.conExpDays);
+    const levelCls = r.level === 'high' ? 'warn' : (r.level === 'medium' ? 'accent' : 'ok');
+    const levelLbl = r.level === 'high' ? 'VISOK' : (r.level === 'medium' ? 'SREDNJI' : 'NIZAK');
+    return `<tr>
+      <td><strong>${escHtml(employeeDisplayName(r.emp) || '—')}</strong></td>
+      <td class="col-hide-sm">${escHtml(r.emp.department || '—')}</td>
+      <td style="font-family:var(--mono);font-weight:600">${r.boDays}</td>
+      <td class="col-hide-sm">${r.boCount}</td>
+      <td><span class="kadr-pill ${medBadge.cls}">${escHtml(medBadge.label)}</span></td>
+      <td class="col-hide-sm"><span class="kadr-pill ${conBadge.cls}">${escHtml(conBadge.label)}</span></td>
+      <td><span class="kadr-pill ${levelCls}" style="font-weight:700">${levelLbl}</span></td>
+      <td class="col-hide-sm" style="font-size:.82rem;color:var(--text2)">${escHtml(r.reasons.join(' · '))}</td>
+    </tr>`;
+  }).join('');
+}
+
+function _renderRiskHeatmap(host) {
+  if (!host) return;
+  const today = new Date();
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    months.push({
+      label: ['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Avg','Sep','Okt','Nov','Dec'][d.getMonth()] + ' ' + String(d.getFullYear()).slice(2),
+      ym: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+    });
+  }
+  const medByMonth = new Map();
+  const conByMonth = new Map();
+  for (const r of _riskCache) {
+    if (r.emp.medicalExamExpires) {
+      const ym = r.emp.medicalExamExpires.slice(0, 7);
+      medByMonth.set(ym, (medByMonth.get(ym) || 0) + 1);
+    }
+    /* Aktivni ugovor (uzmi iz cache-a kroz r objekat — ali nemamo direktan link) */
+  }
+  /* Za ugovore — iz state-a direktno */
+  for (const c of (kadrContractsState.items || [])) {
+    if (c.isActive === false || !c.dateTo) continue;
+    const ym = c.dateTo.slice(0, 7);
+    conByMonth.set(ym, (conByMonth.get(ym) || 0) + 1);
+  }
+
+  const maxMed = Math.max(1, ...Array.from(medByMonth.values()));
+  const maxCon = Math.max(1, ...Array.from(conByMonth.values()));
+  const maxBoth = Math.max(maxMed, maxCon);
+
+  const cell = (val, max) => {
+    if (!val) return '<span class="risk-heat-zero">·</span>';
+    const intensity = Math.min(1, val / max);
+    return `<span class="risk-heat-val" style="background:rgba(245, 158, 11, ${0.15 + intensity * 0.55});">${val}</span>`;
+  };
+
+  host.innerHTML = `
+    <div class="risk-heatmap">
+      <div class="risk-heatmap-title">Šta nas čeka — narednih 12 meseci</div>
+      <table class="risk-heatmap-table">
+        <thead>
+          <tr>
+            <th></th>
+            ${months.map(m => `<th>${escHtml(m.label)}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="risk-heat-row-label">🩺 Lekarski ističe</td>
+            ${months.map(m => `<td>${cell(medByMonth.get(m.ym) || 0, maxBoth)}</td>`).join('')}
+          </tr>
+          <tr>
+            <td class="risk-heat-row-label">📄 Ugovor ističe</td>
+            ${months.map(m => `<td>${cell(conByMonth.get(m.ym) || 0, maxBoth)}</td>`).join('')}
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
+async function _exportRiskXlsx() {
+  if (!_riskCache.length) { showToast('Nema podataka za izvoz'); return; }
+  showToast('⏳ Učitavam XLSX...');
+  const XLSX = await loadXlsx();
+  const aoa = [[
+    'Zaposleni', 'Odeljenje', 'Pozicija',
+    'BO dana (period)', 'BO evidencija',
+    'Lekarski važi do', 'Dana do isteka lekarskog',
+    'Ugovor važi do', 'Dana do isteka ugovora',
+    'Rizik', 'Razlog',
+  ]];
+  for (const r of _riskCache) {
+    const con = (kadrContractsState.items || []).find(c => c.employeeId === r.emp.id && c.isActive !== false);
+    aoa.push([
+      employeeDisplayName(r.emp) || '',
+      r.emp.department || '',
+      r.emp.position || '',
+      r.boDays,
+      r.boCount,
+      r.emp.medicalExamExpires || '',
+      r.medExpDays != null ? r.medExpDays : '',
+      con?.dateTo || '',
+      r.conExpDays != null ? r.conExpDays : '',
+      r.level === 'high' ? 'VISOK' : (r.level === 'medium' ? 'SREDNJI' : 'NIZAK'),
+      r.reasons.join(' · '),
+    ]);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 28 }, { wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 36 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Risk');
+  XLSX.writeFile(wb, `Risk_izvestaj_${_isoToday()}.xlsx`);
+  showToast('📊 Izvezeno');
+}
+
 async function _renderAuditReport() {
   if (!panelRoot || !isAdmin()) return;
   const tbody = panelRoot.querySelector('#repAuditTbody');
@@ -2183,6 +2532,7 @@ export async function wireReportsTab(panel) {
       if (tab === 'medical') await _renderMedicalReport();
       if (tab === 'certs') await _renderCertsReport();
       if (tab === 'children') await _renderChildrenReport();
+      if (tab === 'risk') await _renderRiskReport();
       if (tab === 'audit') await _renderAuditReport();
     });
   });
@@ -2290,6 +2640,13 @@ export async function wireReportsTab(panel) {
   });
   panel.querySelector('#repMedExport')?.addEventListener('click', _exportMedicalXlsx);
   panel.querySelector('#repMedExportCsv')?.addEventListener('click', _exportMedCsv);
+
+  /* ── Risk listeners ──────────────────────────────── */
+  const reRenderRisk = () => { void _renderRiskReport().catch(e => console.warn('[reports] risk', e)); };
+  panel.querySelector('#repRiskStatus')?.addEventListener('change', reRenderRisk);
+  panel.querySelector('#repRiskMonths')?.addEventListener('change', reRenderRisk);
+  panel.querySelector('#repRiskLevel')?.addEventListener('change', reRenderRisk);
+  panel.querySelector('#repRiskExport')?.addEventListener('click', _exportRiskXlsx);
 
   /* ── Audit log listeners ──────────────────────────── */
   const reRenderAudit = () => { void _renderAuditReport().catch(e => console.warn('[reports] audit', e)); };
