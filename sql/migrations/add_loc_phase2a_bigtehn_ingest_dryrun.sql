@@ -105,7 +105,7 @@ DECLARE
   v_count_armed_executed  INT := 0;
   v_count_armed_skipped   INT := 0;
   v_action_samples        JSONB := '[]'::jsonb;
-  v_max_samples           CONST INT := 25;
+  v_max_samples           CONSTANT INT := 25;
   v_started_at            TIMESTAMPTZ := now();
 
   /* per-signal */
