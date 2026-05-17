@@ -27,7 +27,7 @@ import {
   getCurrentUser,
   canSubmitVacationRequestForOthers,
   canManageVacationRequests,
-  getManagedDepartments,
+  getManagedSubDepartmentIds,
 } from '../../state/auth.js';
 import { hasSupabaseConfig } from '../../lib/constants.js';
 import { sbReq } from '../../services/supabase.js';
@@ -212,11 +212,11 @@ async function _loadAndRender() {
 
     /* Lista svih zaposlenih za picker (upravljačke role) */
     if (canSubmitForOthers && allEmpData) {
-      const managedDepts = getManagedDepartments();
+      const managedIds = getManagedSubDepartmentIds();
       let list = allEmpData.map(mapDbEmployee);
-      /* leadpm/pm: filtrirati samo odeljenja kojima upravljaju */
-      if (managedDepts && managedDepts.length > 0) {
-        list = list.filter(e => managedDepts.includes(e.department));
+      if (managedIds != null && managedIds.length > 0) {
+        const idSet = new Set(managedIds.map(x => Number(x)).filter(n => Number.isFinite(n)));
+        list = list.filter(e => idSet.has(Number(e.subDepartmentId ?? e.sub_department_id)));
       }
       list.sort(compareEmployeesByLastFirst);
       allEmployees = list;

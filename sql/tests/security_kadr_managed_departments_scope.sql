@@ -14,26 +14,52 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(12);
+SELECT plan(14);
 
 -- Privremeno za seed (isto kao security_has_edit_role.sql)
 SET LOCAL row_security = off;
 
-INSERT INTO public.user_roles (email, role, project_id, is_active, managed_departments)
-VALUES
-  ('kadr-audit-admin@test.local', 'admin', NULL, true, NULL),
-  ('kadr-audit-hr@test.local', 'hr', NULL, true, NULL),
-  ('kadr-audit-mgr-null@test.local', 'menadzment', NULL, true, NULL),
-  ('kadr-audit-mgr-scoped@test.local', 'menadzment', NULL, true, ARRAY['Odeljenje A']::text[]),
-  ('kadr-audit-pm@test.local', 'pm', NULL, true, NULL),
-  ('kadr-audit-viewer@test.local', 'viewer', NULL, true, NULL)
-ON CONFLICT DO NOTHING;
+ALTER TABLE public.user_roles
+  ADD COLUMN IF NOT EXISTS managed_departments text[];
 
-INSERT INTO public.employees (id, full_name, department, email, is_active)
+ALTER TABLE public.user_roles
+  ADD COLUMN IF NOT EXISTS managed_sub_department_ids int[];
+
+INSERT INTO public.sub_departments (id, department_id, name, sort_order)
 VALUES
-  ('baaaaaaa-bbbb-bbbb-bbbb-bbbbbbbbbba1', 'Zaposleni A', 'Odeljenje A', 'emp-a-kadr@test.local', true),
-  ('baaaaaaa-bbbb-bbbb-bbbb-bbbbbbbbbba2', 'Zaposleni B', 'Odeljenje B', 'emp-b-kadr@test.local', true)
-ON CONFLICT DO NOTHING;
+  (65001, 5, 'Odeljenje A', 0),
+  (65002, 5, 'Odeljenje B', 0)
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+
+DELETE FROM public.user_roles
+WHERE lower(email) IN (
+  lower('kadr-audit-admin@test.local'),
+  lower('kadr-audit-hr@test.local'),
+  lower('kadr-audit-mgr-null@test.local'),
+  lower('kadr-audit-mgr-scoped@test.local'),
+  lower('kadr-audit-pm@test.local'),
+  lower('kadr-audit-viewer@test.local')
+);
+
+INSERT INTO public.user_roles (
+  email, role, project_id, is_active, managed_departments, managed_sub_department_ids
+)
+VALUES
+  ('kadr-audit-admin@test.local', 'admin', NULL, true, NULL, NULL),
+  ('kadr-audit-hr@test.local', 'hr', NULL, true, NULL, NULL),
+  ('kadr-audit-mgr-null@test.local', 'menadzment', NULL, true, NULL, NULL),
+  ('kadr-audit-mgr-scoped@test.local', 'menadzment', NULL, true, ARRAY['Odeljenje A']::text[], ARRAY[65001]::int[]),
+  ('kadr-audit-pm@test.local', 'pm', NULL, true, NULL, NULL),
+  ('kadr-audit-viewer@test.local', 'viewer', NULL, true, NULL, NULL);
+
+INSERT INTO public.employees (id, full_name, department, email, is_active, sub_department_id)
+VALUES
+  ('baaaaaaa-bbbb-bbbb-bbbb-bbbbbbbbbba1', 'Zaposleni A', 'Odeljenje A', 'emp-a-kadr@test.local', true, 65001),
+  ('baaaaaaa-bbbb-bbbb-bbbb-bbbbbbbbbba2', 'Zaposleni B', 'Odeljenje B', 'emp-b-kadr@test.local', true, 65002)
+ON CONFLICT (id) DO UPDATE SET
+  sub_department_id = EXCLUDED.sub_department_id,
+  department = EXCLUDED.department,
+  is_active = EXCLUDED.is_active;
 
 SET LOCAL row_security = on;
 
@@ -51,24 +77,32 @@ RETURNS void LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claims', '', true);
 $$;
 
--- ─── current_user_managed_departments ─────────────────────────────────────
+-- ─── current_user_managed_departments (deprecated stub) + sub_department_ids ─
 SELECT test_set_jwt_email('kadr-audit-mgr-scoped@test.local');
+SELECT ok(
+  public.current_user_managed_departments() IS NULL,
+  'DEPRECATED stub: current_user_managed_departments uvek NULL'
+);
 SELECT is(
-  public.current_user_managed_departments(),
-  ARRAY['Odeljenje A']::text[],
-  'menadzment sa nizom: vraća managed_departments'
+  public.current_user_managed_sub_department_ids(),
+  ARRAY[65001]::int[],
+  'scoped menadžment: current_user_managed_sub_department_ids'
 );
 
 SELECT test_set_jwt_email('kadr-audit-mgr-null@test.local');
 SELECT ok(
   public.current_user_managed_departments() IS NULL,
-  'menadzment sa NULL managed_departments: funkcija vraća NULL (legacy pun obim)'
+  'menadzment NULL scope: stub i managed_sub_department_ids NULL'
+);
+SELECT ok(
+  public.current_user_managed_sub_department_ids() IS NULL,
+  'menadzment bez managed_sub_department_ids → NULL (legacy pun obim)'
 );
 
 SELECT test_set_jwt_email('kadr-audit-hr@test.local');
 SELECT ok(
   public.current_user_managed_departments() IS NULL,
-  'hr nema menadzment red: current_user_managed_departments() je NULL'
+  'hr: current_user_managed_departments stub NULL'
 );
 
 -- ─── current_user_manages_employee ────────────────────────────────────────

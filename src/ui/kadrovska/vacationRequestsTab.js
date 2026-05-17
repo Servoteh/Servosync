@@ -2,7 +2,7 @@
  * Kadrovska — TAB Zahtevi GO (Faza K5).
  *
  * HR/admin/menadžment/leadpm/pm pregled i odobravanje zahteva za GO.
- * Scope po managed_departments za menadžment (null = legacy pun prikaz; niz uključujući [] = filter).
+ * Scope po managed_sub_department_ids za menadžment (null = legacy pun prikaz; niz uključujući [] = filter).
  * Nema pickera „za koga podnosim” — koristi se Moj profil.
  *
  * Badge na tabu prikazuje broj pending zahteva (posle scope filtera).
@@ -13,7 +13,7 @@ import { formatDate, daysInclusive } from '../../lib/date.js';
 import {
   canManageVacationRequests,
   canManageEmployee,
-  getManagedDepartments,
+  getManagedSubDepartmentIds,
   getCurrentRole,
   getIsOnline,
 } from '../../state/auth.js';
@@ -158,7 +158,7 @@ async function _loadRequests(force = false) {
 
 /** Scope kao mojProfil ~214: null = bez filtera; niz (uključujući []) = canManageEmployee po redu. */
 function _itemsInScope(items) {
-  const managed = getManagedDepartments();
+  const managed = getManagedSubDepartmentIds();
   if (managed == null) return items;
   return items.filter(r => {
     const emp = kadrovskaState.employees.find(e => e.id === r.employeeId);
@@ -190,7 +190,7 @@ function _renderRows() {
   const tbody   = panelRoot.querySelector('#vacReqTbody');
   const empty   = panelRoot.querySelector('#vacReqEmpty');
   const countEl = panelRoot.querySelector('#vacReqCount');
-  const managed = getManagedDepartments();
+  const managed = getManagedSubDepartmentIds();
 
   const itemsScoped = _itemsInScope(kadrVacReqState.items);
   const filtered = _applyFilters(itemsScoped);
@@ -225,11 +225,11 @@ function _renderRows() {
       if (managed !== null && managed.length === 0) {
         if (tEl) tEl.textContent = 'Nema zahteva za prikaz';
         if (bEl) {
-          bEl.textContent = 'Nije podešen opseg odeljenja. Obratite se HR-u / administraciji.';
+          bEl.textContent = 'Nije podešen opseg pododeljenja. Obratite se HR-u / administraciji.';
         }
       } else if (managed !== null && managed.length > 0 && itemsScoped.length === 0 && hasGlobal) {
         if (tEl) tEl.textContent = 'Nema zahteva za prikaz';
-        if (bEl) bEl.textContent = 'Nema zahteva za zaposlene u dodeljenim odeljenjima.';
+        if (bEl) bEl.textContent = 'Nema zahteva za zaposlene u dodeljenim pododeljenjima.';
       } else if (hasGlobal) {
         if (tEl) tEl.textContent = 'Nema zahteva za prikaz';
         if (bEl) bEl.textContent = 'Pokušajte drugi status, godinu ili pretragu.';

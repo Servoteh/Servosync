@@ -16,27 +16,42 @@ SELECT plan(18);
 ALTER TABLE public.user_roles
   ADD COLUMN IF NOT EXISTS managed_departments TEXT[];
 
+ALTER TABLE public.user_roles
+  ADD COLUMN IF NOT EXISTS managed_sub_department_ids int[];
+
 SET LOCAL row_security = off;
 
-INSERT INTO public.user_roles (email, role, project_id, is_active, managed_departments)
+INSERT INTO public.sub_departments (id, department_id, name, sort_order)
 VALUES
-  ('kadr-write-admin@test.local', 'admin', NULL, true, NULL),
-  ('kadr-write-hr@test.local', 'hr', NULL, true, NULL),
-  ('kadr-write-mgr1@test.local', 'menadzment', NULL, true, ARRAY['Proizvodnja']::text[]),
-  ('kadr-write-mgr3@test.local', 'menadzment', NULL, true, NULL),
-  ('kadr-write-pm@test.local', 'pm', NULL, true, NULL),
-  ('kadr-write-viewer-self@test.local', 'viewer', NULL, true, NULL)
+  (640001, 5, 'KWR_Prod_Sub', 0),
+  (640002, 5, 'KWR_Kom_Sub', 0)
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+
+INSERT INTO public.user_roles (
+  email, role, project_id, is_active, managed_departments, managed_sub_department_ids
+)
+VALUES
+  ('kadr-write-admin@test.local', 'admin', NULL, true, NULL, NULL),
+  ('kadr-write-hr@test.local', 'hr', NULL, true, NULL, NULL),
+  ('kadr-write-mgr1@test.local', 'menadzment', NULL, true, ARRAY['Proizvodnja']::text[], ARRAY[640001]::int[]),
+  ('kadr-write-mgr3@test.local', 'menadzment', NULL, true, NULL, NULL),
+  ('kadr-write-pm@test.local', 'pm', NULL, true, NULL, NULL),
+  ('kadr-write-viewer-self@test.local', 'viewer', NULL, true, NULL, NULL)
 ON CONFLICT (email) DO UPDATE SET
   role = EXCLUDED.role,
   is_active = EXCLUDED.is_active,
-  managed_departments = EXCLUDED.managed_departments;
+  managed_departments = EXCLUDED.managed_departments,
+  managed_sub_department_ids = EXCLUDED.managed_sub_department_ids;
 
-INSERT INTO public.employees (id, full_name, department, email, is_active)
+INSERT INTO public.employees (id, full_name, department, email, is_active, sub_department_id)
 VALUES
-  ('eeeeeeee-1111-1111-1111-111111111101', 'Radnik Proizvodnja', 'Proizvodnja', 'emp-prod-kwr@test.local', true),
-  ('eeeeeeee-2222-2222-2222-222222222202', 'Radnik Komercijala', 'Komercijala', 'emp-kom-kwr@test.local', true),
-  ('eeeeeeee-3333-3333-3333-333333333303', 'Sam Viewer', 'Proizvodnja', 'kadr-write-viewer-self@test.local', true)
-ON CONFLICT (id) DO NOTHING;
+  ('eeeeeeee-1111-1111-1111-111111111101', 'Radnik Proizvodnja', 'Proizvodnja', 'emp-prod-kwr@test.local', true, 640001),
+  ('eeeeeeee-2222-2222-2222-222222222202', 'Radnik Komercijala', 'Komercijala', 'emp-kom-kwr@test.local', true, 640002),
+  ('eeeeeeee-3333-3333-3333-333333333303', 'Sam Viewer', 'Proizvodnja', 'kadr-write-viewer-self@test.local', true, 640001)
+ON CONFLICT (id) DO UPDATE SET
+  sub_department_id = EXCLUDED.sub_department_id,
+  department = EXCLUDED.department,
+  is_active = EXCLUDED.is_active;
 
 INSERT INTO public.absences (id, employee_id, type, date_from, date_to, days_count, note)
 VALUES

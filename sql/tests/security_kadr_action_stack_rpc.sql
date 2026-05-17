@@ -29,7 +29,16 @@ $$;
 ALTER TABLE public.user_roles
   ADD COLUMN IF NOT EXISTS managed_departments TEXT[];
 
+ALTER TABLE public.user_roles
+  ADD COLUMN IF NOT EXISTS managed_sub_department_ids int[];
+
 SET LOCAL row_security = off;
+
+INSERT INTO public.sub_departments (id, department_id, name, sort_order)
+VALUES
+  (600001, 5, 'KADR_AS_SUB_A', 0),
+  (600002, 5, 'KADR_AS_SUB_B', 0)
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 DELETE FROM public.user_roles
 WHERE lower(email) IN (
@@ -40,16 +49,18 @@ WHERE lower(email) IN (
   lower('kadr-as-viewer@test.local')
 );
 
-INSERT INTO public.user_roles (email, role, project_id, is_active, managed_departments)
+INSERT INTO public.user_roles (
+  email, role, project_id, is_active, managed_departments, managed_sub_department_ids
+)
 VALUES
-  ('kadr-as-admin@test.local', 'admin', NULL, true, NULL),
-  ('kadr-as-hr@test.local', 'hr', NULL, true, NULL),
-  ('kadr-as-mgr1@test.local', 'menadzment', NULL, true, ARRAY['KADR_AS_DEPT_A']::text[]),
-  ('kadr-as-mgr3@test.local', 'menadzment', NULL, true, NULL),
-  ('kadr-as-viewer@test.local', 'viewer', NULL, true, NULL);
+  ('kadr-as-admin@test.local', 'admin', NULL, true, NULL, NULL),
+  ('kadr-as-hr@test.local', 'hr', NULL, true, NULL, NULL),
+  ('kadr-as-mgr1@test.local', 'menadzment', NULL, true, NULL, ARRAY[600001]::int[]),
+  ('kadr-as-mgr3@test.local', 'menadzment', NULL, true, NULL, NULL),
+  ('kadr-as-viewer@test.local', 'viewer', NULL, true, NULL, NULL);
 
 INSERT INTO public.employees (
-  id, full_name, department, email, is_active, work_type
+  id, full_name, department, email, is_active, work_type, sub_department_id
 )
 VALUES
   (
@@ -58,7 +69,8 @@ VALUES
     'KADR_AS_DEPT_A',
     'kadr-as-emp-a@test.local',
     true,
-    'ugovor'
+    'ugovor',
+    600001
   ),
   (
     'aaaaaaaa-2222-2222-2222-222222222202',
@@ -66,7 +78,8 @@ VALUES
     'KADR_AS_DEPT_B',
     'kadr-as-emp-b@test.local',
     true,
-    'ugovor'
+    'ugovor',
+    600002
   ),
   (
     'aaaaaaaa-3333-3333-3333-333333333303',
@@ -74,13 +87,15 @@ VALUES
     'KADR_AS_DEPT_A',
     'kadr-as-miss@test.local',
     true,
-    'ugovor'
+    'ugovor',
+    600001
   )
 ON CONFLICT (id) DO UPDATE SET
   full_name = EXCLUDED.full_name,
   department = EXCLUDED.department,
   is_active = EXCLUDED.is_active,
-  work_type = EXCLUDED.work_type;
+  work_type = EXCLUDED.work_type,
+  sub_department_id = EXCLUDED.sub_department_id;
 
 DELETE FROM public.vacation_requests
 WHERE id IN (

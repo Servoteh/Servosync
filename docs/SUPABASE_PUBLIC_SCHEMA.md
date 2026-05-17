@@ -1188,6 +1188,8 @@ Ispod: **Pregledi**, **Enumi**, **Foreign keys**, zatim **flat tabela svih kolon
 | user_roles | updated_at | timestamp with time zone(6) | YES |
 | user_roles | created_by | text | YES |
 | user_roles | must_change_password | boolean | YES |
+| user_roles | managed_departments | text[] | YES |
+| user_roles | managed_sub_department_ids | integer[] | YES |
 | vacation_entitlements | id | uuid | NO |
 | vacation_entitlements | employee_id | uuid | NO |
 | vacation_entitlements | year | integer(32,0) | NO |

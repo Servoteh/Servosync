@@ -22,37 +22,54 @@ $$;
 ALTER TABLE public.user_roles
   ADD COLUMN IF NOT EXISTS managed_departments TEXT[];
 
+ALTER TABLE public.user_roles
+  ADD COLUMN IF NOT EXISTS managed_sub_department_ids int[];
+
 SET LOCAL row_security = off;
 
-INSERT INTO public.user_roles (email, role, project_id, is_active, managed_departments)
+INSERT INTO public.sub_departments (id, department_id, name, sort_order)
 VALUES
-  ('kadr-dash-admin@test.local', 'admin', NULL, true, NULL),
-  ('kadr-dash-hr@test.local', 'hr', NULL, true, NULL),
-  ('kadr-dash-mgr1@test.local', 'menadzment', NULL, true, ARRAY['KADR_DASH_DEPT_A']::text[]),
-  ('kadr-dash-mgr3@test.local', 'menadzment', NULL, true, NULL),
-  ('kadr-dash-viewer@test.local', 'viewer', NULL, true, NULL)
+  (88001, 5, 'KADR_DASH_SUB_A', 0),
+  (88002, 5, 'KADR_DASH_SUB_B', 0)
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  department_id = EXCLUDED.department_id;
+
+INSERT INTO public.user_roles (email, role, project_id, is_active, managed_departments, managed_sub_department_ids)
+VALUES
+  ('kadr-dash-admin@test.local', 'admin', NULL, true, NULL, NULL),
+  ('kadr-dash-hr@test.local', 'hr', NULL, true, NULL, NULL),
+  ('kadr-dash-mgr1@test.local', 'menadzment', NULL, true, NULL, ARRAY[88001]::int[]),
+  ('kadr-dash-mgr3@test.local', 'menadzment', NULL, true, NULL, NULL),
+  ('kadr-dash-viewer@test.local', 'viewer', NULL, true, NULL, NULL)
 ON CONFLICT (email) DO UPDATE SET
   role = EXCLUDED.role,
   is_active = EXCLUDED.is_active,
-  managed_departments = EXCLUDED.managed_departments;
+  managed_departments = EXCLUDED.managed_departments,
+  managed_sub_department_ids = EXCLUDED.managed_sub_department_ids;
 
-INSERT INTO public.employees (id, full_name, department, email, is_active)
+INSERT INTO public.employees (id, full_name, department, email, is_active, sub_department_id)
 VALUES
   (
     'dddddddd-1111-1111-1111-111111111101',
     'KPI Radnik A',
     'KADR_DASH_DEPT_A',
     'kpi-emp-a@test.local',
-    true
+    true,
+    88001
   ),
   (
     'dddddddd-2222-2222-2222-222222222202',
     'KPI Radnik B',
     'KADR_DASH_DEPT_B',
     'kpi-emp-b@test.local',
-    true
+    true,
+    88002
   )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  sub_department_id = EXCLUDED.sub_department_id,
+  department = EXCLUDED.department,
+  is_active = EXCLUDED.is_active;
 
 DELETE FROM public.absences
 WHERE id = 'bbbbbbbb-1111-1111-1111-111111111111'::uuid;

@@ -6,9 +6,10 @@ import { SESSION_KEYS } from '../lib/constants.js';
 import { getIsOnline } from '../state/auth.js';
 import { sbReq } from './supabase.js';
 import { ssGet, ssSet, ssRemove } from '../lib/storage.js';
+import { clearSubDepartmentsLookupCache } from './subDepartments.js';
 
 const CACHE_TTL_MS = 60_000;
-const CACHE_KEY = 'kadr_dashboard_v1';
+const CACHE_KEY = 'kadr_dashboard_v2';
 
 /**
  * Pročitaj i obriši jednokratni intent sa dashboard-a ako `tab` odgovara.
@@ -49,6 +50,7 @@ function writeSessionCache(key, value) {
 }
 
 export function clearDashboardCache() {
+  clearSubDepartmentsLookupCache();
   try {
     for (const k of Object.keys(sessionStorage)) {
       if (k.startsWith(CACHE_KEY)) sessionStorage.removeItem(k);

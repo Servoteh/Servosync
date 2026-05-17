@@ -8,7 +8,7 @@
 
 - **Tabela sa RLS politikama:** 70
 - **Ukupno efektivnih politika:** 217
-- **SECURITY DEFINER funkcija:** 135
+- **SECURITY DEFINER funkcija:** 141
 - **Objekata sa anon grant-om:** 2
 
 ## 2. Anon (javni) pristup
@@ -41,12 +41,16 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `current_user_is_hr` | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
 | `current_user_is_hr_or_admin` | `sql/migrations/add_menadzment_full_edit_kadrovska.sql` |
 | `current_user_is_management` | `sql/migrations/harden_sastanci_rls_phase2.sql` |
-| `current_user_managed_departments` | `sql/migrations/extend_kadr_managed_departments_scope.sql` |
-| `current_user_manages_employee` | `sql/migrations/extend_kadr_managed_departments_scope.sql` |
-| `get_my_user_roles` | `sql/migrations/enable_user_roles_rls_proper.sql` |
+| `current_user_managed_departments` | `sql/migrations/refactor_managed_to_sub_department_ids.sql` |
+| `current_user_managed_sub_department_ids` | `sql/migrations/refactor_managed_to_sub_department_ids.sql` |
+| `current_user_manages_employee` | `sql/migrations/refactor_managed_to_sub_department_ids.sql` |
+| `get_my_user_roles` | `sql/migrations/refactor_managed_to_sub_department_ids.sql` |
 | `has_edit_role` | `sql/migrations/add_menadzment_full_edit_kadrovska.sql` |
 | `is_sastanak_ucesnik` | `sql/migrations/harden_sastanci_rls_phase2.sql` |
 | `kadr_audit_log_trigger` | `sql/migrations/add_kadr_audit_log.sql` |
+| `kadr_dashboard_action_stack` | `sql/migrations/add_kadr_dashboard_action_stack_rpc.sql` |
+| `kadr_dashboard_kpis` | `sql/migrations/update_dashboard_rpcs_for_sub_dept_scope.sql` |
+| `kadr_dashboard_mini_reports` | `sql/migrations/update_dashboard_rpcs_for_sub_dept_scope.sql` |
 | `kadr_dispatch_dequeue` | `sql/migrations/add_kadr_notifications.sql` |
 | `kadr_dispatch_mark_failed` | `sql/migrations/add_kadr_notifications.sql` |
 | `kadr_dispatch_mark_sent` | `sql/migrations/add_kadr_notifications.sql` |
@@ -60,11 +64,13 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `loc_auth_roles` | `sql/migrations/add_loc_module.sql` |
 | `loc_bigtehn_ingest_arm` | `sql/migrations/add_loc_phase2a_bigtehn_ingest_dryrun.sql` |
 | `loc_bigtehn_ingest_run` | `sql/migrations/add_loc_phase2b_bigtehn_ingest_armed.sql` |
+| `loc_bigtehn_ingest_run_now` | `sql/migrations/add_loc_bigtehn_ingest_status_rpc.sql` |
 | `loc_bigtehn_parse_ident` | `sql/migrations/add_loc_phase2b_smart_ident_parser.sql` |
 | `loc_can_create_movement` | `sql/migrations/harden_loc_create_movement_v5_roles.sql` |
 | `loc_can_manage_locations` | `sql/migrations/add_loc_module.sql` |
 | `loc_claim_sync_events` | `sql/migrations/add_loc_step5_sync_rpcs.sql` |
 | `loc_create_movement` | `sql/migrations/harden_loc_create_movement_v5_roles.sql` |
+| `loc_get_bigtehn_ingest_status` | `sql/migrations/add_loc_bigtehn_ingest_status_rpc.sql` |
 | `loc_is_admin` | `sql/migrations/add_loc_module.sql` |
 | `loc_locations_after_path_change` | `sql/migrations/add_loc_module.sql` |
 | `loc_locations_audit` | `sql/migrations/add_loc_locations_audit.sql` |

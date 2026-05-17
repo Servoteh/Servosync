@@ -22,7 +22,16 @@ $$;
 ALTER TABLE public.user_roles
   ADD COLUMN IF NOT EXISTS managed_departments TEXT[];
 
+ALTER TABLE public.user_roles
+  ADD COLUMN IF NOT EXISTS managed_sub_department_ids int[];
+
 SET LOCAL row_security = off;
+
+INSERT INTO public.sub_departments (id, department_id, name, sort_order)
+VALUES
+  (89001, 5, 'KADR_MR_SUB_A', 0),
+  (89002, 5, 'KADR_MR_SUB_B', 0)
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 DELETE FROM public.user_roles
 WHERE lower(email) IN (
@@ -33,31 +42,38 @@ WHERE lower(email) IN (
   lower('kadr-mr-viewer@test.local')
 );
 
-INSERT INTO public.user_roles (email, role, project_id, is_active, managed_departments)
+INSERT INTO public.user_roles (
+  email, role, project_id, is_active, managed_departments, managed_sub_department_ids
+)
 VALUES
-  ('kadr-mr-admin@test.local', 'admin', NULL, true, NULL),
-  ('kadr-mr-hr@test.local', 'hr', NULL, true, NULL),
-  ('kadr-mr-mgr1@test.local', 'menadzment', NULL, true, ARRAY['KADR_MR_DEPT_A']::text[]),
-  ('kadr-mr-mgr3@test.local', 'menadzment', NULL, true, NULL),
-  ('kadr-mr-viewer@test.local', 'viewer', NULL, true, NULL);
+  ('kadr-mr-admin@test.local', 'admin', NULL, true, NULL, NULL),
+  ('kadr-mr-hr@test.local', 'hr', NULL, true, NULL, NULL),
+  ('kadr-mr-mgr1@test.local', 'menadzment', NULL, true, NULL, ARRAY[89001]::int[]),
+  ('kadr-mr-mgr3@test.local', 'menadzment', NULL, true, NULL, NULL),
+  ('kadr-mr-viewer@test.local', 'viewer', NULL, true, NULL, NULL);
 
-INSERT INTO public.employees (id, full_name, department, email, is_active)
+INSERT INTO public.employees (id, full_name, department, email, is_active, sub_department_id)
 VALUES
   (
     'eeeeeeee-1111-1111-1111-111111111101',
     'Mini A',
     'KADR_MR_DEPT_A',
     'kadr-mr-emp-a@test.local',
-    true
+    true,
+    89001
   ),
   (
     'eeeeeeee-2222-2222-2222-222222222202',
     'Mini B',
     'KADR_MR_DEPT_B',
     'kadr-mr-emp-b@test.local',
-    true
+    true,
+    89002
   )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  sub_department_id = EXCLUDED.sub_department_id,
+  department = EXCLUDED.department,
+  is_active = EXCLUDED.is_active;
 
 DELETE FROM public.absences
 WHERE id = 'ffffffff-1111-1111-1111-111111111111'::uuid;

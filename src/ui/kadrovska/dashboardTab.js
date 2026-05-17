@@ -7,7 +7,7 @@ import {
   getAuth,
   getCurrentUser,
   getCurrentRole,
-  getManagedDepartments,
+  getManagedSubDepartmentIds,
 } from '../../state/auth.js';
 import { visibleSubmodules } from './shared.js';
 import {
@@ -15,6 +15,7 @@ import {
   loadActionStack,
   loadMiniReports,
 } from '../../services/kadrovskaDashboard.js';
+import { loadSubDepartments, getSubDepartmentNames } from '../../services/subDepartments.js';
 import { setPendingFilter } from '../../state/kadrovska.js';
 import {
   destroyChart,
@@ -55,14 +56,19 @@ function _displayName() {
 
 function _managedLineHtml() {
   if (getCurrentRole() !== 'menadzment') return '';
-  const managed = getManagedDepartments();
+  const managedIds = getManagedSubDepartmentIds();
   let text;
-  if (managed == null) {
-    text = 'Pokrivate odeljenja: sva odeljenja (nije podešen skup)';
-  } else if (managed.length === 0) {
-    text = 'Pokrivate odeljenja: nema dodeljenih odeljenja (prazan skup)';
+  if (managedIds == null) {
+    text = 'Pokrivate pododeljenja: sva (nije podešen skup — legacy pun obim)';
+  } else if (managedIds.length === 0) {
+    text = 'Pokrivate pododeljenja: nema dodele (prazan skup)';
   } else {
-    text = `Pokrivate odeljenja: ${managed.map(d => escHtml(String(d))).join(', ')}`;
+    const names = getSubDepartmentNames(managedIds);
+    const display =
+      names.length > 0
+        ? names.map(n => escHtml(String(n))).join(', ')
+        : managedIds.map(id => escHtml(String(id))).join(', ');
+    text = `Pokrivate: ${display}`;
   }
   return `<div class="kadr-dashboard__hero-managed">${text}</div>`;
 }
@@ -211,7 +217,8 @@ async function _hydrate(rootEl, opts, { forceRefresh } = { forceRefresh: false }
  * @param {{ onOpenTab?: (tabId: string) => void }} [opts]
  * @returns {Promise<void>}
  */
-export function renderKadrovskaDashboard(rootEl, opts = {}) {
+export async function renderKadrovskaDashboard(rootEl, opts = {}) {
+  await loadSubDepartments();
   const auth = getAuth();
   const roleUpper = (auth.role || 'viewer').toUpperCase();
   const onOpenTab = opts.onOpenTab;

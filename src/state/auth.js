@@ -23,6 +23,10 @@ const state = {
   isOnline: false,
   /** True ako je poslednji /user_roles upit pao zbog HTTP/parse greške. */
   lastUserRolesQueryFailed: false,
+  /** Tekstualni scope (deprecated; kolona u DB ostaje). */
+  managedDepartments: null,
+  /** int[] pododeljenja za menadžment; null = legacy pun obim. */
+  managedSubDepartmentIds: null,
 };
 
 const listeners = new Set();
@@ -217,14 +221,37 @@ export function canAccessSastanci() {
 }
 
 /**
- * Odeljenja nad kojima trenutni korisnik ima scope (odobravanje odmora itd.).
- * NULL / undefined = neograničen pristup (admin, COO, HR).
- * Popunjen niz = filtrira samo ta odeljenja.
- * Popunjava se iz user_roles.managed_departments prilikom login-a.
+ * Pododeljenja (int[]) u kojima menadžment ima scope — iz user_roles.managed_sub_department_ids.
+ * null = legacy pun obim za menadžment; [] = niko u scope-u.
+ */
+export function getManagedSubDepartmentIds() {
+  return state.managedSubDepartmentIds ?? null;
+}
+
+export function setManagedSubDepartmentIds(ids) {
+  if (ids == null) {
+    state.managedSubDepartmentIds = null;
+    return;
+  }
+  if (!Array.isArray(ids)) {
+    state.managedSubDepartmentIds = null;
+    return;
+  }
+  const nums = ids.map(x => Number(x)).filter(n => Number.isFinite(n));
+  state.managedSubDepartmentIds = nums.length ? nums : [];
+}
+
+/**
+ * @deprecated Sprint 3.4 — koristi getManagedSubDepartmentIds(). Ostaje radi upozorenja.
  */
 export function getManagedDepartments() {
-  return state.managedDepartments ?? null;
+  console.warn('[deprecated] getManagedDepartments — koristi getManagedSubDepartmentIds');
+  return null;
 }
+
+/**
+ * @deprecated Tekstualni managed_departments; postavi managed_sub_department_ids preko setManagedSubDepartmentIds.
+ */
 export function setManagedDepartments(depts) {
   state.managedDepartments = Array.isArray(depts) ? depts : null;
 }
@@ -308,24 +335,20 @@ export function canManageVacationRequests() {
 }
 
 /**
- * Paritet sa `public.current_user_manages_employee` — da li sme akciju nad zaposlenim
- * (npr. GO zahtev) uz već učitan scope iz `getManagedDepartments()`.
- * @param {string | { department?: string, departmentName?: string }} employeeOrDept
+ * Paritet sa `public.current_user_manages_employee` — scope preko getManagedSubDepartmentIds().
  */
-export function canManageEmployee(employeeOrDept) {
+export function canManageEmployee(employee) {
   if (!state.user) return false;
   if (state.role === 'admin' || state.role === 'hr') return true;
   if (state.role === 'leadpm' || state.role === 'pm') return true;
   if (state.role === 'menadzment') {
-    const managed = getManagedDepartments();
-    if (managed == null) return true;
-    if (managed.length === 0) return false;
-    const dept =
-      typeof employeeOrDept === 'string'
-        ? employeeOrDept
-        : String(employeeOrDept?.department ?? employeeOrDept?.departmentName ?? '').trim();
-    if (!dept) return false;
-    return managed.includes(dept);
+    const managed = getManagedSubDepartmentIds();
+    if (managed === null) return true;
+    if (!Array.isArray(managed) || managed.length === 0) return false;
+    const subDeptId = employee?.sub_department_id ?? employee?.subDepartmentId;
+    if (subDeptId == null) return false;
+    const n = Number(subDeptId);
+    return managed.some(x => Number(x) === n);
   }
   return false;
 }

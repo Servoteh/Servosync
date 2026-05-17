@@ -19,6 +19,7 @@ import {
   setLastUserRolesQueryFailed,
   setRole,
   setManagedDepartments,
+  setManagedSubDepartmentIds,
 } from '../state/auth.js';
 
 export async function loadUserRoleMatchesFromDb() {
@@ -47,7 +48,7 @@ export async function loadUserRoleMatchesFromDb() {
   let anyQuerySucceeded = false;
 
   for (let fi = 0; fi < filters.length; fi++) {
-    const path = 'user_roles?is_active=eq.true&' + filters[fi] + '&select=email,role,project_id,managed_departments';
+    const path = 'user_roles?is_active=eq.true&' + filters[fi] + '&select=email,role,project_id,managed_departments,managed_sub_department_ids';
     const data = await sbReq(path);
     if (data === null) {
       console.error('[user_roles] Filter ' + fi + ' failed (HTTP/parse error). Trying next filter.', { path });
@@ -104,13 +105,14 @@ export function effectiveRoleFromMatches(matches) {
   return 'viewer';
 }
 
-/** Convenience: učita matches i postavi rolu + managed_departments u state. */
+/** Convenience: učita matches i postavi rolu + scope (managed_sub_department_ids) u state. */
 export async function loadAndApplyUserRole() {
   const matches = await loadUserRoleMatchesFromDb();
   const role = effectiveRoleFromMatches(matches);
   const primary = matches.find(r => String(r.role || '').toLowerCase() === role);
-  /* Pre setRole: onAuthChange slušaoci vide ažuriran managed_departments zajedno sa rolom. */
+  /* Pre setRole: onAuthChange slušaoci vide scope zajedno sa rolom. */
   setManagedDepartments(primary?.managed_departments ?? null);
+  setManagedSubDepartmentIds(primary?.managed_sub_department_ids ?? null);
   setRole(role);
   return { role, matches };
 }
