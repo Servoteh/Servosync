@@ -6,9 +6,9 @@
 
 ## 1. Sažetak
 
-- **Tabela sa RLS politikama:** 51
-- **Ukupno efektivnih politika:** 175
-- **SECURITY DEFINER funkcija:** 100
+- **Tabela sa RLS politikama:** 70
+- **Ukupno efektivnih politika:** 217
+- **SECURITY DEFINER funkcija:** 135
 - **Objekata sa anon grant-om:** 2
 
 ## 2. Anon (javni) pristup
@@ -29,35 +29,56 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | Funkcija | Definisana u |
 |---|---|
 | `_loc_purge_synced_events_cron` | `sql/migrations/add_loc_step4_pgcron.sql` |
+| `_po_cleanup_orphaned_machines_cron` | `sql/migrations/add_production_orphaned_machine_cleanup.sql` |
 | `audit_log_cleanup` | `sql/migrations/add_audit_log.sql` |
 | `audit_row_change` | `sql/migrations/add_audit_log.sql` |
 | `bulk_reassign_production_lines` | `sql/migrations/add_production_g5_reassign_rpc.sql` |
-| `can_edit_plan_proizvodnje` | `sql/migrations/add_plan_proizvodnje_menadzment_edit.sql` |
+| `can_edit_plan_proizvodnje` | `sql/migrations/add_production_security_hardening.sql` |
+| `can_force_plan_reassign` | `sql/migrations/add_production_security_hardening.sql` |
+| `current_user_can_manage_vacreq` | `sql/migrations/extend_kadr_managed_departments_scope.sql` |
 | `current_user_email` | `sql/migrations/add_audit_log.sql` |
 | `current_user_is_admin` | `sql/migrations/fix_user_roles_rls_recursion.sql` |
+| `current_user_is_hr` | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
 | `current_user_is_hr_or_admin` | `sql/migrations/add_menadzment_full_edit_kadrovska.sql` |
 | `current_user_is_management` | `sql/migrations/harden_sastanci_rls_phase2.sql` |
-| `current_user_managed_departments` | `sql/migrations/add_rbac_managed_departments.sql` |
+| `current_user_managed_departments` | `sql/migrations/extend_kadr_managed_departments_scope.sql` |
+| `current_user_manages_employee` | `sql/migrations/extend_kadr_managed_departments_scope.sql` |
 | `get_my_user_roles` | `sql/migrations/enable_user_roles_rls_proper.sql` |
 | `has_edit_role` | `sql/migrations/add_menadzment_full_edit_kadrovska.sql` |
 | `is_sastanak_ucesnik` | `sql/migrations/harden_sastanci_rls_phase2.sql` |
+| `kadr_audit_log_trigger` | `sql/migrations/add_kadr_audit_log.sql` |
 | `kadr_dispatch_dequeue` | `sql/migrations/add_kadr_notifications.sql` |
 | `kadr_dispatch_mark_failed` | `sql/migrations/add_kadr_notifications.sql` |
 | `kadr_dispatch_mark_sent` | `sql/migrations/add_kadr_notifications.sql` |
+| `kadr_medical_exams_sync_employee` | `sql/migrations/add_kadr_medical_exams.sql` |
 | `kadr_payroll_init_month` | `sql/migrations/add_kadr_payroll_v2.sql` |
+| `kadr_queue_payroll_notifications` | `sql/migrations/add_kadr_vacation_notifications.sql` |
+| `kadr_queue_vacation_notification` | `sql/migrations/add_kadr_vacation_notifications.sql` |
 | `kadr_schedule_hr_reminders` | `sql/migrations/add_kadr_notifications.sql` |
 | `kadr_trigger_schedule_hr_reminders` | `sql/migrations/add_kadr_notifications.sql` |
 | `loc_after_movement_insert` | `sql/migrations/add_loc_v4_drawing_no.sql` |
 | `loc_auth_roles` | `sql/migrations/add_loc_module.sql` |
+| `loc_bigtehn_ingest_arm` | `sql/migrations/add_loc_phase2a_bigtehn_ingest_dryrun.sql` |
+| `loc_bigtehn_ingest_run` | `sql/migrations/add_loc_phase2b_bigtehn_ingest_armed.sql` |
+| `loc_bigtehn_parse_ident` | `sql/migrations/add_loc_phase2b_smart_ident_parser.sql` |
+| `loc_can_create_movement` | `sql/migrations/harden_loc_create_movement_v5_roles.sql` |
 | `loc_can_manage_locations` | `sql/migrations/add_loc_module.sql` |
 | `loc_claim_sync_events` | `sql/migrations/add_loc_step5_sync_rpcs.sql` |
-| `loc_create_movement` | `sql/migrations/add_loc_v4_drawing_no.sql` |
+| `loc_create_movement` | `sql/migrations/harden_loc_create_movement_v5_roles.sql` |
 | `loc_is_admin` | `sql/migrations/add_loc_module.sql` |
 | `loc_locations_after_path_change` | `sql/migrations/add_loc_module.sql` |
 | `loc_locations_audit` | `sql/migrations/add_loc_locations_audit.sql` |
 | `loc_mark_sync_failed` | `sql/migrations/add_loc_step5_sync_rpcs.sql` |
 | `loc_mark_sync_synced` | `sql/migrations/add_loc_step5_sync_rpcs.sql` |
 | `loc_purge_synced_events` | `sql/migrations/add_loc_step3_cleanup.sql` |
+| `loc_sync_admin_emails` | `sql/migrations/add_loc_sync_health_monitor.sql` |
+| `loc_sync_dispatch_dequeue` | `sql/migrations/add_loc_sync_health_monitor.sql` |
+| `loc_sync_dispatch_mark_failed` | `sql/migrations/add_loc_sync_health_monitor.sql` |
+| `loc_sync_dispatch_mark_sent` | `sql/migrations/add_loc_sync_health_monitor.sql` |
+| `loc_sync_health_check_and_enqueue` | `sql/migrations/add_loc_sync_health_monitor.sql` |
+| `loc_sync_health_summary` | `sql/migrations/add_loc_sync_health_monitor.sql` |
+| `loc_sync_pulse_monitor_dispatch` | `sql/migrations/add_loc_sync_monitor_dispatch_pulse.sql` |
+| `loc_sync_worker_heartbeat_upsert` | `sql/migrations/add_loc_sync_health_monitor.sql` |
 | `loc_touch_updated_at` | `sql/migrations/add_loc_module.sql` |
 | `maint_apply_part_stock_movement` | `sql/migrations/add_maint_inventory.sql` |
 | `maint_asset_visible` | `sql/migrations/add_maint_assets_supertable.sql` |
@@ -82,6 +103,7 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `maint_is_erp_admin_or_management` | `sql/migrations/add_maint_work_orders.sql` |
 | `maint_it_asset_details_guard` | `sql/migrations/add_maint_it_asset_details.sql` |
 | `maint_machine_delete_hard` | `sql/migrations/add_maint_machine_hard_delete.sql` |
+| `maint_machine_dept_code` | `sql/migrations/add_loc_machine_sync_trigger.sql` |
 | `maint_machine_rename` | `sql/migrations/add_maint_rls_menadzment_paritet.sql` |
 | `maint_machine_visible` | `sql/migrations/add_maintenance_module.sql` |
 | `maint_machines_ensure_asset` | `sql/migrations/add_maint_assets_supertable.sql` |
@@ -93,6 +115,7 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `maint_wo_row_visible` | `sql/migrations/add_maint_work_orders.sql` |
 | `maint_work_orders_assign_wo_number` | `sql/migrations/add_maint_work_orders.sql` |
 | `mark_in_progress_from_tech_routing` | `sql/migrations/add_production_g6_auto_in_progress.sql` |
+| `pb_check_dep_cycle` | `sql/migrations/add_pb_task_deps.sql` |
 | `pb_current_employee_id` | `sql/migrations/add_pb4_rls_and_agg.sql` |
 | `pb_current_user_can_see_all_reports` | `sql/migrations/add_pb4_rls_and_agg.sql` |
 | `pb_dispatch_dequeue` | `sql/migrations/add_pb_notifications.sql` |
@@ -102,12 +125,23 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `pb_enqueue_notifications` | `sql/migrations/add_pb_notifications.sql` |
 | `pb_get_load_stats` | `sql/migrations/pb_load_stats_mechanical_engineering.sql` |
 | `pb_get_mechanical_projecting_engineers` | `sql/migrations/pb_mechanical_engineers_rpc.sql` |
+| `pb_get_team_load_stats` | `sql/migrations/add_pb_team_load_stats.sql` |
 | `pb_get_work_report_summary` | `sql/migrations/add_pb4_rls_and_agg.sql` |
+| `pb_in_quiet_hours` | `sql/migrations/add_pb_notif_quiet_hours.sql` |
+| `pb_task_deps_check_cycle_trg` | `sql/migrations/add_pb_task_deps.sql` |
 | `production_machine_group_slug` | `sql/migrations/add_production_g5_reassign_rpc.sql` |
+| `production_overlays_audit_history` | `sql/migrations/add_production_overlays_history.sql` |
 | `reassign_production_line` | `sql/migrations/add_production_g5_reassign_rpc.sql` |
 | `rev_can_manage` | `sql/migrations/add_reversi_module.sql` |
+| `rev_confirm_cutting_return` | `sql/migrations/add_reversi_cutting_tools.sql` |
 | `rev_confirm_return` | `sql/migrations/add_reversi_module.sql` |
-| `rev_get_or_create_recipient_location` | `sql/migrations/add_reversi_module.sql` |
+| `rev_cts_apply_delta` | `sql/migrations/add_reversi_cutting_tools.sql` |
+| `rev_current_employee_id` | `sql/migrations/add_reversi_module.sql` |
+| `rev_current_machine_codes` | `sql/migrations/add_reversi_my_machines_view.sql` |
+| `rev_cutting_tool_seed_stock` | `sql/migrations/add_reversi_cutting_tools.sql` |
+| `rev_cutting_tool_set_barcode` | `sql/migrations/add_reversi_cutting_tools.sql` |
+| `rev_get_or_create_recipient_location` | `sql/migrations/loc_location_code_scope_unique_strip_prefix.sql` |
+| `rev_issue_cutting_reversal` | `sql/migrations/add_reversi_cutting_tools.sql` |
 | `rev_issue_reversal` | `sql/migrations/add_reversi_module.sql` |
 | `rev_next_doc_number` | `sql/migrations/add_reversi_module.sql` |
 | `salary_payroll_set_created_by` | `sql/migrations/add_kadr_salary_payroll.sql` |
@@ -117,6 +151,7 @@ eskalacija ako search_path nije postavljen ili ako logika ne proverava ulogu.
 | `sast_trg_akcija_new` | `sql/migrations/add_sastanci_notification_triggers.sql` |
 | `sast_trg_meeting_locked` | `sql/migrations/add_sastanci_notification_triggers.sql` |
 | `sast_trg_ucesnik_invite` | `sql/migrations/add_sastanci_notification_triggers.sql` |
+| `sast_trg_ucesnik_invite_cleanup` | `sql/migrations/add_sastanci_invite_clear_on_ucesnik_delete.sql` |
 | `sast_zakljucaj_sastanak` | `sql/migrations/add_sast_zakljucaj_rpc.sql` |
 | `sastanci_dispatch_dequeue` | `sql/migrations/add_sastanci_dispatch_rpc.sql` |
 | `sastanci_dispatch_mark_failed` | `sql/migrations/add_sastanci_dispatch_rpc.sql` |
@@ -140,10 +175,10 @@ Legenda flag-ova:
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
-| `absences_delete` | DELETE | `authenticated` | `has_edit_role()` | `` | ✅ | `sql/migrations/add_kadrovska_phase1.sql` |
-| `absences_insert` | INSERT | `authenticated` | `` | `has_edit_role()` | ✅ | `sql/migrations/add_kadrovska_phase1.sql` |
+| `absences_delete` | DELETE | `authenticated` | `public.current_user_is_admin() OR public.current_user_is_hr…` | `` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
+| `absences_insert` | INSERT | `authenticated` | `` | `public.current_user_is_admin() OR public.current_user_is_hr…` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
 | `absences_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadrovska_phase1.sql` |
-| `absences_update` | UPDATE | `authenticated` | `has_edit_role()` | `has_edit_role()` | ✅ | `sql/migrations/add_kadrovska_phase1.sql` |
+| `absences_update` | UPDATE | `authenticated` | `public.current_user_is_admin() OR public.current_user_is_hr…` | `public.current_user_is_admin() OR public.current_user_is_hr…` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
 
 ### `akcioni_plan`
 
@@ -155,11 +190,35 @@ Legenda flag-ova:
 | `ap_select` | SELECT | `authenticated` | `LOWER(COALESCE(odgovoran_email, '')) = LOWER(COALESCE(auth.…` | `` | ✅ | `sql/migrations/harden_sastanci_rls_phase2.sql` |
 | `ap_update` | UPDATE | `authenticated` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 
+### `bigtehn_artikli_cache`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `bigtehn_artikli_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_bigtehn_artikli_cache.sql` |
+
 ### `bigtehn_drawings_cache`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
 | `bdc_read_authenticated` | SELECT | `authenticated` | `TRUE` | `` | ⚠ USING(true) | `sql/migrations/add_bigtehn_drawings.sql` |
+
+### `bigtehn_grupa_cache`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `bigtehn_grupa_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_bigtehn_artikli_cache.sql` |
+
+### `bigtehn_podgrupa_cache`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `bigtehn_podgrupa_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_bigtehn_artikli_cache.sql` |
+
+### `bigtehn_poreklo_cache`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `bigtehn_poreklo_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_bigtehn_artikli_cache.sql` |
 
 ### `bigtehn_rework_scrap_cache`
 
@@ -170,14 +229,20 @@ Legenda flag-ova:
 | `brsc_read_authenticated` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_production_g4_rework_scrap_cache.sql` |
 | `brsc_no_client_update` | UPDATE | `authenticated` | `false` | `false` | ✅ | `sql/migrations/add_production_g4_rework_scrap_cache.sql` |
 
+### `bigtehn_tarife_cache`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `bigtehn_tarife_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_bigtehn_artikli_cache.sql` |
+
 ### `contracts`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
-| `contracts_delete` | DELETE | `authenticated` | `has_edit_role()` | `` | ✅ | `sql/migrations/add_kadrovska_phase1.sql` |
-| `contracts_insert` | INSERT | `authenticated` | `` | `has_edit_role()` | ✅ | `sql/migrations/add_kadrovska_phase1.sql` |
+| `contracts_delete` | DELETE | `authenticated` | `public.current_user_is_admin() OR public.current_user_is_hr…` | `` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
+| `contracts_insert` | INSERT | `authenticated` | `` | `public.current_user_is_admin() OR public.current_user_is_hr…` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
 | `contracts_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadrovska_phase1.sql` |
-| `contracts_update` | UPDATE | `authenticated` | `has_edit_role()` | `has_edit_role()` | ✅ | `sql/migrations/add_kadrovska_phase1.sql` |
+| `contracts_update` | UPDATE | `authenticated` | `public.current_user_is_admin() OR public.current_user_is_hr…` | `public.current_user_is_admin() OR public.current_user_is_hr…` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
 
 ### `departments`
 
@@ -199,10 +264,10 @@ Legenda flag-ova:
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
-| `employees_delete` | DELETE | `authenticated` | `has_edit_role()` | `` | ✅ | `sql/migrations/add_kadrovska_module.sql` |
-| `employees_insert` | INSERT | `authenticated` | `` | `has_edit_role()` | ✅ | `sql/migrations/add_kadrovska_module.sql` |
+| `employees_delete` | DELETE | `authenticated` | `public.current_user_is_admin() OR public.current_user_is_hr…` | `` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
+| `employees_insert` | INSERT | `authenticated` | `` | `public.current_user_is_admin() OR public.current_user_is_hr…` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
 | `employees_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadrovska_module.sql` |
-| `employees_update` | UPDATE | `authenticated` | `has_edit_role()` | `has_edit_role()` | ✅ | `sql/migrations/add_kadrovska_module.sql` |
+| `employees_update` | UPDATE | `authenticated` | `public.current_user_is_admin() OR public.current_user_is_hr…` | `public.current_user_is_admin() OR public.current_user_is_hr…` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
 
 ### `job_positions`
 
@@ -210,6 +275,21 @@ Legenda flag-ova:
 |---|---|---|---|---|---|---|
 | `job_positions_manage` | ALL | `authenticated` | `public.current_user_is_admin()` | `public.current_user_is_admin()` | ✅ | `sql/migrations/add_kadr_org_structure.sql` |
 | `job_positions_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadr_org_structure.sql` |
+
+### `kadr_audit_log`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `kadr_audit_log_select` | SELECT | `authenticated` | `current_user_is_admin()` | `` | ✅ | `sql/migrations/add_kadr_audit_log.sql` |
+
+### `kadr_certificates`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `kadr_certificates_delete` | DELETE | `authenticated` | `current_user_is_hr_or_admin()` | `` | ✅ | `sql/migrations/add_kadr_certificates.sql` |
+| `kadr_certificates_insert` | INSERT | `authenticated` | `` | `current_user_is_hr_or_admin()` | ✅ | `sql/migrations/add_kadr_certificates.sql` |
+| `kadr_certificates_select` | SELECT | `authenticated` | `current_user_is_hr_or_admin()` | `` | ✅ | `sql/migrations/add_kadr_certificates.sql` |
+| `kadr_certificates_update` | UPDATE | `authenticated` | `current_user_is_hr_or_admin()` | `current_user_is_hr_or_admin()` | ✅ | `sql/migrations/add_kadr_certificates.sql` |
 
 ### `kadr_holidays`
 
@@ -219,6 +299,15 @@ Legenda flag-ova:
 | `kadr_holidays_insert_admin` | INSERT | `authenticated` | `` | `public.current_user_is_admin()` | ✅ | `sql/migrations/add_kadr_holidays.sql` |
 | `kadr_holidays_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadr_holidays.sql` |
 | `kadr_holidays_update_admin` | UPDATE | `authenticated` | `public.current_user_is_admin()` | `public.current_user_is_admin()` | ✅ | `sql/migrations/add_kadr_holidays.sql` |
+
+### `kadr_medical_exams`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `kadr_medical_exams_delete` | DELETE | `authenticated` | `current_user_is_hr_or_admin()` | `` | ✅ | `sql/migrations/add_kadr_medical_exams.sql` |
+| `kadr_medical_exams_insert` | INSERT | `authenticated` | `` | `current_user_is_hr_or_admin()` | ✅ | `sql/migrations/add_kadr_medical_exams.sql` |
+| `kadr_medical_exams_select` | SELECT | `authenticated` | `current_user_is_hr_or_admin()` | `` | ✅ | `sql/migrations/add_kadr_medical_exams.sql` |
+| `kadr_medical_exams_update` | UPDATE | `authenticated` | `current_user_is_hr_or_admin()` | `current_user_is_hr_or_admin()` | ✅ | `sql/migrations/add_kadr_medical_exams.sql` |
 
 ### `kadr_notification_config`
 
@@ -234,6 +323,12 @@ Legenda flag-ova:
 | `kadr_notif_delete_hr` | DELETE | `authenticated` | `public.current_user_is_hr_or_admin()` | `` | ✅ | `sql/migrations/add_kadr_notifications.sql` |
 | `kadr_notif_select_hr` | SELECT | `authenticated` | `public.current_user_is_hr_or_admin()` | `` | ✅ | `sql/migrations/add_kadr_notifications.sql` |
 | `kadr_notif_update_hr` | UPDATE | `authenticated` | `public.current_user_is_hr_or_admin()` | `public.current_user_is_hr_or_admin()` | ✅ | `sql/migrations/add_kadr_notifications.sql` |
+
+### `loc_bigtehn_ingest_state`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `loc_bigtehn_ingest_state_select` | SELECT | `authenticated` | `TRUE` | `` | ⚠ USING(true) | `sql/migrations/add_loc_phase2a_bigtehn_ingest_dryrun.sql` |
 
 ### `loc_item_placements`
 
@@ -255,11 +350,23 @@ Legenda flag-ova:
 | `loc_locations_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_loc_module.sql` |
 | `loc_locations_update` | UPDATE | `authenticated` | `public.loc_can_manage_locations()` | `public.loc_can_manage_locations()` | ✅ | `sql/migrations/add_loc_module.sql` |
 
+### `loc_sync_alerts_outbox`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `loc_sync_alerts_select` | SELECT | `authenticated` | `public.loc_is_admin()` | `` | ✅ | `sql/migrations/add_loc_sync_health_monitor.sql` |
+
 ### `loc_sync_outbound_events`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
 | `loc_sync_select` | SELECT | `authenticated` | `public.loc_is_admin()` | `` | ✅ | `sql/migrations/add_loc_module.sql` |
+
+### `loc_sync_worker_heartbeat`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `loc_sync_heartbeat_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_loc_sync_health_monitor.sql` |
 
 ### `maint_wo_number_counter`
 
@@ -280,6 +387,32 @@ Legenda flag-ova:
 |---|---|---|---|---|---|---|
 | `pb_notification_log_admin_all` | ALL | `authenticated` | `public.current_user_is_admin()` | `public.current_user_is_admin()` | ✅ | `sql/migrations/add_pb_notifications.sql` |
 | `pb_notification_log_own_select` | SELECT | `authenticated` | `recipient_user_id = auth.uid()` | `` | ✅ | `sql/migrations/add_pb_notifications.sql` |
+
+### `pb_task_comments`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `ptc_delete` | DELETE | `authenticated` | `public.current_user_is_admin() OR (created_by_user_id = aut…` | `` | ✅ | `sql/migrations/add_pb_task_comments.sql` |
+| `ptc_insert` | INSERT | `authenticated` | `` | `public.pb_can_edit_tasks() AND created_by_user_id = auth.ui…` | ✅ | `sql/migrations/add_pb_task_comments.sql` |
+| `ptc_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_pb_task_comments.sql` |
+| `ptc_update` | UPDATE | `authenticated` | `public.current_user_is_admin() OR (created_by_user_id = aut…` | `public.current_user_is_admin() OR (created_by_user_id = aut…` | ✅ | `sql/migrations/add_pb_task_comments.sql` |
+
+### `pb_task_deps`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `ptd_delete` | DELETE | `authenticated` | `public.pb_can_edit_tasks()` | `` | ✅ | `sql/migrations/add_pb_task_deps.sql` |
+| `ptd_insert` | INSERT | `authenticated` | `` | `public.pb_can_edit_tasks()` | ✅ | `sql/migrations/add_pb_task_deps.sql` |
+| `ptd_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_pb_task_deps.sql` |
+
+### `pb_task_files`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `ptf_delete` | DELETE | `authenticated` | `public.pb_can_edit_tasks()` | `` | ✅ | `sql/migrations/add_pb_task_files.sql` |
+| `ptf_insert` | INSERT | `authenticated` | `` | `public.pb_can_edit_tasks() AND uploaded_by = auth.uid()` | ✅ | `sql/migrations/add_pb_task_files.sql` |
+| `ptf_select` | SELECT | `authenticated` | `deleted_at IS NULL` | `` | ✅ | `sql/migrations/add_pb_task_files.sql` |
+| `ptf_update` | UPDATE | `authenticated` | `public.current_user_is_admin() OR (uploaded_by = auth.uid()…` | `public.current_user_is_admin() OR (uploaded_by = auth.uid()…` | ✅ | `sql/migrations/add_pb_task_files.sql` |
 
 ### `pb_tasks`
 
@@ -321,7 +454,7 @@ Legenda flag-ova:
 | `pm_teme_draft_insert` | INSERT | `authenticated` | `` | `status = 'draft' AND sastanak_id IS NULL AND public.has_edi…` | ✅ | `sql/migrations/add_sast_draft_rls.sql` |
 | `pmt_insert` | INSERT | `authenticated` | `` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 | `pmt_select` | SELECT | `authenticated` | `LOWER(COALESCE(predlozio_email, '')) = LOWER(COALESCE(auth.…` | `` | ✅ | `sql/migrations/harden_sastanci_rls_phase2.sql` |
-| `pm_teme_draft_review` | UPDATE | `authenticated` | `status = 'draft' AND ( public.has_edit_role() OR public.cur…` | `status IN ('usvojeno', 'odbijeno') AND ( public.has_edit_ro…` | ✅ | `sql/migrations/add_sast_draft_rls.sql` |
+| `pm_teme_draft_review` | UPDATE | `authenticated` | `status = 'draft' AND ( public.has_edit_role() OR public.cur…` | `public.has_edit_role() OR public.current_user_is_management…` | ✅ | `sql/migrations/add_sast_draft_rls.sql` |
 | `pmt_update` | UPDATE | `authenticated` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | `public.has_edit_role() AND ( (sastanak_id IS NULL AND publi…` | ✅ | `sql/migrations/harden_sastanci_write_rls.sql` |
 
 ### `presek_aktivnosti`
@@ -371,6 +504,15 @@ Legenda flag-ova:
 | `po_read_authenticated` | SELECT | `authenticated` | `TRUE` | `` | ⚠ USING(true) | `sql/migrations/add_plan_proizvodnje.sql` |
 | `po_update_admin_pm` | UPDATE | `authenticated` | `public.can_edit_plan_proizvodnje()` | `public.can_edit_plan_proizvodnje()` | ✅ | `sql/migrations/add_plan_proizvodnje.sql` |
 
+### `production_overlays_history`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `poh_no_client_delete` | DELETE | `authenticated` | `false` | `` | ✅ | `sql/migrations/add_production_overlays_history.sql` |
+| `poh_no_client_write` | INSERT | `authenticated` | `` | `false` | ✅ | `sql/migrations/add_production_overlays_history.sql` |
+| `poh_select_authenticated` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_production_overlays_history.sql` |
+| `poh_no_client_update` | UPDATE | `authenticated` | `false` | `false` | ✅ | `sql/migrations/add_production_overlays_history.sql` |
+
 ### `production_reassign_audit`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
@@ -412,6 +554,27 @@ Legenda flag-ova:
 | `reminder_insert` | INSERT | `authenticated` | `` | `has_edit_role(project_id)` | ✅ | `sql/schema.sql` |
 | `reminder_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/schema.sql` |
 | `reminder_update` | UPDATE | `authenticated` | `has_edit_role(project_id)` | `has_edit_role(project_id)` | ✅ | `sql/schema.sql` |
+
+### `rev_cutting_tool_catalog`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `rev_cts_catalog_insert` | INSERT | `authenticated` | `` | `rev_can_manage()` | ✅ | `sql/migrations/add_reversi_cutting_tools.sql` |
+| `rev_cts_catalog_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_reversi_cutting_tools.sql` |
+| `rev_cts_catalog_update` | UPDATE | `authenticated` | `rev_can_manage()` | `rev_can_manage()` | ✅ | `sql/migrations/add_reversi_cutting_tools.sql` |
+
+### `rev_cutting_tool_stock`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `rev_cts_stock_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_reversi_cutting_tools.sql` |
+
+### `rev_document_cutting_assignees`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `rev_doc_cts_assignees_write` | ALL | `authenticated` | `public.rev_can_manage()` | `public.rev_can_manage()` | ✅ | `sql/migrations/20260521120000_rev_cutting_legacy_import_assignees_views.sql` |
+| `rev_doc_cts_assignees_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/20260521120000_rev_cutting_legacy_import_assignees_views.sql` |
 
 ### `rev_document_lines`
 
@@ -543,19 +706,28 @@ Legenda flag-ova:
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
-| `vac_ent_delete` | DELETE | `authenticated` | `has_edit_role()` | `` | ✅ | `sql/migrations/add_kadr_employee_extended.sql` |
-| `vac_ent_insert` | INSERT | `authenticated` | `` | `has_edit_role()` | ✅ | `sql/migrations/add_kadr_employee_extended.sql` |
+| `vac_ent_delete` | DELETE | `authenticated` | `public.current_user_is_admin() OR public.current_user_is_hr…` | `` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
+| `vac_ent_insert` | INSERT | `authenticated` | `` | `public.current_user_is_admin() OR public.current_user_is_hr…` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
 | `vac_ent_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadr_employee_extended.sql` |
-| `vac_ent_update` | UPDATE | `authenticated` | `has_edit_role()` | `has_edit_role()` | ✅ | `sql/migrations/add_kadr_employee_extended.sql` |
+| `vac_ent_update` | UPDATE | `authenticated` | `public.current_user_is_admin() OR public.current_user_is_hr…` | `public.current_user_is_admin() OR public.current_user_is_hr…` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
+
+### `vacation_requests`
+
+| Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
+|---|---|---|---|---|---|---|
+| `vr_delete` | DELETE | `authenticated` | `current_user_is_hr_or_admin()` | `` | ✅ | `sql/migrations/add_kadr_vacation_requests.sql` |
+| `vr_insert` | INSERT | `authenticated` | `` | `lower(submitted_by) = lower(coalesce(auth.jwt() ->> 'email'…` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
+| `vr_select` | SELECT | `authenticated` | `lower(submitted_by) = lower(coalesce(auth.jwt() ->> 'email'…` | `` | ✅ | `sql/migrations/extend_kadr_managed_departments_scope.sql` |
+| `vr_update` | UPDATE | `authenticated` | `public.current_user_manages_employee(employee_id)` | `public.current_user_manages_employee(employee_id)` | ✅ | `sql/migrations/extend_kadr_managed_departments_scope.sql` |
 
 ### `work_hours`
 
 | Politika | Akcija | Role | USING | WITH CHECK | Flagovi | Izvor |
 |---|---|---|---|---|---|---|
-| `work_hours_delete` | DELETE | `authenticated` | `has_edit_role()` | `` | ✅ | `sql/migrations/add_kadrovska_phase1.sql` |
-| `work_hours_insert` | INSERT | `authenticated` | `` | `has_edit_role()` | ✅ | `sql/migrations/add_kadrovska_phase1.sql` |
+| `work_hours_delete` | DELETE | `authenticated` | `public.current_user_is_admin() OR public.current_user_is_hr…` | `` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
+| `work_hours_insert` | INSERT | `authenticated` | `` | `public.current_user_is_admin() OR public.current_user_is_hr…` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
 | `work_hours_select` | SELECT | `authenticated` | `true` | `` | ⚠ USING(true) | `sql/migrations/add_kadrovska_phase1.sql` |
-| `work_hours_update` | UPDATE | `authenticated` | `has_edit_role()` | `has_edit_role()` | ✅ | `sql/migrations/add_kadrovska_phase1.sql` |
+| `work_hours_update` | UPDATE | `authenticated` | `public.current_user_is_admin() OR public.current_user_is_hr…` | `public.current_user_is_admin() OR public.current_user_is_hr…` | ✅ | `sql/migrations/harden_kadr_menadzment_write_scope.sql` |
 
 ### `work_packages`
 
@@ -568,7 +740,7 @@ Legenda flag-ova:
 
 ## 5. Statistika rizika
 
-- Politike sa `USING(true)` (osim INSERT): **31**
+- Politike sa `USING(true)` (osim INSERT): **44**
 - Politike sa `TO anon`: **0**
 - Anon objekt grant-ovi (sa SELECT/INSERT/UPDATE/DELETE): **2**
 

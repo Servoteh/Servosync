@@ -39,6 +39,12 @@ sql/migrations/add_loc_sync_health_monitor.sql
 # Faza 2 security / lokacije — potrebno za pgTAP (has_edit_role, RLS, audit, HALA↔POLICA pravila)
 sql/migrations/add_menadzment_full_edit_kadrovska.sql
 sql/migrations/enable_user_roles_rls_proper.sql
+# Kadrovska K5 + scope (posle current_user_is_admin); extend za manages_employee;
+# harden za write RLS Sprint 2.2.
+sql/migrations/add_rbac_managed_departments.sql
+sql/migrations/add_kadr_vacation_requests.sql
+sql/migrations/extend_kadr_managed_departments_scope.sql
+sql/migrations/harden_kadr_menadzment_write_scope.sql
 sql/migrations/add_audit_log.sql
 sql/migrations/add_audit_actor_attribution.sql
 sql/migrations/add_loc_location_hierarchy_rules.sql
