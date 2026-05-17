@@ -28,14 +28,6 @@ export function consumeKadrDashIntent(expectedTab) {
   }
 }
 
-export function publishKadrDashIntent(payload) {
-  try {
-    ssSet(SESSION_KEYS.KADR_DASH_INTENT, JSON.stringify(payload));
-  } catch {
-    /* noop */
-  }
-}
-
 function readSessionCache(key) {
   try {
     const raw = sessionStorage.getItem(key);
