@@ -60,7 +60,12 @@ $check$;
 --     parent. Zato koristimo location_type = 'OTHER' za njih — funkcionalno
 --     to su grupišuće „kutije", ne fizičke hale. Mašine (MACHINE) ispod njih
 --     su dozvoljene (MACHINE nema hijerarhijska ograničenja).
--- Strategija: ON CONFLICT (lower(location_code)) DO NOTHING (jedinstven indeks iz add_loc_step2_ci_unique.sql).
+-- Strategija: ON CONFLICT DO NOTHING (bez target-a). Postoje dva moguća unique
+-- indeksa na loc_locations.location_code — originalni case-sensitive iz
+-- `add_loc_module.sql` i case-insensitive (lower) iz `add_loc_step2_ci_unique.sql`.
+-- Targeted ON CONFLICT (lower(location_code)) pada na produkciji koja još nije
+-- primenila Step 2 sa „no unique constraint matching ON CONFLICT specification".
+-- DO NOTHING bez target-a hvata svaki unique violation iz BILO KOJEG indeksa.
 
 INSERT INTO public.loc_locations
   (location_code, name, location_type, parent_id, is_active, notes)
@@ -77,7 +82,7 @@ VALUES
   ('M.ERO',   'Erodiranje',                       'OTHER',      NULL, TRUE, 'Seed po departments.js (Faza 1)'),
   ('M.CAM',   'CAM programiranje',                'OTHER',      NULL, TRUE, 'Seed po departments.js (Faza 1)'),
   ('M.OST',   'Ostalo (mašine bez kategorije)',   'OTHER',      NULL, TRUE, 'Seed po departments.js — fallback')
-ON CONFLICT (lower(location_code)) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 UPDATE public.loc_locations
    SET name = 'M — Proizvodnja'
@@ -150,7 +155,7 @@ SELECT
 FROM dept_for_machine d
 LEFT JOIN public.loc_locations parent
   ON parent.location_code = d.dept_code
-ON CONFLICT (lower(location_code)) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- ── 5. Sanity check ─────────────────────────────────────────────────────────
 DO $sanity$
