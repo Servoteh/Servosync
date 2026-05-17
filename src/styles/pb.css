@@ -1410,6 +1410,11 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
 
 .pb-table-wrap {
   overflow-x: auto;
+  /* `clip` (ne `hidden`) ovde je KRITIČNO: hidden/auto bi napravili Y-scroll-container
+     i sticky THEAD bi se zaglavio na ovaj wrap (koji raste sa sadržajem), pa nikad
+     ne bi se zalepio. `clip` klipuje preliv ali NE pravi scroll container → sticky
+     bubble-uje do .pb-tab-body kako treba. */
+  overflow-y: clip;
 }
 
 .pb-table-container {
@@ -1458,7 +1463,9 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   vertical-align: middle;
   position: sticky;
   top: 0;
-  z-index: 3;
+  /* Niži z-index nego .pb-chrome (z:2) — čak i ako sticky ne odradi (stari browser
+     bez overflow:clip), thead ne sme da se vizuelno proseče preko top menija. */
+  z-index: 1;
   /* Box-shadow zamenjuje border-bottom kad je THEAD sticky preko sadržaja. */
   box-shadow: inset 0 -1px 0 var(--border, #e5e7eb);
 }
