@@ -105,6 +105,9 @@ sql/migrations/add_pb4_rls_and_agg.sql
 # Lokacije × Mašine — Faza 1 (2026-05-17): MACHINE enum + seed mašina
 # iz bigtehn_machines_cache; source kolona na movements; view+RPC samo ako
 # postoje PP cache tabele (vidi ispod).
+# `add_loc_machine_enum.sql` MORA biti odvojena migracija od seed-a — PG
+# ne dozvoljava korišćenje nove enum vrednosti u istoj tx u kojoj je dodata.
+sql/migrations/add_loc_machine_enum.sql
 sql/migrations/add_loc_machine_locations.sql
 sql/migrations/add_loc_movement_source_column.sql
 # `add_loc_bigtehn_op_status_rpc.sql` zavisi od `bigtehn_work_order_lines_cache`,

@@ -1,15 +1,20 @@
 -- ============================================================================
--- LOKACIJE × MAŠINE — Faza 1: mašine kao tip lokacije + seed iz bigtehn cache
+-- LOKACIJE × MAŠINE — Faza 1, Korak 2: seed mašinskih lokacija
 -- ============================================================================
--- Pokreni JEDNOM u Supabase SQL Editoru (idempotentno).
+-- Pokreni JEDNOM u Supabase SQL Editoru — POSLE `add_loc_machine_enum.sql`.
+--
+-- VAŽNO — preduslov:
+--   Mora biti prvo pokrenut `add_loc_machine_enum.sql` koji dodaje vrednost
+--   'MACHINE' u `loc_type_enum`. PostgreSQL ne dozvoljava korišćenje nove
+--   enum vrednosti u istoj transakciji u kojoj je dodata (vidi ALTER TYPE
+--   ograničenje), pa moraju biti dva odvojena „Run" klika u SQL Editoru.
 --
 -- Šta radi:
---   1. Proširi `loc_type_enum` sa 'MACHINE'.
---   2. Seed-uje root „M — Proizvodnja" (location_code = `M`, PRODUCTION).
---   3. Seed-uje 10 grupa po strojnoj podeli iz `src/ui/planProizvodnje/departments.js`
+--   1. Seed-uje root „M — Proizvodnja" (location_code = `M`, PRODUCTION).
+--   2. Seed-uje 10 grupa po strojnoj podeli iz `src/ui/planProizvodnje/departments.js`
 --      (bez taba „Sve") — svaka ima `location_type = OTHER`, parent je root `M`
 --      (PRODUCTION kao dete hijerarhijskog pravila nije dozvoljeno).
---   4. Seed-uje mašinske lokacije iz `bigtehn_machines_cache`:
+--   3. Seed-uje mašinske lokacije iz `bigtehn_machines_cache`:
 --        - location_code = rj_code (npr. „3.21")
 --        - name          = naziv mašine
 --        - location_type = MACHINE
@@ -30,22 +35,24 @@
 --   /* Enum value se ne može DROP-ovati u Postgres-u — ostaje 'MACHINE'. */
 -- ============================================================================
 
--- ── 1. Proširi loc_type_enum sa MACHINE ─────────────────────────────────────
--- ALTER TYPE ADD VALUE je idempotent (IF NOT EXISTS od PG 12).
-DO $enum$ BEGIN
-  ALTER TYPE public.loc_type_enum ADD VALUE IF NOT EXISTS 'MACHINE';
-EXCEPTION WHEN others THEN
-  RAISE NOTICE 'loc_type_enum MACHINE već postoji ili greška: %', SQLERRM;
-END $enum$;
+-- ── 1. Preduslov: enum 'MACHINE' MORA postojati ─────────────────────────────
+-- Ako nije pokrenut `add_loc_machine_enum.sql` pre ovoga, eksplicitno padamo
+-- sa jasnom porukom umesto kasnijeg generičkog ENUM error-a u INSERT-u.
+DO $check$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON t.oid = e.enumtypid
+    WHERE t.typname = 'loc_type_enum' AND e.enumlabel = 'MACHINE'
+  ) THEN
+    RAISE EXCEPTION
+      'add_loc_machine_locations: enum vrednost MACHINE ne postoji. '
+      'Prvo pokreni `sql/migrations/add_loc_machine_enum.sql` (pa zatim ovaj fajl).';
+  END IF;
+END
+$check$;
 
--- VAŽNO: nove enum vrednosti su čitljive tek POSLE komita transakcije u nekim
--- verzijama PG-a. Za Supabase (PG 15+) ovo je OK u istom skriptu, ali ako se
--- migracija deli na više koraka, prvi korak treba da bude SAMO ALTER TYPE.
-
--- ── 2. Pomoćni helper za seed parent_id po prefiksu rj_code ─────────────────
--- (samo lokalno za ovaj seed; ne kreira trajnu funkciju u public šemi)
-
--- ── 3. Seed: root „M — Proizvodnja" + 10 pseudo-grupacija po departments.js ─
+-- ── 2. Seed: root „M — Proizvodnja" + 10 pseudo-grupacija po departments.js ─
 -- NAPOMENA o tipovima:
 --   - Root „M" je PRODUCTION (hala) → mora biti root (parent_id IS NULL).
 --   - Dept sub-grupacije (M.SEC, M.STR, …) NE mogu biti PRODUCTION jer pravilo
