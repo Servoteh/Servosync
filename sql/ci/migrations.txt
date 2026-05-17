@@ -45,6 +45,8 @@ sql/migrations/add_rbac_managed_departments.sql
 sql/migrations/add_kadr_vacation_requests.sql
 sql/migrations/extend_kadr_managed_departments_scope.sql
 sql/migrations/harden_kadr_menadzment_write_scope.sql
+sql/migrations/add_kadr_dashboard_kpis_rpc.sql
+sql/migrations/fix_kadr_dashboard_kpis_active_employees_company_wide.sql
 sql/migrations/add_audit_log.sql
 sql/migrations/add_audit_actor_attribution.sql
 sql/migrations/add_loc_location_hierarchy_rules.sql

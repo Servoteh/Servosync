@@ -14,6 +14,7 @@
 
 import { lsGetJSON, lsSetJSON, ssGet, ssSet, ssRemove } from '../lib/storage.js';
 import { STORAGE_KEYS, SESSION_KEYS } from '../lib/constants.js';
+import { clearDashboardCache } from '../services/kadrovskaDashboard.js';
 
 /* ── Sub-states ── */
 export const kadrovskaState = {
@@ -143,6 +144,8 @@ export function saveContractsCache(list) {
 /* ── Resetovanje na logout (security: ne curiti podatke između naloga) ── */
 export function resetKadrovskaState() {
   ssRemove(SESSION_KEYS.KADR_TAB);
+  ssRemove(SESSION_KEYS.KADR_DASH_INTENT);
+  clearDashboardCache();
   kadrovskaState.employees = [];
   kadrovskaState.loaded = false;
   kadrAbsencesState.items = [];

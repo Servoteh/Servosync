@@ -30,6 +30,7 @@ import {
   ensureEmployeesLoaded,
   employeeNameById,
 } from '../../services/kadrovska.js';
+import { consumeKadrDashIntent } from '../../services/kadrovskaDashboard.js';
 import { renderSummaryChips, employeeOptionsHtml } from './shared.js';
 
 let panelRef = null;
@@ -133,6 +134,16 @@ export async function wireContractsTab(panelEl) {
   await ensureEmployeesLoaded();
   await ensureContractsLoaded(true);
   selectedIds.clear();
+
+  const dash = consumeKadrDashIntent('contracts');
+  if (dash?.employeeId) {
+    const empSel = panelEl.querySelector('#conEmpFilter');
+    if (empSel) empSel.value = String(dash.employeeId);
+    const st = panelEl.querySelector('#conStatusFilter');
+    if (st && dash.contractStatusFilter) st.value = String(dash.contractStatusFilter);
+    else if (st) st.value = 'all';
+  }
+
   refreshContractsTab();
 }
 

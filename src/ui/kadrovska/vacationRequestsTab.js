@@ -30,6 +30,7 @@ import { mapDbAbsence, saveAbsenceToDb } from '../../services/absences.js';
 import { triggerHrDispatch } from '../../services/hrNotifications.js';
 import { ensureEmployeesLoaded, employeeNameById } from '../../services/kadrovska.js';
 import { renderSummaryChips } from './shared.js';
+import { consumeKadrDashIntent } from '../../services/kadrovskaDashboard.js';
 
 let panelRoot = null;
 
@@ -107,6 +108,16 @@ export async function wireVacationRequestsTab(panelEl) {
       btn.disabled = false; btn.textContent = '🔔 Pošalji čekaće';
     }
   });
+
+  const dash = consumeKadrDashIntent('vac-requests');
+  if (dash?.vacStatus) {
+    const sel = panelEl.querySelector('#vacReqStatusFilter');
+    if (sel) sel.value = String(dash.vacStatus);
+  }
+  if (dash?.search) {
+    const inp = panelEl.querySelector('#vacReqSearch');
+    if (inp) inp.value = String(dash.search);
+  }
 
   await ensureEmployeesLoaded();
   await _loadRequests(true);

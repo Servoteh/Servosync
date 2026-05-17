@@ -51,6 +51,7 @@ import {
 } from '../../services/kadrovska.js';
 import { orgStructureState } from '../../state/kadrovska.js';
 import { renderSummaryChips } from './shared.js';
+import { consumeKadrDashIntent } from '../../services/kadrovskaDashboard.js';
 import { openEmployeesBulkModal } from './employeesBulkModal.js';
 import { openMedicalExamsModal } from './medicalExamsModal.js';
 import { openCertificatesModal } from './certificatesModal.js';
@@ -159,6 +160,13 @@ export async function wireEmployeesTab(panelEl, { onChange } = {}) {
 
   await ensureEmployeesLoaded(true);
   try { await ensureOrgStructureLoaded(); } catch (e) { console.warn('[kadrovska] org structure load failed', e); }
+
+  const dash = consumeKadrDashIntent('employees');
+  if (dash?.search) {
+    const inp = panelEl.querySelector('#kadrovskaSearch');
+    if (inp) inp.value = String(dash.search);
+  }
+
   refreshEmployeesTab();
 }
 

@@ -1,5 +1,5 @@
 /**
- * Kadrovska — tab „Pregled” (dashboard skelet, Sprint 3.2 povezuje podatke).
+ * Kadrovska — tab „Pregled” (KPI + action stack).
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
@@ -10,6 +10,11 @@ import {
   getManagedDepartments,
 } from '../../state/auth.js';
 import { visibleSubmodules } from './shared.js';
+import {
+  loadDashboardKpis,
+  loadActionStack,
+  publishKadrDashIntent,
+} from '../../services/kadrovskaDashboard.js';
 
 const DOC_HREF =
   'https://github.com/Servoteh/Servosync/blob/main/docs/Kadrovska_modul.md';
@@ -68,9 +73,86 @@ function _submoduleCardsHtml() {
     .join('');
 }
 
+function _setKpiLoading(rootEl, loading) {
+  rootEl.querySelectorAll('[data-kpi-card]').forEach(el => {
+    el.classList.toggle('kadr-dashboard__kpi-card--loading', loading);
+  });
+}
+
+function _applyKpi(rootEl, kpi) {
+  const v = (key, fallback = '—') => {
+    if (!kpi || kpi[key] == null) return fallback;
+    return String(kpi[key]);
+  };
+  const el = id => rootEl.querySelector(`[data-kpi="${id}"]`);
+  const a = el('active_employees');
+  const o = el('on_absence_today');
+  const p = el('pending_vac_requests');
+  const g = el('grid_fill_percent');
+  if (a) a.textContent = v('active_employees', '0');
+  if (o) o.textContent = v('on_absence_today', '0');
+  if (p) p.textContent = v('pending_vac_requests', '0');
+  if (g) {
+    const n = Number(kpi?.grid_fill_percent);
+    g.textContent = Number.isFinite(n) ? `${n}%` : v('grid_fill_percent', '—');
+  }
+}
+
+function _renderActions(rootEl, items, onOpenTab) {
+  const ul = rootEl.querySelector('#kadrDashActionStack');
+  if (!ul) return;
+  ul.innerHTML = '';
+  if (!items || !items.length) {
+    const li = document.createElement('li');
+    li.className = 'kadr-dashboard__action-item--empty';
+    li.textContent = 'Nema stavki za prikaz';
+    ul.appendChild(li);
+    return;
+  }
+  for (const it of items) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'kadr-dashboard__action-item';
+    btn.textContent = it.title + (it.subtitle ? ` — ${it.subtitle}` : '');
+    btn.addEventListener('click', () => {
+      if (it.deepLink && typeof onOpenTab === 'function') {
+        publishKadrDashIntent(it.deepLink);
+        onOpenTab(it.deepLink.tab);
+      }
+    });
+    li.appendChild(btn);
+    ul.appendChild(li);
+  }
+}
+
+async function _hydrate(rootEl, opts, { forceRefresh } = { forceRefresh: false }) {
+  const onOpenTab = opts.onOpenTab;
+  _setKpiLoading(rootEl, true);
+  try {
+    const [kpi, actions] = await Promise.all([
+      loadDashboardKpis({ forceRefresh }),
+      loadActionStack({ forceRefresh }),
+    ]);
+    if (kpi && typeof kpi === 'object') {
+      _applyKpi(rootEl, kpi);
+    } else {
+      showToast('⚠ KPI nisu učitani — proveri mrežu ili migraciju');
+      _applyKpi(rootEl, null);
+    }
+    _renderActions(rootEl, Array.isArray(actions) ? actions : [], onOpenTab);
+  } catch (e) {
+    console.error('[kadrovska] dashboard hydrate', e);
+    showToast('⚠ Greška pri učitavanju pregleda');
+  } finally {
+    _setKpiLoading(rootEl, false);
+  }
+}
+
 /**
  * @param {HTMLElement} rootEl
  * @param {{ onOpenTab?: (tabId: string) => void }} [opts]
+ * @returns {Promise<void>}
  */
 export function renderKadrovskaDashboard(rootEl, opts = {}) {
   const auth = getAuth();
@@ -85,6 +167,10 @@ export function renderKadrovskaDashboard(rootEl, opts = {}) {
           <p class="kadr-dashboard__hero-sub">${escHtml(_monthSubtitle())}</p>
         </div>
         <div class="kadr-dashboard__hero-user">
+          <div class="kadr-dashboard__hero-tools">
+            <button type="button" class="btn btn-ghost kadr-dashboard__refresh" id="kadrDashRefresh"
+              title="Osveži KPI i stek akcija">📊 Osveži</button>
+          </div>
           <div class="kadr-dashboard__hero-name">${escHtml(_displayName())}</div>
           <div class="kadr-dashboard__hero-role">${escHtml(roleUpper)}</div>
           ${_managedLineHtml()}
@@ -92,42 +178,40 @@ export function renderKadrovskaDashboard(rootEl, opts = {}) {
       </section>
 
       <section class="kadr-dashboard__kpi-strip" aria-label="Kratke statistike">
-        <article class="kadr-dashboard__kpi-card">
+        <article class="kadr-dashboard__kpi-card kadr-dashboard__kpi-card--loading" data-kpi-card>
           <span class="kadr-dashboard__kpi-icon" aria-hidden="true">👥</span>
           <div class="kadr-dashboard__kpi-body">
             <div class="kadr-dashboard__kpi-label">Aktivni zaposleni</div>
-            <div class="kadr-dashboard__kpi-value">47</div>
+            <div class="kadr-dashboard__kpi-value" data-kpi="active_employees">—</div>
           </div>
         </article>
-        <article class="kadr-dashboard__kpi-card">
+        <article class="kadr-dashboard__kpi-card kadr-dashboard__kpi-card--loading" data-kpi-card>
           <span class="kadr-dashboard__kpi-icon" aria-hidden="true">🏠</span>
           <div class="kadr-dashboard__kpi-body">
             <div class="kadr-dashboard__kpi-label">Trenutno na odsustvu</div>
-            <div class="kadr-dashboard__kpi-value">3</div>
+            <div class="kadr-dashboard__kpi-value" data-kpi="on_absence_today">—</div>
           </div>
         </article>
-        <article class="kadr-dashboard__kpi-card">
+        <article class="kadr-dashboard__kpi-card kadr-dashboard__kpi-card--loading" data-kpi-card>
           <span class="kadr-dashboard__kpi-icon" aria-hidden="true">✋</span>
           <div class="kadr-dashboard__kpi-body">
             <div class="kadr-dashboard__kpi-label">Otvoreni zahtevi GO</div>
-            <div class="kadr-dashboard__kpi-value">5</div>
+            <div class="kadr-dashboard__kpi-value" data-kpi="pending_vac_requests">—</div>
           </div>
         </article>
-        <article class="kadr-dashboard__kpi-card">
+        <article class="kadr-dashboard__kpi-card kadr-dashboard__kpi-card--loading" data-kpi-card>
           <span class="kadr-dashboard__kpi-icon" aria-hidden="true">📊</span>
           <div class="kadr-dashboard__kpi-body">
             <div class="kadr-dashboard__kpi-label">Mesečni grid popunjenost</div>
-            <div class="kadr-dashboard__kpi-value">78%</div>
+            <div class="kadr-dashboard__kpi-value" data-kpi="grid_fill_percent">—</div>
           </div>
         </article>
       </section>
 
       <section class="kadr-dashboard__actions" aria-label="Šta čeka mene">
         <h2 class="kadr-dashboard__section-title">Šta čeka mene</h2>
-        <ul class="kadr-dashboard__action-stack">
-          <li><button type="button" class="kadr-dashboard__action-item">⚠ Lekarski pregled ističe za 12 dana — Marko Marković</button></li>
-          <li><button type="button" class="kadr-dashboard__action-item">📋 4 zahteva za odobravanje GO</button></li>
-          <li><button type="button" class="kadr-dashboard__action-item">🎂 Rođendan ove nedelje — Ana Anić</button></li>
+        <ul class="kadr-dashboard__action-stack" id="kadrDashActionStack">
+          <li class="kadr-dashboard__action-item--empty">Učitavanje…</li>
         </ul>
       </section>
 
@@ -141,8 +225,8 @@ export function renderKadrovskaDashboard(rootEl, opts = {}) {
       <section class="kadr-dashboard__mini-reports" aria-label="Izveštaji (uskoro)">
         <h2 class="kadr-dashboard__section-title kadr-dashboard__section-title--muted">Mini izveštaji</h2>
         <div class="kadr-dashboard__mini-reports-row">
-          <div class="kadr-dashboard__mini-report-placeholder">Sprint 3.2 — mini grafikon odeljenja</div>
-          <div class="kadr-dashboard__mini-report-placeholder">Sprint 3.2 — sati po danu (trenutni mesec)</div>
+          <div class="kadr-dashboard__mini-report-placeholder">Sprint 3.3 — mini grafikon odeljenja</div>
+          <div class="kadr-dashboard__mini-report-placeholder">Sprint 3.3 — sati po danu (trenutni mesec)</div>
         </div>
       </section>
 
@@ -158,16 +242,19 @@ export function renderKadrovskaDashboard(rootEl, opts = {}) {
     </div>
   `;
 
-  rootEl.querySelectorAll('.kadr-dashboard__action-item').forEach(btn => {
-    btn.addEventListener('click', () => {
-      showToast('ℹ Sprint 3.2 — biće povezano sa filterima tabova');
-    });
-  });
-
   rootEl.querySelectorAll('.kadr-dashboard__submodule-open').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-kadr-dash-tab');
       if (id && typeof onOpenTab === 'function') onOpenTab(id);
     });
   });
+
+  const refreshBtn = rootEl.querySelector('#kadrDashRefresh');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      void _hydrate(rootEl, opts, { forceRefresh: true });
+    });
+  }
+
+  return _hydrate(rootEl, opts, { forceRefresh: false });
 }
