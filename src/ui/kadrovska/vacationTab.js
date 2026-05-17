@@ -16,6 +16,7 @@ import { canEditKadrovska, canViewEmployeePii } from '../../state/auth.js';
 import {
   kadrovskaState,
   kadrVacationState,
+  consumePendingFilter,
 } from '../../state/kadrovska.js';
 import {
   ensureEmployeesLoaded,
@@ -167,6 +168,18 @@ export async function wireVacationTab(panelEl) {
   });
 
   await ensureEmployeesLoaded();
+  const pendingVac = consumePendingFilter('vacation');
+  if (pendingVac) {
+    if (pendingVac.year != null && pendingVac.year !== '') {
+      const yInp = panelEl.querySelector('#vacYear');
+      if (yInp) yInp.value = String(pendingVac.year);
+    }
+    if (pendingVac.employee_id) {
+      const name = employeeNameById(String(pendingVac.employee_id));
+      const inp = panelEl.querySelector('#vacSearch');
+      if (inp && name) inp.value = name;
+    }
+  }
   await refreshVacationTab();
 }
 

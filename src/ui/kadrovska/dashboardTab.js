@@ -14,8 +14,8 @@ import {
   loadDashboardKpis,
   loadActionStack,
   loadMiniReports,
-  publishKadrDashIntent,
 } from '../../services/kadrovskaDashboard.js';
+import { setPendingFilter } from '../../state/kadrovska.js';
 import {
   destroyChart,
   destroyMiniReportCharts,
@@ -165,9 +165,11 @@ function _renderActions(rootEl, items, onOpenTab) {
     btn.className = 'kadr-dashboard__action-item';
     btn.textContent = it.title + (it.subtitle ? ` — ${it.subtitle}` : '');
     btn.addEventListener('click', () => {
-      if (it.deepLink && typeof onOpenTab === 'function') {
-        publishKadrDashIntent(it.deepLink);
-        onOpenTab(it.deepLink.tab);
+      const tab = it.deep_link_tab || it.deepLink?.tab;
+      if (tab && typeof onOpenTab === 'function') {
+        const flt = it.deep_link_filter ?? it.deepLink ?? {};
+        setPendingFilter(tab, typeof flt === 'object' && flt !== null ? flt : {});
+        onOpenTab(tab);
       }
     });
     li.appendChild(btn);
@@ -224,7 +226,7 @@ export function renderKadrovskaDashboard(rootEl, opts = {}) {
         <div class="kadr-dashboard__hero-user">
           <div class="kadr-dashboard__hero-tools">
             <button type="button" class="btn btn-ghost kadr-dashboard__refresh" id="kadrDashRefresh"
-              title="Osveži KPI i stek akcija">📊 Osveži</button>
+              title="Osveži KPI, stek akcija i mini izveštaje">📊 Osveži</button>
           </div>
           <div class="kadr-dashboard__hero-name">${escHtml(_displayName())}</div>
           <div class="kadr-dashboard__hero-role">${escHtml(roleUpper)}</div>

@@ -56,6 +56,8 @@ export const SESSION_KEYS = Object.freeze({
   KADR_TAB: 'plan_montaze_kadr_active_tab_v1',
   /** Jednokratni navigacioni intent sa Pregleda (JSON: { tab, … }) */
   KADR_DASH_INTENT: 'plan_montaze_kadr_dash_intent_v1',
+  /** Jednokratni filter pri prelazu sa Pregleda (JSON: { tab, filter, ts }) */
+  KADR_PENDING_FILTER: 'plan_montaze_kadr_pending_filter_v1',
   /** Pretraga u Mesečnom gridu (Kadrovska) — vidljivost redova, ne lokalni storage */
   KADR_GRID_SEARCH: 'plan_montaze_kadr_grid_search_v1',
   /** Pregled odsustava — aktivni sub-tab ('pregled' | 'listing') */

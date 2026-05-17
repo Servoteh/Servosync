@@ -18,8 +18,7 @@ import {
   getIsOnline,
 } from '../../state/auth.js';
 import { hasSupabaseConfig } from '../../lib/constants.js';
-import { kadrovskaState } from '../../state/kadrovska.js';
-import { kadrVacReqState } from '../../state/kadrovska.js';
+import { kadrovskaState, kadrVacReqState, consumePendingFilter } from '../../state/kadrovska.js';
 import {
   loadAllVacationRequestsFromDb,
   updateVacationRequestStatusInDb,
@@ -108,6 +107,19 @@ export async function wireVacationRequestsTab(panelEl) {
       btn.disabled = false; btn.textContent = '🔔 Pošalji čekaće';
     }
   });
+
+  const pending = consumePendingFilter('vac-requests');
+  if (pending) {
+    if (pending.status != null && pending.status !== '') {
+      const sel = panelEl.querySelector('#vacReqStatusFilter');
+      if (sel) sel.value = String(pending.status);
+    }
+    if (pending.employee_id) {
+      const name = employeeNameById(String(pending.employee_id));
+      const inp = panelEl.querySelector('#vacReqSearch');
+      if (inp && name) inp.value = name.split(/\s+/)[0] || name;
+    }
+  }
 
   const dash = consumeKadrDashIntent('vac-requests');
   if (dash?.vacStatus) {

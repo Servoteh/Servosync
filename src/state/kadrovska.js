@@ -112,6 +112,48 @@ export function setActiveKadrTab(tab) {
   ssSet(SESSION_KEYS.KADR_TAB, tab);
 }
 
+/**
+ * Pregled action stack → tab sa pre-setovanim filterom (sessionStorage, ~60s).
+ * @param {string} targetTabKey — npr. 'vac-requests', 'grid'
+ * @param {Record<string, unknown>} filterObj
+ */
+export function setPendingFilter(targetTabKey, filterObj) {
+  try {
+    sessionStorage.setItem(
+      SESSION_KEYS.KADR_PENDING_FILTER,
+      JSON.stringify({
+        tab: targetTabKey,
+        filter: filterObj && typeof filterObj === 'object' ? filterObj : {},
+        ts: Date.now(),
+      }),
+    );
+  } catch {
+    /* noop */
+  }
+}
+
+/**
+ * Jednokratno čitanje pending filtera za dati tab (briše ključ).
+ * @param {string} tabKey
+ * @returns {Record<string, unknown>|null}
+ */
+export function consumePendingFilter(tabKey) {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEYS.KADR_PENDING_FILTER);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (obj?.tab !== tabKey) return null;
+    if (Date.now() - Number(obj.ts || 0) > 60_000) {
+      sessionStorage.removeItem(SESSION_KEYS.KADR_PENDING_FILTER);
+      return null;
+    }
+    sessionStorage.removeItem(SESSION_KEYS.KADR_PENDING_FILTER);
+    return obj.filter && typeof obj.filter === 'object' ? obj.filter : {};
+  } catch {
+    return null;
+  }
+}
+
 /* ── Cache helperi ── */
 export function loadEmployeesCache() {
   return lsGetJSON(STORAGE_KEYS.KADROVSKA, []) || [];
@@ -145,6 +187,7 @@ export function saveContractsCache(list) {
 export function resetKadrovskaState() {
   ssRemove(SESSION_KEYS.KADR_TAB);
   ssRemove(SESSION_KEYS.KADR_DASH_INTENT);
+  ssRemove(SESSION_KEYS.KADR_PENDING_FILTER);
   clearDashboardCache();
   kadrovskaState.employees = [];
   kadrovskaState.loaded = false;

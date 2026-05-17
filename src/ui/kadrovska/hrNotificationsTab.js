@@ -26,6 +26,7 @@ import {
   deleteHrNotif,
   triggerScheduleHrReminders,
 } from '../../services/hrNotifications.js';
+import { consumePendingFilter } from '../../state/kadrovska.js';
 
 let panelRoot = null;
 let currentFilter = 'queued';
@@ -115,6 +116,15 @@ export async function wireHrNotificationsTab(panelEl) {
     panelEl.querySelector('#hrnTbody').innerHTML =
       '<tr><td colspan="8" class="emp-sub" style="padding:20px;text-align:center">Online konekcija je obavezna.</td></tr>';
     return;
+  }
+  const pending = consumePendingFilter('notifications');
+  if (pending && pending.status != null) {
+    const sel = panelEl.querySelector('#hrnFilter');
+    const st = String(pending.status);
+    if (sel && [...sel.options].some(o => o.value === st)) {
+      currentFilter = st;
+      sel.value = st;
+    }
   }
   await reload();
 }

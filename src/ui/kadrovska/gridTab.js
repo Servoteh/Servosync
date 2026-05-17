@@ -28,8 +28,8 @@ import {
 } from '../../lib/employeeNames.js';
 import { canEditKadrovskaGrid, getIsOnline } from '../../state/auth.js';
 import { hasSupabaseConfig, sbReq } from '../../services/supabase.js';
-import { kadrovskaState, orgStructureState } from '../../state/kadrovska.js';
-import { ensureEmployeesLoaded, ensureOrgStructureLoaded } from '../../services/kadrovska.js';
+import { kadrovskaState, orgStructureState, consumePendingFilter } from '../../state/kadrovska.js';
+import { ensureEmployeesLoaded, ensureOrgStructureLoaded, employeeNameById } from '../../services/kadrovska.js';
 import { loadGridMonth, batchUpsertGrid } from '../../services/grid.js';
 import { renderSummaryChips } from './shared.js';
 import { loadXlsx } from '../../lib/xlsx.js';
@@ -505,7 +505,7 @@ function _renderGridBody() {
       const deptSubLine = `<span class="grid-emp-meta">${escHtml(_gridEmpDeptSubLine(emp))}</span>`;
       const posLine = `<span class="grid-emp-meta">${escHtml(_gridEmpPositionLine(emp))}</span>`;
       const nameCell = `<span class="grid-emp-name">${escHtml(employeeDisplayName(emp) || '—')}</span>${deptSubLine}${posLine}`;
-      html += `<tr class="row-emp-1"><td class="col-num" rowspan="4">${serialNo}.</td><td class="col-name" rowspan="4">${nameCell}</td><td class="col-kind">Redovni</td>${cellsReg.join('')}<td class="col-sum">${_gridFormatSum(sReg)}</td></tr>`;
+      html += `<tr class="row-emp-1" data-grid-emp="${empId}"><td class="col-num" rowspan="4">${serialNo}.</td><td class="col-name" rowspan="4">${nameCell}</td><td class="col-kind">Redovni</td>${cellsReg.join('')}<td class="col-sum">${_gridFormatSum(sReg)}</td></tr>`;
       html += `<tr class="row-emp-2"><td class="col-kind">Prekov.</td>${cellsOt.join('')}<td class="col-sum">${_gridFormatSum(sOt)}</td></tr>`;
       html += `<tr class="row-emp-3"><td class="col-kind" title="Teren — domaći (D) / inostrani (I)">Teren</td>${cellsField.join('')}<td class="col-sum" title="Domaći ${_gridFormatSum(sFdom)}h / Inostrani ${_gridFormatSum(sFfor)}h">${_gridFormatSum(sField)}</td></tr>`;
       html += `<tr class="row-emp-4"><td class="col-kind" title="Rad na dve mašine — dodatno se plaća">2 maš.</td>${cellsTm.join('')}<td class="col-sum">${_gridFormatSum(sTm)}</td></tr>`;
@@ -1096,11 +1096,50 @@ export async function wireGridTab(panel, toolbarHost = null) {
     compSel.innerHTML = _gridCompanyOptions(cur);
   }
 
-  const monthEl = _gridQ('#gridMonth');
-  const wantMonth = monthEl?.value || _gridDefaultMonthKey();
+  const pendingGrid = consumePendingFilter('grid');
+  let wantMonth = _gridQ('#gridMonth')?.value || _gridDefaultMonthKey();
+  if (pendingGrid && typeof pendingGrid === 'object') {
+    const y = Number(pendingGrid.year);
+    const m = Number(pendingGrid.month);
+    if (Number.isFinite(y) && Number.isFinite(m) && m >= 1 && m <= 12) {
+      wantMonth = `${y}-${String(m).padStart(2, '0')}`;
+      const mel = _gridQ('#gridMonth');
+      if (mel) mel.value = wantMonth;
+    }
+  }
+
   if (gridState.loaded && gridState.monthKey === wantMonth) {
     _renderGridBody();
   } else {
     await _loadAndRender(wantMonth);
+  }
+
+  if (pendingGrid && pendingGrid.employee_id) {
+    const empId = String(pendingGrid.employee_id);
+    const name = employeeNameById(empId) || '';
+    const inp = _gridQ('#gridSearch');
+    if (inp && name) {
+      inp.value = name;
+      gridState.searchQuery = name;
+      ssSet(SESSION_KEYS.KADR_GRID_SEARCH, name);
+      _renderGridBody();
+    }
+    requestAnimationFrame(() => {
+      const wrap = _gridQ('#gridWrap');
+      const row = wrap?.querySelector(`tr.row-emp-1[data-grid-emp="${empId}"]`);
+      if (!row || !wrap) return;
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      const r2 = row.nextElementSibling;
+      const r3 = r2?.nextElementSibling;
+      const r4 = r3?.nextElementSibling;
+      for (const r of [row, r2, r3, r4]) {
+        r?.classList.add('grid-row-pending-focus');
+      }
+      setTimeout(() => {
+        for (const r of [row, r2, r3, r4]) {
+          r?.classList.remove('grid-row-pending-focus');
+        }
+      }, 2500);
+    });
   }
 }

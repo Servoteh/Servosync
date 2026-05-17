@@ -30,6 +30,7 @@ import {
   kadrovskaState,
   kadrChildrenState,
   saveEmployeesCache,
+  consumePendingFilter,
 } from '../../state/kadrovska.js';
 import {
   saveEmployeeToDb,
@@ -161,13 +162,22 @@ export async function wireEmployeesTab(panelEl, { onChange } = {}) {
   await ensureEmployeesLoaded(true);
   try { await ensureOrgStructureLoaded(); } catch (e) { console.warn('[kadrovska] org structure load failed', e); }
 
+  const pending = consumePendingFilter('employees');
   const dash = consumeKadrDashIntent('employees');
+  const pendingEmpId = pending?.employee_id ? String(pending.employee_id) : '';
   if (dash?.search) {
     const inp = panelEl.querySelector('#kadrovskaSearch');
     if (inp) inp.value = String(dash.search);
+  } else if (pendingEmpId) {
+    const emp = kadrovskaState.employees.find(e => e.id === pendingEmpId);
+    const inp = panelEl.querySelector('#kadrovskaSearch');
+    if (inp && emp) inp.value = employeeDisplayName(emp) || '';
   }
 
   refreshEmployeesTab();
+  if (pendingEmpId) {
+    void openEmployeeModal(pendingEmpId);
+  }
 }
 
 function applyFilters(list) {

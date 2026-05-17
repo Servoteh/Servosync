@@ -2573,7 +2573,14 @@ body.module-settings .set-shell > .set-layout {
 .grid-table thead th.col-name,
 .grid-table thead th.col-kind { z-index:6; background:var(--surface2); }
 
-/* Per-employee row group: highlight on hover */
+/* Kratki vizuelni akcenat reda posle deep linka sa Pregleda */
+.grid-table tr.row-emp-1.grid-row-pending-focus td,
+.grid-table tr.row-emp-2.grid-row-pending-focus td,
+.grid-table tr.row-emp-3.grid-row-pending-focus td,
+.grid-table tr.row-emp-4.grid-row-pending-focus td {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface)) !important;
+}
+
 .grid-table tr.row-emp-1 td.col-name,
 .grid-table tr.row-emp-1 td.col-num,
 .grid-table tr.row-emp-1 td.col-kind { border-top:2px solid var(--border2); }

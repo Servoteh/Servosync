@@ -18,6 +18,7 @@ import {
   kadrovskaState,
   kadrContractsState,
   saveContractsCache,
+  consumePendingFilter,
 } from '../../state/kadrovska.js';
 import {
   saveContractToDb,
@@ -135,12 +136,14 @@ export async function wireContractsTab(panelEl) {
   await ensureContractsLoaded(true);
   selectedIds.clear();
 
+  const pending = consumePendingFilter('contracts');
   const dash = consumeKadrDashIntent('contracts');
-  if (dash?.employeeId) {
+  const empFromFilter = pending?.employee_id || pending?.employeeId || dash?.employeeId;
+  if (empFromFilter) {
     const empSel = panelEl.querySelector('#conEmpFilter');
-    if (empSel) empSel.value = String(dash.employeeId);
+    if (empSel) empSel.value = String(empFromFilter);
     const st = panelEl.querySelector('#conStatusFilter');
-    if (st && dash.contractStatusFilter) st.value = String(dash.contractStatusFilter);
+    if (st && dash?.contractStatusFilter) st.value = String(dash.contractStatusFilter);
     else if (st) st.value = 'all';
   }
 
