@@ -3,12 +3,13 @@
 -- ============================================================================
 -- Preduslov: extend_kadr_managed_departments_scope + employees/absences/work_hours
 -- Ručno: psql … -v ON_ERROR_STOP=1 -f sql/tests/security_kadr_mini_reports_rpc.sql
+-- Supabase SQL editor: lepi ceo fajl i pokreni odjednom (ista sesija za JWT/set_config).
 -- ============================================================================
 
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(15);
+SELECT plan(19);
 
 CREATE OR REPLACE FUNCTION test_mr_set_jwt_email(p_email text)
 RETURNS void LANGUAGE sql AS $$
@@ -103,97 +104,156 @@ VALUES (
 
 SET LOCAL row_security = on;
 
-CREATE TEMP TABLE _mr_snap (lbl text PRIMARY KEY, j jsonb);
+-- Bez TEMP TABLE: u Supabase SQL editor / poolingu sesije se ne drže između statement-a.
 
 -- admin
 SELECT test_mr_set_jwt_email('kadr-mr-admin@test.local');
-INSERT INTO _mr_snap VALUES ('admin', public.kadr_dashboard_mini_reports());
 SELECT is(
-  (SELECT j ->> 'scope_kind' FROM _mr_snap WHERE lbl = 'admin'),
+  (SELECT public.kadr_dashboard_mini_reports() ->> 'scope_kind'),
   'admin',
   'admin → scope_kind'
 );
-SELECT is(
-  (SELECT jsonb_array_length(j -> 'employees_by_department') FROM _mr_snap WHERE lbl = 'admin'),
-  2,
-  'admin → dva odeljenja u agregatu'
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements((SELECT public.kadr_dashboard_mini_reports() -> 'employees_by_department')) AS elem
+    WHERE elem->>'department' = 'KADR_MR_DEPT_A'
+      AND (elem->>'count')::int >= 1
+  ),
+  'admin → donut uključuje seed sektor A (globalni agregat)'
 );
 SELECT ok(
-  (SELECT jsonb_array_length(j -> 'hours_per_day') FROM _mr_snap WHERE lbl = 'admin') >= 28,
-  'admin → hours_per_day pokriva mesec'
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements((SELECT public.kadr_dashboard_mini_reports() -> 'employees_by_department')) AS elem
+    WHERE elem->>'department' = 'KADR_MR_DEPT_B'
+      AND (elem->>'count')::int >= 1
+  ),
+  'admin → donut uključuje seed sektor B'
 );
 SELECT ok(
-  (SELECT jsonb_array_length(j -> 'absences_by_type') FROM _mr_snap WHERE lbl = 'admin') >= 1,
+  (
+    SELECT
+      jsonb_typeof(r -> 'hours_per_day') = 'array'
+      AND jsonb_array_length(r -> 'hours_per_day') = (
+        EXTRACT(
+          day
+          FROM (
+            date_trunc('month', current_date) + interval '1 month - 1 day'
+          )::date
+        )::int
+      )
+    FROM (SELECT public.kadr_dashboard_mini_reports() AS r) s
+  ),
+  'admin → hours_per_day: niz, jedna stavka po danu u mesecu'
+);
+SELECT ok(
+  (SELECT jsonb_array_length((public.kadr_dashboard_mini_reports())->'absences_by_type')) >= 1,
   'admin → absences_by_type nije prazan'
 );
 
 -- HR
 SELECT test_mr_set_jwt_email('kadr-mr-hr@test.local');
-INSERT INTO _mr_snap VALUES ('hr', public.kadr_dashboard_mini_reports());
 SELECT is(
-  (SELECT j ->> 'scope_kind' FROM _mr_snap WHERE lbl = 'hr'),
+  (SELECT public.kadr_dashboard_mini_reports() ->> 'scope_kind'),
   'hr',
   'HR → scope_kind'
 );
-SELECT is(
-  (SELECT jsonb_array_length(j -> 'employees_by_department') FROM _mr_snap WHERE lbl = 'hr'),
-  2,
-  'HR → pun agregat odeljenja'
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements((SELECT public.kadr_dashboard_mini_reports() -> 'employees_by_department')) AS elem
+    WHERE elem->>'department' = 'KADR_MR_DEPT_A'
+      AND (elem->>'count')::int >= 1
+  ),
+  'HR → donut uključuje sektor A'
+);
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements((SELECT public.kadr_dashboard_mini_reports() -> 'employees_by_department')) AS elem
+    WHERE elem->>'department' = 'KADR_MR_DEPT_B'
+      AND (elem->>'count')::int >= 1
+  ),
+  'HR → donut uključuje sektor B'
 );
 
 -- menadžment scoped
 SELECT test_mr_set_jwt_email('kadr-mr-mgr1@test.local');
-INSERT INTO _mr_snap VALUES ('mgr1', public.kadr_dashboard_mini_reports());
 SELECT is(
-  (SELECT j ->> 'scope_kind' FROM _mr_snap WHERE lbl = 'mgr1'),
+  (SELECT public.kadr_dashboard_mini_reports() ->> 'scope_kind'),
   'menadzment_scoped',
   'mgr1 → scope_kind'
 );
-SELECT is(
-  (SELECT jsonb_array_length(j -> 'employees_by_department') FROM _mr_snap WHERE lbl = 'mgr1'),
-  1,
-  'mgr1 → jedno odeljenje'
+SELECT ok(
+  (
+    SELECT jsonb_array_length((public.kadr_dashboard_mini_reports()) -> 'employees_by_department') >= 1
+  ),
+  'mgr1 → donut: bar jedan segment u scope-u'
 );
-SELECT is(
-  (SELECT j -> 'employees_by_department' -> 0 ->> 'department' FROM _mr_snap WHERE lbl = 'mgr1'),
-  'KADR_MR_DEPT_A',
-  'mgr1 → samo dept A'
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements((SELECT public.kadr_dashboard_mini_reports() -> 'employees_by_department')) AS elem
+    WHERE elem ->> 'department' = 'KADR_MR_SUB_A'
+      AND (elem ->> 'count')::int >= 1
+  ),
+  'mgr1 → agregat po sub_departments.name (KADR_MR_SUB_A), ne po sektor tekstu'
+);
+SELECT ok(
+  NOT EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements((SELECT public.kadr_dashboard_mini_reports() -> 'employees_by_department')) AS elem
+    WHERE elem ->> 'department' = 'KADR_MR_DEPT_A'
+  ),
+  'mgr1 → scoped donut ne grupiše po employees.department (KADR_MR_DEPT_A)'
 );
 
 -- menadžment pun obim (NULL managed)
 SELECT test_mr_set_jwt_email('kadr-mr-mgr3@test.local');
-INSERT INTO _mr_snap VALUES ('mgr3', public.kadr_dashboard_mini_reports());
 SELECT is(
-  (SELECT j ->> 'scope_kind' FROM _mr_snap WHERE lbl = 'mgr3'),
+  (SELECT public.kadr_dashboard_mini_reports() ->> 'scope_kind'),
   'menadzment_full',
   'mgr3 → scope_kind'
 );
-SELECT is(
-  (SELECT jsonb_array_length(j -> 'employees_by_department') FROM _mr_snap WHERE lbl = 'mgr3'),
-  2,
-  'mgr3 → sva odeljenja'
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements((SELECT public.kadr_dashboard_mini_reports() -> 'employees_by_department')) AS elem
+    WHERE elem->>'department' = 'KADR_MR_DEPT_A'
+      AND (elem->>'count')::int >= 1
+  ),
+  'mgr3 full → donut uključuje sektor A'
+);
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements((SELECT public.kadr_dashboard_mini_reports() -> 'employees_by_department')) AS elem
+    WHERE elem->>'department' = 'KADR_MR_DEPT_B'
+      AND (elem->>'count')::int >= 1
+  ),
+  'mgr3 full → donut uključuje sektor B'
 );
 
 -- viewer
 SELECT test_mr_set_jwt_email('kadr-mr-viewer@test.local');
-INSERT INTO _mr_snap VALUES ('viewer', public.kadr_dashboard_mini_reports());
 SELECT is(
-  (SELECT j ->> 'scope_kind' FROM _mr_snap WHERE lbl = 'viewer'),
+  (SELECT public.kadr_dashboard_mini_reports() ->> 'scope_kind'),
   'no_access',
   'viewer → no_access'
 );
 SELECT is(
-  (SELECT jsonb_array_length(j -> 'employees_by_department') FROM _mr_snap WHERE lbl = 'viewer'),
+  (SELECT jsonb_array_length((public.kadr_dashboard_mini_reports())->'employees_by_department')),
   0,
   'viewer → prazno employees_by_department'
 );
 SELECT is(
-  (SELECT jsonb_array_length(j -> 'hours_per_day') FROM _mr_snap WHERE lbl = 'viewer'),
+  (SELECT jsonb_array_length((public.kadr_dashboard_mini_reports())->'hours_per_day')),
   0,
   'viewer → prazno hours_per_day'
 );
 SELECT is(
-  (SELECT jsonb_array_length(j -> 'absences_by_type') FROM _mr_snap WHERE lbl = 'viewer'),
+  (SELECT jsonb_array_length((public.kadr_dashboard_mini_reports())->'absences_by_type')),
   0,
   'viewer → prazno absences_by_type'
 );

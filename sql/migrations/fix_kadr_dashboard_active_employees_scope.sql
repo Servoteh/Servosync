@@ -1,7 +1,9 @@
--- Kadrovska Pregled RPC-ovi: scope preko managed_sub_department_ids + employees.sub_department_id.
--- Depends: refactor_managed_to_sub_department_ids.sql, fix_kadr_dashboard_kpis_active_employees_company_wide.sql
--- mini_reports employees_by_department: admin/HR/menadzment pun obim → grupa po employees.department;
---   sužen menadžment → po sub_departments.name (fix_kadr_dashboard_active_employees_scope.sql i KPI dodatno usklađuje active_employees).
+-- Sprint 4.0b-priprema: KPI active_employees po istom scope-u kao ostali brojevi;
+-- mini_reports donut — admin/HR/menadžment pun obim: agregat po sektoru (employees.department);
+-- menadžment sužen: agregat po imenu pododeljenja (sub_departments.name).
+--
+-- Depends: update_dashboard_rpcs_for_sub_dept_scope.sql
+-- Idempotentno: CREATE OR REPLACE.
 
 CREATE OR REPLACE FUNCTION public.kadr_dashboard_kpis(
   p_year int DEFAULT NULL,
@@ -29,6 +31,7 @@ DECLARE
       and ur.is_active is true
   );
   v_managed_ids int[] := public.current_user_managed_sub_department_ids();
+  -- Prazan niz iz kolone/ORM ponaša se kao „nema liste“: isto što i SQL NULL za pun obim.
   v_managed_eff int[] := nullif(v_managed_ids, array[]::int[]);
   v_no_scope boolean := v_is_admin OR v_is_hr OR (v_is_menadzment AND v_managed_eff is null);
 BEGIN
@@ -49,6 +52,7 @@ BEGIN
       select count(*)::int
       from public.employees e
       where e.is_active is true
+        and (v_no_scope or e.sub_department_id = any (v_managed_eff))
     ),
     'on_absence_today', (
       select count(distinct a.employee_id)::int
@@ -103,7 +107,7 @@ END
 $$;
 
 COMMENT ON FUNCTION public.kadr_dashboard_kpis(int, int) IS
-  'JSON KPI: active_employees firma-wide; ostalo po admin/HR/menadžment + managed_sub_department_ids (NULL=legacy pun obim za menadžment).';
+  'JSON KPI: svi brojevi po istom scope-u (admin/HR/menadžment pun obim vs managed_sub_department_ids).';
 
 REVOKE ALL ON FUNCTION public.kadr_dashboard_kpis(int, int) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.kadr_dashboard_kpis(int, int) TO authenticated, service_role;
@@ -234,10 +238,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.kadr_dashboard_mini_reports(int, int) IS
-  'Mini izveštaji: scope preko managed_sub_department_ids; viewer → prazan feed.';
+  'Mini izveštaji: pun obim → donut po employees.department; sužen menadžment → po sub_departments.name.';
 
 REVOKE ALL ON FUNCTION public.kadr_dashboard_mini_reports(int, int) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.kadr_dashboard_mini_reports(int, int) TO authenticated, service_role;
-
--- kadr_dashboard_action_stack: nema agregacije po managed_departments; HR/admin blokovi su
--- globalni, GO stavke već filtriraju preko current_user_manages_employee (refaktorisanog).

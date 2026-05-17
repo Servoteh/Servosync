@@ -175,8 +175,9 @@ SELECT is(
     SELECT count(*)::int
     FROM public.employees e
     WHERE e.is_active IS TRUE
+      AND e.sub_department_id = 88001
   ),
-  'menadžment-1 → active_employees = svi aktivni (firma-wide)'
+  'menadžment-1 → active_employees samo u scope sub_dept'
 );
 SELECT is(
   ((SELECT j ->> 'pending_vac_requests' FROM _kpi_snap WHERE lbl = 'mgr1')::int),
@@ -213,12 +214,8 @@ SELECT is(
 );
 SELECT is(
   ((SELECT j ->> 'active_employees' FROM _kpi_snap WHERE lbl = 'viewer')::int),
-  (
-    SELECT count(*)::int
-    FROM public.employees e
-    WHERE e.is_active IS TRUE
-  ),
-  'viewer → active_employees = svi aktivni (firma-wide)'
+  0,
+  'viewer → active_employees = 0 (bez scope)'
 );
 SELECT is(
   ((SELECT j ->> 'on_absence_today' FROM _kpi_snap WHERE lbl = 'viewer')::int),
