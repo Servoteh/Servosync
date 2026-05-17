@@ -1,32 +1,36 @@
 -- ============================================================================
--- LOKACIJE × MAŠINE — Faza 1, Korak 2b: dopuna seed-a iz `maint_machines`
+-- LOKACIJE × MAŠINE — Faza 1, Korak 2b: sync seed-a iz `maint_machines`
 -- ============================================================================
--- Pokreni JEDNOM u Supabase SQL Editoru (idempotentno, safe za ponovno pokretanje).
+-- Pokreni JEDNOM (i kasnije po potrebi) u Supabase SQL Editoru. Idempotentno.
 --
 -- ZAŠTO POSTOJI ova migracija:
---   Prvi seed (`add_loc_machine_locations.sql`) je čitao direktno iz
---   `bigtehn_machines_cache` sa filterom `no_procedure = FALSE`. To je
---   isključilo CAM stanice (17.0, 17.1) i druge „pomoćne operacije" koje su
---   flagovane `no_procedure = TRUE` u BigTehn-u, iako su validne lokacije iz
---   ugla Lokacije modula (operater može imati komad na CAM stanici).
+--   `maint_machines` je AUTORITATIVNI lokalni katalog mašina u ERP-u (vidi
+--   `add_maint_machines_catalog.sql`). Održavanje modul ga održava — inicijalno
+--   seed iz BigTehn-a, dalje se menja ručno (chief/admin dodaje, arhivira).
 --
---   Autoritativni lokalni katalog mašina u ERP-u je `maint_machines`
---   (vidi `add_maint_machines_catalog.sql`). To je tabela koju Održavanje modul
---   održava — inicijalno seed iz BigTehn-a, dalje se menja ručno (chief/admin
---   dodaje ručne mašine, arhivira stare, itd.).
+--   Prvi seed (`add_loc_machine_locations.sql`) je čitao iz
+--   `bigtehn_machines_cache` sa `no_procedure=FALSE` filterom — što je u prvom
+--   pasusu uradilo isto što i ovo. Ali kad admin kroz Održavanje doda novu
+--   mašinu (npr. KOMP-01 manuelno), ona neće biti u BigTehn-u nikad. Ovo
+--   povezuje dva izvora tako što čita lokalni katalog umesto BigTehn keš-a.
+--
+--   NAPOMENA: CAM stanice (17.0, 17.1) NISU ovde — flagovane su
+--   `no_procedure=TRUE` u BigTehn-u i namerno NISU dodate u `maint_machines`
+--   (CAM = programiranje na PC-u, komad fizički ne ide tamo).
 --
 -- Šta radi:
---   1. UNION: sve aktivne mašine iz `maint_machines` (archived_at IS NULL,
---      tracked = TRUE) + mašine iz `bigtehn_machines_cache` koje NISU u
---      `maint_machines`. Time pokrivamo i mašine koje su u BigTehn-u flagovane
---      `no_procedure=TRUE` (CAM stanice, itd.) i one koje su admin ručno dodali
---      u Održavanje a nisu u BigTehn-u.
---   2. Mapira `rj_code` na dept grupaciju (M.SEC, M.STR, …, M.OST fallback)
+--   1. Čita sve aktivne mašine iz `maint_machines` (archived_at IS NULL,
+--      tracked = TRUE).
+--   2. Mapira `machine_code` na dept grupaciju (M.SEC, M.STR, …, M.OST fallback)
 --      preko istog CASE-a kao u originalnom seed-u.
 --   3. INSERT ... ON CONFLICT DO NOTHING — postojeći redovi ostaju nedirnuti.
 --
 -- Preduslov: `add_loc_machine_enum.sql` i `add_loc_machine_locations.sql`
 -- moraju biti pre ovoga (root M, dept halls, MACHINE enum vrednost).
+--
+-- KORIŠĆENJE U BUDUĆNOSTI: kad chief doda novu mašinu u Održavanje → Katalog,
+-- re-pokreni ovu migraciju da je dodaš u Lokacije. (Faza 2 može da to radi
+-- automatski preko trigger-a na `maint_machines` AFTER INSERT.)
 --
 -- DOWN: nije potrebno; INSERT je samo dopuna.
 -- ============================================================================
@@ -62,9 +66,11 @@ BEGIN
 END
 $check$;
 
--- ── Dopuna seed-a ───────────────────────────────────────────────────────────
+-- ── Sync iz maint_machines ──────────────────────────────────────────────────
 WITH all_known_machines AS (
-  /* Primarni izvor: maint_machines (lokalni autoritativni katalog). */
+  /* JEDINI izvor: maint_machines (lokalni autoritativni katalog).
+   * CAM stanice (17.x) i druge no_procedure=TRUE pomoćne operacije NISU ovde
+   * — namerno, jer komad fizički ne ide tamo (CAM = programiranje na PC-u). */
   SELECT
     m.machine_code AS rj_code,
     m.name
@@ -73,21 +79,6 @@ WITH all_known_machines AS (
     AND m.tracked = TRUE
     AND m.machine_code IS NOT NULL
     AND length(trim(m.machine_code)) > 0
-  UNION
-  /* Fallback: BigTehn cache mašine koje NISU u maint_machines (npr. CAM
-   * stanice koje su flagovane no_procedure=TRUE pa nisu ušle u maint seed). */
-  SELECT
-    c.rj_code,
-    c.name
-  FROM public.bigtehn_machines_cache c
-  WHERE c.rj_code IS NOT NULL
-    AND length(trim(c.rj_code)) > 0
-    AND NOT EXISTS (
-      SELECT 1 FROM public.maint_machines mm
-       WHERE mm.machine_code = c.rj_code
-         AND mm.archived_at IS NULL
-         AND mm.tracked = TRUE
-    )
 ),
 dept_for_machine AS (
   SELECT
