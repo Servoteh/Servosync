@@ -31,6 +31,7 @@ Ovaj fajl je istina za **redosled apply-a u Supabase produkciji**. CI redosled j
 | 19 | **`harden_loc_create_movement_v5.sql`** (Härd-1) | v4 | da | restore v4 RPC body, DROP COLUMN client_event_uuid |
 | 20 | **`harden_loc_create_movement_v5_roles.sql`** (Härd-2) | harden_v5 | da | restore prethodni RPC body, DROP FUNCTION loc_can_create_movement |
 | 21 | **`add_loc_sync_health_monitor.sql`** (Härd-3) | step5 + step4 (pg_cron); RPC sa fallback ako pg_cron nije dostupan | da | DROP TABLE loc_sync_worker_heartbeat, loc_sync_alerts_outbox; DROP FUNCTION loc_sync_* |
+| 22 | **`add_loc_sync_monitor_dispatch_pulse.sql`** (Härd-3) | 21 + deploy `loc-sync-monitor-dispatch` Edge; **Vault secret** `loc_sync_monitor_dispatch_url` (vidi README funkcije); pg_net + pg_cron | da | `cron.unschedule('loc_sync_monitor_dispatch_every_5_min')`; `DROP FUNCTION loc_sync_pulse_monitor_dispatch` |
 
 ## Provera primenjenih migracija
 
@@ -72,13 +73,18 @@ SELECT EXISTS (
 Migracije koje koriste `cron.schedule`:
 - `add_loc_step4_pgcron.sql` — dnevni purge SYNCED stavki.
 - `add_loc_sync_health_monitor.sql` — satni health check (alert enqueue).
+- `add_loc_sync_monitor_dispatch_pulse.sql` — svakih 5 min `pg_net.http_post` ka Edge funkciji (prazni outbox / šalje mejl ako je Resend podešen).
 
 Obe migracije imaju `EXCEPTION WHEN undefined_table THEN NULL` handler oko cron.schedule-a. U CI-u (Postgres bez pg_cron-a) migracije prolaze, ali job se ne registruje. Na Supabase produkciji proveri:
 
 ```sql
-SELECT jobid, jobname, schedule, active
+ SELECT jobid, jobname, schedule, active
   FROM cron.job
- WHERE jobname IN ('loc_purge_synced_daily', 'loc_sync_health_check_hourly');
+ WHERE jobname IN (
+      'loc_purge_synced_daily',
+      'loc_sync_health_check_hourly',
+      'loc_sync_monitor_dispatch_every_5_min'
+   );
 ```
 
 Ako bilo koji job nedostaje — re-run odgovarajuću migraciju.
@@ -121,6 +127,18 @@ BEGIN;
   DROP TABLE IF EXISTS public.loc_sync_alerts_outbox;
   DROP TABLE IF EXISTS public.loc_sync_worker_heartbeat;
 COMMIT;
+```
+
+**Pulse cron (opciono, nakon što više ne treba automatizacija):**
+
+```sql
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'loc_sync_monitor_dispatch_every_5_min') THEN
+    PERFORM cron.unschedule('loc_sync_monitor_dispatch_every_5_min');
+  END IF;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+DROP FUNCTION IF EXISTS public.loc_sync_pulse_monitor_dispatch();
 ```
 
 ---

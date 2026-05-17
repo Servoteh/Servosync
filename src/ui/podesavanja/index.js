@@ -30,6 +30,11 @@ import {
   renderPodesavanjePredmetaPanel,
   wirePodesavanjePredmetaPanel,
 } from './podesavanjePredmeta/index.js';
+import {
+  refreshMaintMachinesTab,
+  renderMasineTab,
+  wireMasineTab,
+} from './masineTab.js';
 
 let _mountEl = null;
 let _onLogoutCb = null;
@@ -59,6 +64,7 @@ const SIDEBAR_GROUPS = [
     label: 'Podaci',
     items: [
       { id: 'masters',         icon: '🗄', label: 'Matični podaci',  adminOnly: true },
+      { id: 'masine',          icon: '🛠', label: 'Mašine',          adminOnly: false },
       { id: 'maint-profiles',  icon: '🔧', label: 'Održ. profili',   adminOnly: false },
       { id: 'predmet-aktivacija', icon: '📋', label: 'Podeš. predmeta', adminOnly: false },
     ],
@@ -99,6 +105,7 @@ const TAB_SUBTITLES = {
   organizacija: 'Organizacija',
   odeljenja: 'Organizacija',
   masters: 'Podaci',
+  masine: 'Podaci',
   'maint-profiles': 'Podaci',
   'predmet-aktivacija': 'Podaci',
   integracije: 'Sistem',
@@ -132,6 +139,9 @@ export async function renderPodesavanjaModule(mountEl, options = {}) {
   }
   if (_activeTab === 'organizacija') {
     refreshOrgStructure().then(() => _renderShell()).catch(e => console.warn('[podesavanja] org structure load failed', e));
+  }
+  if (_activeTab === 'masine') {
+    refreshMaintMachinesTab().then(() => _renderShell()).catch(e => console.warn('[podesavanja] masine load failed', e));
   }
 
   if (_authUnsubscribe) _authUnsubscribe();
@@ -245,6 +255,7 @@ function _panelHtml(tab) {
   if (tab === 'maint-profiles') return renderMaintProfilesTab();
   if (tab === 'predmet-aktivacija') return renderPodesavanjePredmetaPanel();
   if (tab === 'masters') return renderMastersTab();
+  if (tab === 'masine') return renderMasineTab();
   if (tab === 'system') return renderSystemTab();
   return '';
 }
@@ -322,6 +333,9 @@ function _wireSidebar() {
       if (t === 'organizacija') {
         refreshOrgStructure().then(() => _renderShell()).catch(e => console.warn('[podesavanja] org structure refresh failed', e));
       }
+      if (t === 'masine') {
+        refreshMaintMachinesTab().then(() => _renderShell()).catch(e => console.warn('[podesavanja] masine refresh failed', e));
+      }
     });
   });
 }
@@ -338,5 +352,8 @@ function _wireTabBody() {
   }
   if (_activeTab === 'organizacija') {
     wireOrgStructureTab(_mountEl);
+  }
+  if (_activeTab === 'masine') {
+    wireMasineTab(_mountEl);
   }
 }

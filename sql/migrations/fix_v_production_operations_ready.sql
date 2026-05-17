@@ -11,9 +11,17 @@
 --
 -- Oslonac za spoljašnji omotač: supabase/migrations/20260507100000__plan_final_qc_hide_fix_double_sum.sql
 -- Bezbednost: revoke_anon_v_production_operations.sql (samo authenticated).
+-- Napomena: PG ne dozvoljava CREATE OR REPLACE kada se menja redosled/imena kolona
+-- (npr. is_ready_for_processing ↔ is_ready_for_machine) — prvo DROP zavisnih view-ova.
 -- ============================================================================
 
-CREATE OR REPLACE VIEW public.v_production_operations_pre_g4
+DROP VIEW IF EXISTS public.v_production_operations_effective CASCADE;
+
+DROP VIEW IF EXISTS public.v_production_operations CASCADE;
+
+DROP VIEW IF EXISTS public.v_production_operations_pre_g4 CASCADE;
+
+CREATE VIEW public.v_production_operations_pre_g4
 WITH (security_invoker = true) AS
 SELECT
   l.id                                                  AS line_id,
@@ -223,10 +231,6 @@ COMMENT ON VIEW public.v_production_operations_pre_g4 IS
 
 GRANT SELECT ON public.v_production_operations_pre_g4 TO authenticated;
 REVOKE SELECT ON public.v_production_operations_pre_g4 FROM anon;
-
-DROP VIEW IF EXISTS public.v_production_operations_effective CASCADE;
-
-DROP VIEW IF EXISTS public.v_production_operations CASCADE;
 
 CREATE VIEW public.v_production_operations
 WITH (security_invoker = true) AS

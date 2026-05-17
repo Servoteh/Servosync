@@ -33,7 +33,7 @@ import {
   setReportPageSize,
   toggleReportSort,
 } from '../../state/lokacije.js';
-import { filterLocationsHierarchical, sortPlacementsForDisplay } from '../../lib/lokacijeFilters.js';
+import { filterLocationsHierarchical } from '../../lib/lokacijeFilters.js';
 import { rowsToCsv, CSV_BOM } from '../../lib/csv.js';
 import {
   fetchAllMovements,
@@ -1573,10 +1573,10 @@ async function renderPanel(host, tabId) {
     const total = typeof placRes?.total === 'number' ? placRes.total : null;
     const locIdx = locationIndex(locs);
 
-    const placSorted = sortPlacementsForDisplay(Array.isArray(plac) ? plac : [], locIdx);
-
+    /* Redosled: kao u Supabase-u (`updated_at DESC`) — bez klijentskog sortiranja po crtežu,
+     * jer prazni stringovi u poređenju ostaju „ispred“ pravih vrednosti i zbunjuju prikaz. */
     const rows = Array.isArray(plac)
-      ? placSorted
+      ? plac
           .map(r => {
             const loc = r.location_id != null ? locIdx.get(String(r.location_id)) : null;
             const locCell = loc
