@@ -19,6 +19,7 @@ import {
   savePbView,
   deletePbView,
   pbErrorMessage,
+  savePbPlanLoadSectionOpen,
 } from './shared.js';
 import {
   updatePbTask,
@@ -32,8 +33,9 @@ import { positionFloatingMenu } from './menuPosition.js';
 const IC_CHEVRON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 const IC_REFRESH = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>';
 
-/* Podrazumevano otvoren panel opterećenja — inače je max-height:0 i izgleda kao da „nema statusa“. */
-let _loadOpen = true;
+/* Inicijalno stanje panela "Opterećenost" — učitava se iz PB state-a pri prvom render-u. */
+let _loadOpen = false;
+let _loadOpenLoaded = false;
 
 /** Jednokratno vezivanje resize/scroll/Escape; callback se ažurira svakim paint() (renderPlanTab se ponovo poziva pri svakom ulasku u Plan tab). */
 let _pbPlanFloatViewportWired = false;
@@ -228,6 +230,10 @@ function buildAlarms(tasks, loadRows) {
 export function renderPlanTab(root, ctx) {
   const canEdit = canEditProjektniBiro();
   const pbMod = loadPbState();
+  if (!_loadOpenLoaded) {
+    _loadOpen = pbMod.planLoadSectionOpen ?? false;
+    _loadOpenLoaded = true;
+  }
   let filters = {
     search: pbMod.moduleSearch ?? '',
     status: pbMod.moduleStatus ?? 'all',
@@ -410,26 +416,28 @@ export function renderPlanTab(root, ctx) {
     const masterHeader = canEdit
       ? `<th class="pb-th-sel"><input type="checkbox" id="pbSelAll" aria-label="Selektuj sve"${masterAttr} /></th>`
       : '';
-    const colCount = canEdit ? 13 : 12;
+    // Header cells u nizu — colspan se računa iz dužine, ne iz magičnog broja.
+    const headerCells = [
+      masterHeader,
+      '<th>#</th>',
+      th('naziv', 'Naziv zadatka'),
+      th('project', 'Projekat'),
+      th('engineer', 'Inženjer'),
+      th('vrsta', 'Vrsta'),
+      th('datumi', 'Datumi'),
+      th('trajanje', 'Trajanje', 'dan'),
+      th('norma', 'Norma', 'h/dan'),
+      th('status', 'Status'),
+      th('pct', '%'),
+      th('prio', 'Prioritet'),
+      '<th></th>',
+    ].filter(Boolean);
+    const colCount = headerCells.length;
     const desktopBody = !_isMobile
       ? `<div class="pb-table-wrap">
           <div class="pb-table-container">
             <table class="pb-table">
-              <thead><tr>
-                ${masterHeader}
-                <th>#</th>
-                ${th('naziv', 'Naziv zadatka')}
-                ${th('project', 'Projekat')}
-                ${th('engineer', 'Inženjer')}
-                ${th('vrsta', 'Vrsta')}
-                ${th('datumi', 'Datumi')}
-                ${th('trajanje', 'Trajanje', 'dan')}
-                ${th('norma', 'Norma', 'h/dan')}
-                ${th('status', 'Status')}
-                ${th('pct', '%')}
-                ${th('prio', 'Prioritet')}
-                <th></th>
-              </tr></thead>
+              <thead><tr>${headerCells.join('')}</tr></thead>
               <tbody>${rowsHtml || `<tr><td colspan="${colCount}" class="pb-muted" style="text-align:center;padding:20px">Nema zadataka za filter.</td></tr>`}</tbody>
             </table>
           </div>
@@ -724,6 +732,7 @@ export function renderPlanTab(root, ctx) {
 
     root.querySelector('#pbLoadToggle')?.addEventListener('click', () => {
       _loadOpen = !_loadOpen;
+      savePbPlanLoadSectionOpen(_loadOpen);
       const content = root.querySelector('.pb-load-content');
       const chevron = root.querySelector('.pb-load-chevron');
       content?.classList.toggle('open', _loadOpen);

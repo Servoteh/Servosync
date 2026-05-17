@@ -1415,8 +1415,9 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
 .pb-table-container {
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 10px;
-  overflow: hidden;
   box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.06));
+  /* `overflow: hidden` ovde lomi sticky THEAD (nearest-scrolling-ancestor pravilo).
+     Umesto klipovanja preko containera, radius dodajemo direktno na th/td uglove ispod. */
 }
 
 @media (max-width: 767px) {
@@ -1455,7 +1456,18 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   text-align: left;
   white-space: nowrap;
   vertical-align: middle;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  /* Box-shadow zamenjuje border-bottom kad je THEAD sticky preko sadržaja. */
+  box-shadow: inset 0 -1px 0 var(--border, #e5e7eb);
 }
+
+/* Border-radius na uglove (zamena za parent overflow:hidden koji je sklonjen). */
+.pb-table thead tr:first-child th:first-child { border-top-left-radius: 10px; }
+.pb-table thead tr:first-child th:last-child { border-top-right-radius: 10px; }
+.pb-table tbody tr:last-child td:first-child { border-bottom-left-radius: 10px; }
+.pb-table tbody tr:last-child td:last-child { border-bottom-right-radius: 10px; }
 
 .pb-table tbody tr {
   transition: background 0.1s;

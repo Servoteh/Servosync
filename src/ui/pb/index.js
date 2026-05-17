@@ -233,9 +233,12 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
             ${projects.map(p => `<option value="${escHtml(p.id)}" ${state.activeProject === p.id ? 'selected' : ''}>${escHtml(p.project_code)} — ${escHtml(p.project_name)}</option>`).join('')}
           </select>
         </div>
-        <div class="pb-context-engineers-row">
+        <div class="pb-context-project-row">
           <span class="pb-context-label">Inženjer</span>
-          <div id="pbChipHost" class="pb-chip-list pb-chip-list--wrap"></div>
+          <select id="pbEngineerSel" class="pb-context-select pb-context-select--grow">
+            <option value="all" ${state.activeEngineer === 'all' ? 'selected' : ''}>Svi inženjeri</option>
+            ${engineers.map(en => `<option value="${escHtml(en.id)}" ${state.activeEngineer === en.id ? 'selected' : ''}>${escHtml(en.full_name)}</option>`).join('')}
+          </select>
         </div>
       </div>
       </div>`;
@@ -248,6 +251,11 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     });
     root.querySelector('#pbProjectSel')?.addEventListener('change', e => {
       state.activeProject = e.target.value;
+      savePbState(state);
+      loadAll();
+    });
+    root.querySelector('#pbEngineerSel')?.addEventListener('change', e => {
+      state.activeEngineer = e.target.value || 'all';
       savePbState(state);
       loadAll();
     });
@@ -266,26 +274,6 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         savePbState(state);
         paintChrome();
         void mountActiveTab();
-      });
-    });
-
-    renderEngineerChips(root.querySelector('#pbChipHost'), state);
-  }
-
-  function renderEngineerChips(host, st) {
-    if (!host) return;
-
-    host.innerHTML = `
-        <button type="button" class="pb-chip ${st.activeEngineer === 'all' ? 'active' : ''}" data-eng="all">Svi</button>
-        ${engineers.map(en => `<button type="button" class="pb-chip ${st.activeEngineer === en.id ? 'active' : ''}" data-eng="${escHtml(en.id)}">${escHtml(en.full_name)}</button>`).join('')}
-    `;
-
-    host.querySelectorAll('[data-eng]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        st.activeEngineer = btn.getAttribute('data-eng') || 'all';
-        savePbState(st);
-        renderEngineerChips(host, st);
-        loadAll();
       });
     });
   }

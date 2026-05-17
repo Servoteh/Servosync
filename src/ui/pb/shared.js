@@ -99,6 +99,7 @@ export function loadPbState() {
       moduleUnassignedOnly: o.moduleUnassignedOnly ?? false,
       ganttStartDate: o.ganttStartDate ?? null,
       ganttZoom: o.ganttZoom ?? 'day',
+      planLoadSectionOpen: o.planLoadSectionOpen ?? false,
     };
   } catch {
     return defaultPbState();
@@ -166,7 +167,15 @@ function defaultPbState() {
     moduleUnassignedOnly: false,
     ganttStartDate: null,
     ganttZoom: 'day',
+    planLoadSectionOpen: false,
   };
+}
+
+/** Čuva da li je "Opterećenost" panel u Plan tabu otvoren. */
+export function savePbPlanLoadSectionOpen(open) {
+  const s = loadPbState();
+  s.planLoadSectionOpen = !!open;
+  savePbState(s);
 }
 
 /** Sinhronizacija Plan / Kanban / Gantt filtera. */
