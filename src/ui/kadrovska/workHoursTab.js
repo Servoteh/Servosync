@@ -30,6 +30,7 @@ import {
 } from '../../services/kadrovska.js';
 import { renderSummaryChips, employeeOptionsHtml } from './shared.js';
 import { queuePayrollNotifications } from '../../services/hrNotifications.js';
+import { askConfirm } from '../../lib/confirm.js';
 
 let panelRef = null;
 
@@ -102,7 +103,12 @@ export async function wireWorkHoursTab(panelEl) {
     const year = Number(yearStr);
     const month = Number(monthStr);
     const label = new Date(year, month - 1, 1).toLocaleString('sr-Latn', { month: 'long', year: 'numeric' });
-    if (!confirm(`Poslati obračun sati za ${label} svim zaposlenim koji imaju upisane sate?\n\nBiće upisane notifikacije u red čekanja (email + WhatsApp gde postoji kontakt).`)) return;
+    const ok = await askConfirm({
+      title: 'Slanje obračuna sati',
+      body: `Poslati obračun sati za ${label} svim zaposlenim koji imaju upisane sate? Biće upisane notifikacije u red čekanja (email + WhatsApp gde postoji kontakt).`,
+      confirmLabel: 'Pošalji',
+    });
+    if (!ok) return;
     const btn = panelRef.querySelector('#whSendPayrollBtn');
     btn.disabled = true; btn.textContent = 'Slanje…';
     try {
@@ -379,7 +385,13 @@ async function submitWorkHourForm() {
 
 async function confirmDeleteWorkHour(id) {
   if (!canEdit()) return;
-  if (!confirm('Obrisati unos sati?')) return;
+  const ok = await askConfirm({
+    title: 'Brisanje unosa sati',
+    body: 'Obrisati unos sati? Akcija je trajna.',
+    confirmLabel: 'Obriši',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     if (getIsOnline() && hasSupabaseConfig() && !String(id).startsWith('local_')) {
       const ok = await deleteWorkHourFromDb(id);

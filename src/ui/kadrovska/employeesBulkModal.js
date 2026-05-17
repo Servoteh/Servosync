@@ -28,6 +28,7 @@ import { canViewEmployeePii } from '../../state/auth.js';
 import { loadXlsx } from '../../lib/xlsx.js';
 import { saveEmployeeToDb } from '../../services/employees.js';
 import { isValidJmbgFormat, parseJmbg as parseJmbgLib } from '../../lib/jmbg.js';
+import { askConfirm } from '../../lib/confirm.js';
 
 /* ─── KOLONE ─────────────────────────────────────────────────────────── */
 
@@ -344,8 +345,14 @@ function wireGridHost() {
     gridRows.push(makeEmptyRow());
     appendGridRow(gridRows.length - 1);
   });
-  modalEl.querySelector('#empBulkClearBtn')?.addEventListener('click', () => {
-    if (!confirm('Obrisati sve redove?')) return;
+  modalEl.querySelector('#empBulkClearBtn')?.addEventListener('click', async () => {
+    const ok = await askConfirm({
+      title: 'Brisanje svih redova',
+      body: 'Obrisati sve redove iz brzog unosa? Promene koje nisu sačuvane će biti izgubljene.',
+      confirmLabel: 'Obriši',
+      danger: true,
+    });
+    if (!ok) return;
     gridRows = [makeEmptyRow()];
     refreshGridAll();
   });

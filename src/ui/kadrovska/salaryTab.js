@@ -36,6 +36,7 @@ import {
   renderPayrollSubtab,
   wirePayrollSubtab,
 } from './salaryPayrollTab.js';
+import { askConfirm } from '../../lib/confirm.js';
 
 const SUBTAB_KEY = 'pm_salary_subtab';
 const VALID_SUBTABS = new Set(['terms', 'payroll']);
@@ -538,9 +539,15 @@ async function openHistoryModal(empId) {
   });
   m.querySelectorAll('button[data-act="del"]').forEach(b => {
     b.addEventListener('click', async () => {
-      if (!confirm('Obrisati ovaj unos zarade? Akcija je trajna.')) return;
-      const ok = await deleteTermFromDb(b.dataset.termId);
-      if (!ok) { showToast('⚠ Brisanje nije uspelo'); return; }
+      const ok = await askConfirm({
+        title: 'Brisanje unosa zarade',
+        body: 'Obrisati ovaj unos zarade? Akcija je trajna.',
+        confirmLabel: 'Obriši',
+        danger: true,
+      });
+      if (!ok) return;
+      const deleted = await deleteTermFromDb(b.dataset.termId);
+      if (!deleted) { showToast('⚠ Brisanje nije uspelo'); return; }
       kadrSalaryState.termsByEmp.delete(empId);
       await ensureCurrentSalariesLoaded(true);
       closeTermModal();

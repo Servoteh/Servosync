@@ -30,6 +30,7 @@ import { triggerHrDispatch } from '../../services/hrNotifications.js';
 import { ensureEmployeesLoaded, employeeNameById } from '../../services/kadrovska.js';
 import { renderSummaryChips } from './shared.js';
 import { consumeKadrDashIntent } from '../../services/kadrovskaDashboard.js';
+import { askConfirm } from '../../lib/confirm.js';
 
 let panelRoot = null;
 
@@ -298,7 +299,12 @@ async function _approveRequest(id) {
   const emp = kadrovskaState.employees.find(e => e.id === req.employeeId);
   if (!canManageEmployee(emp || {})) return;
 
-  if (!confirm(`Odobriti zahtev za GO zaposlenog ${employeeNameById(req.employeeId)} (${formatDate(req.dateFrom)} – ${formatDate(req.dateTo)})?`)) return;
+  const ok = await askConfirm({
+    title: 'Odobravanje GO',
+    body: `Odobriti zahtev za godišnji odmor zaposlenog ${employeeNameById(req.employeeId)} u periodu ${formatDate(req.dateFrom)} – ${formatDate(req.dateTo)}? Odobravanjem se automatski kreira evidencija odsustva.`,
+    confirmLabel: 'Odobri',
+  });
+  if (!ok) return;
 
   const res = await updateVacationRequestStatusInDb(id, 'approved', '');
   if (!res) { showToast('⚠ Greška pri odobravanju'); return; }
@@ -394,9 +400,15 @@ async function _deleteRequest(id) {
   const reqDel = kadrVacReqState.items.find(r => r.id === id);
   const empDel = reqDel ? kadrovskaState.employees.find(e => e.id === reqDel.employeeId) : null;
   if (!canManageEmployee(empDel || {})) return;
-  if (!confirm('Obrisati ovaj zahtev?')) return;
-  const ok = await deleteVacationRequestFromDb(id);
-  if (!ok) { showToast('⚠ Brisanje nije uspelo'); return; }
+  const ok = await askConfirm({
+    title: 'Brisanje zahteva',
+    body: 'Obrisati ovaj zahtev za GO? Akcija je trajna.',
+    confirmLabel: 'Obriši',
+    danger: true,
+  });
+  if (!ok) return;
+  const deleted = await deleteVacationRequestFromDb(id);
+  if (!deleted) { showToast('⚠ Brisanje nije uspelo'); return; }
   kadrVacReqState.items = kadrVacReqState.items.filter(r => r.id !== id);
   _renderRows();
   showToast('🗑 Zahtev obrisan');

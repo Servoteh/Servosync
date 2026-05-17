@@ -18,6 +18,7 @@ import {
 } from '../../services/medicalExams.js';
 import { ensureEmployeesLoaded } from '../../services/kadrovska.js';
 import { kadrovskaState } from '../../state/kadrovska.js';
+import { askConfirm } from '../../lib/confirm.js';
 
 const EXAM_TYPE_LABELS = {
   redovan:    'Redovan',
@@ -149,9 +150,15 @@ async function refreshMedList() {
 }
 
 async function onDeleteMedExam(id) {
-  if (!confirm('Obrisati ovaj lekarski pregled?')) return;
-  const ok = await deleteMedExam(id);
-  if (!ok) { showToast('⚠ Brisanje nije uspelo'); return; }
+  const ok = await askConfirm({
+    title: 'Brisanje lekarskog pregleda',
+    body: 'Obrisati ovaj lekarski pregled? Akcija je trajna.',
+    confirmLabel: 'Obriši',
+    danger: true,
+  });
+  if (!ok) return;
+  const deleted = await deleteMedExam(id);
+  if (!deleted) { showToast('⚠ Brisanje nije uspelo'); return; }
   showToast('🗑 Obrisano');
   await refreshMedList();
   onChangeCb?.();

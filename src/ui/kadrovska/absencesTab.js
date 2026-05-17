@@ -33,6 +33,7 @@ import {
 } from '../../services/kadrovska.js';
 import { renderSummaryChips, employeeOptionsHtml } from './shared.js';
 import { renderOdsustvaPregledHtml, wireOdsustvaPregledTab } from './odsustvaPregledTab.js';
+import { askConfirm } from '../../lib/confirm.js';
 
 let panelRef = null;       // listing sub-container
 let hostPanelRef = null;   // outer tab panel
@@ -496,7 +497,13 @@ async function submitAbsenceForm() {
 
 async function confirmDeleteAbsence(id) {
   if (!canEditKadrovska()) return;
-  if (!confirm('Obrisati odsustvo?')) return;
+  const ok = await askConfirm({
+    title: 'Brisanje odsustva',
+    body: 'Obrisati odsustvo? Akcija je trajna.',
+    confirmLabel: 'Obriši',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     if (getIsOnline() && hasSupabaseConfig() && !String(id).startsWith('local_')) {
       const ok = await deleteAbsenceFromDb(id);

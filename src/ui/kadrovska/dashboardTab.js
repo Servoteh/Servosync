@@ -153,6 +153,43 @@ function _applyKpi(rootEl, kpi) {
   }
 }
 
+/**
+ * Izvuci prvi datum iz subtitle stringa (RPC vraća različite formate:
+ * "do 2026-05-25", "Rođendan 18.05.", "od 2026-06-01 do 2026-06-10").
+ * Vraća YMD ('YYYY-MM-DD') ili null.
+ */
+function _extractDate(text, refYear) {
+  if (!text) return null;
+  /* ISO YYYY-MM-DD */
+  const iso = String(text).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  /* DD.MM. ili DD.MM.YYYY */
+  const dot = String(text).match(/(\d{1,2})\.(\d{1,2})\.?(\d{4})?/);
+  if (dot) {
+    const day = String(parseInt(dot[1], 10)).padStart(2, '0');
+    const mon = String(parseInt(dot[2], 10)).padStart(2, '0');
+    const yr = dot[3] || String(refYear || new Date().getFullYear());
+    return `${yr}-${mon}-${day}`;
+  }
+  return null;
+}
+
+/** Vrati { label, tone } pill za broj dana do datuma; null ako datum nedostaje. */
+function _deadlinePill(ymd) {
+  if (!ymd) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(ymd + 'T00:00:00');
+  if (Number.isNaN(target.getTime())) return null;
+  const diff = Math.round((target - today) / 86400000);
+  if (diff < 0) return { label: 'Isteklo', tone: 'expired' };
+  if (diff === 0) return { label: 'Danas', tone: 'today' };
+  if (diff === 1) return { label: 'Sutra', tone: 'soon' };
+  if (diff <= 7) return { label: `za ${diff} d`, tone: 'soon' };
+  if (diff <= 30) return { label: `za ${diff} d`, tone: 'warn' };
+  return { label: `za ${diff} d`, tone: 'muted' };
+}
+
 function _renderActions(rootEl, items, onOpenTab) {
   const ul = rootEl.querySelector('#kadrDashActionStack');
   if (!ul) return;
@@ -169,7 +206,31 @@ function _renderActions(rootEl, items, onOpenTab) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'kadr-dashboard__action-item';
-    btn.textContent = it.title + (it.subtitle ? ` — ${it.subtitle}` : '');
+
+    /* Izvuci rok iz subtitle-a (RPC vraća "do YYYY-MM-DD", "Rođendan DD.MM.", itd.). */
+    const ymd = _extractDate(it.subtitle);
+    const pill = _deadlinePill(ymd);
+
+    const titleEl = document.createElement('span');
+    titleEl.className = 'kadr-dashboard__action-title';
+    titleEl.textContent = it.title || '';
+
+    btn.appendChild(titleEl);
+
+    if (pill) {
+      const pillEl = document.createElement('span');
+      pillEl.className = `kadr-dashboard__action-pill is-${pill.tone}`;
+      pillEl.textContent = pill.label;
+      btn.appendChild(pillEl);
+    }
+
+    if (it.subtitle) {
+      const subEl = document.createElement('span');
+      subEl.className = 'kadr-dashboard__action-sub';
+      subEl.textContent = it.subtitle;
+      btn.appendChild(subEl);
+    }
+
     btn.addEventListener('click', () => {
       const tab = it.deep_link_tab || it.deepLink?.tab;
       if (tab && typeof onOpenTab === 'function') {

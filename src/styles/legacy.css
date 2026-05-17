@@ -2307,6 +2307,82 @@ body.module-settings .set-shell > .set-layout {
   margin-top:6px;
 }
 
+/* Confirm modal — manji, fokusiran. */
+.kadr-confirm { max-width: 440px; }
+.kadr-confirm .kadr-modal-subtitle {
+  font-size: 13px;
+  color: var(--text);
+  letter-spacing: 0;
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+.kadr-confirm input[type="text"] {
+  width: 100%; box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2, var(--surface));
+  color: var(--text);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 13px;
+}
+.kadr-modal-overlay.kadr-confirm--danger .kadr-modal-title {
+  color: var(--red, #ef4444);
+}
+.kadr-modal-overlay.kadr-confirm--danger .kadr-modal {
+  border-top: 3px solid var(--red, #ef4444);
+}
+
+/* Audit trail modal — istorija izmena */
+.emp-audit-table { width: 100%; }
+.emp-audit-row { cursor: pointer; }
+.emp-audit-row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.emp-audit-chev {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--text3);
+  width: 16px;
+  text-align: center;
+}
+.emp-audit-detail > td {
+  background: color-mix(in srgb, var(--text3) 4%, transparent);
+  padding: 8px 12px 12px;
+}
+.emp-audit-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.emp-audit-diff-table th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: var(--text3);
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.emp-audit-diff-table td {
+  padding: 4px 8px;
+  vertical-align: top;
+}
+.emp-audit-before {
+  color: color-mix(in srgb, #dc2626 60%, var(--text2));
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, #dc2626 35%, transparent);
+}
+.emp-audit-after {
+  color: color-mix(in srgb, #16a34a 70%, var(--text));
+  font-weight: 600;
+}
+.emp-audit-arrow {
+  color: var(--text3);
+  text-align: center;
+  width: 24px;
+}
+[data-theme="light"] .emp-audit-before { color: #991b1b; }
+[data-theme="light"] .emp-audit-after  { color: #166534; }
+
 /* Badges for absence type / contract type */
 .kadr-type-badge {
   display:inline-block;

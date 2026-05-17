@@ -27,6 +27,7 @@ import {
   triggerScheduleHrReminders,
 } from '../../services/hrNotifications.js';
 import { consumePendingFilter } from '../../state/kadrovska.js';
+import { askConfirm } from '../../lib/confirm.js';
 
 let panelRoot = null;
 let currentFilter = 'queued';
@@ -200,11 +201,22 @@ function applyFilter() {
         const ok = await retryHrNotif(id);
         showToast(ok ? '♻ Vraćeno u queue' : '⚠ Neuspeh');
       } else if (act === 'cancel') {
-        if (!confirm('Otkazati ovo upozorenje?')) return;
+        const ok1 = await askConfirm({
+          title: 'Otkazivanje upozorenja',
+          body: 'Otkazati ovo upozorenje?',
+          confirmLabel: 'Otkaži',
+        });
+        if (!ok1) return;
         const ok = await cancelHrNotif(id);
         showToast(ok ? '🚫 Otkazano' : '⚠ Neuspeh');
       } else if (act === 'del') {
-        if (!confirm('Obrisati zapis? Akcija je trajna.')) return;
+        const ok2 = await askConfirm({
+          title: 'Brisanje zapisa',
+          body: 'Obrisati zapis? Akcija je trajna.',
+          confirmLabel: 'Obriši',
+          danger: true,
+        });
+        if (!ok2) return;
         const ok = await deleteHrNotif(id);
         showToast(ok ? '🗑 Obrisano' : '⚠ Neuspeh');
       }

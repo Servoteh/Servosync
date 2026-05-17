@@ -46,7 +46,9 @@ let _ganttVacReqByEmp = new Map();
 let _viewMode = 'table';
 let _collapsedDepts = new Set();
 let _deptDropOpen = false;
-let _selectedDepts = new Set(); // empty = sve
+/** Skup SAKRIVENIH odeljenja u Gantt/tabeli (empty = sva vidljiva).
+   Korisnik unchek-uje odeljenje u dropdownu → ulazi u ovaj skup. */
+let _hiddenDepts = new Set();
 
 /** Reset module-level state (poziva se iz resetKadrovskaState — logout / switch user). */
 subscribeKadrReset(() => {
@@ -58,7 +60,7 @@ subscribeKadrReset(() => {
   _viewMode = 'table';
   _collapsedDepts = new Set();
   _deptDropOpen = false;
-  _selectedDepts = new Set();
+  _hiddenDepts = new Set();
 });
 
 /* ── dept color palette ─────────────────────────────────────────────── */
@@ -167,10 +169,10 @@ export async function wireVacationTab(panelEl) {
   panelEl.querySelector('#vacViewGantt').addEventListener('click', () => _toggleView('gantt'));
 
   panelEl.querySelector('#vacDeptBtn').addEventListener('click', _toggleDeptDropdown);
-  panelEl.querySelector('#vacDeptAll').addEventListener('click', () => { _selectedDepts.clear(); _closeDeptDropdown(); _applyFiltersAndRender(); });
+  panelEl.querySelector('#vacDeptAll').addEventListener('click', () => { _hiddenDepts.clear(); _closeDeptDropdown(); _applyFiltersAndRender(); });
   panelEl.querySelector('#vacDeptNone').addEventListener('click', () => {
     const depts = _allDepts();
-    _selectedDepts = new Set(depts);
+    _hiddenDepts = new Set(depts);
     _closeDeptDropdown();
     _applyFiltersAndRender();
   });
@@ -225,7 +227,7 @@ function _rebuildDeptList() {
   if (!list) return;
   const depts = _allDepts();
   list.innerHTML = depts.map(d => {
-    const checked = !_selectedDepts.has(d);
+    const checked = !_hiddenDepts.has(d);
     const col = deptColor(d);
     return `<label class="vac-dept-item">
       <input type="checkbox" data-dept="${escHtml(d)}" ${checked ? 'checked' : ''}>
@@ -236,8 +238,8 @@ function _rebuildDeptList() {
   list.querySelectorAll('input[type=checkbox]').forEach(cb => {
     cb.addEventListener('change', () => {
       const dept = cb.dataset.dept;
-      if (cb.checked) _selectedDepts.delete(dept);
-      else _selectedDepts.add(dept);
+      if (cb.checked) _hiddenDepts.delete(dept);
+      else _hiddenDepts.add(dept);
       _updateDeptBtnLabel();
       _applyFiltersAndRender();
     });
@@ -250,7 +252,7 @@ function _updateDeptBtnLabel() {
   const btn = panelRoot.querySelector('#vacDeptBtn');
   if (!btn) return;
   const total = _allDepts().length;
-  const hidden = _selectedDepts.size;
+  const hidden = _hiddenDepts.size;
   if (hidden === 0 || hidden === total) {
     btn.textContent = 'Odeljenja ▾';
   } else {
@@ -306,7 +308,7 @@ function computeRows() {
 
   const emps = kadrovskaState.employees.filter(e => {
     if (statusF === 'active' && !e.isActive) return false;
-    if (_selectedDepts.has(e.department || '')) return false;
+    if (_hiddenDepts.has(e.department || '')) return false;
     if (q) {
       const hay = [employeeDisplayName(e), e.firstName, e.lastName, e.department, e.team].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;

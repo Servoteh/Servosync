@@ -33,6 +33,7 @@ import {
 } from '../../services/kadrovska.js';
 import { consumeKadrDashIntent } from '../../services/kadrovskaDashboard.js';
 import { renderSummaryChips, employeeOptionsHtml } from './shared.js';
+import { askConfirm } from '../../lib/confirm.js';
 
 let panelRef = null;
 /** Set izabranih ID-jeva ugovora za bulk akcije. Survives re-render. */
@@ -366,7 +367,12 @@ async function applyBulkAction(items) {
     }
   }
 
-  const ok = confirm(`Primeniti akciju nad ${items.length} ugovor(a)? Akcija se ne može poništiti.`);
+  const ok = await askConfirm({
+    title: 'Bulk akcija nad ugovorima',
+    body: `Primeniti akciju nad ${items.length} ugovor(a)? Akcija se ne može poništiti.`,
+    confirmLabel: 'Primeni',
+    danger: true,
+  });
   if (!ok) return;
 
   btn.disabled = true; btn.textContent = '⏳ Obrada…';
@@ -562,7 +568,13 @@ async function submitContractForm() {
 
 async function confirmDeleteContract(id) {
   if (!canEdit()) return;
-  if (!confirm('Obrisati ugovor?')) return;
+  const ok = await askConfirm({
+    title: 'Brisanje ugovora',
+    body: 'Obrisati ugovor? Akcija je trajna.',
+    confirmLabel: 'Obriši',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     if (getIsOnline() && hasSupabaseConfig() && !String(id).startsWith('local_')) {
       const ok = await deleteContractFromDb(id);

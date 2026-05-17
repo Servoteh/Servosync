@@ -33,6 +33,7 @@ import { ensureEmployeesLoaded, ensureOrgStructureLoaded, employeeNameById } fro
 import { loadGridMonth, batchUpsertGrid } from '../../services/grid.js';
 import { renderSummaryChips } from './shared.js';
 import { loadXlsx } from '../../lib/xlsx.js';
+import { askConfirm } from '../../lib/confirm.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
 import { ssGet, ssSet } from '../../lib/storage.js';
 import { loadHolidaysForRange, holidayDateSet } from '../../services/holidays.js';
@@ -864,7 +865,13 @@ async function _saveAllGrid() {
 async function _onMonthChange() {
   const monthEl = _gridQ('#gridMonth');
   if (_gridDirtyCount() > 0) {
-    if (!confirm('Imaš nesačuvanih izmena. Promena meseca će ih odbaciti. Nastaviti?')) {
+    const ok = await askConfirm({
+      title: 'Nesačuvane izmene',
+      body: `Imaš ${_gridDirtyCount()} nesačuvanih izmena. Promena meseca će ih odbaciti. Nastaviti?`,
+      confirmLabel: 'Odbaci i nastavi',
+      danger: true,
+    });
+    if (!ok) {
       if (monthEl) monthEl.value = gridState.monthKey;
       return;
     }
@@ -1037,7 +1044,13 @@ export async function wireGridTab(panel, toolbarHost = null) {
   });
   _gridQ('#gridReload')?.addEventListener('click', async () => {
     if (_gridDirtyCount() > 0) {
-      if (!confirm('Imaš nesačuvanih izmena. Reload će ih odbaciti. Nastaviti?')) return;
+      const ok = await askConfirm({
+        title: 'Nesačuvane izmene',
+        body: `Imaš ${_gridDirtyCount()} nesačuvanih izmena. Reload će ih odbaciti. Nastaviti?`,
+        confirmLabel: 'Odbaci i osveži',
+        danger: true,
+      });
+      if (!ok) return;
       gridState.dirty.clear();
     }
     const yyyymm = _gridQ('#gridMonth')?.value || _gridDefaultMonthKey();

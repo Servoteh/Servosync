@@ -38,6 +38,7 @@ import {
 } from '../../services/salaryPayroll.js';
 import { renderSummaryChips } from './shared.js';
 import { loadXlsx } from '../../lib/xlsx.js';
+import { askConfirm } from '../../lib/confirm.js';
 
 const MONTH_NAMES = [
   'Januar', 'Februar', 'Mart', 'April', 'Maj', 'Jun',
@@ -215,12 +216,13 @@ async function lockMonthBulk() {
   }
   const y = kadrPayrollState.selectedYear;
   const m = kadrPayrollState.selectedMonth;
-  const ok = confirm(
-    `Zaključati mesec ${MONTH_NAMES[m - 1]} ${y}?\n\n`
-    + `${candidates.length} red(ova) će biti markirano kao ISPLAĆENO.\n`
-    + `Nakon toga se ti redovi VIŠE NE MOGU menjati ni brisati.\n\n`
-    + `Ova akcija se ne može poništiti.`
-  );
+  const ok = await askConfirm({
+    title: `Zaključavanje meseca ${MONTH_NAMES[m - 1]} ${y}`,
+    body: `${candidates.length} red(ova) će biti markirano kao ISPLAĆENO. Nakon toga se ti redovi VIŠE NE MOGU menjati ni brisati. Ova akcija se ne može poništiti.`,
+    confirmLabel: 'Zaključaj',
+    danger: true,
+    requireType: 'ZAKLJUČAJ',
+  });
   if (!ok) return;
 
   const btn = rootEl.querySelector('#payrLockMonth');
@@ -507,7 +509,15 @@ async function cycleStatus(tr) {
   if (!r) return;
   const next = nextStatus(r.status);
   if (!next) { showToast('ℹ Već je u krajnjem statusu'); return; }
-  if (next === 'paid' && !confirm('Obeležiti kao ISPLAĆENO? Nakon toga se red više ne može menjati.')) return;
+  if (next === 'paid') {
+    const ok = await askConfirm({
+      title: 'Markiraj kao isplaćeno',
+      body: 'Obeležiti kao ISPLAĆENO? Nakon toga se red više ne može menjati.',
+      confirmLabel: 'Markiraj',
+      danger: true,
+    });
+    if (!ok) return;
+  }
   const payload = augmentPayloadWithPayrollK33(collectRowPayload(tr));
   payload.status = next;
   const saved = await upsertPayroll(payload);
@@ -535,10 +545,16 @@ function statusLabel(s) {
 
 async function deleteRow(tr) {
   if (!tr) return;
-  if (!confirm('Obrisati ceo obračun za ovog zaposlenog u ovom mesecu?')) return;
+  const ok = await askConfirm({
+    title: 'Brisanje obračuna',
+    body: 'Obrisati ceo obračun za ovog zaposlenog u ovom mesecu? Akcija je trajna.',
+    confirmLabel: 'Obriši',
+    danger: true,
+  });
+  if (!ok) return;
   const id = tr.dataset.id;
-  const ok = await deletePayroll(id);
-  if (!ok) { showToast('⚠ Nije obrisano'); return; }
+  const deleted = await deletePayroll(id);
+  if (!deleted) { showToast('⚠ Nije obrisano'); return; }
   const key = currentKey();
   const rows = (kadrPayrollState.byPeriod.get(key) || []).filter(r => r.id !== id);
   kadrPayrollState.byPeriod.set(key, rows);

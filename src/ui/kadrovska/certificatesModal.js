@@ -15,6 +15,7 @@ import {
 } from '../../services/certificates.js';
 import { ensureEmployeesLoaded } from '../../services/kadrovska.js';
 import { kadrovskaState } from '../../state/kadrovska.js';
+import { askConfirm } from '../../lib/confirm.js';
 
 let currentEmpId = null;
 let currentList = [];
@@ -135,9 +136,15 @@ async function refreshCertList() {
 }
 
 async function onDeleteCert(id) {
-  if (!confirm('Obrisati ovaj sertifikat?')) return;
-  const ok = await deleteCertificate(id);
-  if (!ok) { showToast('⚠ Brisanje nije uspelo'); return; }
+  const ok = await askConfirm({
+    title: 'Brisanje sertifikata',
+    body: 'Obrisati ovaj sertifikat? Akcija je trajna.',
+    confirmLabel: 'Obriši',
+    danger: true,
+  });
+  if (!ok) return;
+  const deleted = await deleteCertificate(id);
+  if (!deleted) { showToast('⚠ Brisanje nije uspelo'); return; }
   showToast('🗑 Obrisano');
   await refreshCertList();
   onChangeCb?.();

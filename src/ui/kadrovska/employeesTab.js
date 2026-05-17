@@ -56,7 +56,9 @@ import { consumeKadrDashIntent } from '../../services/kadrovskaDashboard.js';
 import { openEmployeesBulkModal } from './employeesBulkModal.js';
 import { openMedicalExamsModal } from './medicalExamsModal.js';
 import { openCertificatesModal } from './certificatesModal.js';
+import { openEmployeeAuditModal } from './employeeAuditModal.js';
 import { parseJmbg as parseJmbgLib, validateJmbg } from '../../lib/jmbg.js';
+import { askConfirm } from '../../lib/confirm.js';
 
 let panelRef = null;
 let onChangeCb = null;
@@ -143,12 +145,15 @@ export async function wireEmployeesTab(panelEl, { onChange } = {}) {
   });
 
   panelEl.addEventListener('click', e => {
-    const btn = e.target.closest('.btn-emp-edit, .btn-emp-delete, .btn-emp-medical, .btn-emp-certs');
+    const btn = e.target.closest('.btn-emp-edit, .btn-emp-deactivate, .btn-emp-activate, .btn-emp-purge, .btn-emp-medical, .btn-emp-certs, .btn-emp-audit');
     if (!btn || btn.disabled) return;
     const empId = btn.getAttribute('data-id');
     if (!empId) return;
-    if (btn.classList.contains('btn-emp-edit'))    openEmployeeModal(empId);
-    if (btn.classList.contains('btn-emp-delete'))  confirmDeleteEmployee(empId);
+    if (btn.classList.contains('btn-emp-edit'))       openEmployeeModal(empId);
+    if (btn.classList.contains('btn-emp-deactivate')) confirmDeactivateEmployee(empId);
+    if (btn.classList.contains('btn-emp-activate'))   setEmployeeActive(empId, true);
+    if (btn.classList.contains('btn-emp-purge'))      confirmHardDeleteEmployee(empId);
+    if (btn.classList.contains('btn-emp-audit'))      openEmployeeAuditModal(empId);
     if (btn.classList.contains('btn-emp-medical')) openMedicalExamsModal(empId, {
       onChange: async () => {
         /* Trigger u DB-u je već ažurirao employees.medical_exam_*. Reload + refresh. */
@@ -326,7 +331,10 @@ export function refreshEmployeesTab() {
         <button class="btn-row-act btn-emp-edit" data-id="${rowId}" ${edit ? '' : 'disabled'} title="${edit ? 'Izmeni' : 'Samo pregled'}">Izmeni</button>
         ${canViewEmployeePii() ? `<button class="btn-row-act btn-emp-medical" data-id="${rowId}" title="Lekarski pregledi — istorija">🩺</button>` : ''}
         ${canViewEmployeePii() ? `<button class="btn-row-act btn-emp-certs" data-id="${rowId}" title="Sertifikati / licence / obuke">📜</button>` : ''}
-        <button class="btn-row-act danger btn-emp-delete" data-id="${rowId}" ${edit ? '' : 'disabled'} title="${edit ? 'Obriši' : 'Samo pregled'}">Obriši</button>
+        ${isAdmin() ? `<button class="btn-row-act btn-emp-audit" data-id="${rowId}" title="Istorija izmena (audit log)">📒</button>` : ''}
+        ${e.isActive
+          ? `<button class="btn-row-act btn-emp-deactivate" data-id="${rowId}" ${edit ? '' : 'disabled'} title="${edit ? 'Deaktiviraj zaposlenog (zadrži istoriju)' : 'Samo pregled'}">Deaktiviraj</button>`
+          : `<button class="btn-row-act btn-emp-activate" data-id="${rowId}" ${edit ? '' : 'disabled'} title="${edit ? 'Vrati u aktivne' : 'Samo pregled'}">Aktiviraj</button>${isAdmin() ? `<button class="btn-row-act danger btn-emp-purge" data-id="${rowId}" title="Trajno obriši (samo admin) — može da padne ako postoje vezani podaci">🗑 Trajno</button>` : ''}`}
       </td>
     </tr>`;
   }).join('');
@@ -705,9 +713,15 @@ function renderChildrenList(modal, employeeId, children) {
     </table>`;
   host.querySelectorAll('button[data-act="del-child"]').forEach(b => {
     b.addEventListener('click', async () => {
-      if (!confirm('Obrisati ovo dete iz evidencije?')) return;
-      const ok = await deleteChildFromDb(b.dataset.childId);
-      if (!ok) { showToast('⚠ Nije uspelo brisanje'); return; }
+      const ok = await askConfirm({
+        title: 'Brisanje deteta',
+        body: 'Obrisati ovo dete iz evidencije? Akcija je trajna.',
+        confirmLabel: 'Obriši',
+        danger: true,
+      });
+      if (!ok) return;
+      const deleted = await deleteChildFromDb(b.dataset.childId);
+      if (!deleted) { showToast('⚠ Nije uspelo brisanje'); return; }
       const list = (kadrChildrenState.byEmp.get(employeeId) || []).filter(c => c.id !== b.dataset.childId);
       kadrChildrenState.byEmp.set(employeeId, list);
       renderChildrenList(modal, employeeId, list);
@@ -878,28 +892,92 @@ async function submitEmployeeForm() {
   }
 }
 
-async function confirmDeleteEmployee(id) {
+/**
+ * Soft toggle: postavi is_active na zadatu vrednost.
+ *   - aktivan → neaktivan: deaktiviranje (zaposleni ostaje u istoriji, ne broji se u aktivne)
+ *   - neaktivan → aktivan: vraćanje u listu aktivnih
+ *
+ * Preferiramo ovo umesto hard DELETE jer:
+ *   - svi vezani podaci (ugovori, sati, odsustva, zarade) ostaju netaknuti
+ *   - moguće je vratiti zaposlenog ako je deaktiviranje bila greška
+ *   - FK ograničenja u DB-u ne mogu da blokiraju akciju
+ */
+async function setEmployeeActive(id, isActive) {
   if (!canEditKadrovska()) {
-    showToast('⚠ Nemate prava za brisanje');
+    showToast('⚠ Nemate prava za izmenu');
     return;
   }
   const emp = kadrovskaState.employees.find(e => e.id === id);
   if (!emp) return;
-  if (!confirm(`Obrisati zaposlenog "${employeeDisplayName(emp)}"?\nOva akcija je trajna.`)) return;
+
   try {
     if (getIsOnline() && hasSupabaseConfig() && !String(id).startsWith('local_')) {
-      const ok = await deleteEmployeeFromDb(id);
-      if (!ok) {
-        showToast('⚠ Supabase brisanje nije uspelo');
+      const res = await updateEmployeeInDb({ ...emp, isActive });
+      if (!res || !res.length) {
+        showToast('⚠ Promena nije uspela');
+        return;
+      }
+      const saved = mapDbEmployee(res[0]);
+      const idx = kadrovskaState.employees.findIndex(e => e.id === saved.id);
+      if (idx >= 0) kadrovskaState.employees[idx] = saved;
+    } else {
+      emp.isActive = isActive;
+    }
+    saveEmployeesCache(kadrovskaState.employees);
+    refreshEmployeesTab();
+    showToast(isActive ? '✅ Zaposleni je vraćen u aktivne' : '🔒 Zaposleni je deaktiviran');
+  } catch (e) {
+    console.error('[kadrovska] setEmployeeActive', e);
+    showToast('⚠ Greška pri promeni statusa');
+  }
+}
+
+async function confirmDeactivateEmployee(id) {
+  const emp = kadrovskaState.employees.find(e => e.id === id);
+  if (!emp) return;
+  const ok = await askConfirm({
+    title: 'Deaktiviranje zaposlenog',
+    body: `Deaktivirati "${employeeDisplayName(emp)}"? Zaposleni će biti uklonjen iz aktivnih, ali sva istorija (ugovori, sati, odsustva) ostaje. Možeš ga kasnije vratiti.`,
+    confirmLabel: 'Deaktiviraj',
+  });
+  if (!ok) return;
+  await setEmployeeActive(id, false);
+}
+
+/**
+ * Hard DELETE — trajno brisanje iz baze. Dostupno samo admin-u i samo za
+ * zaposlene koji su već neaktivni. Akcija je nepovratna; ako postoje FK
+ * vezani redovi (ugovori, sati, odsustva, zarade), DB će vratiti grešku.
+ */
+async function confirmHardDeleteEmployee(id) {
+  if (!isAdmin()) {
+    showToast('⚠ Trajno brisanje je dostupno samo administratoru');
+    return;
+  }
+  const emp = kadrovskaState.employees.find(e => e.id === id);
+  if (!emp) return;
+  const ok = await askConfirm({
+    title: 'Trajno brisanje zaposlenog',
+    body: `OPREZ: brisanjem zaposlenog "${employeeDisplayName(emp)}" trajno se gubi i sva vezana istorija. Ako postoje ugovori / sati / odsustva, DB će odbiti akciju — u tom slučaju ostavi deaktiviranog. Preporučujemo da prvo izvezeš podatke u Excel.`,
+    confirmLabel: 'Trajno obriši',
+    danger: true,
+    requireType: 'OBRIŠI',
+  });
+  if (!ok) return;
+  try {
+    if (getIsOnline() && hasSupabaseConfig() && !String(id).startsWith('local_')) {
+      const deleted = await deleteEmployeeFromDb(id);
+      if (!deleted) {
+        showToast('⚠ Brisanje nije uspelo — verovatno postoje vezani podaci (ostaviti deaktiviranog)');
         return;
       }
     }
     kadrovskaState.employees = kadrovskaState.employees.filter(e => e.id !== id);
     saveEmployeesCache(kadrovskaState.employees);
     refreshEmployeesTab();
-    showToast('🗑 Zaposleni obrisan');
+    showToast('🗑 Zaposleni trajno obrisan');
   } catch (e) {
-    console.error('[kadrovska] delete error', e);
+    console.error('[kadrovska] hard delete error', e);
     showToast('⚠ Greška pri brisanju');
   }
 }
