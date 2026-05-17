@@ -2016,10 +2016,11 @@ body.module-settings .set-shell > .set-layout {
   overflow:hidden;
 }
 
-/* Sidebar shell */
+/* Sidebar shell — uža kolona (~½ stare širine), tekst u više redova */
 .set-sidebar {
-  width:256px;
-  min-width:220px;
+  width:128px;
+  min-width:92px;
+  max-width:42vw;
   flex-shrink:0;
   background:var(--surface);
   border-right:1px solid var(--border);
@@ -2035,41 +2036,46 @@ body.module-settings .set-shell > .set-layout {
 
 /* Sidebar top header */
 .set-sidebar-header {
-  padding:16px;
+  padding:10px 8px;
   border-bottom:1px solid var(--border);
   flex-shrink:0;
 }
 .set-sidebar-header-label {
-  font-size:10px;
+  font-size:9px;
   font-weight:700;
-  letter-spacing:0.08em;
+  letter-spacing:0.06em;
   text-transform:uppercase;
   color:var(--text3);
   margin-bottom:2px;
 }
 .set-sidebar-header-title {
-  font-size:13px;
+  font-size:11px;
   font-weight:600;
   color:var(--text);
+  line-height:1.25;
+  word-break:break-word;
 }
 
 /* Sidebar groups */
 .set-sidebar-group { margin-bottom:2px; }
 .set-sidebar-group-label {
-  font-size:10px;
+  font-size:9px;
   font-weight:700;
-  letter-spacing:0.08em;
+  letter-spacing:0.06em;
   text-transform:uppercase;
   color:var(--text3);
-  padding:10px 16px 3px;
+  padding:8px 8px 2px;
+  line-height:1.2;
+  word-break:break-word;
 }
 .set-sidebar-item {
   display:flex;
-  align-items:center;
-  gap:8px;
+  flex-wrap:nowrap;
+  align-items:flex-start;
+  gap:4px 5px;
   width:100%;
-  padding:7px 16px;
-  font-size:13px;
+  padding:5px 6px;
+  font-size:11px;
   font-weight:400;
   color:var(--text2);
   background:none;
@@ -2078,7 +2084,20 @@ body.module-settings .set-shell > .set-layout {
   cursor:pointer;
   text-align:left;
   transition:background 0.12s, color 0.12s;
-  white-space:nowrap;
+  white-space:normal;
+}
+.set-sidebar-item-icon {
+  flex-shrink:0;
+  font-size:12px;
+  line-height:1.25;
+  margin-top:1px;
+}
+.set-sidebar-item-label {
+  flex:1 1 0;
+  min-width:0;
+  line-height:1.25;
+  word-break:break-word;
+  hyphens:auto;
 }
 .set-sidebar-item:hover { background:var(--surface2); color:var(--text); }
 .set-sidebar-item.active {
@@ -2088,11 +2107,13 @@ body.module-settings .set-shell > .set-layout {
   font-weight:600;
 }
 .set-sidebar-badge {
+  flex-shrink:0;
   margin-left:auto;
-  font-size:10px;
+  align-self:flex-start;
+  font-size:9px;
   font-weight:600;
   font-family:var(--mono);
-  padding:1px 7px;
+  padding:1px 5px;
   border-radius:999px;
   background:var(--surface3);
   color:var(--text3);
@@ -2111,11 +2132,13 @@ body.module-settings .set-shell > .set-layout {
 
 /* Sidebar footer */
 .set-sidebar-footer {
-  padding:10px 16px;
-  font-size:11px;
+  padding:8px;
+  font-size:9px;
   color:var(--text3);
   border-top:1px solid var(--border);
   flex-shrink:0;
+  line-height:1.2;
+  word-break:break-word;
 }
 
 /* Content area */
@@ -2124,6 +2147,144 @@ body.module-settings .set-shell > .set-layout {
   min-width:0;
   overflow-y:auto;
   padding:24px 28px;
+}
+
+/* Podešavanja: mobilni izbor sekcije (desktop sakriven) */
+.set-nav-mobile-wrap {
+  display:none;
+  align-items:center;
+  gap:10px;
+  padding:0 24px 12px;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+}
+.set-nav-mobile-label {
+  flex-shrink:0;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  color:var(--text3);
+}
+.set-nav-select {
+  flex:1 1 auto;
+  min-width:0;
+  max-width:100%;
+  padding:10px 12px;
+  font-size:14px;
+  font-family:var(--font);
+  color:var(--text);
+  background:var(--surface2);
+  border:1px solid var(--border2);
+  border-radius:8px;
+  cursor:pointer;
+}
+.set-nav-select:focus {
+  outline:none;
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-dim);
+}
+
+/* Podešavanja kompakt (telefon/tablet): klase settings-layout-compact + settings-html-fill
+   postavlja JS (matchMedia ≤1200px), ne samo @media — pouzdano pri kešu, zoom-u i iOS Desktop mode.
+   Kad je kompakt: sakrij sidebar, prikaži padajući „Sekcija“, jedna kolona, #app puni visinu. */
+body.module-settings.settings-layout-compact .set-nav-mobile-wrap {
+  display:flex !important;
+  flex-direction:column;
+  align-items:stretch;
+  gap:6px;
+  padding:10px 12px 12px;
+}
+body.module-settings.settings-layout-compact .set-sidebar,
+body.module-settings.settings-layout-compact .set-layout > .set-sidebar {
+  display:none !important;
+  width:0 !important;
+  min-width:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  overflow:hidden !important;
+  visibility:hidden !important;
+  pointer-events:none !important;
+}
+body.module-settings.settings-layout-compact .set-shell > .set-layout {
+  flex-direction:column !important;
+}
+body.module-settings.settings-layout-compact .set-content {
+  flex:1 1 auto !important;
+  min-width:0 !important;
+  width:100% !important;
+  max-width:100% !important;
+  padding:14px 16px 28px;
+}
+body.module-settings.settings-layout-compact .set-nav-select {
+  width:100%;
+  min-height:44px;
+  font-size:15px;
+  padding:12px 14px;
+}
+
+@media (max-width:1024px) {
+  body.module-settings.settings-layout-compact .set-nav-mobile-wrap {
+    padding-left:16px;
+    padding-right:16px;
+  }
+}
+
+html.settings-html-fill {
+  height:100%;
+}
+body.module-settings.settings-layout-compact.desktop-erp-module:not(.hub-active):not(.m-body) {
+  min-height:100%;
+}
+body.module-settings.settings-layout-compact.desktop-erp-module:not(.hub-active):not(.m-body) #app {
+  display:flex;
+  flex-direction:column;
+  min-height:100vh;
+  min-height:-webkit-fill-available;
+  min-height:100dvh;
+}
+body.module-settings.settings-layout-compact.desktop-erp-module:not(.hub-active):not(.m-body) #app > * {
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+}
+body.module-settings.settings-layout-compact .set-shell {
+  flex:1 1 auto !important;
+  min-height:-webkit-fill-available !important;
+  min-height:100dvh !important;
+  height:auto !important;
+}
+
+@media (max-width:900px) {
+  body.module-settings .kadrovska-header {
+    padding:10px 14px;
+    gap:8px;
+    flex-wrap:nowrap;
+    align-items:center;
+  }
+  body.module-settings .kadrovska-header-left {
+    flex:1 1 auto;
+    min-width:0;
+    gap:8px;
+  }
+  body.module-settings .kadrovska-title {
+    font-size:15px;
+    min-width:0;
+  }
+  body.module-settings .kadrovska-title > span:last-child {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  body.module-settings .kadrovska-header-right {
+    flex-shrink:0;
+    gap:6px;
+  }
+  body.module-settings .hub-logout {
+    padding:6px 10px;
+    font-size:12px;
+  }
 }
 
 /* ── SETTINGS PAGE HEADER ─────────────────────────────────────────────── */
