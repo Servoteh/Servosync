@@ -109,6 +109,9 @@ sql/migrations/add_pb4_rls_and_agg.sql
 # ne dozvoljava korišćenje nove enum vrednosti u istoj tx u kojoj je dodata.
 sql/migrations/add_loc_machine_enum.sql
 sql/migrations/add_loc_machine_locations.sql
+# Dopuna seed-a iz maint_machines (lokalni autoritativni katalog) — pokriva i
+# mašine koje su u BigTehn-u flagovane no_procedure=TRUE (CAM stanice 17.x).
+sql/migrations/add_loc_machine_locations_from_maint.sql
 sql/migrations/add_loc_movement_source_column.sql
 # `add_loc_bigtehn_op_status_rpc.sql` zavisi od `bigtehn_work_order_lines_cache`,
 # `bigtehn_tech_routing_cache`, `production_overlays` — u plain CI bootstrap-u
