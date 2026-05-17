@@ -102,6 +102,7 @@ export function employeeOptionsHtml({
 /** Kartice podmodula na Pregledu — tabId mora odgovarati `tabImpl` u index.js */
 export const KADR_SUBMODULES = [
   { tabId: 'employees', label: 'Zaposleni', icon: '👥', description: 'Lista, profili, ugovori', requires: 'canAccessKadrovska' },
+  { tabId: 'calendar', label: 'Kalendar', icon: '🗓️', description: 'Mesečni pregled odsustava', requires: 'canAccessKadrovska' },
   { tabId: 'odsustva', label: 'Odsustva', icon: '📅', description: 'GO, bolovanje, slobodni dani', requires: 'canAccessKadrovska' },
   { tabId: 'grid', label: 'Mesečni grid', icon: '📊', description: 'Excel-style unos sati', requires: 'canAccessKadrovska' },
   { tabId: 'vacation', label: 'Godišnji odmor', icon: '🏖️', description: 'Entitlementi, saldo', requires: 'canAccessKadrovska' },
@@ -135,6 +136,7 @@ export function visibleSubmodules() {
  */
 export const KADROVSKA_TAB_DEFS = [
   { id: 'dashboard', label: 'Pregled', icon: '🏠', noBadge: true },
+  { id: 'calendar', label: 'Kalendar', icon: '🗓️', badgeId: 'kadrTabCountCalendar' },
   { id: 'grid', label: 'Mesecni grid', badgeId: 'kadrTabCountGrid' },
   { id: 'odsustva', label: 'Odsustva', badgeId: 'kadrTabCountAbsences', pregledOnly: true },
   { id: 'employees', label: 'Zaposleni', badgeId: 'kadrTabCountEmployees' },

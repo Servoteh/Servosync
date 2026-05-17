@@ -255,6 +255,7 @@ export function refreshContractsTab() {
       <td><span class="emp-status-badge ${statusBadgeCls}" title="${escHtml(status.label)}">${escHtml(status.label)}</span></td>
       <td class="col-actions">
         <button class="btn-row-act" data-action="edit" data-id="${id}" ${edit ? '' : 'disabled'}>Izmeni</button>
+        <button class="btn-row-act" data-action="pdf" data-id="${id}" title="Štampa rešenja o zasnivanju radnog odnosa">📄 PDF</button>
         <button class="btn-row-act danger" data-action="delete" data-id="${id}" ${edit ? '' : 'disabled'}>Obriši</button>
       </td>
     </tr>`;
@@ -262,6 +263,9 @@ export function refreshContractsTab() {
 
   tbody.querySelectorAll('button[data-action="edit"]').forEach(b => {
     b.addEventListener('click', () => openContractModal(b.dataset.id));
+  });
+  tbody.querySelectorAll('button[data-action="pdf"]').forEach(b => {
+    b.addEventListener('click', () => openContractPdfPrint(b.dataset.id));
   });
   tbody.querySelectorAll('button[data-action="delete"]').forEach(b => {
     b.addEventListener('click', () => confirmDeleteContract(b.dataset.id));
@@ -588,4 +592,142 @@ async function confirmDeleteContract(id) {
     console.error(e);
     showToast('⚠ Greška');
   }
+}
+
+/* ── PDF rešenje o zasnivanju radnog odnosa (C3.1) ───────────────── */
+
+/**
+ * Otvara print-friendly stranicu sa pravnim šablonom rešenja.
+ * Bez eksternog DocuSign-a — korisnik:
+ *   1. otvori PDF (browser print → "Save as PDF")
+ *   2. ručno potpiše (na papiru ili e-potpisom)
+ *   3. skanira / vrati u ugovor (sledeća faza: upload signed_url)
+ *
+ * Današnji status (`active`, `expiring`, `expired`) izveden iz datuma —
+ * ne traži dodatne DB kolone.
+ */
+function openContractPdfPrint(contractId) {
+  const c = kadrContractsState.items.find(x => x.id === contractId);
+  if (!c) { showToast('⚠ Ugovor nije pronađen'); return; }
+  const emp = kadrovskaState.employees.find(e => e.id === c.employeeId);
+  if (!emp) { showToast('⚠ Zaposleni nije pronađen za ovaj ugovor'); return; }
+
+  const typeLbl = KADR_CON_TYPE_LABELS[c.type] || c.type;
+  const today = new Date();
+  const todayStr = formatDate(today.toISOString().slice(0, 10));
+  const protocol = (c.number && c.number.trim())
+    ? c.number.trim()
+    : `RR-${today.getFullYear()}-${String(emp.id).slice(0, 8).toUpperCase()}`;
+  const fromStr = c.dateFrom ? formatDate(c.dateFrom) : '';
+  const toStr = c.dateTo ? formatDate(c.dateTo) : '';
+  const empName = (function () {
+    const fn = emp.firstName || '';
+    const ln = emp.lastName || '';
+    if (fn || ln) return [fn, ln].filter(Boolean).join(' ');
+    return emp.fullName || '';
+  })();
+  const pii = (window?.document) ? true : false;
+  const showJmbg = !!(emp.personalId);
+
+  const isIndefinite = c.type === 'neodredjeno' || !c.dateTo;
+
+  const periodPara = isIndefinite
+    ? `Radni odnos zasniva se na <strong>neodređeno vreme</strong>, počev od <strong>${escHtml(fromStr || '—')}</strong>.`
+    : `Radni odnos zasniva se na <strong>određeno vreme</strong>, od <strong>${escHtml(fromStr || '—')}</strong> do <strong>${escHtml(toStr || '—')}</strong>.`;
+
+  const html = `<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="utf-8">
+<title>Rešenje o zasnivanju radnog odnosa — ${escHtml(empName)}</title>
+<style>
+  @page { size: A4; margin: 2.2cm 2cm; }
+  body { font-family: 'Times New Roman', Georgia, serif; color:#111; font-size: 12pt; line-height: 1.55; }
+  .doc-head { text-align: right; margin-bottom: 28px; font-size: 11pt; color:#333; }
+  .doc-head .company { font-weight: 700; font-size: 13pt; color:#000; }
+  h1 { text-align:center; font-size: 15pt; margin: 8px 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  h2 { text-align:center; font-size: 12pt; font-weight: 400; margin: 0 0 24px; color:#333; }
+  p { margin: 10px 0; text-align: justify; }
+  .meta { font-size: 11pt; color:#333; margin-bottom: 18px; }
+  .meta-row { display:flex; justify-content:space-between; padding: 3px 0; border-bottom: 1px dotted #ccc; }
+  table.pts { margin: 14px 0 0 14px; }
+  table.pts td { padding: 3px 8px 3px 0; vertical-align: top; }
+  .signs { margin-top: 48px; display:flex; justify-content: space-between; }
+  .sign-box { width: 45%; text-align:center; }
+  .sign-line { border-top:1px solid #333; padding-top:4px; font-size:10pt; color:#555; margin-top:40px; }
+  .print-actions { margin: 20px 0; text-align:center; }
+  .print-actions button { padding: 8px 20px; font-size: 12pt; cursor:pointer; margin: 0 4px; }
+  @media print { .print-actions { display:none; } }
+</style>
+</head>
+<body>
+  <div class="print-actions">
+    <button onclick="window.print()">🖨 Štampaj / Sačuvaj kao PDF</button>
+    <button onclick="window.close()">Zatvori</button>
+  </div>
+  <div class="doc-head">
+    <div class="company">SERVOTEH d.o.o.</div>
+    <div>Dobanovci · Kruševac</div>
+    <div>Broj: <strong>${escHtml(protocol)}</strong></div>
+    <div>Datum: ${escHtml(todayStr)}</div>
+  </div>
+  <h1>Rešenje</h1>
+  <h2>o zasnivanju radnog odnosa</h2>
+
+  <div class="meta">
+    <div class="meta-row"><span>Ime i prezime:</span><strong>${escHtml(empName)}</strong></div>
+    ${showJmbg ? `<div class="meta-row"><span>JMBG:</span><span>${escHtml(emp.personalId)}</span></div>` : ''}
+    ${emp.address ? `<div class="meta-row"><span>Adresa:</span><span>${escHtml(emp.address)}${emp.city ? ', ' + escHtml(emp.city) : ''}</span></div>` : ''}
+    ${c.position ? `<div class="meta-row"><span>Radno mesto:</span><span>${escHtml(c.position)}</span></div>` : ''}
+    ${emp.department ? `<div class="meta-row"><span>Odeljenje / sektor:</span><span>${escHtml(emp.department)}</span></div>` : ''}
+    <div class="meta-row"><span>Tip ugovora:</span><span>${escHtml(typeLbl)}</span></div>
+    ${c.number ? `<div class="meta-row"><span>Broj ugovora:</span><span>${escHtml(c.number)}</span></div>` : ''}
+  </div>
+
+  <p>
+    Na osnovu člana 30. Zakona o radu („Sl. glasnik RS", br. 24/2005 i dr.)
+    i ugovora o radu zaključenog dana <strong>${escHtml(fromStr || '—')}</strong>,
+    poslodavac donosi sledeće:
+  </p>
+
+  <p>
+    ${periodPara}
+  </p>
+
+  <p>
+    Zaposleni će obavljati poslove radnog mesta <strong>${escHtml(c.position || 'prema ugovoru')}</strong>${emp.department ? ` u okviru organizacione celine <strong>${escHtml(emp.department)}</strong>` : ''}, u skladu sa opisom poslova iz ugovora o radu i internim aktima poslodavca.
+  </p>
+
+  <p>
+    Zaposleni je dužan da se pridržava radnih obaveza, pravila bezbednosti
+    i zdravlja na radu i internih akata poslodavca. Sve detaljnije obaveze i prava
+    su definisani ugovorom o radu.
+  </p>
+
+  ${c.note ? `<p><strong>Napomena:</strong> ${escHtml(c.note)}</p>` : ''}
+
+  <table class="pts">
+    <tr><td>•</td><td>Osnov: član 30. Zakona o radu</td></tr>
+    <tr><td>•</td><td>Tip ugovora: ${escHtml(typeLbl)}</td></tr>
+    ${c.number ? `<tr><td>•</td><td>Br. ugovora: ${escHtml(c.number)}</td></tr>` : ''}
+  </table>
+
+  <div class="signs">
+    <div class="sign-box">
+      <div class="sign-line">Zaposleni</div>
+      <div>${escHtml(empName)}</div>
+    </div>
+    <div class="sign-box">
+      <div class="sign-line">Direktor / ovlašćeno lice</div>
+      <div>&nbsp;</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank', 'width=900,height=1200,scrollbars=1');
+  if (!w) { showToast('⚠ Pop-up blocker je sprečio prozor'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }

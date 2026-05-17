@@ -396,3 +396,304 @@ li.kadr-dashboard__action-item--empty {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── KALENDAR TAB (C3.3) ────────────────────────────────────────── */
+
+.kadr-calendar-panel { padding: 0 8px 24px; }
+
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  padding: 10px 4px 14px;
+  font-size: 0.78rem;
+  color: var(--text2, var(--text3));
+}
+.cal-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.cal-legend-sw {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
+.cal-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  max-height: 70vh;
+}
+
+.cal-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+  font-size: 12px;
+  table-layout: fixed;
+}
+
+.cal-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--surface);
+  color: var(--text);
+  padding: 4px 6px;
+  font-weight: 600;
+  font-size: 11px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+.cal-table thead tr.cal-row-letters th {
+  top: 23px;
+  font-weight: 500;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--border);
+}
+.cal-table .cal-th-name {
+  position: sticky;
+  left: 0;
+  top: 0;
+  z-index: 5;
+  background: var(--surface);
+  min-width: 200px;
+  max-width: 200px;
+  text-align: left;
+  padding: 6px 10px;
+  border-right: 2px solid var(--border);
+}
+.cal-table .cal-th-day {
+  min-width: 28px;
+  max-width: 28px;
+}
+
+.cal-table tbody td {
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  text-align: center;
+  vertical-align: middle;
+  height: 36px;
+}
+
+.cal-td-name {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  text-align: left !important;
+  padding: 4px 10px !important;
+  border-right: 2px solid var(--border) !important;
+  min-width: 200px;
+  max-width: 200px;
+}
+.cal-emp-name {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.cal-emp-meta {
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 1px;
+}
+.cal-emp-badges {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+}
+.cal-emp-badge {
+  font-size: 11px;
+  cursor: help;
+  filter: grayscale(0.2);
+}
+.cal-emp-badge.tone-med { color: #f59e0b; }
+.cal-emp-badge.tone-bday { color: #ec4899; }
+
+.cal-td-day {
+  cursor: pointer;
+  transition: background 0.1s;
+  min-width: 28px;
+  max-width: 28px;
+}
+.cal-td-day:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.cal-cell-weekend { background: color-mix(in srgb, var(--text3) 8%, transparent); }
+.cal-cell-sat { background: color-mix(in srgb, var(--text3) 10%, transparent); }
+.cal-cell-sun { background: color-mix(in srgb, var(--text3) 12%, transparent); }
+.cal-cell-holiday { background: color-mix(in srgb, #60a5fa 16%, var(--surface)); }
+.cal-cell-today {
+  outline: 2px solid #f59e0b;
+  outline-offset: -2px;
+  z-index: 1;
+  position: relative;
+}
+
+.cal-cell-mark {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  font-family: var(--mono, ui-monospace, monospace);
+}
+
+/* Absence type tones — pozadina + jasna boja teksta */
+.cal-abs-go  { background: color-mix(in srgb, #16a34a 35%, var(--surface)); color: #ecfdf5; }
+.cal-abs-bo  { background: color-mix(in srgb, #dc2626 35%, var(--surface)); color: #fee2e2; }
+.cal-abs-sp  { background: color-mix(in srgb, #3b82f6 35%, var(--surface)); color: #dbeafe; }
+.cal-abs-pl  { background: color-mix(in srgb, #eab308 40%, var(--surface)); color: #fef3c7; }
+.cal-abs-nop { background: color-mix(in srgb, #6b7280 35%, var(--surface)); color: #f3f4f6; }
+.cal-abs-sl  { background: color-mix(in srgb, #f97316 30%, var(--surface)); color: #fed7aa; }
+.cal-abs-other { background: color-mix(in srgb, #a855f7 30%, var(--surface)); color: #f3e8ff; }
+
+[data-theme="light"] .cal-abs-go  { color: #064e3b; }
+[data-theme="light"] .cal-abs-bo  { color: #7f1d1d; }
+[data-theme="light"] .cal-abs-sp  { color: #1e3a8a; }
+[data-theme="light"] .cal-abs-pl  { color: #78350f; }
+[data-theme="light"] .cal-abs-nop { color: #1f2937; }
+[data-theme="light"] .cal-abs-sl  { color: #7c2d12; }
+[data-theme="light"] .cal-abs-other { color: #581c87; }
+
+/* Detail modal — cell click */
+.cal-detail-body { padding: 6px 0 12px; }
+.cal-detail-row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.cal-detail-row:last-child { border-bottom: 0; }
+.cal-detail-range {
+  display: block;
+  font-size: 12px;
+  color: var(--text2);
+  font-family: var(--mono, ui-monospace, monospace);
+  margin-top: 3px;
+}
+.cal-detail-note {
+  font-size: 12px;
+  color: var(--text3);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+@media (max-width: 768px) {
+  .cal-table { font-size: 10px; }
+  .cal-table .cal-th-name,
+  .cal-td-name { min-width: 140px; max-width: 140px; }
+  .cal-emp-name { font-size: 11px; }
+  .cal-emp-meta { font-size: 9px; }
+}
+
+/* ── MOJ PROFIL — Dokumenti (C3.2) ───────────────────────────────── */
+
+.mp-doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.mp-doc-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.mp-doc-card.mp-doc-danger { border-left-color: #dc2626; }
+.mp-doc-card.mp-doc-warn   { border-left-color: #f59e0b; }
+.mp-doc-card.mp-doc-accent { border-left-color: #3b82f6; }
+.mp-doc-card.mp-doc-ok     { border-left-color: #16a34a; }
+.mp-doc-card.mp-doc-muted  { border-left-color: var(--border); }
+.mp-doc-icon { font-size: 1.6rem; line-height: 1; padding-top: 2px; }
+.mp-doc-body { flex: 1; min-width: 0; }
+.mp-doc-title { font-weight: 600; color: var(--text); font-size: 0.92rem; }
+.mp-doc-meta { font-size: 0.78rem; color: var(--text2); margin-top: 3px; }
+.mp-doc-badge {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  font-family: var(--mono, ui-monospace, monospace);
+}
+.mp-doc-badge--danger { background: color-mix(in srgb, #dc2626 18%, transparent); color: #fecaca; }
+.mp-doc-badge--warn   { background: color-mix(in srgb, #f59e0b 18%, transparent); color: #fcd34d; }
+.mp-doc-badge--accent { background: color-mix(in srgb, #3b82f6 15%, transparent); color: #bfdbfe; }
+.mp-doc-badge--ok     { background: color-mix(in srgb, #16a34a 15%, transparent); color: #bbf7d0; }
+.mp-doc-badge--muted  { background: color-mix(in srgb, var(--text3) 12%, transparent); color: var(--text2); }
+[data-theme="light"] .mp-doc-badge--danger { color: #991b1b; }
+[data-theme="light"] .mp-doc-badge--warn   { color: #92400e; }
+[data-theme="light"] .mp-doc-badge--accent { color: #1e40af; }
+[data-theme="light"] .mp-doc-badge--ok     { color: #166534; }
+
+/* ── MOJ PROFIL — Kolege na odsustvu (C3.2) ──────────────────────── */
+
+.mp-coll-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mp-coll-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.mp-coll-now { border-left: 3px solid #f59e0b; }
+.mp-coll-soon { border-left: 3px solid #60a5fa; opacity: 0.92; }
+.mp-coll-dot { font-size: 0.9rem; }
+.mp-coll-body { flex: 1; min-width: 0; }
+.mp-coll-name { font-weight: 600; color: var(--text); font-size: 0.92rem; }
+.mp-coll-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--text2);
+}
+.mp-coll-period { font-family: var(--mono, ui-monospace, monospace); }
+.mp-coll-when {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-size: 0.7rem;
+}
+.mp-coll-section-title {
+  font-size: 0.78rem;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin: 8px 0 6px;
+  font-weight: 600;
+}
+.mp-coll-empty {
+  font-size: 0.85rem;
+  color: var(--text2);
+  padding: 8px 0;
+  font-style: italic;
+}

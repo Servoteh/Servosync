@@ -86,6 +86,12 @@ let myRequests = [];         // vacation_requests za mene
 let allEmployees = [];       // za picker (samo za upravljačke role)
 let myReversalIssued = [];  // v_rev_my_issued_tools (Revers)
 let myReversalLoadErr = null;
+/** Aktivne kolege iz istog odeljenja (uključujući mene) — za prikaz "ko je danas na odsustvu". */
+let deptColleagues = [];
+/** Svi absences u sistemu — koristimo za izračun ko od kolega je danas/sutra na odsustvu. */
+let allAbsencesRaw = [];
+/** Moji aktivni ugovori (filtriraj po employee_id) — za "Moj ugovor — status" karticu. */
+let myContracts = [];
 
 /* ── Root render ────────────────────────────────────────────────── */
 
@@ -160,8 +166,9 @@ async function _loadAndRender() {
       return;
     }
 
-    /* Parallelni fetch: sopstveni employee, saldo, odsustva, zahtevi */
-    const [empData, balData, absData, reqData, allEmpData, revIssuedRes] = await Promise.all([
+    /* Parallelni fetch: sopstveni employee, saldo, odsustva, zahtevi,
+       sve aktivne kolege (za "ko je danas na odsustvu") i moji ugovori. */
+    const [empData, balData, absData, reqData, allEmpData, revIssuedRes, allActiveEmpData, conData] = await Promise.all([
       sbReq(`v_employees_safe?email=eq.${encodeURIComponent(email)}&select=*&limit=1`),
       sbReq(`v_vacation_balance?year=eq.${year}&select=*`),
       sbReq(`absences?select=*&order=date_from.desc`),
@@ -170,7 +177,12 @@ async function _loadAndRender() {
         ? sbReq('v_employees_safe?select=id,full_name,first_name,last_name,department,is_active&is_active=eq.true&order=full_name')
         : Promise.resolve(null),
       fetchMyIssuedTools(),
+      /* Aktivne kolege — za sekciju "Iz mog odeljenja danas na odsustvu". */
+      sbReq('v_employees_safe?select=id,full_name,first_name,last_name,department,sub_department_name&is_active=eq.true'),
+      /* Moji ugovori — filter posle učitavanja employee_id-a. RLS: SELECT je dostupan svima koji vide employees. */
+      sbReq('contracts?select=*&is_active=eq.true&order=date_from.desc'),
     ]);
+    allAbsencesRaw = Array.isArray(absData) ? absData : [];
 
     myReversalLoadErr = revIssuedRes?.ok ? null : (revIssuedRes?.error || 'Učitavanje reversa nije uspelo');
     myReversalIssued =
@@ -224,6 +236,24 @@ async function _loadAndRender() {
       allEmployees = [];
     }
 
+    /* Kolege iz mog odeljenja (sve aktivne) — koristim za "ko je danas na odsustvu". */
+    if (myEmployee && Array.isArray(allActiveEmpData)) {
+      const myDept = (myEmployee.department || '').trim();
+      deptColleagues = allActiveEmpData
+        .map(mapDbEmployee)
+        .filter(e => e.id !== myEmployee.id && (e.department || '').trim() === myDept)
+        .sort(compareEmployeesByLastFirst);
+    } else {
+      deptColleagues = [];
+    }
+
+    /* Moji aktivni ugovori. */
+    if (myEmployee && Array.isArray(conData)) {
+      myContracts = conData.filter(c => c.employee_id === myEmployee.id);
+    } else {
+      myContracts = [];
+    }
+
     _renderContent(host);
   } catch (e) {
     console.error('[mojProfil] load failed', e);
@@ -249,6 +279,9 @@ function _renderContent(host) {
 
       ${_profileCardHtml()}
       ${_balanceCardHtml(year)}
+
+      ${_myDocsStatusHtml()}
+      ${_colleaguesOnLeaveHtml()}
 
       ${_reversiIssuedSectionHtml()}
 
@@ -417,6 +450,165 @@ function _absencesTableHtml() {
     ${myAbsences.length > thisYear.length
       ? `<div style="font-size:.8rem;color:var(--text2);margin-top:6px;">Prikazano ${thisYear.length} od ${myAbsences.length} ukupnih odsustava (samo tekuća godina).</div>`
       : ''}`;
+}
+
+/* ── C3.2: Moja dokumenta — status kartice ───────────────────────────
+ * Lekarski pregled, ugovor — vidim da li mi ističe i kad. Read-only.
+ * Cilj: zaposleni proveri svoj status pre nego što ide kod HR-a. */
+
+function _docStatusBadge(ymd) {
+  if (!ymd) return { label: '—', cls: 'muted' };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(ymd + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return { label: '—', cls: 'muted' };
+  const diff = Math.round((d - today) / 86400000);
+  if (diff < 0) return { label: 'Istekao', cls: 'danger' };
+  if (diff === 0) return { label: 'Ističe danas', cls: 'warn' };
+  if (diff <= 30) return { label: `Ističe za ${diff} d`, cls: 'warn' };
+  if (diff <= 90) return { label: `Ističe za ${diff} d`, cls: 'accent' };
+  return { label: `Važi do ${formatDate(ymd)}`, cls: 'ok' };
+}
+
+function _myDocsStatusHtml() {
+  if (!myEmployee) return '';
+  const cards = [];
+
+  /* Lekarski pregled — datum + status */
+  if (myEmployee.medicalExamExpires || myEmployee.medicalExamDate) {
+    const exp = myEmployee.medicalExamExpires || '';
+    const dt = myEmployee.medicalExamDate || '';
+    const badge = _docStatusBadge(exp);
+    cards.push(`
+      <div class="mp-doc-card mp-doc-${badge.cls}">
+        <div class="mp-doc-icon">🩺</div>
+        <div class="mp-doc-body">
+          <div class="mp-doc-title">Lekarski pregled</div>
+          <div class="mp-doc-meta">${dt ? 'Obavljen: ' + escHtml(formatDate(dt)) : 'Nema upisa'}</div>
+          ${exp ? `<span class="mp-doc-badge mp-doc-badge--${badge.cls}">${escHtml(badge.label)}</span>` : ''}
+        </div>
+      </div>`);
+  }
+
+  /* Aktivni ugovor (poslednji po dateFrom). */
+  if (myContracts && myContracts.length) {
+    const sorted = [...myContracts].sort((a, b) => String(b.date_from || '').localeCompare(String(a.date_from || '')));
+    const c = sorted[0];
+    const type = c.contract_type || 'ugovor';
+    const fromTxt = c.date_from ? formatDate(c.date_from) : '—';
+    if (c.date_to) {
+      const badge = _docStatusBadge(c.date_to);
+      cards.push(`
+        <div class="mp-doc-card mp-doc-${badge.cls}">
+          <div class="mp-doc-icon">📄</div>
+          <div class="mp-doc-body">
+            <div class="mp-doc-title">Ugovor — ${escHtml(type)}</div>
+            <div class="mp-doc-meta">Važi: ${escHtml(fromTxt)} → ${escHtml(formatDate(c.date_to))}</div>
+            <span class="mp-doc-badge mp-doc-badge--${badge.cls}">${escHtml(badge.label)}</span>
+          </div>
+        </div>`);
+    } else {
+      cards.push(`
+        <div class="mp-doc-card mp-doc-ok">
+          <div class="mp-doc-icon">📄</div>
+          <div class="mp-doc-body">
+            <div class="mp-doc-title">Ugovor — ${escHtml(type)}</div>
+            <div class="mp-doc-meta">Važi od: ${escHtml(fromTxt)}</div>
+            <span class="mp-doc-badge mp-doc-badge--ok">Neodređeno</span>
+          </div>
+        </div>`);
+    }
+  }
+
+  if (!cards.length) return '';
+
+  return `
+    <div class="mp-section-header" style="margin:18px 0 8px;">
+      <h3 style="margin:0;font-size:1rem;font-weight:600;color:var(--text)">Moji dokumenti</h3>
+    </div>
+    <div class="mp-doc-grid">
+      ${cards.join('')}
+    </div>`;
+}
+
+/* ── C3.2: Kolege iz mog odeljenja — danas na odsustvu ──────────────
+ * Zaposleni sa kojima radim — ko je danas/sutra fizički odsutan. */
+
+function _colleaguesOnLeaveHtml() {
+  if (!myEmployee || !deptColleagues.length) return '';
+
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+  /* Map<empId, najbliže odsustvo koje pokriva danas/sutra ili počinje uskoro> */
+  const absByEmp = new Map();
+  for (const a of allAbsencesRaw) {
+    if (!a || !a.date_from || !a.date_to) continue;
+    if (a.date_to < today) continue; /* prošlo */
+    const empId = a.employee_id;
+    if (!empId) continue;
+    /* Uzmi najraniji koji se preklapa danas, ili najranije nadolazeći u 7 dana. */
+    const existing = absByEmp.get(empId);
+    const isCurrent = a.date_from <= today && a.date_to >= today;
+    const isTomorrow = a.date_from <= tomorrow && a.date_to >= tomorrow;
+    const startsSoon = a.date_from > today; /* dolazi */
+    if (!existing || isCurrent) {
+      if (isCurrent || isTomorrow || startsSoon) {
+        absByEmp.set(empId, { ...a, _isCurrent: isCurrent, _isTomorrow: isTomorrow && !isCurrent });
+      }
+    }
+  }
+
+  const onLeave = [];
+  const upcoming = [];
+  for (const colleague of deptColleagues) {
+    const a = absByEmp.get(colleague.id);
+    if (!a) continue;
+    /* Učitaj samo unutar narednih 14 dana */
+    const daysToStart = Math.round((new Date(a.date_from + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+    if (daysToStart > 14) continue;
+    if (a._isCurrent) onLeave.push({ colleague, absence: a });
+    else upcoming.push({ colleague, absence: a, daysToStart });
+  }
+  upcoming.sort((x, y) => x.daysToStart - y.daysToStart);
+
+  if (!onLeave.length && !upcoming.length) {
+    return '';
+  }
+
+  const renderRow = ({ colleague, absence, daysToStart }) => {
+    const typeLbl = ABS_TYPE_LABELS[absence.type] || absence.type;
+    const periodTxt = `${formatDate(absence.date_from)} → ${formatDate(absence.date_to)}`;
+    const sublineTxt = daysToStart != null
+      ? (daysToStart === 1 ? 'sutra' : `za ${daysToStart} d`)
+      : 'sada';
+    return `<li class="mp-coll-row mp-coll-${absence._isCurrent ? 'now' : 'soon'}">
+      <span class="mp-coll-dot">${absence._isCurrent ? '🟠' : '🔵'}</span>
+      <div class="mp-coll-body">
+        <div class="mp-coll-name">${escHtml(employeeDisplayName(colleague) || '—')}</div>
+        <div class="mp-coll-meta">
+          <span class="kadr-type-badge t-${escHtml(absence.type)}">${escHtml(typeLbl)}</span>
+          <span class="mp-coll-period">${escHtml(periodTxt)}</span>
+          <span class="mp-coll-when">${escHtml(sublineTxt)}</span>
+        </div>
+      </div>
+    </li>`;
+  };
+
+  const nowList = onLeave.length
+    ? `<ul class="mp-coll-list">${onLeave.map(renderRow).join('')}</ul>`
+    : `<div class="mp-coll-empty">Niko trenutno nije na odsustvu.</div>`;
+  const soonList = upcoming.length
+    ? `<div class="mp-coll-section-title">Nadolazeća odsustva (≤ 14 dana)</div>
+       <ul class="mp-coll-list">${upcoming.map(renderRow).join('')}</ul>`
+    : '';
+
+  return `
+    <div class="mp-section-header" style="margin:18px 0 8px;">
+      <h3 style="margin:0;font-size:1rem;font-weight:600;color:var(--text)">Kolege u odeljenju</h3>
+    </div>
+    <p style="margin:0 0 8px;font-size:.8rem;color:var(--text2);">Ko je danas/uskoro odsutan iz odeljenja <strong>${escHtml(myEmployee.department || '—')}</strong>.</p>
+    ${nowList}
+    ${soonList}`;
 }
 
 /** Jedan red za prikaz zaduženja iz reversa (alat ili stavka kooperacije). */

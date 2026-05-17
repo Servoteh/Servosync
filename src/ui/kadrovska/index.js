@@ -71,6 +71,7 @@ import {
 import { renderComingSoonTab } from './comingSoon.js';
 import { renderAbsencesTab, wireAbsencesTab } from './absencesTab.js';
 import { renderVacationRequestsTab, wireVacationRequestsTab, refreshVacReqBadge } from './vacationRequestsTab.js';
+import { renderCalendarTab, wireCalendarTab } from './calendarTab.js';
 
 let rootEl = null;
 let onBackToHubCb = null;
@@ -245,6 +246,7 @@ function mountTabBody(id, opts = {}) {
       },
     },
     employees: { render: renderEmployeesTab, wire: wireEmployeesTab },
+    calendar: { render: renderCalendarTab, wire: wireCalendarTab },
     vacation: { render: renderVacationTab, wire: wireVacationTab },
     grid: {
       render: renderGridPanelBody,
