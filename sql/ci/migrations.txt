@@ -123,3 +123,8 @@ sql/migrations/add_loc_movement_source_column.sql
 # loguje šta bi uradio bez side-effect-a). Zavisi od bigtehn_tech_routing_cache
 # pa je preskočeno u CI; primeni ručno na Supabase posle Faza 1 migracija.
 # sql/migrations/add_loc_phase2a_bigtehn_ingest_dryrun.sql
+
+# Faza 2B — ARMED grana worker-a (INITIAL=RN total, TRANSFER=full placement qty),
+# trigger filter za source='bigtehn' (loop prevention), 7d safety net.
+# Posle deploy-a: SELECT loc_bigtehn_ingest_arm(TRUE) da se aktivira. Preskočeno u CI.
+# sql/migrations/add_loc_phase2b_bigtehn_ingest_armed.sql
