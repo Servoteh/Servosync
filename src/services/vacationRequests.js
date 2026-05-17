@@ -40,6 +40,35 @@ function buildInsertPayload(req) {
   };
 }
 
+/**
+ * Segmenti za Gantt godišnjeg (Modul: Kadrovska → Godišnji → Gantt).
+ * Samo pending / approved; Map<employeeId, { dateFrom, dateTo, daysCount, status }[]>.
+ */
+export async function vacationRequestSegmentsByEmployeeForYear(year) {
+  const map = new Map();
+  if (!year || !getIsOnline()) return map;
+  const y = Number(year);
+  const data = await sbReq(
+    `vacation_requests?year=eq.${encodeURIComponent(y)}`
+    + '&status=in.(pending,approved)'
+    + '&select=employee_id,date_from,date_to,days_count,status'
+    + '&order=date_from.asc',
+  );
+  if (!Array.isArray(data)) return map;
+  for (const r of data) {
+    const id = r.employee_id;
+    if (!id) continue;
+    if (!map.has(id)) map.set(id, []);
+    map.get(id).push({
+      dateFrom: r.date_from || '',
+      dateTo: r.date_to || '',
+      daysCount: Number(r.days_count ?? 0),
+      status: (r.status || 'pending').toLowerCase(),
+    });
+  }
+  return map;
+}
+
 /** Svi zahtevi — za HR/admin/menadzment prikaz u KADROVI. */
 export async function loadAllVacationRequestsFromDb() {
   if (!getIsOnline()) return null;

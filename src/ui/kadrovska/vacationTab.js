@@ -27,6 +27,7 @@ import {
   loadBalancesFromDb,
   saveEntitlementToDb,
 } from '../../services/vacation.js';
+import { vacationRequestSegmentsByEmployeeForYear } from '../../services/vacationRequests.js';
 import {
   countGoDaysByEmployeeForYear,
   latestGoSegmentForEmployeeYear,
@@ -39,6 +40,7 @@ import { loadXlsx } from '../../lib/xlsx.js';
 let panelRoot = null;
 const vacGoCache = { year: null, byEmp: new Map() };
 let _ganttSegments = new Map();
+let _ganttVacReqByEmp = new Map();
 let _viewMode = 'table';
 let _collapsedDepts = new Set();
 let _deptDropOpen = false;
@@ -175,6 +177,7 @@ export async function refreshVacationTab() {
   vacGoCache.year = year;
   vacGoCache.byEmp = await countGoDaysByEmployeeForYear(year);
   _ganttSegments = await allGoSegmentsForYear(year);
+  _ganttVacReqByEmp = await vacationRequestSegmentsByEmployeeForYear(year);
   _rebuildDeptList();
   _applyFiltersAndRender();
 }
@@ -407,6 +410,18 @@ function renderRows(rows) {
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'];
 
+/** Jedan segment na vremenskoj liniji (godina + ukupno dana u godini). */
+function _ganttBarHtml(seg, year, totalDays, r, barCls, tipTitle) {
+  const cFrom = clampYmd(seg.dateFrom, year);
+  const cTo = clampYmd(seg.dateTo, year);
+  const startDoy = dayOfYearZero(cFrom, year);
+  const endDoy = dayOfYearZero(cTo, year);
+  const left = (startDoy / totalDays) * 100;
+  const width = Math.max(0.2, ((endDoy - startDoy + 1) / totalDays) * 100);
+  const tip = `${tipTitle}: ${seg.dateFrom} → ${seg.dateTo} (${seg.daysCount} d.) · ${employeeDisplayName(r.emp) || '—'}`;
+  return `<div class="vac-gantt-bar ${barCls}" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;" data-tip="${escHtml(tip)}"></div>`;
+}
+
 function renderGantt() {
   if (!panelRoot) return;
   const rows = computeRows();
@@ -455,19 +470,24 @@ function renderGantt() {
     const col = deptColor(dept === '(bez odeljenja)' ? '' : dept);
 
     const empRowsHtml = dRows.map(r => {
-      const segs = _ganttSegments.get(r.emp.id) || [];
-      const barsHtml = segs.map(seg => {
-        const cFrom = clampYmd(seg.dateFrom, year);
-        const cTo = clampYmd(seg.dateTo, year);
-        const startDoy = dayOfYearZero(cFrom, year);
-        const endDoy = dayOfYearZero(cTo, year);
-        const left = (startDoy / totalDays) * 100;
-        const width = Math.max(0.2, ((endDoy - startDoy + 1) / totalDays) * 100);
-        const isOver = r.daysRemaining < 0;
+      const vacReqs = _ganttVacReqByEmp.get(r.emp.id) || [];
+      const pending = vacReqs.filter(s => s.status === 'pending');
+      const approved = vacReqs.filter(s => s.status === 'approved');
+      const usedSegs = _ganttSegments.get(r.emp.id) || [];
+      const isOver = r.daysRemaining < 0;
+
+      const barsParts = [];
+      for (const seg of pending) {
+        barsParts.push(_ganttBarHtml(seg, year, totalDays, r, 'vac-bar-pending', 'Željeni GO (čeka odobrenje)'));
+      }
+      for (const seg of approved) {
+        barsParts.push(_ganttBarHtml(seg, year, totalDays, r, 'vac-bar-approved', 'Odobren GO'));
+      }
+      for (const seg of usedSegs) {
         const barCls = isOver ? 'vac-bar-over' : 'vac-bar-used';
-        const tip = `${employeeDisplayName(r.emp)}: ${seg.dateFrom} → ${seg.dateTo} (${seg.daysCount} dana)`;
-        return `<div class="vac-gantt-bar ${barCls}" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;" data-tip="${escHtml(tip)}"></div>`;
-      }).join('');
+        barsParts.push(_ganttBarHtml(seg, year, totalDays, r, barCls, 'Iskorišćeno GO'));
+      }
+      const barsHtml = barsParts.join('');
 
       const remCls = r.daysRemaining < 0 ? 'vac-bal-over' : (r.daysRemaining < 3 ? 'vac-bal-warn' : 'vac-bal-ok');
       return `<div class="vac-gantt-emp-row">
@@ -504,8 +524,10 @@ function renderGantt() {
 
   ganttEl.innerHTML = `
     <div class="vac-gantt-legend">
+      <span class="vac-leg-item"><span class="vac-leg-swatch vac-bar-pending"></span>Željeni GO (zahtev na čekanju)</span>
+      <span class="vac-leg-item"><span class="vac-leg-swatch vac-bar-approved"></span>Odobren GO</span>
       <span class="vac-leg-item"><span class="vac-leg-swatch vac-bar-used"></span>Iskorišćeno GO</span>
-      <span class="vac-leg-item"><span class="vac-leg-swatch vac-bar-over"></span>Prekoračenje</span>
+      <span class="vac-leg-item"><span class="vac-leg-swatch vac-bar-over"></span>Prekoračenje (evidencija)</span>
       ${isCurrentYear ? '<span class="vac-leg-item"><span class="vac-leg-swatch" style="background:var(--accent);width:2px;height:14px;display:inline-block;"></span>Danas</span>' : ''}
     </div>
     <div class="vac-gantt-groups" id="vacGanttGroups">
