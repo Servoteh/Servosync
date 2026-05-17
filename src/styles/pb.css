@@ -1470,11 +1470,11 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   box-shadow: inset 0 -1px 0 var(--border, #e5e7eb);
 }
 
-/* Border-radius na uglove (zamena za parent overflow:hidden koji je sklonjen). */
-.pb-table thead tr:first-child th:first-child { border-top-left-radius: 10px; }
-.pb-table thead tr:first-child th:last-child { border-top-right-radius: 10px; }
-.pb-table tbody tr:last-child td:first-child { border-bottom-left-radius: 10px; }
-.pb-table tbody tr:last-child td:last-child { border-bottom-right-radius: 10px; }
+/* Container ima border-radius:10px ali bez overflow:clip — što znači da rounded border
+   crta van pozadine ćelija. Cell-level radius bi bio "popravka" ALI on pravi vidljiv
+   trougao prazne prve ćelije (.pb-th-sel je samo 32px široka, 10px radius pojede
+   skoro celu ćeliju). Bolje: ćelije ostaju FLAT, container border crta zaobljeno
+   spolja. Mali slivers oko uglova kontejnera su prihvatljivi (~1-2px). */
 
 .pb-table tbody tr {
   transition: background 0.1s;
