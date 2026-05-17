@@ -128,3 +128,8 @@ sql/migrations/add_loc_movement_source_column.sql
 # trigger filter za source='bigtehn' (loop prevention), 7d safety net.
 # Posle deploy-a: SELECT loc_bigtehn_ingest_arm(TRUE) da se aktivira. Preskočeno u CI.
 # sql/migrations/add_loc_phase2b_bigtehn_ingest_armed.sql
+
+# Faza 2B refinement — smart ident_broj parser. Longest active predmet match
+# protiv bigtehn_items_cache: „9400/1/165" → predmet=„9400/1" tp=„165" ako je
+# „9400/1" aktivan predmet. Inače fallback na (split 1 / split 2).
+# sql/migrations/add_loc_phase2b_smart_ident_parser.sql
