@@ -101,3 +101,14 @@ sql/migrations/add_pb4_rls_and_agg.sql
 # (REVOKE FROM anon na nepostojecem objektu padne — pa je u CI svjesno
 # preskocena dok ne ukljucimo full plan-proizvodnje migracije u CI listu).
 # sql/migrations/revoke_anon_v_production_operations.sql
+
+# Lokacije × Mašine — Faza 1 (2026-05-17): MACHINE enum + seed mašina
+# iz bigtehn_machines_cache; source kolona na movements; view+RPC samo ako
+# postoje PP cache tabele (vidi ispod).
+sql/migrations/add_loc_machine_locations.sql
+sql/migrations/add_loc_movement_source_column.sql
+# `add_loc_bigtehn_op_status_rpc.sql` zavisi od `bigtehn_work_order_lines_cache`,
+# `bigtehn_tech_routing_cache`, `production_overlays` — u plain CI bootstrap-u
+# nisu stubovani (samo je `bigtehn_machines_cache` minimalni stub). Produkcija
+# Supabase: primeni ručno kao treći korak.
+# sql/migrations/add_loc_bigtehn_op_status_rpc.sql

@@ -14,6 +14,7 @@ import { rowsToCsv, CSV_BOM } from '../../lib/csv.js';
 import {
   searchBigtehnItems,
   fetchTpsForPredmet,
+  fetchBigtehnOpStatus,
 } from '../../services/lokacije.js';
 import { getPrioritetIds, isPrioritet, ensurePrioritetHydrated } from '../podesavanja/podesavanjePredmeta/prioritetService.js';
 import { openDrawingPdf } from '../../services/drawings.js';
@@ -551,6 +552,10 @@ function renderTpRowHtml(r) {
   /* Materijal */
   const matCell = `${escHtml(r.materijal || '')}${r.dimenzija_materijala ? ` <span class="lp-mono" style="color:var(--lp-text2)">${escHtml(r.dimenzija_materijala)}</span>` : ''}`;
 
+  /* „⚙ Op" dugme — otvara mali modal sa BigTehn operativnim statusom za TP
+   * (mašine + komada per operacija + status). Vodi se kroz `data-op-wo-id`
+   * (umesto data-wo-id) da klik na njega NE okine row-level handler koji
+   * otvara veliki TechProcedureModal iz planProizvodnje. */
   return `<tr class="${isAssembled ? 'lp-row--assembled' : ''}" data-wo-id="${escHtml(woId)}" style="cursor:pointer">
     <td class="lp-td-rn">${ident}</td>
     <td class="lp-td-mono">${tpNo}</td>
@@ -559,7 +564,12 @@ function renderTpRowHtml(r) {
     <td class="lp-td-center">${qtyCell}</td>
     <td>${locCell}</td>
     <td class="lp-td-mono" style="font-size:12px">${matCell || '<span class="lp-td-muted">—</span>'}</td>
-    <td><button type="button" class="lp-ext-btn" title="Otvori TP modal">${ICO.externalLink}</button></td>
+    <td style="white-space:nowrap">
+      <button type="button" class="lp-ext-btn" data-op-wo-id="${escHtml(woId)}"
+        title="Operativni status iz BigTehn-a (mašine, komada po operaciji)"
+        aria-label="Operativni status" style="margin-right:4px">⚙</button>
+      <button type="button" class="lp-ext-btn" title="Otvori TP modal">${ICO.externalLink}</button>
+    </td>
   </tr>`;
 }
 
@@ -628,6 +638,20 @@ function attachTableRowClicks(host) {
     });
   });
 
+  /* „⚙ Op" — operativni status (BigTehn) za TP. Mora pre row-handler-a u
+   * DOM-u i mora stopPropagation, inače će klik propušten do <tr> okidati i
+   * veliki TechProcedureModal. */
+  host.querySelectorAll('#lpRows [data-op-wo-id]').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      const id = Number(btn.getAttribute('data-op-wo-id'));
+      if (Number.isFinite(id) && id > 0) {
+        void openBigtehnOpStatusModal(id);
+      }
+    });
+  });
+
   host.querySelectorAll('#lpRows [data-wo-id]').forEach(tr => {
     tr.addEventListener('click', () => {
       const id = Number(tr.getAttribute('data-wo-id'));
@@ -636,6 +660,190 @@ function attachTableRowClicks(host) {
       }
     });
   });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BigTehn op status modal — Faza 1 Mašine × Lokacije
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Otvara mali modal sa operativnim statusom TP-a iz `bigtehn_tech_routing_cache`.
+ * Tabela: operacija, mašina, komada (gotovo / u radu), status, operater(i), vreme.
+ *
+ * NE menja placement, čisto read-only. Korisnik vidi „gde su komadi
+ * operativno" odvojeno od placement-a (gde su fizički).
+ *
+ * @param {number} workOrderId  bigtehn_work_orders_cache.id
+ */
+async function openBigtehnOpStatusModal(workOrderId) {
+  /* Cleanup eventualnog ranijeg overlay-a (npr. ako user dvaput klikne brzo). */
+  document.getElementById('lpOpStatusOverlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'lpOpStatusOverlay';
+  overlay.className = 'kadr-modal-overlay';
+  overlay.innerHTML = `
+    <div class="kadr-modal" style="max-width:760px;width:96vw">
+      <div class="kadr-modal-header">
+        <h3 style="margin:0">Operativni status (BigTehn)</h3>
+        <button type="button" class="kadr-modal-close" id="lpOpClose" aria-label="Zatvori">×</button>
+      </div>
+      <div class="kadr-modal-body" id="lpOpBody" style="max-height:70vh;overflow:auto">
+        <div class="lp-empty" style="padding:24px;text-align:center;color:var(--lp-text2)">
+          <span class="lp-empty-icon">⏳</span>
+          <span class="lp-empty-title">Učitavam operacije…</span>
+        </div>
+      </div>
+      <div class="kadr-modal-actions">
+        <button type="button" class="btn" id="lpOpCancel">Zatvori</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.querySelector('#lpOpClose')?.addEventListener('click', close);
+  overlay.querySelector('#lpOpCancel')?.addEventListener('click', close);
+  overlay.addEventListener('click', ev => {
+    if (ev.target === overlay) close();
+  });
+  const escHandler = ev => {
+    if (ev.key === 'Escape') {
+      close();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+
+  let res;
+  try {
+    res = await fetchBigtehnOpStatus(workOrderId);
+  } catch (err) {
+    const body = overlay.querySelector('#lpOpBody');
+    if (body) {
+      body.innerHTML = `<div style="padding:18px;color:#f87171">
+        Greška: ${escHtml(err?.message || String(err))}
+      </div>`;
+    }
+    return;
+  }
+
+  const body = overlay.querySelector('#lpOpBody');
+  if (!body) return;
+
+  if (!res || res.ok === false) {
+    const err = res?.error || 'fetch_failed';
+    body.innerHTML = `<div style="padding:18px;color:#f87171">
+      Nije moguće učitati operativni status: <code>${escHtml(err)}</code>.
+      ${err === 'work_order_not_found' ? '<br>RN možda nije u BigTehn keš-u.' : ''}
+    </div>`;
+    return;
+  }
+
+  body.innerHTML = renderOpStatusHtml(res);
+}
+
+function renderOpStatusHtml(res) {
+  const wo = res?.work_order || {};
+  const ops = Array.isArray(res?.operations) ? res.operations : [];
+  const headerHtml = `
+    <div style="padding:12px 16px;background:var(--lp-card2,#f8fafc);border-radius:6px;margin-bottom:12px">
+      <div style="font-size:13px;color:var(--lp-text2);margin-bottom:2px">RN</div>
+      <div style="font-weight:600;font-size:15px;margin-bottom:6px">${escHtml(wo.ident_broj || '—')}</div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px">
+        ${wo.broj_crteza ? `<span><strong>Crtež:</strong> ${escHtml(wo.broj_crteza)}</span>` : ''}
+        ${wo.komada_total != null ? `<span><strong>Komada (ukupno):</strong> ${escHtml(String(wo.komada_total))}</span>` : ''}
+        ${wo.naziv_dela ? `<span style="color:var(--lp-text2)">${escHtml(String(wo.naziv_dela).slice(0, 80))}</span>` : ''}
+      </div>
+    </div>`;
+
+  if (!ops.length) {
+    return headerHtml + `<div style="padding:18px;text-align:center;color:var(--lp-text2)">
+      Nema operacija u BigTehn-u za ovaj RN (ili keš nije svež).
+    </div>`;
+  }
+
+  const totalKom = Number(wo.komada_total) || 0;
+  const rowsHtml = ops.map(op => {
+    const fin = Number(op.qty_finished) || 0;
+    const inP = Number(op.qty_in_process) || 0;
+    const status = String(op.status || '');
+    const statusPill = (() => {
+      if (status === 'DONE') return `<span class="lp-pill lp-pill--green">✓ Završeno</span>`;
+      if (status === 'IN_PROGRESS') return `<span class="lp-pill lp-pill--blue">⏳ U radu</span>`;
+      return `<span class="lp-pill" style="background:#e5e7eb;color:#374151">— Nije počelo</span>`;
+    })();
+    const machineCell = op.machine_code
+      ? `<span class="lp-mono">${escHtml(String(op.machine_code))}</span>${op.machine_name ? `<br><span style="font-size:11px;color:var(--lp-text2)">${escHtml(String(op.machine_name))}</span>` : ''}`
+      : '<span class="lp-td-muted">—</span>';
+    const finPct = totalKom > 0 ? Math.round((fin / totalKom) * 100) : null;
+    const finCell = fin > 0
+      ? `<strong>${fin}</strong>${totalKom > 0 ? ` <span style="color:var(--lp-text2);font-size:11px">/ ${totalKom}${finPct != null ? ` · ${finPct}%` : ''}</span>` : ''}`
+      : '<span class="lp-td-muted">0</span>';
+    const inPCell = inP > 0
+      ? `<strong style="color:#2563eb">${inP}</strong>`
+      : '<span class="lp-td-muted">—</span>';
+    const timeCell = op.last_finished_at
+      ? `završeno: ${escHtml(formatRelativeTime(op.last_finished_at))}`
+      : op.last_started_at
+      ? `od: ${escHtml(formatRelativeTime(op.last_started_at))}`
+      : '<span class="lp-td-muted">—</span>';
+    const operatorsCell = op.operators
+      ? escHtml(String(op.operators).slice(0, 60))
+      : '<span class="lp-td-muted">—</span>';
+    return `<tr>
+      <td class="lp-td-mono">${escHtml(String(op.operation_code || ''))}</td>
+      <td>${escHtml(String(op.operation_name || '').slice(0, 40)) || '<span class="lp-td-muted">—</span>'}</td>
+      <td>${machineCell}</td>
+      <td class="lp-td-center">${finCell}</td>
+      <td class="lp-td-center">${inPCell}</td>
+      <td>${statusPill}</td>
+      <td style="font-size:12px">${operatorsCell}</td>
+      <td style="font-size:12px">${timeCell}</td>
+    </tr>`;
+  }).join('');
+
+  return `${headerHtml}
+    <p style="margin:0 0 8px;font-size:12px;color:var(--lp-text2)">
+      Read-only iz <code>bigtehn_tech_routing_cache</code>. „U radu" = prijave bez završetka (komadi su trenutno na mašini). „Gotovo" = prijave sa <code>is_completed=true</code>. Komadi mogu kroz više operacija — prikazani brojevi su <em>per operacija</em>, ne TP-level total.
+    </p>
+    <div style="overflow-x:auto">
+      <table class="lp-table" style="font-size:13px">
+        <thead><tr>
+          <th>Op #</th>
+          <th>Naziv</th>
+          <th>Mašina</th>
+          <th class="lp-td-center" title="Komada završeno na ovoj operaciji">Gotovo</th>
+          <th class="lp-td-center" title="Komada u radu (started, ne završeno)">U radu</th>
+          <th>Status</th>
+          <th>Operater(i)</th>
+          <th>Vreme</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
+}
+
+/**
+ * „pre 2h", „juče 14:32", „2026-04-12 09:00" — kompaktan format za panel.
+ */
+function formatRelativeTime(iso) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '—';
+  const diffMs = Date.now() - t;
+  const diffH = diffMs / (3600 * 1000);
+  if (diffH < 1) {
+    const m = Math.max(0, Math.round(diffMs / 60000));
+    return `pre ${m} min`;
+  }
+  if (diffH < 24) {
+    return `pre ${Math.round(diffH)} h`;
+  }
+  const d = new Date(t);
+  const pad = n => String(n).padStart(2, '0');
+  if (diffH < 48) {
+    return `juče ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function attachPagerHandlers(host, refresh) {

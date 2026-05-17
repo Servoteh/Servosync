@@ -1484,6 +1484,7 @@ async function renderPanel(host, tabId) {
       ['', 'Sve lokacije'],
       ['hall', 'Samo HALE'],
       ['shelf', 'Samo POLICE'],
+      ['machine', 'Samo MAŠINE'],
       ['other', 'Ostalo'],
     ]
       .map(([v, label]) => `<option value="${escHtml(v)}"${browseKindFilter === v ? ' selected' : ''}>${escHtml(label)}</option>`)

@@ -2,11 +2,14 @@
  * Poslovna klasifikacija `loc_locations.location_type`.
  *
  * Baza koristi jedan enum za sve vrste lokacija, ali UI mora svuda da govori
- * istim jezikom: HALA je veći prostor, POLICA je konkretno mesto unutar hale.
+ * istim jezikom: HALA je veći prostor, POLICA je konkretno mesto unutar hale,
+ * MAŠINA je pseudo-lokacija mašine (Faza 1: vidljiva u browse/destinationima
+ * iza filtera „Mašine", ne pojavljuje se u default flow-u).
  */
 
 export const HALL_TYPES = Object.freeze(['WAREHOUSE', 'PRODUCTION', 'ASSEMBLY', 'FIELD', 'TEMP']);
 export const SHELF_TYPES = Object.freeze(['SHELF', 'RACK', 'BIN']);
+export const MACHINE_TYPES = Object.freeze(['MACHINE']);
 
 export const HALL_TYPE_OPTIONS = Object.freeze([
   { value: 'WAREHOUSE', label: 'Magacin / standardna hala' },
@@ -18,6 +21,7 @@ export const HALL_TYPE_OPTIONS = Object.freeze([
 
 const HALL_SET = new Set(HALL_TYPES);
 const SHELF_SET = new Set(SHELF_TYPES);
+const MACHINE_SET = new Set(MACHINE_TYPES);
 
 export function normalizeLocType(type) {
   return String(type || '').trim().toUpperCase();
@@ -31,9 +35,14 @@ export function isShelfType(type) {
   return SHELF_SET.has(normalizeLocType(type));
 }
 
+export function isMachineType(type) {
+  return MACHINE_SET.has(normalizeLocType(type));
+}
+
 export function getLocationKind(type) {
   if (isHallType(type)) return 'hall';
   if (isShelfType(type)) return 'shelf';
+  if (isMachineType(type)) return 'machine';
   return 'other';
 }
 
@@ -41,6 +50,7 @@ export function getLocationKindLabel(type, { icon = false } = {}) {
   const kind = getLocationKind(type);
   if (kind === 'hall') return icon ? 'HALA' : 'HALA';
   if (kind === 'shelf') return icon ? 'POLICA' : 'POLICA';
+  if (kind === 'machine') return icon ? 'MAŠINA' : 'MAŠINA';
   return icon ? 'OSTALO' : 'OSTALO';
 }
 
@@ -51,6 +61,7 @@ export function getLocationTypeLabel(type) {
   if (t === 'SHELF') return 'Polica';
   if (t === 'RACK') return 'Regal';
   if (t === 'BIN') return 'Boks / pozicija';
+  if (t === 'MACHINE') return 'Mašina';
   return t || 'Nepoznato';
 }
 

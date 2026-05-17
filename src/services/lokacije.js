@@ -807,6 +807,33 @@ export async function fetchTpsForPredmet(itemId, opts = {}) {
 }
 
 /**
+ * BigTehn operativni status za jedan TP (radni nalog) — Faza 1 Mašine ×
+ * Lokacije integracija. Wrapper oko RPC `loc_get_bigtehn_op_status`.
+ *
+ * Migracija: `sql/migrations/add_loc_bigtehn_op_status_rpc.sql`.
+ *
+ * Vraća listu operacija (po `bigtehn_work_order_lines_cache`) sa agregatima
+ * iz `bigtehn_tech_routing_cache` (komada, status, mašina, vreme). Panel u
+ * Lokacije / Pregled predmeta prikazuje ovo da bi se znalo gde su komadi
+ * OPERATIVNO, dok placement i dalje opisuje FIZIČKO mesto.
+ *
+ * @param {number|string} workOrderId  bigtehn_work_orders_cache.id (bigint)
+ * @returns {Promise<{ ok: boolean, work_order?: object, operations?: object[], error?: string }|null>}
+ */
+export async function fetchBigtehnOpStatus(workOrderId) {
+  const id = Number(workOrderId);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const res = await sbReq(
+    'rpc/loc_get_bigtehn_op_status',
+    'POST',
+    { p_work_order_id: id },
+    { upsert: false },
+  );
+  if (!res || typeof res !== 'object') return null;
+  return res;
+}
+
+/**
  * Sync worker zdravstveni pregled (Härd-3 / M28 + H27).
  *
  * Vraća kombinovan summary iz `loc_sync_worker_heartbeat` (uploads worker svaki 60s)

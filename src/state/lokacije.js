@@ -20,7 +20,7 @@ const VALID_TABS = new Set([
 ]);
 const DEFAULT_TAB = 'dashboard';
 
-const VALID_BROWSE_KIND_FILTERS = new Set(['', 'hall', 'shelf', 'other']);
+const VALID_BROWSE_KIND_FILTERS = new Set(['', 'hall', 'shelf', 'machine', 'other']);
 const VALID_LOCATION_FILTERS = new Set(['all', 'with', 'without']);
 
 /* Veličine stranice za items paginator — striktan whitelist da se LS ne koristi kao XSS vektor. */

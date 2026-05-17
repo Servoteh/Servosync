@@ -1015,6 +1015,15 @@ export function openQuickMoveModal({ onSuccess } = {}) {
             </div>
           </div>
           <div class="emp-field col-full">
+            <label class="loc-inline-check" style="font-weight:400">
+              <input type="checkbox" id="locQmShowMachines" />
+              <span>Prikaži i mašine kao destinaciju</span>
+            </label>
+            <div class="loc-muted" style="font-size:11px;margin-top:2px">
+              Mašine su pseudo-lokacije (Faza 1: ručno premeštanje na mašinu) — sakrivene su iz default liste da ne bi zbunjivale operatera koji premešta između polica.
+            </div>
+          </div>
+          <div class="emp-field col-full">
             <label for="locQmTo">Odredišna lokacija *</label>
             <select id="locQmTo" required></select>
             <div id="locQmToHint" class="loc-muted" style="font-size:11px;margin-top:4px"></div>
@@ -1060,20 +1069,24 @@ export function openQuickMoveModal({ onSuccess } = {}) {
     const hallFilterEl = /** @type {HTMLSelectElement|null} */ (overlay.querySelector('#locQmHallFilter'));
     const toSelEl = /** @type {HTMLSelectElement|null} */ (overlay.querySelector('#locQmTo'));
     const toHintEl = overlay.querySelector('#locQmToHint');
+    const showMachinesEl = /** @type {HTMLInputElement|null} */ (overlay.querySelector('#locQmShowMachines'));
 
     /** Hale iz mastera (sve aktivne); police A–Z po šifri kada je hala izabrana. */
     function populateQmDestinationSelects() {
       const shelves = [];
       const halls = [];
+      const machines = [];
       const others = [];
       for (const l of locs) {
         if (l.is_active === false) continue;
         const kind = getLocationKind(l.location_type);
         if (kind === 'shelf') shelves.push(l);
         else if (kind === 'hall') halls.push(l);
+        else if (kind === 'machine') machines.push(l);
         else others.push(l);
       }
       halls.sort(compareLocationCodeNatural);
+      machines.sort(compareLocationCodeNatural);
       others.sort(compareLocationCodeNatural);
 
       /** @type {Map<string|null, object[]>} */
@@ -1143,23 +1156,31 @@ export function openQuickMoveModal({ onSuccess } = {}) {
         return `<optgroup label="${escHtml(label)}">${opts}</optgroup>`;
       };
 
+      /* Mašine su sakrivene osim ako operater eksplicitno čekira „Prikaži mašine".
+       * Razlog: 99% premeštaja je shelf-to-shelf; mašine zbunjuju većinu operatera. */
+      const showMachines = !!showMachinesEl?.checked;
       const grouped =
         renderShelfGroups() +
         renderFlatGroup('🏭 HALE', halls) +
+        (showMachines ? renderFlatGroup('⚙ MAŠINE', machines) : '') +
         renderFlatGroup('📦 OSTALE', others);
 
       if (toSelEl) {
         toSelEl.innerHTML = '<option value="">— izaberi odredište —</option>' + grouped;
       }
       if (toHintEl) {
-        toHintEl.textContent = filterHallId
+        const baseHint = filterHallId
           ? 'Police ispod sortirane A–Z po šifri; HALE/skart ostaju u svojim grupama ispod.'
           : 'Izaberi halu za listu police (sve aktivne HALE iz master liste).';
+        toHintEl.textContent = showMachines
+          ? `${baseHint} Mašine su uključene u listu.`
+          : baseHint;
       }
     }
 
     populateQmDestinationSelects();
     hallFilterEl?.addEventListener('change', () => populateQmDestinationSelects());
+    showMachinesEl?.addEventListener('change', () => populateQmDestinationSelects());
 
     /* Stanje: trenutni placement-i za (bigtehn_rn, TP, predmet) — mapa location_id → qty. */
     let currentPlacements = [];
