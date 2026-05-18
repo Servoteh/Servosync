@@ -292,9 +292,7 @@ function _emptyHtml() {
   return `
     <div class="kadrovska-empty" id="usersEmpty" style="margin-top:16px;">
       <div class="kadrovska-empty-title">Nema dodeljenih uloga (ili nemaš pravo da ih vidiš)</div>
-      <div style="margin-top:6px">Ako si <strong>Admin</strong>, listu treba da vidiš čim se RLS politika učita. Nove uloge se dodaju iz <strong>Supabase Dashboard → SQL Editor</strong>:</div>
-      <pre style="background:var(--surface2);padding:10px;border-radius:6px;margin-top:8px;font-size:11px;overflow:auto"><code>INSERT INTO user_roles (email, role, is_active, full_name, team)
-VALUES ('novi.kolega@servoteh.com', 'pm', true, 'Ime Prezime', 'Tim X');</code></pre>
+      <div style="margin-top:6px">Ako si <strong>Admin</strong>, listu treba da vidiš čim se RLS politika učita. Koristi dugme <strong>Pozovi korisnika</strong> iznad tabele:</div>
     </div>
   `;
 }
