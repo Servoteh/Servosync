@@ -9,9 +9,12 @@ import {
   canEditPbTasks,
   canEditPbWorkReports,
   getAuth,
+  getIsOnline,
   isAdmin,
   isPbReadOnly,
+  onAuthChange,
 } from '../../state/auth.js';
+import { applyPbUrlToState, buildPbModuleUrl, parsePbModuleSearch } from './pbUrl.js';
 import {
   closePbFilterDrawer,
   countPbActiveFilters,
@@ -49,6 +52,9 @@ let teardownResize = null;
 let _chromeSearchDebounceTimer = null;
 let _pbMoreDocHandler = null;
 
+/** @type {{ at: Date|null, ok: boolean, partial: boolean, detail: string }} */
+let _pbLoadStatus = { at: null, ok: true, partial: false, detail: '' };
+
 /** Kompaktan chrome (tabovi, filteri) — širi prag od 767 zbog iOS / tablet / zoom. */
 function mqCompactChrome() {
   return window.matchMedia('(max-width: 1024px)');
@@ -73,7 +79,7 @@ const TAB_EMOJI = {
  * @param {HTMLElement} root
  * @param {{ onBackToHub: () => void, onLogout: () => void }} options
  */
-export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
+export function renderPbModule(root, { onBackToHub, onLogout, initialSearch } = {}) {
   if (!getAuth().user) {
     showToast('Prijavi se da otvoriš Projektovanje');
     onBackToHub?.();
@@ -81,6 +87,55 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
   }
 
   const state = loadPbState();
+  const urlInit = typeof initialSearch === 'string'
+    ? parsePbModuleSearch(initialSearch)
+    : (initialSearch || parsePbModuleSearch(window.location.search));
+  applyPbUrlToState(state, urlInit);
+  savePbState(state);
+  /** Deep link ?rn= — otvori zadatak posle učitavanja. */
+  let pendingTaskId = urlInit.rn || null;
+  let _urlSyncReady = false;
+
+  function syncPbUrl(replace = true) {
+    if (!_urlSyncReady) return;
+    const path = buildPbModuleUrl({
+      tab: state.activeTab,
+      predmet: state.activeProject,
+      inzenjer: state.activeEngineer,
+      q: state.moduleSearch,
+    });
+    const next = path;
+    const cur = window.location.pathname + window.location.search;
+    if (cur === next) return;
+    if (replace) history.replaceState(null, '', next);
+    else history.pushState(null, '', next);
+  }
+
+  function formatLoadStatus() {
+    if (!_pbLoadStatus.at) return 'Još nije učitano';
+    const t = _pbLoadStatus.at.toLocaleTimeString('sr-Latn', { hour: '2-digit', minute: '2-digit' });
+    if (!_pbLoadStatus.ok) return `Greška (${t})`;
+    if (_pbLoadStatus.partial) return `Delimično (${t})`;
+    return `OK (${t})`;
+  }
+
+  function tryOpenPendingTask() {
+    if (!pendingTaskId) return;
+    const id = pendingTaskId;
+    pendingTaskId = null;
+    const task = (tasks || []).find(x => x.id === id);
+    if (!task) {
+      showToast('Zadatak iz linka nije u trenutnom prikazu.');
+      return;
+    }
+    openTaskEditorModal({
+      task,
+      projects,
+      engineers,
+      canEdit: canEditPbTasks(),
+      onSaved: () => loadAll(true),
+    });
+  }
   let projects = [];
   let engineers = [];
   let tasks = [];
@@ -261,6 +316,12 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
 
       const failedLabels = [rProj, rEng, rTasks].filter(x => !x.ok).map(x => x.label);
       if (!statsOk) failedLabels.push('loadStats');
+      _pbLoadStatus = {
+        at: new Date(),
+        ok: failedLabels.length === 0,
+        partial: failedLabels.length > 0,
+        detail: failedLabels.join(', '),
+      };
       if (failedLabels.length) {
         const detail = failedLabels.join(', ');
         showToast(`Delimično učitano (${detail}). F12 → Console za detalje.`);
@@ -268,8 +329,12 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
 
       paintChrome();
       void mountActiveTab();
+      tryOpenPendingTask();
+      _urlSyncReady = true;
+      syncPbUrl();
     } catch (err) {
       console.error('PB loadAll fatal', err);
+      _pbLoadStatus = { at: new Date(), ok: false, partial: false, detail: 'fatal' };
       const msg = pbErrorMessage(err) || 'Greška pri učitavanju';
       if (body) {
         body.innerHTML = `<div class="pb-load-error"><p><strong>Učitavanje nije uspelo</strong></p><p class="pb-muted">${escHtml(msg)}</p><button type="button" class="btn btn-primary" id="pbRetryLoad">Pokušaj ponovo</button></div>`;
@@ -310,16 +375,21 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     const onProject = e => {
       state.activeProject = e.target.value;
       savePbState(state);
+      syncPbUrl();
+      if (pbIsCompact(root)) closePbFilterDrawer(root);
       void applyChromeFiltersAndRemount();
     };
     const onEngineer = e => {
       state.activeEngineer = e.target.value || 'all';
       savePbState(state);
+      syncPbUrl();
+      if (pbIsCompact(root)) closePbFilterDrawer(root);
       void applyChromeFiltersAndRemount();
     };
     const onSearch = e => {
       state.moduleSearch = e.target.value || '';
       syncPbModuleFilters({ moduleSearch: state.moduleSearch });
+      syncPbUrl();
       refreshFilterBadge(loadPbState().activeTab === 'plan' ? {
         status: loadPbState().moduleStatus,
         vrsta: loadPbState().moduleVrsta,
@@ -345,6 +415,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     hub.innerHTML = `
       <div class="pb-chrome-pinned">
       ${readOnly ? '<div class="pb-readonly-banner" role="status">Samo pregled — izmene zadataka nisu dostupne za vašu ulogu.</div>' : ''}
+      ${!getIsOnline() ? '<div class="pb-offline-banner" role="status">Niste na mreži — prikaz i izmene mogu biti ograničeni.</div>' : ''}
       <div class="pb-chrome-nav" role="navigation" aria-label="Projektovanje navigacija">
         <div class="pb-topbar-start">
           <button type="button" class="pb-back-btn" id="pbBackBtn" aria-label="Nazad na module">
@@ -377,6 +448,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
           <div class="pb-more-menu" id="pbMoreMenu" role="menu" hidden>
             <button type="button" class="pb-more-menu-item" id="pbMoreTheme" role="menuitem">Tema</button>
             <button type="button" class="pb-more-menu-item" id="pbMoreRefresh" role="menuitem">Osveži podatke</button>
+            <span class="pb-more-menu-meta" id="pbMoreLoadStatus" role="presentation">Podaci: ${escHtml(formatLoadStatus())}</span>
             ${auth.role ? `<span class="pb-more-menu-meta" role="presentation">${escHtml(auth.role.toUpperCase())}</span>` : ''}
             <button type="button" class="pb-more-menu-item" id="pbMoreLogout" role="menuitem">Odjavi se</button>
           </div>
@@ -452,6 +524,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       btn.addEventListener('click', () => {
         state.activeTab = btn.dataset.pbTab || 'plan';
         savePbState(state);
+        syncPbUrl();
         paintChrome();
         void mountActiveTab();
       });
@@ -488,6 +561,9 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         engineers,
         search: state.moduleSearch ?? '',
         showDone: state.moduleShowDone ?? false,
+        chromeFilterActive: state.activeProject !== 'all'
+          || state.activeEngineer !== 'all'
+          || Boolean((state.moduleSearch || '').trim()),
         onRefresh: () => loadAll(),
         onSwitchToPlanShowDone: switchToPlanShowDone,
       });
@@ -571,7 +647,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     <div id="pbHubSlot" class="pb-chrome"></div>
     <div id="pbFilterDrawer" class="pb-filter-drawer" hidden>
       <button type="button" class="pb-filter-drawer-backdrop" id="pbFilterDrawerBackdrop" aria-label="Zatvori filtere"></button>
-      <div class="pb-filter-drawer-panel" role="dialog" aria-labelledby="pbFilterDrawerTitle">
+      <div class="pb-filter-drawer-panel" role="dialog" aria-labelledby="pbFilterDrawerTitle" tabindex="-1">
         <header class="pb-filter-drawer-head">
           <h2 id="pbFilterDrawerTitle" class="pb-filter-drawer-title">Filteri</h2>
           <button type="button" class="pb-filter-drawer-close" id="pbFilterDrawerClose" aria-label="Zatvori">✕</button>
@@ -586,6 +662,9 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
             <div id="pbFilterDrawerPlan"></div>
           </section>
         </div>
+        <footer class="pb-filter-drawer-foot">
+          <button type="button" class="btn btn-primary" id="pbFilterDrawerApply">Primeni filtere</button>
+        </footer>
       </div>
     </div>
     <main id="pbTabBody" class="pb-tab-body pb-tab-body--loading" aria-busy="true">
@@ -608,7 +687,16 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     paintChrome();
     void mountActiveTab();
   });
-  teardownResize = () => mm.removeEventListener('change', applyMq);
+  teardownResize = () => mm.removeEventListener('change', applyMqClass);
+
+  const unsubAuth = onAuthChange(() => {
+    paintChrome();
+  });
+  const prevTeardown = teardownResize;
+  teardownResize = () => {
+    prevTeardown?.();
+    unsubAuth?.();
+  };
 
   root.querySelector('#pbFab')?.addEventListener('click', () => {
     openTaskEditorModal({
@@ -620,7 +708,9 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     });
   });
 
-  wirePbFilterDrawer(root);
+  wirePbFilterDrawer(root, {
+    onApply: () => { void applyChromeFiltersAndRemount(); },
+  });
   loadAll();
 }
 

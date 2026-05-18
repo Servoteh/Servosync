@@ -2,7 +2,8 @@
  * Analiza tab — dashboard po projektu.
  */
 
-import { escHtml } from '../../lib/dom.js';
+import { escHtml, showToast } from '../../lib/dom.js';
+import { downloadCsv } from '../../lib/csv.js';
 import {
   statusBadgeClass,
   prioClass,
@@ -146,8 +147,12 @@ export function renderAnaliza(root, ctx) {
           </div>`).join('')}
       </section>` : '';
 
+    const projLabel = plist.find(p => p.id === pid);
+    const exportDisabled = !pid || !list.length;
+
     root.innerHTML = `
       <div class="pb-an-wrap">
+        <div class="pb-an-toolbar">
         <label class="pb-field-inline pb-an-proj"><span>Analiza projekta</span>
           <select id="pbAnProj">
             ${plist.length ? plist.map(p => `
@@ -157,6 +162,8 @@ export function renderAnaliza(root, ctx) {
               : '<option value="">— nema projekata sa zadacima —</option>'}
           </select>
         </label>
+        <button type="button" class="btn btn-sm" id="pbAnExportCsv" ${exportDisabled ? 'disabled' : ''} title="Izvoz zadataka projekta u CSV">⤓ CSV</button>
+        </div>
 
         ${pid ? `
         <section class="pb-an-sec"><h3 class="pb-section-title">Timeline projekta</h3>${timelineHtml}</section>
@@ -174,6 +181,33 @@ export function renderAnaliza(root, ctx) {
     root.querySelector('#pbAnProj')?.addEventListener('change', e => {
       selectedPid = e.target.value || null;
       paint();
+    });
+
+    root.querySelector('#pbAnExportCsv')?.addEventListener('click', () => {
+      if (!pid || !list.length) {
+        showToast('Nema zadataka za izvoz.');
+        return;
+      }
+      const code = projLabel?.project_code || pid;
+      const headers = [
+        'naziv', 'status', 'prioritet', 'vrsta', 'inzenjer',
+        'datum_pocetka_plan', 'datum_zavrsetka_plan', 'procenat_zavrsenosti', 'norma_sati_dan', 'problem',
+      ];
+      const rows = list.map(t => [
+        t.naziv,
+        t.status,
+        t.prioritet,
+        t.vrsta,
+        t.engineer_name,
+        (t.datum_pocetka_plan || '').slice(0, 10),
+        (t.datum_zavrsetka_plan || '').slice(0, 10),
+        t.procenat_zavrsenosti,
+        t.norma_sati_dan,
+        t.problem,
+      ]);
+      const today = new Date().toISOString().slice(0, 10);
+      downloadCsv(`pb-analiza-${code}-${today}.csv`, headers, rows);
+      showToast('CSV preuzet');
     });
 
     root.querySelectorAll('.pb-an-desc').forEach(btn => {
