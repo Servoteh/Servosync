@@ -23,7 +23,7 @@ import {
 import { fetchBigtehnOpSnapshotByRnAndTp } from '../../services/planProizvodnje.js';
 import { enqueueMovement } from '../../services/offlineQueue.js';
 import { getIsOnline } from '../../state/auth.js';
-import { compareLocationCodeNatural } from '../../lib/lokacijeSort.js';
+import { compareLocationCodeNatural, groupShelvesByCodePrefix } from '../../lib/lokacijeSort.js';
 import { computeLocInitialRemainder, LOC_FROM_UNPLACED_VALUE, isLocFromUnplacedOption } from '../../lib/lokacijeFilters.js';
 import {
   parseShelfCompositeBarcodeToken,
@@ -1321,7 +1321,9 @@ export async function openScanMoveModal({
   /**
    * Popuni "Na lokaciju" select grupisano po kategorijama da user brže nađe
    * odredište. Kategorije (po `location_type`):
-   *   📍 POLICE  — SHELF / RACK / BIN, **podgrupe po roditeljskoj hali** (`parent_id`)
+   *   📍 POLICE  — SHELF / RACK / BIN, **podgrupe po roditeljskoj hali** (`parent_id`);
+   *     unutar izabrane hale police su u **dodatnim optgroup-ovima po vodećem slovu reda**
+   *     u `location_code` (npr. A1–A100 pod „… — A", zatim B…).
    *   🏭 HALE     — WAREHOUSE / PRODUCTION / ASSEMBLY / FIELD / TEMP
    *   📦 OSTALE   — SCRAPPED / OFFICE / …
    *
@@ -1390,13 +1392,23 @@ export async function openScanMoveModal({
         .map(pid => {
           const items = shelfByParent.get(pid);
           if (!items?.length) return '';
-          const opts = items
-            .map(
-              l =>
-                `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
-            )
+          const sub = groupShelvesByCodePrefix(items);
+          return sub
+            .map(({ prefix, shelves }) => {
+              const opts = shelves
+                .map(
+                  l =>
+                    `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
+                )
+                .join('');
+              const p = state.locById.get(pid);
+              const hallCode = p?.location_code != null ? String(p.location_code).trim() : '';
+              const grpLabel = hallCode
+                ? `📍 Police · ${hallCode} — ${prefix} (${shelves.length})`
+                : `${shelfLabelForParent(pid)} — ${prefix} (${shelves.length})`;
+              return `<optgroup label="${escHtml(grpLabel)}">${opts}</optgroup>`;
+            })
             .join('');
-          return `<optgroup label="${escHtml(shelfLabelForParent(pid))}">${opts}</optgroup>`;
         })
         .join('');
     };
@@ -1432,13 +1444,15 @@ export async function openScanMoveModal({
      * neka grupa prva (npr. kliknuo je "POLICA" prečicu sa home-a). */
     const hintEl = $('#locScanToHint');
     if (hintEl) {
-      const filt = filterHallId ? ' · izabrana hala · police A–Z po šifri' : ' · sve HALE u filteru · izaberi halu za police';
+      const filt = filterHallId
+        ? ' · izabrana hala · police po grupama (slovo reda) pa A–Z po šifri'
+        : ' · sve HALE u filteru · izaberi halu za police';
       if (preferLocationCategory === 'shelf') {
         hintEl.textContent = '— prečica sa home: POLICE su prve; police su po halama' + filt;
       } else if (preferLocationCategory === 'warehouse') {
         hintEl.textContent = '— prečica sa home: HALE su prve u listi' + filt;
       } else {
-        hintEl.textContent = '— police su grupisane po hali (parent_id)' + filt;
+        hintEl.textContent = '— police su grupisane po hali, unutar hale po slovu reda (A, B, …)' + filt;
       }
     }
   }

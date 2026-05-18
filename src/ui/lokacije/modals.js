@@ -27,7 +27,7 @@ import {
   fetchTpOptionsForPredmetOrder,
 } from '../../services/planProizvodnje.js';
 import { getIsOnline } from '../../state/auth.js';
-import { compareLocationCodeNatural } from '../../lib/lokacijeSort.js';
+import { compareLocationCodeNatural, groupShelvesByCodePrefix } from '../../lib/lokacijeSort.js';
 import { computeLocInitialRemainder, LOC_FROM_UNPLACED_VALUE, isLocFromUnplacedOption, sortPlacementsForDisplay } from '../../lib/lokacijeFilters.js';
 
 /* TRANSFER je prvi jer je najčešći slučaj u svakodnevnom radu;
@@ -1134,13 +1134,23 @@ export function openQuickMoveModal({ onSuccess } = {}) {
           .map(pid => {
             const items = shelfByParent.get(pid);
             if (!items?.length) return '';
-            const opts = items
-              .map(
-                l =>
-                  `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
-              )
+            const sub = groupShelvesByCodePrefix(items);
+            return sub
+              .map(({ prefix, shelves }) => {
+                const opts = shelves
+                  .map(
+                    l =>
+                      `<option value="${escHtml(l.id)}">${escHtml(l.location_code)} — ${escHtml(l.name)}</option>`,
+                  )
+                  .join('');
+                const p = locById.get(pid);
+                const hallCode = p?.location_code != null ? String(p.location_code).trim() : '';
+                const grpLabel = hallCode
+                  ? `📍 Police · ${hallCode} — ${prefix} (${shelves.length})`
+                  : `${shelfLabelForParent(pid)} — ${prefix} (${shelves.length})`;
+                return `<optgroup label="${escHtml(grpLabel)}">${opts}</optgroup>`;
+              })
               .join('');
-            return `<optgroup label="${escHtml(shelfLabelForParent(pid))}">${opts}</optgroup>`;
           })
           .join('');
       };
@@ -1170,7 +1180,7 @@ export function openQuickMoveModal({ onSuccess } = {}) {
       }
       if (toHintEl) {
         const baseHint = filterHallId
-          ? 'Police ispod sortirane A–Z po šifri; HALE/skart ostaju u svojim grupama ispod.'
+          ? 'Police ispod grupisane po slovu reda (A, B, …), unutar grupe A–Z po šifri; HALE/skart ostaju ispod.'
           : 'Izaberi halu za listu police (sve aktivne HALE iz master liste).';
         toHintEl.textContent = showMachines
           ? `${baseHint} Mašine su uključene u listu.`
