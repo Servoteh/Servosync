@@ -21,6 +21,7 @@ import {
   pbErrorMessage,
   savePbPlanLoadSectionOpen,
 } from './shared.js';
+import { attachStickyHscroll } from '../../lib/stickyHscroll.js';
 import {
   updatePbTask,
   bulkUpdatePbTasks,
@@ -249,6 +250,8 @@ export function renderPlanTab(root, ctx) {
   let sortDir = 'asc';
   let _searchDebounceTimer = null;
   let _delegationAttached = false;
+  /** Cleanup funkcija za sticky-hscroll proxy (Sprint 3A stavka 7). */
+  let _stickyHscrollCleanup = null;
   /** @type {Set<string>} Selektovani task ID-evi za bulk operacije. */
   const _selectedIds = new Set();
   /** @type {null|'status'|'prio'|'engineer'} Otvoreni bulk-action menu. */
@@ -459,6 +462,19 @@ export function renderPlanTab(root, ctx) {
     refreshBulkBar();
     // Re-attach sort listenere (jer su .pb-th elementi novi posle innerHTML zamene).
     attachSortListeners();
+    // Re-attach sticky horizontal scrollbar — proxy je u DOM-u rušen sa innerHTML.
+    setupStickyHscroll();
+  }
+
+  function setupStickyHscroll() {
+    if (_stickyHscrollCleanup) {
+      try { _stickyHscrollCleanup(); } catch { /* ignore */ }
+      _stickyHscrollCleanup = null;
+    }
+    const tableWrap = root.querySelector('.pb-table-wrap');
+    if (tableWrap) {
+      _stickyHscrollCleanup = attachStickyHscroll(tableWrap);
+    }
   }
 
   /** Bulk action bar — prikazuje se kad je _selectedIds.size > 0. */
@@ -803,6 +819,7 @@ export function renderPlanTab(root, ctx) {
     attachSortListeners();
     attachBulkBarListeners();
     attachViewsListeners();
+    setupStickyHscroll();
 
     if (!_delegationAttached) {
       attachRootDelegation();

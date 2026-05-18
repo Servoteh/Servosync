@@ -61,8 +61,10 @@ import {
   deleteRow,
   addPhaseFromInput,
 } from './planActions.js';
+import { attachStickyHscroll } from '../../lib/stickyHscroll.js';
 
 let _onChangeRoot = null;
+let _stickyHscrollCleanup = null;
 
 /* ── PUBLIC: HTML rendering ──────────────────────────────────────────── */
 
@@ -111,6 +113,16 @@ export function wirePlanSection(root, { onChange } = {}) {
   root.querySelector('#newPhaseInput')?.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') _onAddPhaseClick();
   });
+
+  /* Sticky horizontal scrollbar — proxy fiksiran na dnu tab viewport-a. */
+  if (_stickyHscrollCleanup) {
+    try { _stickyHscrollCleanup(); } catch { /* ignore */ }
+    _stickyHscrollCleanup = null;
+  }
+  const tableWrap = root.querySelector('#planTableWrap');
+  if (tableWrap) {
+    _stickyHscrollCleanup = attachStickyHscroll(tableWrap);
+  }
 
   /* Wire row event listeners on tbody */
   _wireTbody(root);

@@ -558,6 +558,34 @@ textarea.note-area:focus { border-color: var(--accent); box-shadow: 0 0 0 2px va
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text3); }
 .legend-box { width: 10px; height: 10px; border-radius: 3px; }
 
+/* --- STICKY HORIZONTAL SCROLLBAR (Sprint 3A stavka 7) --- */
+/* Proxy scroll bar fiksiran na dnu vidljivog dela tab-body container-a.
+   Vidi src/lib/stickyHscroll.js za JS koji ga kreira i sinhronizuje. */
+.sticky-hscroll-proxy {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  height: 14px;
+  max-height: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--surface, #fff);
+  border-top: 1px solid var(--border, #e5e7eb);
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  margin: 0;
+}
+
+.sticky-hscroll-spacer {
+  height: 1px;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  /* Na mobile-u native horizontal scroll je dovoljan; ne dupli ga. */
+  .sticky-hscroll-proxy { display: none !important; }
+}
+
 /* --- GANTT --- */
 .gantt-wrap {
   display: flex;

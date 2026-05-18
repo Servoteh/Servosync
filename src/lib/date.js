@@ -41,11 +41,19 @@ export function dateToYMD(dt) {
   return formatYMD(dt.getFullYear(), dt.getMonth(), dt.getDate());
 }
 
+/**
+ * Format datum za prikaz — dd/mm/yyyy (sa slash separator-om, Sprint 3A stavka 5).
+ * Prošli format je bio dd.mm.yyyy (tačke); promenjen na slash radi uniformnosti
+ * sa PB modulom i Servoteh konvencijom.
+ */
 export function formatDate(d) {
   const dt = parseDateLocal(d);
   if (!dt) return '';
-  return `${String(dt.getDate()).padStart(2, '0')}.${String(dt.getMonth() + 1).padStart(2, '0')}.${dt.getFullYear()}`;
+  return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
 }
+
+/** Alias za formatDate — eksplicitno "dmy" za nove pozive. */
+export const formatDmy = formatDate;
 
 export function toIsoDate(d) {
   const dt = parseDateLocal(d);
