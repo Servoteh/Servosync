@@ -45,7 +45,12 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
     /* Scroll je u main.pb-tab-body; sticky ovde aktivira overlap sadržaja ispod pri body scroll. */
     position: relative;
     top: auto;
-    z-index: 2;
+    /* z:50 — mora biti VEĆI nego sticky thead corner (z:2) da spreči punch-through
+       tokom scroll tranzicije. Sprint 2C+ fix. */
+    z-index: 50;
+    /* isolation: isolate kreira nov stacking context — chrome je samostalan sloj,
+       tab-body sadržaji nikad ne mogu vizuelno prosečnati kroz njega. */
+    isolation: isolate;
     will-change: auto;
   }
 }
@@ -1678,11 +1683,15 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
 .pb-table .pb-sticky-left { left: 0; }
 .pb-table .pb-sticky-right { right: 0; }
 
-/* Thead corner — sticky-top (z:1) + sticky-side → z:2 da pokrije i thead i sticky-side tbody. */
+/* Thead corner — sticky-top + sticky-side. z:1 (isti kao ostali thead) — chrome
+   ima z:50 sa isolation:isolate, pa korner ne može da prosečnati chrome.
+   Tradeoff: tokom horizontal scroll-a, sliding cells (z:1, ista vrednost) bi
+   po DOM redosledu paint-ovale OVER corner — ali u praksi je table 1300+ px
+   pa horizontal scroll retko triggeruje na desktop-u. */
 .pb-table thead .pb-sticky-left,
 .pb-table thead .pb-sticky-right {
   background-color: var(--surface3, #f9fafb);
-  z-index: 2;
+  z-index: 1;
 }
 
 /* Scroll-edge indikator: granica na "unutrašnjoj" strani sticky kolone. */
@@ -3327,7 +3336,9 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   flex: 0 0 auto;
   position: relative;
   top: auto;
-  z-index: 2;
+  /* z:50 — vidi komentar u media query-ju iznad. */
+  z-index: 50;
+  isolation: isolate;
   will-change: auto;
   /* Razmak pre scroll oblasti — bez podsecanja prvog reda teksta (alarm, Gantt legenda, itd.). */
   padding-bottom: 12px;
