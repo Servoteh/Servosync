@@ -114,6 +114,7 @@ sql/migrations/pb_mechanical_engineers_rpc.sql
 sql/migrations/add_pb_notifications.sql
 sql/migrations/add_pb4_rls_and_agg.sql
 sql/migrations/fix_pb_tasks_soft_delete_rls.sql
+sql/migrations/add_pb_soft_delete_rpc.sql
 
 # Faza 1 security hardening (2026-04-23). Migracija je idempotentna i
 # preživljava izvrsavanje cak i ako v_production_operations ne postoji

@@ -16,12 +16,11 @@ CREATE POLICY pb_tasks_update_editors
     AND deleted_at IS NULL
   );
 
+-- Napomena: direktan PATCH deleted_at i dalje pada zbog SELECT politike na novom redu.
+-- Koristiti RPC pb_soft_delete_task / pb_soft_delete_tasks.
 CREATE POLICY pb_tasks_soft_delete
   ON public.pb_tasks FOR UPDATE TO authenticated
-  USING (
-    public.pb_can_edit_tasks()
-    AND deleted_at IS NULL
-  )
+  USING (public.pb_can_edit_tasks())
   WITH CHECK (
     public.pb_can_edit_tasks()
     AND deleted_at IS NOT NULL

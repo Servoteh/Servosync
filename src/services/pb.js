@@ -248,16 +248,7 @@ async function patchPbTasksResponse(path, payload) {
 
 export async function softDeletePbTask(id) {
   if (!id) throw new Error('ID nedostaje');
-  const payload = {
-    deleted_at: new Date().toISOString(),
-    updated_by: actorEmail(),
-  };
-  await sbReqThrow(
-    `pb_tasks?id=eq.${encodeURIComponent(id)}&deleted_at=is.null`,
-    'PATCH',
-    payload,
-    { preferReturn: 'minimal' },
-  );
+  await sbReqThrow('rpc/pb_soft_delete_task', 'POST', { p_task_id: id }, { upsert: false });
 }
 
 /**
@@ -287,21 +278,17 @@ export async function bulkUpdatePbTasks(ids, data) {
  */
 export async function bulkSoftDeletePbTasks(ids) {
   if (!Array.isArray(ids) || ids.length === 0) return { ok: 0, requested: 0 };
-  const payload = {
-    deleted_at: new Date().toISOString(),
-    updated_by: actorEmail(),
-  };
-  const inList = ids.map(encodeURIComponent).join(',');
-  const res = await sbReqThrow(
-    `pb_tasks?id=in.(${inList})&deleted_at=is.null`,
-    'PATCH',
-    payload,
-    { preferReturn: 'minimal', withCount: true },
+  const n = await sbReqThrow(
+    'rpc/pb_soft_delete_tasks',
+    'POST',
+    { p_task_ids: ids },
+    { upsert: false },
   );
-  const count = res && typeof res === 'object' && res.total != null
-    ? res.total
-    : (Array.isArray(res) ? res.length : ids.length);
-  return { ok: count, requested: ids.length };
+  const count = Number(n);
+  return {
+    ok: Number.isFinite(count) ? count : 0,
+    requested: ids.length,
+  };
 }
 
 export async function getPbLoadStats(windowDays = 20) {
