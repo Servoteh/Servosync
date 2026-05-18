@@ -362,8 +362,7 @@ export async function openScanMoveModal({
                 Na lokaciju *
                 <span class="loc-muted" id="locScanToHint" style="font-weight:400;font-size:12px"></span>
               </label>
-              <select id="locScanHallFilter" aria-label="Hala ako skenirate samo šifru police"
-                style="width:100%;max-width:100%;font-size:15px;padding:9px 10px;margin-bottom:8px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
+              <select id="locScanHallFilter" class="loc-scan-code-field loc-scan-hall-filter" aria-label="Hala ako skenirate samo šifru police">
                 <option value="">—HALA—</option>
               </select>
               <select id="locScanTo" required></select>
@@ -372,9 +371,8 @@ export async function openScanMoveModal({
                 <button type="button" class="btn" data-act="pickLocBarcodeFile">Barkod police iz slike</button>
               </div>
               <div class="loc-scan-to-tools" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%">
-                <input type="text" id="locScanToCode" autocomplete="off" maxlength="80"
-                  placeholder="Ili ukucaj ili nalepi (npr. HALA 1 - A1, MAG-X - P-09 ili LP…)"
-                  style="flex:1;min-width:140px;font-size:16px;padding:9px 10px;border-radius:6px;border:1px solid var(--border2,#333a46);background:var(--surface,#14181f);color:var(--text,#f1f1f1)">
+                <input type="text" id="locScanToCode" class="loc-scan-code-field loc-scan-to-code-input" autocomplete="off" maxlength="80"
+                  placeholder="Ili ukucaj ili nalepi (npr. HALA 1 - A1, MAG-X - P-09 ili LP…)">
                 <button type="button" class="btn" data-act="applyLocCode">Primeni</button>
               </div>
               <div class="loc-muted" style="font-size:11px;margin-top:4px;line-height:1.35">
