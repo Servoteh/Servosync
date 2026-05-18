@@ -71,7 +71,8 @@ export const SESSION_KEYS = Object.freeze({
   /** Pregled odsustava — sortiranje, JSON {col, dir} */
   KADR_ODSUSTVA_SORT: 'plan_montaze_kadr_odsustva_sort_v1',
   MODULE_HUB: 'plan_montaze_v51_active_module',
-  SETTINGS_TAB: 'plan_montaze_v51_settings_tab',
+  /** Aktivni tab u modulu Podešavanja (migrirano sa plan_montaze_v51_settings_tab). */
+  SETTINGS_TAB: 'servosync_settings_tab_v1',
   /** Posle login-a: pun path + query (npr. /maintenance/machines/8.3?tab=checks) */
   POST_LOGIN_REDIRECT: 'plan_montaze_v51_post_login_redirect_v1',
   /** Sastanci: lista / kalendar u tabu Sastanci */

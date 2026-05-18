@@ -230,3 +230,13 @@ export function buildSastanakDetaljPath(sastanakId, tab = null) {
   if (tab) return `${base}?tab=${encodeURIComponent(tab)}`;
   return base;
 }
+
+/**
+ * Deep link na tab u Podešavanjima.
+ * @param {string} tab npr. 'users', 'predmet-aktivacija'
+ */
+export function buildPodesavanjaPath(tab = null) {
+  const base = '/podesavanja';
+  if (tab) return `${base}?tab=${encodeURIComponent(tab)}`;
+  return base;
+}

@@ -124,8 +124,7 @@ export function isAdminOrMenadzment() {
 }
 
 /**
- * Modul Podešavanja: ERP admin ima sve tabove; menadžment vidi samo „Održ. profili”
- * (upravljanje `maint_user_profiles` u skladu sa RLS).
+ * Modul Podešavanja: admin — svi tabovi; menadžment — Mašine, Održ. profili, Podeš. predmeta.
  */
 export function canAccessPodesavanja() {
   return isAdminOrMenadzment();

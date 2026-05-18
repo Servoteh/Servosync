@@ -1,19 +1,25 @@
 /**
- * Podešavanja → Sistem (placeholder).
- *
- * Kasnije: rezervna kopija, Supabase env info, dijagnostika, sync status.
+ * Podešavanja → Sistem (dijagnostika + linkovi).
  */
 
 import { escHtml } from '../../lib/dom.js';
 import { hasSupabaseConfig, SUPABASE_CONFIG } from '../../lib/constants.js';
 import { getAuth } from '../../state/auth.js';
+import { buildPodesavanjaModulePath } from '../../lib/podesavanjaTabs.js';
 
 export function renderSystemTab() {
   const auth = getAuth();
   const url = SUPABASE_CONFIG.url || '—';
   const hasKey = !!SUPABASE_CONFIG.anonKey;
   return `
-    <main class="kadrovska-main" style="display:flex;flex-direction:column;gap:14px;max-width:720px">
+    <div class="set-page-header">
+      <div class="set-page-header-icon">⚙</div>
+      <div>
+        <h2 class="set-page-header-title">Sistem</h2>
+        <p class="set-page-header-sub">Dijagnostika i platforma</p>
+      </div>
+    </div>
+    <main class="kadrovska-main" style="display:flex;flex-direction:column;gap:14px;max-width:720px;padding:0">
       <div class="kpi-grid">
         <div class="kpi-card kpi-${auth.isOnline ? 'info' : 'warn'}">
           <div class="kpi-label">Konekcija</div>
@@ -31,10 +37,13 @@ export function renderSystemTab() {
           <div class="kpi-sub">env: VITE_SUPABASE_URL</div>
         </div>
       </div>
-      <div class="kadrovska-empty">
-        <div class="kadrovska-empty-title">Sistem — u izradi</div>
-        <div>Rezervna kopija, dijagnostika, sync status, audit log. Biće dostupno u sledećoj fazi.</div>
-      </div>
+      <p class="form-hint">
+        <a href="${escHtml(buildPodesavanjaModulePath('integracije'))}">Integracije</a> ·
+        <a href="${escHtml(buildPodesavanjaModulePath('audit-log'))}">Audit log</a> ·
+        Rezervna kopija i sync monitor — planirano u narednoj fazi.
+      </p>
     </main>
   `;
 }
+
+export function wireSystemTab() {}
