@@ -14,6 +14,14 @@
  *   - Identifikator korisnika je EMAIL (parity sa user_roles, ne UUID).
  *   - "vodio_label" / "predlozio_label" su SNAPSHOT-ovi punog imena u
  *     trenutku unosa — kasnije promene u user_roles ne menjaju zapise.
+ *
+ * akcioni_plan.odgovoran_* (vidi services/akcioniPlan.js za CRUD):
+ *   - odgovoran_email — kanonski identifikator (user_roles.email); filteri,
+ *     notifikacije i "moje akcije" koriste ovo polje.
+ *   - odgovoran_label — snapshot punog imena u trenutku dodele (ne menja se
+ *     ako se ime u user_roles promeni).
+ *   - odgovoran_text — slobodan tekst kada odgovorni nisu u sistemu ili je
+ *     više ljudi (npr. "M. Stojadinović + V. Petrović"); prikaz: label || text || email.
  */
 
 import { sbReq } from './supabase.js';

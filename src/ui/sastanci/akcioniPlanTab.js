@@ -12,9 +12,11 @@
 import { escHtml, showToast } from '../../lib/dom.js';
 import { formatDate } from '../../lib/date.js';
 import {
-  loadAkcije, saveAkcija, deleteAkcija, updateAkcijaStatus,
+  loadAkcije, saveAkcija, deleteAkcija, updateAkcijaStatus, updateAkcijeStatusBulk,
   AKCIJA_STATUSI, AKCIJA_STATUS_BOJE,
 } from '../../services/akcioniPlan.js';
+import { renderStatusBadge } from './statusBadge.js';
+import { renderEmptyStateHtml } from './emptyState.js';
 import { loadProjektiLite } from '../../services/projekti.js';
 import { getCurrentUser } from '../../state/auth.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
@@ -44,6 +46,7 @@ export async function renderAkcioniPlanTab(host, { canEdit }) {
           <button type="button" class="sst-tgl-btn${view === 'kanban' ? ' is-on' : ''}" data-ap-view="kanban">⬛ Kanban</button>
         </div>
         <div class="sast-toolbar-actions">
+          <button type="button" class="btn" id="apExportCsv" title="CSV export">⬇ CSV</button>
           ${canEdit ? '<button class="btn btn-primary" id="newAkcijaBtn">+ Nova akcija</button>' : ''}
         </div>
       </div>
@@ -76,6 +79,8 @@ export async function renderAkcioniPlanTab(host, { canEdit }) {
       openAkcijaModal(host, { canEdit, mode: 'create' });
     });
   }
+
+  host.querySelector('#apExportCsv')?.addEventListener('click', () => exportAkcijeCsv(cachedRows));
 
   host.querySelectorAll('[data-ap-view]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -152,10 +157,26 @@ async function renderAkcije(host, { canEdit }) {
     otkazan: cachedRows.filter(a => a.effectiveStatus === 'otkazan'),
   };
 
+  if (!cachedRows.length) {
+    body.innerHTML = renderEmptyStateHtml({ title: 'Nema akcija sa filterima.' });
+    return;
+  }
+
   body.innerHTML = `
+    ${canEdit ? `
+      <div class="sast-bulk-bar">
+        <label><input type="checkbox" id="apChkAll"> Sve</label>
+        <select id="apBulkStatus" class="sast-input">
+          <option value="">— status —</option>
+          ${Object.entries(AKCIJA_STATUSI).map(([k, v]) => `<option value="${k}">${escHtml(v)}</option>`).join('')}
+        </select>
+        <button type="button" class="btn btn-sm" id="apBulkApply">Primeni na izabrane</button>
+      </div>
+    ` : ''}
     <table class="sast-table">
       <thead>
         <tr>
+          ${canEdit ? '<th class="sast-th-chk"></th>' : ''}
           <th>Status</th>
           <th>Naslov</th>
           <th>Odgovoran</th>
@@ -172,6 +193,19 @@ async function renderAkcije(host, { canEdit }) {
     </table>
   `;
 
+  body.querySelector('#apChkAll')?.addEventListener('change', (e) => {
+    body.querySelectorAll('.ap-chk').forEach(c => { c.checked = e.target.checked; });
+  });
+  body.querySelector('#apBulkApply')?.addEventListener('click', async () => {
+    const status = body.querySelector('#apBulkStatus')?.value;
+    const ids = [...body.querySelectorAll('.ap-chk:checked')].map(c => c.value);
+    if (!ids.length) { showToast('Izaberi akcije'); return; }
+    if (!status) { showToast('Izaberi status'); return; }
+    const n = await updateAkcijeStatusBulk(ids, status);
+    if (n) { showToast(`✓ Ažurirano ${n}`); await renderAkcije(host, { canEdit }); }
+    else showToast('⚠ Nije uspelo');
+  });
+
   body.querySelectorAll('[data-action]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -184,9 +218,30 @@ async function renderAkcije(host, { canEdit }) {
   });
 }
 
+function exportAkcijeCsv(rows) {
+  const header = ['naslov', 'odgovoran', 'rok', 'status', 'projekat'];
+  const lines = [header.join(';')];
+  rows.forEach(a => {
+    const proj = cachedProjekti.find(p => p.id === a.projekatId);
+    lines.push([
+      `"${String(a.naslov || '').replace(/"/g, '""')}"`,
+      `"${String(a.odgovoranLabel || a.odgovoranEmail || '').replace(/"/g, '""')}"`,
+      a.rok || a.rokText || '',
+      a.effectiveStatus || a.status,
+      proj ? (proj.code || proj.name) : '',
+    ].join(';'));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `akcioni-plan-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function renderAkcijaRow(a, canEdit) {
   const eff = a.effectiveStatus || a.status;
-  const color = AKCIJA_STATUS_BOJE[eff] || '#666';
   const projekat = cachedProjekti.find(p => p.id === a.projekatId);
   const projLabel = projekat ? escHtml(projekat.code || projekat.name) : '';
   const rokDispl = a.rokText || (a.rok ? formatDate(a.rok) : '—');
@@ -204,7 +259,8 @@ function renderAkcijaRow(a, canEdit) {
   }
   return `
     <tr class="${eff === 'kasni' ? 'sast-row-late' : ''}">
-      <td><span class="sast-status-pill" style="background:${color}">${escHtml(AKCIJA_STATUSI[eff] || eff)}</span></td>
+      ${canEdit ? `<td><input type="checkbox" class="ap-chk" value="${escHtml(a.id)}"></td>` : ''}
+      <td>${renderStatusBadge(eff, { kind: 'akcija' })}</td>
       <td>
         <div><strong>${escHtml(a.naslov)}</strong></div>
         ${a.opis ? `<div class="sast-row-sub">${escHtml(a.opis.slice(0, 200))}${a.opis.length > 200 ? '…' : ''}</div>` : ''}

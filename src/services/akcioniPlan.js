@@ -197,3 +197,17 @@ export async function deleteAkcija(id) {
   if (!id || !getIsOnline()) return false;
   return (await sbReq(`akcioni_plan?id=eq.${encodeURIComponent(id)}`, 'DELETE')) !== null;
 }
+
+/** Bulk PATCH status za izabrane akcije. */
+export async function updateAkcijeStatusBulk(ids, status) {
+  if (!ids?.length || !status || !getIsOnline()) return 0;
+  const cu = getCurrentUser();
+  const payload = { status, updated_at: new Date().toISOString() };
+  if (status === 'zavrsen') {
+    payload.zatvoren_at = new Date().toISOString();
+    payload.zatvoren_by_email = cu?.email || null;
+  }
+  const enc = ids.map(id => encodeURIComponent(id)).join(',');
+  const res = await sbReq(`akcioni_plan?id=in.(${enc})`, 'PATCH', payload);
+  return res !== null ? ids.length : 0;
+}

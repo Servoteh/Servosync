@@ -26,15 +26,18 @@ import {
 } from '../../../services/sastanciDetalj.js';
 import { generateSastanakPdf } from '../../../lib/sastanciPdf.js';
 import { uploadSastanakPdf } from '../../../services/sastanciArhiva.js';
-import { SASTANAK_TIPOVI, SASTANAK_STATUSI, SASTANAK_STATUS_BOJE } from '../../../services/sastanci.js';
+import { SASTANAK_TIPOVI } from '../../../services/sastanci.js';
 import { renderPripremiTab, teardownPripremiTab } from './pripremiTab.js';
 import { renderZapisnikTab, teardownZapisnikTab } from './zapisnikTab.js';
 import { renderAkcijeTab, teardownAkcijeTab } from './akcijeTab.js';
 import { renderArhivaDetaljTab, teardownArhivaDetaljTab } from './arhivaTab.js';
+import { renderOdlukeTab, teardownOdlukeTab } from './odlukeTab.js';
+import { renderStatusBadge } from '../statusBadge.js';
 
 const INTERNAL_TABS = [
   { id: 'pripremi',  label: 'Priprema',  icon: '📋' },
   { id: 'zapisnik',  label: 'Zapisnik',  icon: '📝' },
+  { id: 'odluke',    label: 'Odluke',    icon: '⚖️' },
   { id: 'akcije',    label: 'Akcije',    icon: '✅' },
   { id: 'arhiva',    label: 'Arhiva',    icon: '🔒' },
 ];
@@ -81,8 +84,7 @@ function render(host, sastanak, { onBack, onNavigate }) {
   const isLocked = sastanak.status === 'zakljucan' || sastanak.status === 'zavrsen';
   const isReadOnly = isLocked || sastanak.status === 'otkazan';
 
-  const statusColor = SASTANAK_STATUS_BOJE[sastanak.status] || '#888';
-  const statusLabel = SASTANAK_STATUSI[sastanak.status] || sastanak.status;
+  const statusBadge = renderStatusBadge(sastanak.status, { kind: 'sastanak' });
   const tipLabel = SASTANAK_TIPOVI[sastanak.tip] || sastanak.tip;
 
   const ucesniciHtml = renderUcesniciAvatars(sastanak.ucesnici || []);
@@ -106,7 +108,7 @@ function render(host, sastanak, { onBack, onNavigate }) {
             <h1 class="sast-detalj-title">${escHtml(sastanak.naslov)}</h1>
             <div class="sast-detalj-sub">
               <span class="sast-tip-badge">${escHtml(tipLabel)}</span>
-              <span class="sastanak-status-pill" style="background:${statusColor}">${escHtml(statusLabel)}</span>
+              ${statusBadge}
               <span class="sast-detalj-datum">${formatDate(sastanak.datum)}${sastanak.vreme ? ' · ' + sastanak.vreme.slice(0,5) : ''}</span>
               ${sastanak.mesto ? `<span class="sast-detalj-mesto">📍 ${escHtml(sastanak.mesto)}</span>` : ''}
             </div>
@@ -162,6 +164,8 @@ function renderCurrentTab(tabHost, sastanak, { canWrite, isReadOnly, onNavigate 
     renderPripremiTab(tabHost, { sastanak, canWrite, isReadOnly });
   } else if (currentTabId === 'zapisnik') {
     renderZapisnikTab(tabHost, { sastanak, canWrite, isReadOnly });
+  } else if (currentTabId === 'odluke') {
+    renderOdlukeTab(tabHost, { sastanak, canWrite, isReadOnly });
   } else if (currentTabId === 'akcije') {
     renderAkcijeTab(tabHost, { sastanak, canWrite });
   } else if (currentTabId === 'arhiva') {
@@ -172,6 +176,7 @@ function renderCurrentTab(tabHost, sastanak, { canWrite, isReadOnly, onNavigate 
 function teardownCurrentTab() {
   if (currentTabId === 'pripremi') teardownPripremiTab();
   else if (currentTabId === 'zapisnik') teardownZapisnikTab();
+  else if (currentTabId === 'odluke') teardownOdlukeTab();
   else if (currentTabId === 'akcije') teardownAkcijeTab();
   else if (currentTabId === 'arhiva') teardownArhivaDetaljTab();
 }

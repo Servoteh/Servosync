@@ -15,6 +15,8 @@ import { openCreateSastanakModal } from './createSastanakModal.js';
 import { openTemplatesModal } from './templatesModal.js';
 import { navigateToSastanakDetalj } from './index.js';
 import { renderSastanciCalendarView, groupSastanciByYmd } from './sastanciCalendar.js';
+import { renderSastanciWeekView } from './sastanciWeekView.js';
+import { renderStatusBadge } from './statusBadge.js';
 import { SESSION_KEYS } from '../../lib/constants.js';
 import { getSastSastanView } from '../../state/sastanci.js';
 
@@ -50,6 +52,7 @@ export async function renderSastanciTab(host, { canEdit }) {
         <div class="sst-toggle" role="group" aria-label="Prikaz">
           <button type="button" class="sst-tgl-btn${view === 'lista' ? ' is-on' : ''}" data-v="lista" title="Lista">📋 Lista</button>
           <button type="button" class="sst-tgl-btn${view === 'kalendar' ? ' is-on' : ''}" data-v="kalendar" title="Kalendar">📅 Kalendar</button>
+          <button type="button" class="sst-tgl-btn${view === 'nedelja' ? ' is-on' : ''}" data-v="nedelja" title="Nedeljni pregled">📆 Nedelja</button>
         </div>
         <div class="sst-toolbar-actions sst-ttpl">
           ${canEdit ? '<button type="button" class="btn" id="sstOpenTpl">📋 Templati</button>' : ''}
@@ -83,11 +86,7 @@ export async function renderSastanciTab(host, { canEdit }) {
       openCreateSastanakModal({
         projekti: cachedProjekti,
         onCreated: (sast) => {
-          openSastanakModal({
-            sastanakId: sast.id,
-            canEdit,
-            onClose: () => renderAll(host, canEdit),
-          });
+          navigateToSastanakDetalj(sast.id);
         },
       });
     });
@@ -124,8 +123,32 @@ export async function renderSastanciTab(host, { canEdit }) {
 }
 
 async function renderAll(host, canEdit) {
-  if (getSastSastanView() === 'kalendar') return renderCal(host, canEdit);
+  const v = getSastSastanView();
+  if (v === 'kalendar') return renderCal(host, canEdit);
+  if (v === 'nedelja') return renderWeek(host, canEdit);
   return renderRowsTable(host, canEdit);
+}
+
+async function renderWeek(host, canEdit) {
+  const body = host.querySelector('#ssBody');
+  body.innerHTML = '<div class="sst-loading">Učitavam nedelju…</div>';
+  const start = new Date();
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const rows = await loadSastanci({
+    tip: filters.tip || null,
+    status: filters.status || null,
+    projekatId: filters.projekatId || null,
+    fromDate: toYmd(start),
+    toDate: toYmd(end),
+    limit: 500,
+  });
+  if (abortFlag) return;
+  renderSastanciWeekView(body, {
+    weekStart: start,
+    rows,
+    onOpen: (id) => navigateToSastanakDetalj(id),
+  });
 }
 
 export function teardownSastanciTab() {
@@ -294,7 +317,7 @@ function renderSastanakRow(s, canEdit, nP, nU) {
   const projekat = cachedProjekti.find(p => p.id === s.projekatId);
   const projLabel = projekat ? escHtml(projekat.code || projekat.name) : '';
 
-  const statusSpan = `<span class="sastanak-status-pill sastanak-status-${escHtml(st)}">${escHtml(stLabel)}</span>`;
+  const statusSpan = renderStatusBadge(st, { kind: 'sastanak', label: stLabel });
   const actions = [];
   if (st === 'planiran') {
     actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="pripremi" data-id="${s.id}">Pripremi</button>`);

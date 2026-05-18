@@ -1724,3 +1724,76 @@ body.dark .sast-projekat-item.is-active {
 }
 .sast-pdf-banner--warn { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
 .sast-arhiva-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+/* Status pills (unified) */
+.sast-status-pill,
+.sastanak-status-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.4;
+}
+.sast-status-pill--planiran { background: #7280a8; }
+.sast-status-pill--u_toku { background: #3b82f6; }
+.sast-status-pill--zavrsen { background: #10b981; }
+.sast-status-pill--zakljucan { background: #a855f7; }
+.sast-status-pill--otvoren { background: #7280a8; }
+.sast-status-pill--kasni { background: #ef4444; }
+
+/* Admin gear menu */
+.sast-admin-wrap { position: relative; margin-right: 8px; }
+.sast-admin-gear {
+  width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border, #e5e5e5);
+  background: var(--surface2, #f6f6f6); cursor: pointer; font-size: 18px;
+}
+.sast-admin-menu {
+  position: absolute; right: 0; top: 100%; z-index: 50; min-width: 200px;
+  background: var(--surface, #fff); border: 1px solid var(--border, #e5e5e5);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px;
+}
+.sast-admin-menu-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 12px; border: none; background: none; cursor: pointer; text-align: left;
+  border-radius: 6px; font-size: 14px;
+}
+.sast-admin-menu-item:hover,
+.sast-admin-menu-item.is-active { background: var(--surface2, #f0f4ff); }
+.sast-admin-tab-hint { margin-left: auto; font-size: 13px; color: var(--text2, #888); align-self: center; }
+
+.sast-mr-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }
+.sast-chip {
+  padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border, #e5e5e5);
+  background: var(--surface, #fff); cursor: pointer; font-size: 13px;
+}
+.sast-chip.is-on { background: var(--primary, #2563eb); color: #fff; border-color: transparent; }
+.sast-mr-block { margin-bottom: 28px; }
+.sast-mr-block h3 { margin: 0 0 12px; font-size: 16px; }
+
+.sast-week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; min-height: 200px; }
+.sast-week-col { border: 1px solid var(--border, #e5e5e5); border-radius: 8px; background: var(--surface, #fff); }
+.sast-week-col-head { padding: 8px; font-weight: 600; font-size: 12px; border-bottom: 1px solid var(--border, #eee); }
+.sast-week-col-body { padding: 6px; display: flex; flex-direction: column; gap: 6px; min-height: 120px; }
+.sast-week-card {
+  display: block; width: 100%; text-align: left; padding: 8px; border-radius: 6px;
+  border: 1px solid var(--border, #eee); background: var(--surface2, #fafafa); cursor: pointer;
+}
+.sast-week-card-title { display: block; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+.sast-week-empty { color: var(--text2, #aaa); font-size: 12px; }
+
+.sast-bulk-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.sast-empty-state .sast-empty-icon { font-size: 32px; display: block; margin-bottom: 8px; }
+.sast-empty-title { font-weight: 600; margin: 0; }
+.sast-empty-hint { color: var(--text2, #888); font-size: 13px; margin: 4px 0 0; }
+
+.zs-editor-toolbar--full { flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.zs-tb-sep { width: 1px; height: 20px; background: var(--border, #ddd); margin: 0 4px; }
+
+@media print {
+  .kadrovska-header, .kadrovska-tabs, .sast-admin-wrap, .hub-logout, .btn-hub-back { display: none !important; }
+  .sast-tabpanel { padding: 0; max-width: none; }
+  .sast-table { font-size: 11px; }
+  .sast-status-pill { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

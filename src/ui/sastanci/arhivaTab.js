@@ -10,9 +10,9 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { formatDate } from '../../lib/date.js';
-import { loadSveArhive, printZapisnik } from '../../services/sastanakArhiva.js';
+import { loadSveArhive, printZapisnik } from '../../services/sastanciArhiva.js';
 import { SASTANAK_TIPOVI } from '../../services/sastanci.js';
-import { openSastanakModal } from './sastanakModal.js';
+import { navigateToSastanakDetalj } from './index.js';
 
 let abortFlag = false;
 let cachedArhive = [];
@@ -102,7 +102,7 @@ function renderRows(host, { canEdit }) {
   body.querySelectorAll('tr[data-sid]').forEach(tr => {
     tr.addEventListener('click', (e) => {
       if (e.target.closest('[data-action]')) return;
-      openSastanakModal({ sastanakId: tr.dataset.sid, canEdit, onClose: () => {} });
+      navigateToSastanakDetalj(tr.dataset.sid);
     });
   });
 
@@ -115,7 +115,7 @@ function renderRows(host, { canEdit }) {
       const arh = cachedArhive.find(x => x.id === aid);
       if (!arh) return;
       if (b.dataset.action === 'open') {
-        openSastanakModal({ sastanakId: sid, canEdit, onClose: () => {} });
+        navigateToSastanakDetalj(sid);
       }
       if (b.dataset.action === 'print') {
         if (arh.snapshot) printZapisnik(arh.snapshot);

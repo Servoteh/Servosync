@@ -10,6 +10,7 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { saveSastanak, SASTANAK_TIPOVI } from '../../services/sastanci.js';
+import { listTemplates, instantiateTemplate } from '../../services/sastanciTemplates.js';
 import { getCurrentUser } from '../../state/auth.js';
 
 export function openCreateSastanakModal({ projekti = [], onCreated } = {}) {
@@ -36,6 +37,13 @@ export function openCreateSastanakModal({ projekti = [], onCreated } = {}) {
   function renderStepTip(host) {
     host.innerHTML = `
       <p style="margin:0 0 16px;color:var(--text2)">Izaberi tip sastanka:</p>
+      <div class="sast-from-tpl-bar" style="margin-bottom:16px">
+        <label class="sast-form-row" style="margin:0">
+          <span>Iz šablona</span>
+          <select id="csTplSelect" class="sast-input"><option value="">— učitavam šablone —</option></select>
+        </label>
+        <button type="button" class="btn btn-primary" id="csTplGo" style="margin-top:8px">Kreiraj iz šablona</button>
+      </div>
       <div class="sast-tip-choice">
         <button type="button" class="sast-tip-card" data-tip="sedmicni">
           <div class="sast-tip-icon">📅</div>
@@ -61,6 +69,24 @@ export function openCreateSastanakModal({ projekti = [], onCreated } = {}) {
     `;
     host.querySelectorAll('[data-tip]').forEach(b => {
       b.addEventListener('click', () => renderStepForm(host, b.dataset.tip));
+    });
+
+    void listTemplates().then(tpls => {
+      const sel = host.querySelector('#csTplSelect');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— izaberi šablon —</option>'
+        + (tpls || []).map(t => `<option value="${escHtml(t.id)}">${escHtml(t.naziv || t.id)}</option>`).join('');
+    });
+
+    host.querySelector('#csTplGo')?.addEventListener('click', async () => {
+      const tplId = host.querySelector('#csTplSelect')?.value;
+      if (!tplId) { showToast('Izaberi šablon'); return; }
+      const sast = await instantiateTemplate({ id: tplId });
+      if (sast) {
+        showToast('+ Sastanak iz šablona');
+        close();
+        onCreated?.(sast);
+      } else showToast('⚠ Nije uspelo');
     });
   }
 

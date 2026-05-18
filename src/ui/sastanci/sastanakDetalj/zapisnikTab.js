@@ -11,6 +11,8 @@
 import { escHtml, showToast } from '../../../lib/dom.js';
 import { SAVE_DEBOUNCE_MS } from '../../../lib/constants.js';
 import { sanitizeHtml, htmlToText } from '../../../lib/htmlSanitize.js';
+import { sanitizeZapisnikPasteHtml } from '../../../lib/sastanciPasteSanitize.js';
+import { renderZapisnikToolbarHtml, wireZapisnikToolbar } from './zapisnikToolbar.js';
 import { getIsOnline, onAuthChange } from '../../../state/auth.js';
 import {
   loadPresekAktivnosti, savePresekAktivnost, deletePresekAktivnost,
@@ -318,13 +320,7 @@ function renderSekcija(a, slike, locked) {
         </label>
       </div>
       <div class="zs-editor-wrap">
-        <div class="zs-editor-toolbar" ${locked ? 'style="display:none"' : ''}>
-          <button type="button" class="zs-tb" data-cmd="bold" title="Bold"><b>B</b></button>
-          <button type="button" class="zs-tb" data-cmd="italic" title="Italic"><i>I</i></button>
-          <button type="button" class="zs-tb" data-cmd="underline" title="Underline"><u>U</u></button>
-          <button type="button" class="zs-tb" data-cmd="insertUnorderedList" title="Lista">≡</button>
-          <button type="button" class="zs-tb" data-cmd="insertOrderedList" title="Broj.lista">1.</button>
-        </div>
+        ${locked ? '' : renderZapisnikToolbarHtml()}
         <div class="zs-editor" contenteditable="${!locked}"
              data-id="${escHtml(a.id)}"
              ${locked ? '' : 'role="textbox" aria-multiline="true"'}
@@ -409,15 +405,24 @@ function wireSekcijaEvents(el, akt, slikeMap, sastanak, locked, aktivnosti) {
 
   const editor = el.querySelector('.zs-editor');
 
-  el.querySelectorAll('.zs-tb').forEach(btn => {
-    btn.addEventListener('mousedown', e => {
-      e.preventDefault();
-      document.execCommand(btn.dataset.cmd, false, null);
-      editor?.dispatchEvent(new Event('input', { bubbles: true }));
+  const toolbar = el.querySelector('.zs-editor-toolbar--full');
+  if (editor && toolbar) {
+    wireZapisnikToolbar(toolbar, editor, {
+      onChange: () => editor.dispatchEvent(new Event('input', { bubbles: true })),
+      onManualSave: () => flushSaveKey(`html_${akt.id}`),
     });
-  });
+  }
 
   if (editor) {
+    editor.addEventListener('paste', (e) => {
+      const html = e.clipboardData?.getData('text/html');
+      if (html) {
+        e.preventDefault();
+        const clean = sanitizeZapisnikPasteHtml(html);
+        document.execCommand('insertHTML', false, clean);
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
     editor.addEventListener('input', () => {
       scheduleDebouncedSave(`html_${akt.id}`, saveHtmlFromDom);
     });
