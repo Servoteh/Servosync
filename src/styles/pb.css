@@ -112,6 +112,44 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   min-width: 0;
 }
 
+/* Projektni biro na telefonu (.pb-module--mobile = max-width 767px u JS):
+   desktop topbar je grid sa tri kolone; tabovi u sredini se preklapaju sa
+   Moduli / tema / odjava. Dva reda: kontrole levo–desno, ispod toga tabovi
+   pune širine (DOM redosled ostaje isti — grid-area). */
+.pb-module.pb-module--mobile .pb-topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "pbMobHdrL pbMobHdrR"
+    "pbMobTabs pbMobTabs";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 8px;
+}
+
+.pb-module.pb-module--mobile .pb-topbar-start {
+  grid-area: pbMobHdrL;
+  min-width: 0;
+}
+
+.pb-module.pb-module--mobile .pb-topbar-end {
+  grid-area: pbMobHdrR;
+  justify-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 6px;
+}
+
+.pb-module.pb-module--mobile .pb-topbar .pb-tabs {
+  grid-area: pbMobTabs;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  justify-content: flex-start;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
 /* == LEGACY HEADER (zadržano za nazadnu kompatibilnost — neki tabovi i moduli koriste) == */
 
 .pb-header {
