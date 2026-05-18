@@ -5,7 +5,21 @@
 import { escHtml, showToast } from '../../lib/dom.js';
 import { logout } from '../../services/auth.js';
 import { toggleTheme } from '../../lib/theme.js';
-import { canEditProjektniBiro, getAuth, isAdmin } from '../../state/auth.js';
+import {
+  canEditPbTasks,
+  canEditPbWorkReports,
+  getAuth,
+  isAdmin,
+  isPbReadOnly,
+} from '../../state/auth.js';
+import {
+  closePbFilterDrawer,
+  countPbActiveFilters,
+  openPbFilterDrawer,
+  pbIsCompact,
+  updatePbFilterBadge,
+  wirePbFilterDrawer,
+} from './filterDrawer.js';
 import {
   getPbProjects,
   getPbEngineers,
@@ -73,6 +87,8 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
   let loadStats = [];
   let teamLoadStats = [];
   let workReports = [];
+  /** Pun skup zadataka (kad su projekat i inženjer „Svi”) — client filter bez novog fetch-a. */
+  let allTasksCache = null;
 
   function mergeStoredState() {
     const s = loadPbState();
@@ -92,8 +108,62 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     get teamLoadStats() { return teamLoadStats; },
     get moduleSearch() { return state.moduleSearch ?? ''; },
     get moduleShowDone() { return state.moduleShowDone ?? false; },
-    onRefresh: () => loadAll(),
+    onRefresh: () => {
+      allTasksCache = null;
+      return loadAll(true);
+    },
+    onFilterCountChange: planFilters => {
+      updatePbFilterBadge(root, countPbActiveFilters(
+        {
+          project: state.activeProject,
+          engineer: state.activeEngineer,
+          search: state.moduleSearch,
+        },
+        planFilters,
+      ));
+    },
+    isReadOnly: isPbReadOnly(),
   };
+
+  function applyChromeTaskFilters(list) {
+    let l = list || [];
+    if (state.activeProject !== 'all') {
+      l = l.filter(t => t.project_id === state.activeProject);
+    }
+    if (state.activeEngineer !== 'all') {
+      l = l.filter(t => t.employee_id === state.activeEngineer);
+    }
+    return l;
+  }
+
+  function refreshFilterBadge(planFilters) {
+    updatePbFilterBadge(root, countPbActiveFilters(
+      {
+        project: state.activeProject,
+        engineer: state.activeEngineer,
+        search: state.moduleSearch,
+      },
+      planFilters,
+    ));
+  }
+
+  async function applyChromeFiltersAndRemount() {
+    if (allTasksCache) {
+      tasks = applyChromeTaskFilters(allTasksCache);
+      refreshFilterBadge(loadPbState().activeTab === 'plan' ? {
+        status: loadPbState().moduleStatus,
+        vrsta: loadPbState().moduleVrsta,
+        prioritet: loadPbState().modulePrioritet,
+        problemOnly: loadPbState().moduleProblemOnly,
+        unassignedOnly: loadPbState().moduleUnassignedOnly,
+        showDone: loadPbState().moduleShowDone,
+      } : undefined);
+      paintChrome();
+      await mountActiveTab();
+      return;
+    }
+    await loadAll();
+  }
 
   async function loadWorkReportsForMonth(year, month0) {
     const first = new Date(year, month0, 1);
@@ -104,15 +174,27 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     workReports = Array.isArray(wr) ? wr : [];
   }
 
-  async function loadAll() {
+  async function loadAll(forceRefresh = false) {
     mergeStoredState();
     const body = root.querySelector('#pbTabBody');
     if (body) {
       body.classList.add('pb-tab-body--loading');
       body.setAttribute('aria-busy', 'true');
     }
+    const fetchAllTasks = state.activeProject === 'all' && state.activeEngineer === 'all';
     const projFilter = state.activeProject === 'all' ? {} : { projectId: state.activeProject };
     const engFilter = state.activeEngineer === 'all' ? {} : { employeeId: state.activeEngineer };
+
+    if (!forceRefresh && allTasksCache && !fetchAllTasks) {
+      tasks = applyChromeTaskFilters(allTasksCache);
+      paintChrome();
+      await mountActiveTab();
+      if (body) {
+        body.classList.remove('pb-tab-body--loading');
+        body.removeAttribute('aria-busy');
+      }
+      return;
+    }
 
     /**
      * Jedan REST/RPC poziv ne sme da obrise ceo chrome — hvata grešku i loguje.
@@ -137,12 +219,18 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       const [rProj, rEng, rTasks] = await Promise.all([
         pbSafe('projects', getPbProjects()),
         pbSafe('engineers', getPbEngineers()),
-        pbSafe('tasks', getPbTasks({ ...projFilter, ...engFilter })),
+        pbSafe('tasks', getPbTasks(fetchAllTasks ? {} : { ...projFilter, ...engFilter })),
       ]);
 
       projects = sortProjectsForPredmetPrioritet(rProj.data);
       engineers = rEng.data;
-      tasks = rTasks.data;
+      if (fetchAllTasks && rTasks.ok) {
+        allTasksCache = rTasks.data;
+        tasks = allTasksCache;
+      } else {
+        allTasksCache = null;
+        tasks = rTasks.data;
+      }
 
       if (state.activeProject !== 'all' && !projects.some(p => p.id === state.activeProject)) {
         state.activeProject = 'all';
@@ -195,47 +283,9 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     }
   }
 
-  function paintChrome() {
-    const hub = root.querySelector('#pbHubSlot');
-    if (!hub) return;
-    const auth = getAuth();
+  function buildContextFieldsHtml() {
     const searchValue = state.moduleSearch ?? '';
-    hub.innerHTML = `
-      <div class="pb-chrome-pinned">
-      <div class="pb-chrome-nav" role="navigation" aria-label="Projektovanje navigacija">
-        <div class="pb-topbar-start">
-          <button type="button" class="pb-back-btn" id="pbBackBtn" aria-label="Nazad na module">
-            ${IC_BACK}<span class="pb-back-btn-label">Moduli</span>
-          </button>
-          <div class="pb-topbar-brand">
-            <div class="pb-module-icon" aria-hidden="true">${IC_MODULE}</div>
-            <div class="pb-topbar-title">Projektovanje</div>
-          </div>
-        </div>
-        <nav class="pb-tabs" role="tablist" aria-label="Projektni biro tabovi">
-          ${pbTabBtn('plan', 'Plan', state.activeTab === 'plan')}
-          ${pbTabBtn('kanban', 'Kanban', state.activeTab === 'kanban')}
-          ${pbTabBtn('gantt', 'Gantt', state.activeTab === 'gantt')}
-          ${pbTabBtn('izvestaji', 'Izveštaji', state.activeTab === 'izvestaji')}
-          ${pbTabBtn('analiza', 'Analiza', state.activeTab === 'analiza')}
-          ${isAdmin() ? pbTabBtn('podesavanja', 'Podešavanja', state.activeTab === 'podesavanja') : ''}
-        </nav>
-        <div class="pb-topbar-end">
-          <div class="pb-topbar-actions-pc">
-            <button type="button" class="pb-theme-btn" id="pbThemeBtn" aria-label="Tema">🌙</button>
-            ${auth.role ? `<span class="pb-role-badge">${escHtml(auth.role.toUpperCase())}</span>` : ''}
-            ${canEditProjektniBiro() ? `<button type="button" class="pb-primary-btn pb-new-desktop" id="pbNewDesk">${IC_PLUS} Novi zadatak</button>` : ''}
-            <button type="button" class="pb-logout-btn" id="pbLogoutBtn">Odjavi se</button>
-          </div>
-          <button type="button" class="pb-more-btn" id="pbMoreBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="pbMoreMenu" aria-label="Meni">⋮</button>
-          <div class="pb-more-menu" id="pbMoreMenu" role="menu" hidden>
-            <button type="button" class="pb-more-menu-item" id="pbMoreTheme" role="menuitem">Tema</button>
-            ${auth.role ? `<span class="pb-more-menu-meta" role="presentation">${escHtml(auth.role.toUpperCase())}</span>` : ''}
-            <button type="button" class="pb-more-menu-item" id="pbMoreLogout" role="menuitem">Odjavi se</button>
-          </div>
-        </div>
-      </div>
-      <div class="pb-context-row">
+    return `
         <div class="pb-context-field">
           <span class="pb-context-label">Projekat</span>
           <select id="pbProjectSel" class="pb-context-select">
@@ -253,9 +303,100 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         <div class="pb-context-field pb-context-field--grow">
           <span class="pb-context-label">Pretraga</span>
           <input type="search" id="pbChromeSearch" class="pb-context-search" placeholder="Pretraži po nazivu zadatka..." value="${escHtml(searchValue)}" />
+        </div>`;
+  }
+
+  function wireChromeContextControls() {
+    const onProject = e => {
+      state.activeProject = e.target.value;
+      savePbState(state);
+      void applyChromeFiltersAndRemount();
+    };
+    const onEngineer = e => {
+      state.activeEngineer = e.target.value || 'all';
+      savePbState(state);
+      void applyChromeFiltersAndRemount();
+    };
+    const onSearch = e => {
+      state.moduleSearch = e.target.value || '';
+      syncPbModuleFilters({ moduleSearch: state.moduleSearch });
+      refreshFilterBadge(loadPbState().activeTab === 'plan' ? {
+        status: loadPbState().moduleStatus,
+        vrsta: loadPbState().moduleVrsta,
+        prioritet: loadPbState().modulePrioritet,
+        problemOnly: loadPbState().moduleProblemOnly,
+        unassignedOnly: loadPbState().moduleUnassignedOnly,
+        showDone: loadPbState().moduleShowDone,
+      } : undefined);
+      if (_chromeSearchDebounceTimer) clearTimeout(_chromeSearchDebounceTimer);
+      _chromeSearchDebounceTimer = setTimeout(() => { void mountActiveTab(); }, 180);
+    };
+    for (const sel of root.querySelectorAll('#pbProjectSel')) sel.addEventListener('change', onProject);
+    for (const sel of root.querySelectorAll('#pbEngineerSel')) sel.addEventListener('change', onEngineer);
+    for (const inp of root.querySelectorAll('#pbChromeSearch')) inp.addEventListener('input', onSearch);
+  }
+
+  function paintChrome() {
+    const hub = root.querySelector('#pbHubSlot');
+    if (!hub) return;
+    const auth = getAuth();
+    const readOnly = isPbReadOnly();
+    const contextFields = buildContextFieldsHtml();
+    hub.innerHTML = `
+      <div class="pb-chrome-pinned">
+      ${readOnly ? '<div class="pb-readonly-banner" role="status">Samo pregled — izmene zadataka nisu dostupne za vašu ulogu.</div>' : ''}
+      <div class="pb-chrome-nav" role="navigation" aria-label="Projektovanje navigacija">
+        <div class="pb-topbar-start">
+          <button type="button" class="pb-back-btn" id="pbBackBtn" aria-label="Nazad na module">
+            ${IC_BACK}<span class="pb-back-btn-label">Moduli</span>
+          </button>
+          <div class="pb-topbar-brand">
+            <div class="pb-module-icon" aria-hidden="true">${IC_MODULE}</div>
+            <div class="pb-topbar-title">Projektovanje</div>
+          </div>
+          <button type="button" class="pb-open-filters-btn" id="pbOpenFilters" aria-expanded="false" aria-controls="pbFilterDrawer">
+            Filteri <span class="pb-filter-badge" id="pbFilterBadge" hidden>0</span>
+          </button>
+        </div>
+        <nav class="pb-tabs" role="tablist" aria-label="Projektni biro tabovi">
+          ${pbTabBtn('plan', 'Plan', state.activeTab === 'plan')}
+          ${pbTabBtn('kanban', 'Kanban', state.activeTab === 'kanban')}
+          ${pbTabBtn('gantt', 'Gantt', state.activeTab === 'gantt')}
+          ${pbTabBtn('izvestaji', 'Izveštaji', state.activeTab === 'izvestaji')}
+          ${pbTabBtn('analiza', 'Analiza', state.activeTab === 'analiza')}
+          ${isAdmin() ? pbTabBtn('podesavanja', 'Podešavanja', state.activeTab === 'podesavanja') : ''}
+        </nav>
+        <div class="pb-topbar-end">
+          <div class="pb-topbar-actions-pc">
+            <button type="button" class="pb-theme-btn" id="pbThemeBtn" aria-label="Tema">🌙</button>
+            ${auth.role ? `<span class="pb-role-badge">${escHtml(auth.role.toUpperCase())}</span>` : ''}
+            ${canEditPbTasks() ? `<button type="button" class="pb-primary-btn pb-new-desktop" id="pbNewDesk">${IC_PLUS} Novi zadatak</button>` : ''}
+            <button type="button" class="pb-logout-btn" id="pbLogoutBtn">Odjavi se</button>
+          </div>
+          <button type="button" class="pb-more-btn" id="pbMoreBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="pbMoreMenu" aria-label="Meni">⋮</button>
+          <div class="pb-more-menu" id="pbMoreMenu" role="menu" hidden>
+            <button type="button" class="pb-more-menu-item" id="pbMoreTheme" role="menuitem">Tema</button>
+            <button type="button" class="pb-more-menu-item" id="pbMoreRefresh" role="menuitem">Osveži podatke</button>
+            ${auth.role ? `<span class="pb-more-menu-meta" role="presentation">${escHtml(auth.role.toUpperCase())}</span>` : ''}
+            <button type="button" class="pb-more-menu-item" id="pbMoreLogout" role="menuitem">Odjavi se</button>
+          </div>
         </div>
       </div>
+      ${pbIsCompact(root) ? '' : `<div class="pb-context-row pb-context-row--inline">${contextFields}</div>`}
       </div>`;
+
+    const drawerChrome = root.querySelector('#pbFilterDrawerChrome');
+    if (drawerChrome) drawerChrome.innerHTML = pbIsCompact(root) ? contextFields : '';
+    const planSec = root.querySelector('#pbFilterDrawerPlanSection');
+    if (planSec) planSec.hidden = state.activeTab !== 'plan';
+    refreshFilterBadge(state.activeTab === 'plan' ? {
+      status: loadPbState().moduleStatus,
+      vrsta: loadPbState().moduleVrsta,
+      prioritet: loadPbState().modulePrioritet,
+      problemOnly: loadPbState().moduleProblemOnly,
+      unassignedOnly: loadPbState().moduleUnassignedOnly,
+      showDone: loadPbState().moduleShowDone,
+    } : undefined);
 
     root.querySelector('#pbBackBtn')?.addEventListener('click', () => onBackToHub?.());
     root.querySelector('#pbThemeBtn')?.addEventListener('click', () => toggleTheme());
@@ -278,6 +419,11 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       toggleTheme();
       setMoreOpen(false);
     });
+    root.querySelector('#pbMoreRefresh')?.addEventListener('click', () => {
+      setMoreOpen(false);
+      allTasksCache = null;
+      void loadAll(true);
+    });
     root.querySelector('#pbMoreLogout')?.addEventListener('click', async () => {
       setMoreOpen(false);
       await logout();
@@ -292,32 +438,14 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       };
       document.addEventListener('click', _pbMoreDocHandler);
     }
-    root.querySelector('#pbProjectSel')?.addEventListener('change', e => {
-      state.activeProject = e.target.value;
-      savePbState(state);
-      loadAll();
-    });
-    root.querySelector('#pbEngineerSel')?.addEventListener('change', e => {
-      state.activeEngineer = e.target.value || 'all';
-      savePbState(state);
-      loadAll();
-    });
-    root.querySelector('#pbChromeSearch')?.addEventListener('input', e => {
-      // Search se filtrira klijent-side u Plan/Kanban/Gantt tabu — ne mora loadAll().
-      state.moduleSearch = e.target.value || '';
-      syncPbModuleFilters({ moduleSearch: state.moduleSearch });
-      if (_chromeSearchDebounceTimer) clearTimeout(_chromeSearchDebounceTimer);
-      _chromeSearchDebounceTimer = setTimeout(() => {
-        void mountActiveTab();
-      }, 180);
-    });
+    wireChromeContextControls();
     root.querySelector('#pbNewDesk')?.addEventListener('click', () => {
       openTaskEditorModal({
         task: null,
         projects,
         engineers,
-        canEdit: canEditProjektniBiro(),
-        onSaved: () => loadAll(),
+        canEdit: canEditPbTasks(),
+        onSaved: () => loadAll(true),
       });
     });
     root.querySelectorAll('.pb-tab-btn').forEach(btn => {
@@ -369,7 +497,8 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       let viewMonth = state.ganttStartDate ? new Date(state.ganttStartDate) : new Date();
       if (Number.isNaN(viewMonth.getTime())) viewMonth = new Date();
       viewMonth.setDate(1);
-      const viewZoom = loadPbState().ganttZoom || 'day';
+      const savedZoom = loadPbState().ganttZoom;
+      const viewZoom = savedZoom || (pbIsCompact(root) ? 'week' : 'day');
       renderGanttTab(body, {
         tasks,
         projects,
@@ -399,7 +528,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         getWorkReports: () => workReports,
         loadMonthReports: loadWorkReportsForMonth,
         engineers,
-        canEdit: canEditProjektniBiro(),
+        canEdit: canEditPbWorkReports(),
         defaultEmployeeId: null,
         actorEmail: getAuth().user?.emailRaw || getAuth().user?.email || null,
         onRefresh: async (year, month0) => {
@@ -437,8 +566,28 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
   }
 
   root.className = 'pb-module kadrovska-section';
+  if (isPbReadOnly()) root.classList.add('pb-module--readonly');
   root.innerHTML = `
     <div id="pbHubSlot" class="pb-chrome"></div>
+    <div id="pbFilterDrawer" class="pb-filter-drawer" hidden>
+      <button type="button" class="pb-filter-drawer-backdrop" id="pbFilterDrawerBackdrop" aria-label="Zatvori filtere"></button>
+      <div class="pb-filter-drawer-panel" role="dialog" aria-labelledby="pbFilterDrawerTitle">
+        <header class="pb-filter-drawer-head">
+          <h2 id="pbFilterDrawerTitle" class="pb-filter-drawer-title">Filteri</h2>
+          <button type="button" class="pb-filter-drawer-close" id="pbFilterDrawerClose" aria-label="Zatvori">✕</button>
+        </header>
+        <div class="pb-filter-drawer-body">
+          <section class="pb-filter-drawer-section" aria-label="Modul">
+            <h3 class="pb-filter-drawer-sub">Modul</h3>
+            <div id="pbFilterDrawerChrome" class="pb-filter-drawer-chrome"></div>
+          </section>
+          <section class="pb-filter-drawer-section" id="pbFilterDrawerPlanSection" hidden>
+            <h3 class="pb-filter-drawer-sub">Plan</h3>
+            <div id="pbFilterDrawerPlan"></div>
+          </section>
+        </div>
+      </div>
+    </div>
     <main id="pbTabBody" class="pb-tab-body pb-tab-body--loading" aria-busy="true">
       <div class="pb-loading-skel">
         <div class="pb-skel-line pb-skel-line--lg"></div>
@@ -448,13 +597,17 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         <div class="pb-skel-line"></div><div class="pb-skel-line"></div>
       </div>
     </main>
-    ${canEditProjektniBiro() ? '<button type="button" class="pb-fab" id="pbFab" aria-label="Novi zadatak">+</button>' : ''}
+    ${canEditPbTasks() ? '<button type="button" class="pb-fab" id="pbFab" aria-label="Novi zadatak">+</button>' : ''}
   `;
 
   const mm = mqCompactChrome();
-  const applyMq = () => root.classList.toggle('pb-module--compact', mm.matches);
-  applyMq();
-  mm.addEventListener('change', applyMq);
+  const applyMqClass = () => root.classList.toggle('pb-module--compact', mm.matches);
+  applyMqClass();
+  mm.addEventListener('change', () => {
+    applyMqClass();
+    paintChrome();
+    void mountActiveTab();
+  });
   teardownResize = () => mm.removeEventListener('change', applyMq);
 
   root.querySelector('#pbFab')?.addEventListener('click', () => {
@@ -462,11 +615,12 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       task: null,
       projects,
       engineers,
-      canEdit: canEditProjektniBiro(),
-      onSaved: () => loadAll(),
+      canEdit: canEditPbTasks(),
+      onSaved: () => loadAll(true),
     });
   });
 
+  wirePbFilterDrawer(root);
   loadAll();
 }
 

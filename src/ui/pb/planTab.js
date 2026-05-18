@@ -28,7 +28,8 @@ import {
   bulkSoftDeletePbTasks,
 } from '../../services/pb.js';
 import { downloadCsv } from '../../lib/csv.js';
-import { canEditProjektniBiro } from '../../state/auth.js';
+import { canEditPbTasks, isPbReadOnly } from '../../state/auth.js';
+import { pbIsCompact } from './filterDrawer.js';
 import { positionFloatingMenu } from './menuPosition.js';
 
 const IC_CHEVRON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
@@ -231,10 +232,12 @@ function buildAlarms(tasks, loadRows) {
  * @param {{ tasks, projects, engineers, loadStats, teamLoadStats?, onRefresh }} ctx
  */
 export function renderPlanTab(root, ctx) {
-  const canEdit = canEditProjektniBiro();
+  const canEdit = canEditPbTasks();
+  const readOnly = ctx.isReadOnly ?? isPbReadOnly();
   const pbMod = loadPbState();
   if (!_loadOpenLoaded) {
-    _loadOpen = pbMod.planLoadSectionOpen ?? false;
+    const compactInit = pbIsCompact(root.closest('.pb-module'));
+    _loadOpen = compactInit ? false : (pbMod.planLoadSectionOpen ?? false);
     _loadOpenLoaded = true;
   }
   let filters = {
@@ -258,7 +261,7 @@ export function renderPlanTab(root, ctx) {
   let _bulkMenu = null;
   /** True kad je "Pregledi" dropdown otvoren. */
   let _viewsOpen = false;
-  const _mqMobile = window.matchMedia('(max-width: 767px)');
+  const _mqMobile = window.matchMedia('(max-width: 1024px)');
   let _isMobile = _mqMobile.matches;
   const _mqListener = e => {
     if (!root.isConnected) {
@@ -269,6 +272,35 @@ export function renderPlanTab(root, ctx) {
     paint();
   };
   _mqMobile.addEventListener('change', _mqListener);
+
+  function getPbModule() {
+    return root.closest('.pb-module');
+  }
+
+  function getFilterScope() {
+    const mod = getPbModule();
+    return pbIsCompact(mod) ? mod : root;
+  }
+
+  function notifyFilterCount() {
+    ctx.onFilterCountChange?.({
+      status: filters.status,
+      vrsta: filters.vrsta,
+      prioritet: filters.prioritet,
+      problemOnly: filters.problemOnly,
+      unassignedOnly: filters.unassignedOnly,
+      showDone: filters.showDone,
+    });
+  }
+
+  function mountPlanFilters(html) {
+    const mod = getPbModule();
+    const drawer = mod?.querySelector('#pbFilterDrawerPlan');
+    const sec = mod?.querySelector('#pbFilterDrawerPlanSection');
+    if (sec) sec.hidden = false;
+    if (pbIsCompact(mod) && drawer) drawer.innerHTML = html;
+    else if (drawer) drawer.innerHTML = '';
+  }
 
   function repositionOpenFloatingMenus() {
     if (!root.isConnected) return;
@@ -704,54 +736,19 @@ export function renderPlanTab(root, ctx) {
       || filters.prioritet !== 'all' || filters.problemOnly || filters.unassignedOnly
       || filters.showDone || filters.search;
 
-    const filterHtml = `
-      <div class="pb-filter-toolbar">
-        <div class="pb-ft-field">
-          <span class="pb-ft-label">Status</span>
-          <select id="pbFStatus" class="pb-ft-select ${filters.status !== 'all' ? 'active' : ''}">
-            <option value="all">Svi</option>
-            ${PB_TASK_STATUS.map(s => `<option value="${escHtml(s)}" ${filters.status === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="pb-ft-field">
-          <span class="pb-ft-label">Prioritet</span>
-          <select id="pbFPrio" class="pb-ft-select ${filters.prioritet !== 'all' ? 'active' : ''}">
-            <option value="all">Svi</option>
-            ${PB_PRIORITET.map(s => `<option value="${escHtml(s)}" ${filters.prioritet === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="pb-ft-field">
-          <span class="pb-ft-label">Vrsta</span>
-          <select id="pbFVrsta" class="pb-ft-select ${filters.vrsta !== 'all' ? 'active' : ''}">
-            <option value="all">Sve</option>
-            ${PB_TASK_VRSTA.map(s => `<option value="${escHtml(s)}" ${filters.vrsta === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="pb-ft-toggles">
-          <button type="button" class="pb-ft-toggle ${filters.problemOnly ? 'active' : ''}" id="pbFProb">⚠ Problemi</button>
-          <button type="button" class="pb-ft-toggle ${filters.unassignedOnly ? 'active' : ''}" id="pbFUnassigned">⊘ Ne dodeljeni</button>
-          <button type="button" class="pb-ft-toggle ${filters.showDone ? 'active' : ''}" id="pbFDoneBtn">☐ Završeni</button>
-        </div>
-        <div class="pb-ft-views">
-          <button type="button" class="pb-ft-toggle" id="pbViewsBtn" aria-haspopup="true" aria-expanded="${_viewsOpen ? 'true' : 'false'}">⭐ Pregledi ▾</button>
-          ${_viewsOpen ? buildViewsMenuHtml() : ''}
-        </div>
-        <div class="pb-ft-icons">
-          <button type="button" class="pb-ft-refresh" id="pbRefreshBtn" title="Osveži">${IC_REFRESH}</button>
-          <button type="button" class="pb-ft-refresh" id="pbExportBtn" title="Izvoz u CSV (Excel)">⤓</button>
-        </div>
-        ${hasActiveFilter ? '<button type="button" class="pb-ft-reset" id="pbFReset">✕ Reset</button>' : ''}
-      </div>`;
+    const filterHtml = buildFilterToolbarHtml(hasActiveFilter);
+    const compactFilters = pbIsCompact(getPbModule());
 
     preserveFocus(() => {
       root.innerHTML = `
         ${alarmHtml}
         ${loadHtml}
-        ${filterHtml}
+        ${compactFilters ? '' : filterHtml}
         ${buildBulkBarHtml()}
         <div class="pb-plan-split">${buildBodyHtml(sorted)}</div>`;
     });
 
+    mountPlanFilters(filterHtml);
     applyMasterIndeterminate();
 
     /* ── Event listeners ── */
@@ -769,38 +766,44 @@ export function renderPlanTab(root, ctx) {
       paint();
     });
 
-    // #pbSearch je preseljen u chrome (index.js); listener više nije potreban.
-    root.querySelector('#pbFStatus')?.addEventListener('change', e => {
+    const fScope = getFilterScope();
+    fScope.querySelector('#pbFStatus')?.addEventListener('change', e => {
       filters.status = e.target.value;
       syncPbModuleFilters({ moduleStatus: filters.status });
+      notifyFilterCount();
       paint();
     });
-    root.querySelector('#pbFVrsta')?.addEventListener('change', e => {
+    fScope.querySelector('#pbFVrsta')?.addEventListener('change', e => {
       filters.vrsta = e.target.value;
       syncPbModuleFilters({ moduleVrsta: filters.vrsta });
+      notifyFilterCount();
       paint();
     });
-    root.querySelector('#pbFPrio')?.addEventListener('change', e => {
+    fScope.querySelector('#pbFPrio')?.addEventListener('change', e => {
       filters.prioritet = e.target.value;
       syncPbModuleFilters({ modulePrioritet: filters.prioritet });
+      notifyFilterCount();
       paint();
     });
-    root.querySelector('#pbFDoneBtn')?.addEventListener('click', () => {
+    fScope.querySelector('#pbFDoneBtn')?.addEventListener('click', () => {
       filters.showDone = !filters.showDone;
       syncPbModuleFilters({ moduleShowDone: filters.showDone });
+      notifyFilterCount();
       paint();
     });
-    root.querySelector('#pbFProb')?.addEventListener('click', () => {
+    fScope.querySelector('#pbFProb')?.addEventListener('click', () => {
       filters.problemOnly = !filters.problemOnly;
       syncPbModuleFilters({ moduleProblemOnly: filters.problemOnly });
+      notifyFilterCount();
       paint();
     });
-    root.querySelector('#pbFUnassigned')?.addEventListener('click', () => {
+    fScope.querySelector('#pbFUnassigned')?.addEventListener('click', () => {
       filters.unassignedOnly = !filters.unassignedOnly;
       syncPbModuleFilters({ moduleUnassignedOnly: filters.unassignedOnly });
+      notifyFilterCount();
       paint();
     });
-    root.querySelector('#pbFReset')?.addEventListener('click', () => {
+    fScope.querySelector('#pbFReset')?.addEventListener('click', () => {
       filters = { search: '', status: 'all', vrsta: 'all', prioritet: 'all', showDone: false, problemOnly: false, unassignedOnly: false };
       syncPbModuleFilters({
         moduleSearch: '',
@@ -811,10 +814,11 @@ export function renderPlanTab(root, ctx) {
         moduleProblemOnly: false,
         moduleUnassignedOnly: false,
       });
+      notifyFilterCount();
       paint();
     });
-    root.querySelector('#pbRefreshBtn')?.addEventListener('click', () => ctx.onRefresh?.());
-    root.querySelector('#pbExportBtn')?.addEventListener('click', () => exportCurrentViewToCsv());
+    fScope.querySelector('#pbRefreshBtn')?.addEventListener('click', () => ctx.onRefresh?.());
+    fScope.querySelector('#pbExportBtn')?.addEventListener('click', () => exportCurrentViewToCsv());
 
     attachSortListeners();
     attachBulkBarListeners();
@@ -847,6 +851,51 @@ export function renderPlanTab(root, ctx) {
     wirePbPlanFloatingViewport();
     wirePbPlanFloatingScrollRoot(root);
     wirePbPlanFloatingEscape();
+    notifyFilterCount();
+  }
+
+  function buildFilterToolbarHtml(hasActiveFilter) {
+    const viewsBlock = canEdit
+      ? `<div class="pb-ft-views">
+          <button type="button" class="pb-ft-toggle" id="pbViewsBtn" aria-haspopup="true" aria-expanded="${_viewsOpen ? 'true' : 'false'}">⭐ Pregledi ▾</button>
+          ${_viewsOpen ? buildViewsMenuHtml() : ''}
+        </div>`
+      : '';
+    return `
+      <div class="pb-filter-toolbar${readOnly ? ' pb-filter-toolbar--readonly' : ''}">
+        <div class="pb-ft-field">
+          <span class="pb-ft-label">Status</span>
+          <select id="pbFStatus" class="pb-ft-select ${filters.status !== 'all' ? 'active' : ''}">
+            <option value="all">Svi</option>
+            ${PB_TASK_STATUS.map(s => `<option value="${escHtml(s)}" ${filters.status === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="pb-ft-field">
+          <span class="pb-ft-label">Prioritet</span>
+          <select id="pbFPrio" class="pb-ft-select ${filters.prioritet !== 'all' ? 'active' : ''}">
+            <option value="all">Svi</option>
+            ${PB_PRIORITET.map(s => `<option value="${escHtml(s)}" ${filters.prioritet === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="pb-ft-field">
+          <span class="pb-ft-label">Vrsta</span>
+          <select id="pbFVrsta" class="pb-ft-select ${filters.vrsta !== 'all' ? 'active' : ''}">
+            <option value="all">Sve</option>
+            ${PB_TASK_VRSTA.map(s => `<option value="${escHtml(s)}" ${filters.vrsta === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="pb-ft-toggles">
+          <button type="button" class="pb-ft-toggle ${filters.problemOnly ? 'active' : ''}" id="pbFProb">⚠ Problemi</button>
+          <button type="button" class="pb-ft-toggle ${filters.unassignedOnly ? 'active' : ''}" id="pbFUnassigned">⊘ Ne dodeljeni</button>
+          <button type="button" class="pb-ft-toggle ${filters.showDone ? 'active' : ''}" id="pbFDoneBtn">☐ Završeni</button>
+        </div>
+        ${viewsBlock}
+        <div class="pb-ft-icons">
+          <button type="button" class="pb-ft-refresh" id="pbRefreshBtn" title="Osveži">${IC_REFRESH}</button>
+          <button type="button" class="pb-ft-refresh" id="pbExportBtn" title="Izvoz u CSV (Excel)">⤓</button>
+        </div>
+        ${hasActiveFilter ? '<button type="button" class="pb-ft-reset" id="pbFReset">✕ Reset</button>' : ''}
+      </div>`;
   }
 
   const _emptyFilters = {
@@ -910,7 +959,7 @@ export function renderPlanTab(root, ctx) {
               <span class="pb-views-item-icon">◆</span>
               <span class="pb-views-item-name">${escHtml(v.name)}</span>
             </button>
-            <button type="button" class="pb-views-del" data-view-del="${escHtml(v.name)}" title="Obriši pregled" aria-label="Obriši">✕</button>
+            ${canEdit ? `<button type="button" class="pb-views-del" data-view-del="${escHtml(v.name)}" title="Obriši pregled" aria-label="Obriši">✕</button>` : ''}
           </div>`).join('')
       : '<div class="pb-views-empty">Nema sačuvanih pregleda</div>';
     return `
@@ -920,33 +969,33 @@ export function renderPlanTab(root, ctx) {
         <div class="pb-views-divider"></div>
         <div class="pb-views-section-label">Moji pregledi</div>
         ${userHtml}
-        <div class="pb-views-divider"></div>
-        <button type="button" class="pb-views-save" id="pbViewsSave">＋ Sačuvaj trenutni pregled…</button>
+        ${canEdit ? '<div class="pb-views-divider"></div><button type="button" class="pb-views-save" id="pbViewsSave">＋ Sačuvaj trenutni pregled…</button>' : ''}
       </div>`;
   }
 
   function attachViewsListeners() {
-    root.querySelector('#pbViewsBtn')?.addEventListener('click', e => {
+    const fScope = getFilterScope();
+    fScope.querySelector('#pbViewsBtn')?.addEventListener('click', e => {
       e.stopPropagation();
       _viewsOpen = !_viewsOpen;
       paint();
     });
-    root.querySelector('#pbViewsSave')?.addEventListener('click', saveCurrentView);
-    root.querySelectorAll('[data-view-builtin]').forEach(btn => {
+    fScope.querySelector('#pbViewsSave')?.addEventListener('click', saveCurrentView);
+    fScope.querySelectorAll('[data-view-builtin]').forEach(btn => {
       btn.addEventListener('click', () => {
         const i = Number(btn.getAttribute('data-view-builtin'));
         const v = PB_BUILTIN_VIEWS[i];
         if (v) applyView(v.filters);
       });
     });
-    root.querySelectorAll('[data-view-user]').forEach(btn => {
+    fScope.querySelectorAll('[data-view-user]').forEach(btn => {
       btn.addEventListener('click', () => {
         const i = Number(btn.getAttribute('data-view-user'));
         const v = loadPbViews()[i];
         if (v) applyView(v.filters);
       });
     });
-    root.querySelectorAll('[data-view-del]').forEach(btn => {
+    fScope.querySelectorAll('[data-view-del]').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         const name = btn.getAttribute('data-view-del');

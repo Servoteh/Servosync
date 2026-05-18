@@ -4,7 +4,7 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { openTaskEditorModal, savePbGanttZoom } from './shared.js';
-import { canEditProjektniBiro } from '../../state/auth.js';
+import { canEditPbTasks } from '../../state/auth.js';
 import { updatePbTask } from '../../services/pb.js';
 
 /** Zoom konfiguracija: koliko meseci da prikažemo, širina ćelije dana, tip zaglavlja. */
@@ -165,8 +165,8 @@ export function renderGanttTab(root, ctx) {
   root._pbGanttAbort = ac;
   const sig = ac.signal;
 
-  const canEdit = canEditProjektniBiro();
-  const mobile = window.matchMedia('(max-width: 767px)').matches;
+  const canEdit = canEditPbTasks();
+  const mobile = window.matchMedia('(max-width: 1024px)').matches;
   const zoom = ZOOM_CONFIG[ctx.viewZoom] ? ctx.viewZoom : 'day';
   const zCfg = ZOOM_CONFIG[zoom];
   const dayW = mobile ? zCfg.dayWMobile : zCfg.dayWDesktop;
@@ -462,15 +462,18 @@ export function renderGanttTab(root, ctx) {
   const navLabel = baseMonth.toLocaleString('sr-Latn', { month: 'long', year: 'numeric' });
 
   const legend = list.length ? `
-    <div class="pb-gantt-legend">
-      <span><span class="pb-gantt-dot pb-gantt-bar--new"></span> Nije počelo</span>
-      <span><span class="pb-gantt-dot pb-gantt-bar--progress"></span> U toku</span>
-      <span><span class="pb-gantt-dot pb-gantt-bar--review"></span> Pregled</span>
-      <span><span class="pb-gantt-dot pb-gantt-bar--blocked"></span> Blokirano</span>
-      <span><span class="pb-gantt-dot pb-gantt-bar--done"></span> Završeno (plan)</span>
-      <span><span class="pb-gantt-dot pb-gantt-bar--real"></span> Ostvaren period</span>
-      <span><span class="pb-gantt-today-mark"></span> Danas</span>
-    </div>` : '';
+    <details class="pb-gantt-legend-wrap"${mobile ? '' : ' open'}>
+      <summary class="pb-gantt-legend-toggle">Legenda</summary>
+      <div class="pb-gantt-legend">
+        <span><span class="pb-gantt-dot pb-gantt-bar--new"></span> Nije počelo</span>
+        <span><span class="pb-gantt-dot pb-gantt-bar--progress"></span> U toku</span>
+        <span><span class="pb-gantt-dot pb-gantt-bar--review"></span> Pregled</span>
+        <span><span class="pb-gantt-dot pb-gantt-bar--blocked"></span> Blokirano</span>
+        <span><span class="pb-gantt-dot pb-gantt-bar--done"></span> Završeno (plan)</span>
+        <span><span class="pb-gantt-dot pb-gantt-bar--real"></span> Ostvaren period</span>
+        <span><span class="pb-gantt-today-mark"></span> Danas</span>
+      </div>
+    </details>` : '';
 
   const empty = !list.length ? `
     <div class="pb-gantt-empty">

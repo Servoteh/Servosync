@@ -275,10 +275,33 @@ export function canAccessProjektniBiro() {
 }
 
 /**
- * PB plan — INSERT/UPDATE na pb_tasks; usklađeno sa RLS (has_edit_role ∪ admin).
+ * PB zadaci — INSERT/UPDATE na pb_tasks; usklađeno sa RLS `pb_can_edit_tasks()`.
  */
-export function canEditProjektniBiro() {
+export function canEditPbTasks() {
   return canEditKadrovska();
+}
+
+/** @deprecated Koristi canEditPbTasks */
+export function canEditProjektniBiro() {
+  return canEditPbTasks();
+}
+
+/**
+ * PB izveštaji sati — širi krug vidi/une sve; inače samo sopstveni redovi (RLS).
+ * UI aproksimacija: leadpm/pm/menadzment/admin + svi koji mogu PB zadatke.
+ */
+export function canSeeAllPbWorkReports() {
+  return ['admin', 'leadpm', 'pm', 'menadzment'].includes(state.role);
+}
+
+export function canEditPbWorkReports() {
+  if (canSeeAllPbWorkReports()) return true;
+  return canEditPbTasks();
+}
+
+/** Pregled bez izmene zadataka (viewer, cnc_operater, …). */
+export function isPbReadOnly() {
+  return !canEditPbTasks();
 }
 
 /**

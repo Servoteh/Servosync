@@ -9,7 +9,7 @@ import {
   openTaskEditorModal,
 } from './shared.js';
 import { quickUpdatePbTaskStatus } from '../../services/pb.js';
-import { canEditProjektniBiro } from '../../state/auth.js';
+import { canEditPbTasks } from '../../state/auth.js';
 
 const KANBAN_COLUMNS = [
   'Nije počelo',
@@ -143,11 +143,40 @@ function kanbanCardHtml(t, columnStatus, canEdit) {
  * }} ctx
  */
 export function renderKanbanTab(root, ctx) {
-  const canEdit = canEditProjektniBiro();
+  const canEdit = canEditPbTasks();
+  const compact = window.matchMedia('(max-width: 1024px)').matches;
 
   function buildHtml() {
     const list = filterKanbanTasks(ctx.tasks || [], ctx.search);
     const { cols, olderDoneCount } = partitionByStatus(list, ctx.showDone);
+
+    if (compact) {
+      const sections = KANBAN_COLUMNS.map(st => {
+        const tasks = cols[st] || [];
+        const count = tasks.length;
+        const cards = tasks.map(t => kanbanCardHtml(t, st, canEdit)).join('');
+        const addCard = canEdit
+          ? `<button type="button" class="pb-kanban-add" data-add-status="${escHtml(st)}" aria-label="Novi zadatak">+</button>`
+          : '';
+        let footerOlder = '';
+        if (st === 'Završeno' && !ctx.showDone && olderDoneCount > 0) {
+          footerOlder = `<p class="pb-kanban-older"><button type="button" class="btn btn-link" id="pbKanbanOlder">Još ${olderDoneCount} starijih završenih zadataka (skriveno)</button></p>`;
+        }
+        const openDefault = st === 'U toku' || (st === 'Blokirano' && count > 0);
+        return `
+          <details class="pb-kanban-acc" data-status="${escHtml(st)}"${openDefault ? ' open' : ''}>
+            <summary class="pb-kanban-acc-head">
+              <span class="${colHeaderClass(st)}">${escHtml(st)}</span>
+              <span class="pb-kanban-count">${count}</span>
+            </summary>
+            <div class="pb-kanban-acc-body">
+              <div class="pb-kanban-cards">${cards}${addCard}</div>
+              ${footerOlder}
+            </div>
+          </details>`;
+      }).join('');
+      return `<div class="pb-kanban-accordion">${sections}</div>`;
+    }
 
     const columnsHtml = KANBAN_COLUMNS.map(st => {
       const tasks = cols[st] || [];
