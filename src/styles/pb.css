@@ -57,9 +57,9 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 6px 0;
+  padding: 4px 0;
   flex-shrink: 0;
-  min-height: 40px;
+  min-height: 36px;
 }
 
 .pb-topbar-start {
@@ -251,23 +251,41 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
 .pb-context-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 8px 10px;
-  padding: 6px 0 6px;
-  margin-top: 4px;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 4px 0 4px;
+  margin-top: 2px;
   flex-shrink: 0;
 }
 
+/* Sprint 2C: inline labels — label pored inputa, ne iznad. Štedi ~25px po redu. */
 .pb-context-field {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 140px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .pb-context-field.pb-context-field--grow {
   flex: 1 1 220px;
   min-width: 180px;
+}
+
+.pb-context-field .pb-context-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text3, #9ca3af);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pb-context-field .pb-context-select,
+.pb-context-field .pb-context-search {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .pb-context-search {
@@ -905,17 +923,19 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
 .pb-filter-toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 8px 10px;
-  padding: 12px 0 10px;
-  margin-bottom: 12px;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 0;
+  margin-bottom: 6px;
   border-bottom: 1px solid var(--border, #e5e7eb);
 }
 
+/* Sprint 2C: inline labels — label pored selecta. Štedi ~25px po redu filtera. */
 .pb-ft-field {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
 
 .pb-ft-label {
@@ -924,6 +944,14 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--text3, #9ca3af);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Sakrij prazne (&nbsp;) labele iz Sprint-a 2C — više nisu potrebne za poravnanje. */
+.pb-ft-label:empty,
+.pb-ft-label[data-empty="1"] {
+  display: none;
 }
 
 .pb-ft-search {
@@ -1618,7 +1646,7 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 10px 10px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border, #e5e7eb);
   text-align: left;
   white-space: nowrap;
@@ -1696,10 +1724,22 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
 }
 
 .pb-table td {
-  padding: 8px 10px;
+  padding: 5px 8px;
   border-bottom: 1px solid var(--border, #e5e7eb);
   text-align: left;
   vertical-align: middle;
+  line-height: 1.35;
+}
+
+/* Numeric kolone: tabular nums, desno poravnato. */
+.pb-table td.pb-td-num,
+.pb-table .pb-pct-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.pb-table td.pb-td-num {
+  text-align: right;
+  padding-right: 14px;
 }
 
 .pb-table tbody tr:last-child td {
@@ -1775,10 +1815,11 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   text-align: right;
 }
 
-/* Date display */
+/* Date display — Sprint 2C: compact, tabular nums, manji ostvaren red. */
 .pb-td-dates {
   min-width: 130px;
-  line-height: 1.4;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
 }
 
 .pb-td-dates-plan,
@@ -1786,23 +1827,24 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   white-space: nowrap;
 }
 
 .pb-td-dates-real {
   color: var(--text2, #6b7280);
-  margin-top: 2px;
+  margin-top: 1px;
+  font-size: 0.72rem;
 }
 
 .pb-date-lbl {
   display: inline-block;
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.4px;
   color: var(--text3, #9ca3af);
   text-transform: uppercase;
-  min-width: 48px;
+  min-width: 40px;
 }
 
 .pb-date-lbl--real {

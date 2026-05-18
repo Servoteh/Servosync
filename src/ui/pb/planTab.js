@@ -387,8 +387,8 @@ export function renderPlanTab(root, ctx) {
           <div class="pb-td-dates-plan"><span class="pb-date-lbl">PLAN</span> ${escHtml(fmtDate(t.datum_pocetka_plan))} <span class="pb-date-sep">→</span> ${escHtml(fmtDate(t.datum_zavrsetka_plan))}</div>
           ${hasReal ? `<div class="pb-td-dates-real"><span class="pb-date-lbl pb-date-lbl--real">OSTVAREN</span> ${escHtml(fmtDate(t.datum_pocetka_real))} <span class="pb-date-sep">→</span> ${escHtml(fmtDate(t.datum_zavrsetka_real))}</div>` : ''}
         </td>
-        <td>${wd != null ? wd : '—'}</td>
-        <td>${Number(t.norma_sati_dan) || 0}</td>
+        <td class="pb-td-num">${wd != null ? wd : '—'}</td>
+        <td class="pb-td-num">${Number(t.norma_sati_dan) || 0}</td>
         <td><span class="${statusBadgeClass(t.status)}">${escHtml(t.status || '')}</span></td>
         <td class="pb-td-pct">
           <div class="pb-pct-wrap">
@@ -711,25 +711,18 @@ export function renderPlanTab(root, ctx) {
             ${PB_TASK_VRSTA.map(s => `<option value="${escHtml(s)}" ${filters.vrsta === s ? 'selected' : ''}>${escHtml(s)}</option>`).join('')}
           </select>
         </div>
-        <div class="pb-ft-field">
-          <span class="pb-ft-label">&nbsp;</span>
-          <div class="pb-ft-toggles">
-            <button type="button" class="pb-ft-toggle ${filters.problemOnly ? 'active' : ''}" id="pbFProb">⚠ Problemi</button>
-            <button type="button" class="pb-ft-toggle ${filters.unassignedOnly ? 'active' : ''}" id="pbFUnassigned">⊘ Ne dodeljeni</button>
-            <button type="button" class="pb-ft-toggle ${filters.showDone ? 'active' : ''}" id="pbFDoneBtn">☐ Završeni</button>
-          </div>
+        <div class="pb-ft-toggles">
+          <button type="button" class="pb-ft-toggle ${filters.problemOnly ? 'active' : ''}" id="pbFProb">⚠ Problemi</button>
+          <button type="button" class="pb-ft-toggle ${filters.unassignedOnly ? 'active' : ''}" id="pbFUnassigned">⊘ Ne dodeljeni</button>
+          <button type="button" class="pb-ft-toggle ${filters.showDone ? 'active' : ''}" id="pbFDoneBtn">☐ Završeni</button>
         </div>
-        <div class="pb-ft-field pb-ft-views">
-          <span class="pb-ft-label">&nbsp;</span>
+        <div class="pb-ft-views">
           <button type="button" class="pb-ft-toggle" id="pbViewsBtn" aria-haspopup="true" aria-expanded="${_viewsOpen ? 'true' : 'false'}">⭐ Pregledi ▾</button>
           ${_viewsOpen ? buildViewsMenuHtml() : ''}
         </div>
-        <div class="pb-ft-field">
-          <span class="pb-ft-label">&nbsp;</span>
-          <div class="pb-ft-icons">
-            <button type="button" class="pb-ft-refresh" id="pbRefreshBtn" title="Osveži">${IC_REFRESH}</button>
-            <button type="button" class="pb-ft-refresh" id="pbExportBtn" title="Izvoz u CSV (Excel)">⤓</button>
-          </div>
+        <div class="pb-ft-icons">
+          <button type="button" class="pb-ft-refresh" id="pbRefreshBtn" title="Osveži">${IC_REFRESH}</button>
+          <button type="button" class="pb-ft-refresh" id="pbExportBtn" title="Izvoz u CSV (Excel)">⤓</button>
         </div>
         ${hasActiveFilter ? '<button type="button" class="pb-ft-reset" id="pbFReset">✕ Reset</button>' : ''}
       </div>`;
