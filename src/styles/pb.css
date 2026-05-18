@@ -2298,6 +2298,56 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Sprint 3A: kalendar picker pored text inputa za datum ── */
+.pb-date-input-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  position: relative;
+}
+
+.pb-date-input-wrap .pb-task-date-dmy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pb-date-picker-btn {
+  flex-shrink: 0;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--text2, #6b7280);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.pb-date-picker-btn:hover:not(:disabled) {
+  background: var(--surface3, #f3f4f6);
+  border-color: var(--accent, #E8523A);
+}
+
+.pb-date-picker-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Native date input — neviuelan ali u DOM-u (showPicker zahteva da nije display:none). */
+.pb-date-native {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
 .pb-norm-row {
   display: flex;
   align-items: center;

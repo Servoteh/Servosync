@@ -330,10 +330,34 @@ export function openTaskEditorModal(opts) {
           </label>
         </div>
         <div class="pb-dates-grid">
-          <label><span>Plan početak</span><input type="text" class="pb-task-date-dmy" id="pbTfDp" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_pocetka_plan))}" ${canEdit ? '' : 'disabled'} /></label>
-          <label><span>Plan rok</span><input type="text" class="pb-task-date-dmy" id="pbTfDr" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_zavrsetka_plan))}" ${canEdit ? '' : 'disabled'} /></label>
-          <label><span>Ostvaren poč.</span><input type="text" class="pb-task-date-dmy" id="pbTfRp" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_pocetka_real))}" ${canEdit ? '' : 'disabled'} /></label>
-          <label><span>Ostvaren završetak</span><input type="text" class="pb-task-date-dmy" id="pbTfRz" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_zavrsetka_real))}" ${canEdit ? '' : 'disabled'} /></label>
+          <label><span>Plan početak</span>
+            <div class="pb-date-input-wrap">
+              <input type="text" class="pb-task-date-dmy" id="pbTfDp" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_pocetka_plan))}" ${canEdit ? '' : 'disabled'} />
+              <button type="button" class="pb-date-picker-btn" aria-label="Otvori kalendar" ${canEdit ? '' : 'disabled'}>📅</button>
+              <input type="date" class="pb-date-native" tabindex="-1" aria-hidden="true" value="${escHtml(String(t.datum_pocetka_plan || '').slice(0, 10))}" />
+            </div>
+          </label>
+          <label><span>Plan rok</span>
+            <div class="pb-date-input-wrap">
+              <input type="text" class="pb-task-date-dmy" id="pbTfDr" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_zavrsetka_plan))}" ${canEdit ? '' : 'disabled'} />
+              <button type="button" class="pb-date-picker-btn" aria-label="Otvori kalendar" ${canEdit ? '' : 'disabled'}>📅</button>
+              <input type="date" class="pb-date-native" tabindex="-1" aria-hidden="true" value="${escHtml(String(t.datum_zavrsetka_plan || '').slice(0, 10))}" />
+            </div>
+          </label>
+          <label><span>Ostvaren poč.</span>
+            <div class="pb-date-input-wrap">
+              <input type="text" class="pb-task-date-dmy" id="pbTfRp" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_pocetka_real))}" ${canEdit ? '' : 'disabled'} />
+              <button type="button" class="pb-date-picker-btn" aria-label="Otvori kalendar" ${canEdit ? '' : 'disabled'}>📅</button>
+              <input type="date" class="pb-date-native" tabindex="-1" aria-hidden="true" value="${escHtml(String(t.datum_pocetka_real || '').slice(0, 10))}" />
+            </div>
+          </label>
+          <label><span>Ostvaren završetak</span>
+            <div class="pb-date-input-wrap">
+              <input type="text" class="pb-task-date-dmy" id="pbTfRz" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" value="${escHtml(pbFormatIsoToDmy(t.datum_zavrsetka_real))}" ${canEdit ? '' : 'disabled'} />
+              <button type="button" class="pb-date-picker-btn" aria-label="Otvori kalendar" ${canEdit ? '' : 'disabled'}>📅</button>
+              <input type="date" class="pb-date-native" tabindex="-1" aria-hidden="true" value="${escHtml(String(t.datum_zavrsetka_real || '').slice(0, 10))}" />
+            </div>
+          </label>
         </div>
         <label class="pb-field"><span>Norma (h/dan)</span>
           <div class="pb-norm-row">
@@ -731,12 +755,49 @@ export function openTaskEditorModal(opts) {
 
   document.body.appendChild(wrap);
 
-  panelEl?.querySelectorAll('.pb-task-date-dmy').forEach((inp) => {
-    inp.addEventListener('blur', () => {
-      const raw = inp.value.trim();
+  panelEl?.querySelectorAll('.pb-date-input-wrap').forEach((wrap) => {
+    const textInp = /** @type {HTMLInputElement|null} */ (wrap.querySelector('.pb-task-date-dmy'));
+    const btn = /** @type {HTMLButtonElement|null} */ (wrap.querySelector('.pb-date-picker-btn'));
+    const nativeInp = /** @type {HTMLInputElement|null} */ (wrap.querySelector('.pb-date-native'));
+    if (!textInp) return;
+
+    /** Sinhronizuj text → native pre nego što picker otvori (start position). */
+    function syncTextToNative() {
+      if (!nativeInp) return;
+      const iso = pbParseDmyToIso(textInp.value);
+      if (iso) nativeInp.value = iso;
+    }
+
+    textInp.addEventListener('blur', () => {
+      const raw = textInp.value.trim();
       if (!raw) return;
       const iso = pbParseDmyToIso(raw);
-      if (iso) inp.value = pbFormatIsoToDmy(iso);
+      if (iso) {
+        textInp.value = pbFormatIsoToDmy(iso);
+        if (nativeInp) nativeInp.value = iso;
+      }
+    });
+
+    btn?.addEventListener('click', () => {
+      if (!nativeInp || nativeInp.disabled) return;
+      syncTextToNative();
+      try {
+        if (typeof nativeInp.showPicker === 'function') {
+          nativeInp.showPicker();
+        } else {
+          nativeInp.focus();
+          nativeInp.click();
+        }
+      } catch (_e) {
+        nativeInp.focus();
+      }
+    });
+
+    nativeInp?.addEventListener('change', () => {
+      const iso = (nativeInp.value || '').slice(0, 10);
+      if (iso) {
+        textInp.value = pbFormatIsoToDmy(iso);
+      }
     });
   });
 }
