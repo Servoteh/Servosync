@@ -256,6 +256,7 @@ export async function softDeletePbTask(id) {
     `pb_tasks?id=eq.${encodeURIComponent(id)}&deleted_at=is.null`,
     'PATCH',
     payload,
+    { preferReturn: 'minimal' },
   );
 }
 
@@ -295,8 +296,11 @@ export async function bulkSoftDeletePbTasks(ids) {
     `pb_tasks?id=in.(${inList})&deleted_at=is.null`,
     'PATCH',
     payload,
+    { preferReturn: 'minimal', withCount: true },
   );
-  const count = Array.isArray(res) ? res.length : 0;
+  const count = res && typeof res === 'object' && res.total != null
+    ? res.total
+    : (Array.isArray(res) ? res.length : ids.length);
   return { ok: count, requested: ids.length };
 }
 

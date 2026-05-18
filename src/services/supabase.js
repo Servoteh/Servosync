@@ -70,7 +70,7 @@ export function getSupabaseHeaders() {
  *                          ili 'rpc/get_my_user_roles' za RPC.
  * @param {'GET'|'POST'|'PATCH'|'DELETE'} [method='GET']
  * @param {object|null} [body=null]
- * @param {{ upsert?: boolean, withCount?: boolean }} [options]
+ * @param {{ upsert?: boolean, withCount?: boolean, preferReturn?: 'representation'|'minimal' }} [options]
  *        `upsert` (default `true`) — na POST pridružuje `resolution=merge-duplicates`
  *        kako bi UNIQUE konflikti odradili UPSERT; prosledi `false` kada želiš
  *        klasičan INSERT koji na duplikat vraća 409 (npr. kreiranje master zapisa).
@@ -102,9 +102,10 @@ export async function sbReq(path, method = 'GET', body = null, options = {}) {
           ? 'return=representation,resolution=merge-duplicates'
           : 'return=representation';
       } else if (method === 'PATCH') {
-        headers['Prefer'] = 'return=representation';
+        const ret = options.preferReturn === 'minimal' ? 'minimal' : 'representation';
+        headers['Prefer'] = `return=${ret}`;
       }
-      if (options.withCount && method === 'GET') {
+      if (options.withCount && (method === 'GET' || method === 'PATCH')) {
         headers['Prefer'] = (headers['Prefer'] ? headers['Prefer'] + ',' : '') + 'count=exact';
       }
 
@@ -176,8 +177,8 @@ export async function sbReq(path, method = 'GET', body = null, options = {}) {
         return options.withCount ? { rows: null, total: null } : null;
       }
     }
-    if (options.withCount && method === 'GET') {
-      const cr = r.headers.get('content-range') || ''; /* primer: "0-49/1234" */
+    if (options.withCount && (method === 'GET' || method === 'PATCH')) {
+      const cr = r.headers.get('content-range') || '';
       const total = parseContentRangeTotal(cr);
       return { rows: Array.isArray(parsed) ? parsed : [], total };
     }
@@ -221,7 +222,7 @@ function parseContentRangeTotal(cr) {
  * @param {string} path
  * @param {'GET'|'POST'|'PATCH'|'DELETE'} [method='GET']
  * @param {object|null} [body=null]
- * @param {{ upsert?: boolean, withCount?: boolean }} [options]
+ * @param {{ upsert?: boolean, withCount?: boolean, preferReturn?: 'representation'|'minimal' }} [options]
  */
 export async function sbReqThrow(path, method = 'GET', body = null, options = {}) {
   if (!hasSupabaseConfig()) {
@@ -250,9 +251,10 @@ export async function sbReqThrow(path, method = 'GET', body = null, options = {}
         ? 'return=representation,resolution=merge-duplicates'
         : 'return=representation';
     } else if (method === 'PATCH') {
-      headers['Prefer'] = 'return=representation';
+      const ret = options.preferReturn === 'minimal' ? 'minimal' : 'representation';
+      headers['Prefer'] = `return=${ret}`;
     }
-    if (options.withCount && method === 'GET') {
+    if (options.withCount && (method === 'GET' || method === 'PATCH')) {
       headers['Prefer'] = (headers['Prefer'] ? headers['Prefer'] + ',' : '') + 'count=exact';
     }
 
@@ -313,7 +315,7 @@ export async function sbReqThrow(path, method = 'GET', body = null, options = {}
       throw err;
     }
   }
-  if (options.withCount && method === 'GET') {
+  if (options.withCount && (method === 'GET' || method === 'PATCH')) {
     const cr = r.headers.get('content-range') || '';
     const total = parseContentRangeTotal(cr);
     return { rows: Array.isArray(parsed) ? parsed : [], total };

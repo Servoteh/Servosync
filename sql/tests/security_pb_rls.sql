@@ -10,7 +10,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(5);
+SELECT plan(6);
 
 -- ─── Seed: user_roles (admin piše posle enable_user_roles_rls_proper) ─────
 SET LOCAL row_security = off;
@@ -119,6 +119,23 @@ SELECT is(
   (SELECT count(*)::int FROM public.pb_tasks WHERE id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'),
   0,
   'soft-deleted zadatak NE ulazi u SELECT (deleted_at IS NOT NULL)'
+);
+
+-- =========================================================================
+-- 6) PM može soft delete (UPDATE deleted_at) aktivnog zadatka
+-- =========================================================================
+SELECT lives_ok(
+  $$ UPDATE public.pb_tasks
+     SET deleted_at = now(), updated_by = 'pb-pm@test.local'
+     WHERE id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+       AND deleted_at IS NULL $$,
+  'pm MOŽE soft delete pb_tasks (deleted_at IS NOT NULL posle UPDATE)'
+);
+
+SELECT is(
+  (SELECT count(*)::int FROM public.pb_tasks WHERE id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'),
+  0,
+  'posle soft delete zadatak nije vidljiv u SELECT'
 );
 
 SELECT * FROM finish();
