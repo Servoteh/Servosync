@@ -26,11 +26,17 @@ import {
   saveUserToDb,
   deleteUserRoleFromDb,
   mapDbUser,
+  inviteUserViaEdge,
+  inviteUserRoleViaRpc,
 } from '../../services/users.js';
+import { loadSubDepartments, loadDepartments } from '../../services/orgStructure.js';
 
 let _onChangeRoot = null;
 let _modalEl = null;
+let _inviteModalEl = null;
 let _filters = { search: '', role: '', status: '' };
+/** @type {{ id: number, name: string, department_id: number, deptName?: string }[]} */
+let _subDeptOptions = [];
 
 /* ── PUBLIC ──────────────────────────────────────────────────────────── */
 
@@ -99,9 +105,9 @@ export function wireUsersTab(root, { onChange } = {}) {
       refreshBtn.textContent = orig;
     }
   });
-  inviteBtn?.addEventListener('click', () => {
-    showToast('ℹ Novi korisnici se dodaju kroz Supabase SQL Editor — INSERT u tabelu user_roles');
-  });
+  inviteBtn?.addEventListener('click', () => _openInviteModal());
+
+  _ensureSubDeptOptions().catch(() => {});
 
   _wireTbody(root);
 }
@@ -180,9 +186,7 @@ function _toolbarHtml() {
       <span style="font-size:11px;color:var(--text3);align-self:center" id="usersCount">${n} ${n === 1 ? 'korisnik' : 'korisnika'}</span>
     </div>
     <div style="font-size:11px;color:var(--text3);margin:-6px 0 14px">
-      ℹ Novi nalozi se dodaju kroz <strong>Supabase SQL Editor</strong> — INSERT u tabelu user_roles.
-      Polje <code>managed_departments</code> ovde nije u formi; kad bude (Sprint 2.3), samo za ulogu menadžment —
-      za HR ga ne prikazivati (canManageEmployee ignoriše scope za hr).
+      Pozivnica kreira Auth nalog + ulogu. Menadžment: pododeljenja u formi (Kadrovska scope).
     </div>
   `;
 }
@@ -241,7 +245,10 @@ function _tableHtml() {
          </span>`;
     const actions = editable
       ? `<button class="kadr-action-btn" data-user-action="edit" data-user-id="${escHtml(u.id)}" title="Izmeni">✎</button>
-         <button class="kadr-action-btn kadr-action-danger" data-user-action="delete" data-user-id="${escHtml(u.id)}" title="Obriši">🗑</button>`
+         ${u.isActive
+        ? `<button class="kadr-action-btn" data-user-action="deactivate" data-user-id="${escHtml(u.id)}" title="Deaktiviraj">⊘</button>`
+        : `<button class="kadr-action-btn" data-user-action="activate" data-user-id="${escHtml(u.id)}" title="Aktiviraj">✓</button>`}
+         <button class="kadr-action-btn kadr-action-danger" data-user-action="delete" data-user-id="${escHtml(u.id)}" title="Trajno obriši red">🗑</button>`
       : `<span style="color:var(--text3);font-size:11px">samo Admin</span>`;
     const initials = _initials(u.fullName);
     const avColor  = _avatarColor(u.email);
@@ -314,7 +321,9 @@ function _wireTbody(root) {
     btn.addEventListener('click', () => {
       const id     = btn.dataset.userId;
       const action = btn.dataset.userAction;
-      if (action === 'edit')   _openUserModal(id);
+      if (action === 'edit') _openUserModal(id);
+      else if (action === 'deactivate') _setUserActive(id, false);
+      else if (action === 'activate') _setUserActive(id, true);
       else if (action === 'delete') _confirmDeleteUser(id);
     });
   });
@@ -361,8 +370,15 @@ function _openUserModal(id) {
             <input type="checkbox" id="umIsActive" ${u.isActive ? 'checked' : ''}>
             <span>Nalog aktivan</span>
           </label>
+          <div id="umSubDeptWrap" style="grid-column:1/-1;display:${u.role === 'menadzment' ? 'block' : 'none'}">
+            <label>Pododeljenja (scope)
+              <select id="umSubDepts" multiple size="6" class="form-input" style="min-height:110px;width:100%">
+                ${_subDeptSelectOptions(u.managedSubDepartmentIds)}
+              </select>
+            </label>
+          </div>
         </div>
-        <div class="form-hint">Email je ključ — menja se samo kroz Supabase SQL Editor.</div>
+        <div class="form-hint">Email se ne menja. Preferiraj deaktivaciju umesto brisanja.</div>
         <div id="umErr" class="form-hint" style="display:none;color:var(--red);font-weight:600"></div>
       </div>
       <div class="modal-foot">
@@ -376,6 +392,11 @@ function _openUserModal(id) {
   _modalEl.addEventListener('click', ev => { if (ev.target === _modalEl) _closeUserModal(); });
   document.addEventListener('keydown', _onUmEsc);
   _modalEl.querySelector('#umSubmitBtn')?.addEventListener('click', () => _submitUserForm(id));
+  const roleSel = _modalEl.querySelector('#umRole');
+  const subWrap = _modalEl.querySelector('#umSubDeptWrap');
+  roleSel?.addEventListener('change', () => {
+    if (subWrap) subWrap.style.display = roleSel.value === 'menadzment' ? 'block' : 'none';
+  });
   setTimeout(() => _modalEl?.querySelector('#umFullName')?.focus(), 50);
 }
 
@@ -402,7 +423,17 @@ async function _submitUserForm(id) {
   const existing = usersState.items.find(x => x.id === id);
   if (!existing) { showErr('Korisnik više nije u listi — osveži pa probaj ponovo'); return; }
 
-  const payload = { id, email: existing.email, fullName, team, role, projectId, isActive };
+  const managedSubDepartmentIds = _readSubDeptSelection(_modalEl?.querySelector('#umSubDepts'));
+  const payload = {
+    id,
+    email: existing.email,
+    fullName,
+    team,
+    role,
+    projectId,
+    isActive,
+    managedSubDepartmentIds: role === 'menadzment' ? managedSubDepartmentIds : null,
+  };
   const btn = _modalEl?.querySelector('#umSubmitBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Snimanje…'; }
   try {
@@ -441,7 +472,15 @@ async function _confirmDeleteUser(id) {
   if (String(u.email || '').toLowerCase() === myEmail && u.role === 'admin') {
     if (!confirm('UPOZORENJE: brišeš svoju admin ulogu! Posle toga nećeš moći da upravljaš korisnicima. Sigurno?')) return;
   } else {
-    if (!confirm('Obrisati ulogu za ' + u.email + ' (' + u.role + ')?')) return;
+    const typed = prompt(
+      `Trajno brisanje reda za ${u.email}.\nPreporuka: koristi Deaktiviraj (⊘).\nZa potvrdu ukucaj email:`,
+      '',
+    );
+    if (typed === null) return;
+    if (String(typed).trim().toLowerCase() !== String(u.email).toLowerCase()) {
+      showToast('⚠ Brisanje otkazano — email se ne poklapa');
+      return;
+    }
   }
   try {
     if (getIsOnline() && hasSupabaseConfig() && !String(id).startsWith('local_')) {
@@ -455,5 +494,187 @@ async function _confirmDeleteUser(id) {
   } catch (e) {
     console.error(e);
     showToast('⚠ Greška');
+  }
+}
+
+async function _ensureSubDeptOptions() {
+  if (_subDeptOptions.length) return;
+  const [depts, subs] = await Promise.all([loadDepartments(), loadSubDepartments()]);
+  const deptMap = new Map((depts || []).map(d => [d.id, d.name]));
+  _subDeptOptions = (subs || []).map(s => ({
+    id: s.id,
+    name: s.name,
+    department_id: s.department_id,
+    deptName: deptMap.get(s.department_id) || '',
+  }));
+}
+
+function _subDeptSelectOptions(selectedIds) {
+  const sel = new Set((selectedIds || []).map(Number));
+  if (!_subDeptOptions.length) {
+    return '<option value="" disabled>Učitaj pododeljenja (Organizacija tab)…</option>';
+  }
+  return _subDeptOptions.map(o => {
+    const label = (o.deptName ? o.deptName + ' → ' : '') + o.name;
+    return `<option value="${o.id}"${sel.has(o.id) ? ' selected' : ''}>${escHtml(label)}</option>`;
+  }).join('');
+}
+
+function _readSubDeptSelection(selectEl) {
+  if (!selectEl) return null;
+  const ids = [...selectEl.selectedOptions].map(o => Number(o.value)).filter(n => Number.isFinite(n));
+  return ids.length ? ids : null;
+}
+
+async function _setUserActive(id, active) {
+  if (!canManageUsers()) return;
+  const u = usersState.items.find(x => x.id === id);
+  if (!u) return;
+  const verb = active ? 'aktivirati' : 'deaktivirati';
+  if (!confirm(`${active ? 'Aktivirati' : 'Deaktivirati'} nalog ${u.email}?`)) return;
+  const payload = { ...u, isActive: active };
+  try {
+    if (getIsOnline() && hasSupabaseConfig()) {
+      const res = await saveUserToDb(payload);
+      if (!res) { showToast('⚠ Snimanje nije uspelo'); return; }
+      const saved = Array.isArray(res) ? res[0] : res;
+      if (saved) {
+        const ix = usersState.items.findIndex(x => x.id === id);
+        if (ix !== -1) usersState.items[ix] = mapDbUser(saved);
+      }
+    } else {
+      const ix = usersState.items.findIndex(x => x.id === id);
+      if (ix !== -1) usersState.items[ix] = { ...usersState.items[ix], isActive: active };
+    }
+    saveUsersCache(usersState.items);
+    _onChangeRoot?.();
+    showToast(active ? '✅ Aktiviran' : '⊘ Deaktiviran');
+  } catch (e) {
+    console.error(e);
+    showToast('⚠ Greška');
+  }
+}
+
+async function _openInviteModal() {
+  if (!canManageUsers()) { showToast('⚠ Samo Admin'); return; }
+  _closeInviteModal();
+  await _ensureSubDeptOptions().catch(() => {});
+
+  _inviteModalEl = document.createElement('div');
+  _inviteModalEl.className = 'modal-overlay open';
+  _inviteModalEl.innerHTML = `
+    <div class="modal-panel" role="dialog" aria-label="Pozovi korisnika">
+      <div class="modal-head">
+        <h3>Pozovi korisnika</h3>
+        <button type="button" class="modal-close" data-inv-action="close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <label>Email *<input type="email" id="invEmail" placeholder="ime@servoteh.com"></label>
+          <label>Puno ime<input type="text" id="invFullName"></label>
+          <label>Tim<input type="text" id="invTeam"></label>
+          <label>Uloga<select id="invRole">
+            ${Object.entries(ROLE_LABELS).map(([k, v]) =>
+              `<option value="${k}"${k === 'viewer' ? ' selected' : ''}>${escHtml(v)}</option>`,
+            ).join('')}
+          </select></label>
+          <label>Lozinka (opciono)<input type="text" id="invPassword" placeholder="auto-generisana"></label>
+          <div id="invSubDeptWrap" style="grid-column:1/-1;display:none">
+            <label>Pododeljenja (menadžment)
+              <select id="invSubDepts" multiple size="5" class="form-input" style="min-height:100px;width:100%">
+                ${_subDeptSelectOptions(null)}
+              </select>
+            </label>
+          </div>
+        </div>
+        <div id="invErr" class="form-hint" style="display:none;color:var(--red)"></div>
+        <div id="invOk" class="form-hint" style="display:none;color:var(--green)"></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" data-inv-action="close">Otkaži</button>
+        <button type="button" class="btn btn-primary" id="invSubmitBtn">Pošalji pozivnicu</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(_inviteModalEl);
+  _inviteModalEl.querySelectorAll('[data-inv-action="close"]').forEach(b =>
+    b.addEventListener('click', _closeInviteModal),
+  );
+  _inviteModalEl.addEventListener('click', ev => { if (ev.target === _inviteModalEl) _closeInviteModal(); });
+  _inviteModalEl.querySelector('#invRole')?.addEventListener('change', e => {
+    const wrap = _inviteModalEl.querySelector('#invSubDeptWrap');
+    if (wrap) wrap.style.display = e.target.value === 'menadzment' ? 'block' : 'none';
+  });
+  _inviteModalEl.querySelector('#invSubmitBtn')?.addEventListener('click', () => _submitInvite());
+  setTimeout(() => _inviteModalEl?.querySelector('#invEmail')?.focus(), 50);
+}
+
+function _closeInviteModal() {
+  if (_inviteModalEl?.parentNode) _inviteModalEl.parentNode.removeChild(_inviteModalEl);
+  _inviteModalEl = null;
+}
+
+async function _submitInvite() {
+  const errEl = _inviteModalEl?.querySelector('#invErr');
+  const okEl = _inviteModalEl?.querySelector('#invOk');
+  const showErr = msg => {
+    if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    if (okEl) okEl.style.display = 'none';
+  };
+
+  const email = String(_inviteModalEl?.querySelector('#invEmail')?.value || '').trim().toLowerCase();
+  const fullName = String(_inviteModalEl?.querySelector('#invFullName')?.value || '').trim();
+  const team = String(_inviteModalEl?.querySelector('#invTeam')?.value || '').trim();
+  const role = String(_inviteModalEl?.querySelector('#invRole')?.value || 'viewer').toLowerCase();
+  const password = String(_inviteModalEl?.querySelector('#invPassword')?.value || '').trim();
+  const managedSubDepartmentIds = _readSubDeptSelection(_inviteModalEl?.querySelector('#invSubDepts'));
+
+  if (!email.includes('@')) { showErr('Unesite ispravan email'); return; }
+
+  const btn = _inviteModalEl?.querySelector('#invSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Šaljem…'; }
+
+  const payload = {
+    email,
+    fullName,
+    team,
+    role,
+    projectId: null,
+    password: password || undefined,
+    managedSubDepartmentIds: role === 'menadzment' ? managedSubDepartmentIds : null,
+  };
+
+  try {
+    let result = await inviteUserViaEdge(payload);
+    if (!result?.ok) {
+      result = await inviteUserRoleViaRpc(payload);
+    }
+    if (!result?.ok) {
+      showErr(result?.message || result?.error || 'Pozivnica nije uspela — proveri Edge funkciju ili Auth');
+      return;
+    }
+    if (result.userRole) {
+      usersState.items.push(result.userRole);
+      saveUsersCache(usersState.items);
+    } else {
+      await refreshUsers(true);
+    }
+    let msg = `✅ Kreirano: ${email}`;
+    if (result.temporaryPassword) {
+      msg += ` · privremena lozinka: ${result.temporaryPassword}`;
+    }
+    if (okEl) {
+      okEl.textContent = msg;
+      okEl.style.display = 'block';
+    }
+    showToast(msg);
+    _onChangeRoot?.();
+    if (!result.temporaryPassword) _closeInviteModal();
+  } catch (e) {
+    console.error('[users] invite', e);
+    showErr('Greška — vidi konzolu');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Pošalji pozivnicu'; }
   }
 }

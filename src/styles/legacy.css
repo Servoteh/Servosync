@@ -2258,6 +2258,48 @@ body.module-settings .set-shell > .set-layout {
 }
 .set-stat-card--accent .set-stat-value { color:var(--accent); }
 
+/* ── PODEŠAVANJA: notifikacije hub, RBAC, audit ─────────────────────── */
+.set-notif-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
+  gap:12px;
+}
+.set-notif-card {
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  padding:14px 16px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--surface);
+  text-decoration:none;
+  color:inherit;
+  transition:border-color .15s, background .15s;
+}
+.set-notif-card:hover {
+  border-color:color-mix(in srgb, var(--accent) 40%, var(--border));
+  background:var(--surface2);
+}
+.set-notif-card-icon { font-size:22px; flex-shrink:0; }
+.set-notif-card-title { font-weight:600; font-size:14px; }
+.set-notif-card-desc, .set-notif-card-hint { font-size:12px; color:var(--text3); margin:4px 0 0; }
+.set-notif-card-arrow { margin-left:auto; color:var(--text3); }
+.set-rbac-wrap { overflow-x:auto; }
+.set-rbac-table th, .set-rbac-table td { text-align:center; font-size:12px; }
+.set-rbac-table .set-rbac-module { text-align:left; min-width:160px; }
+.set-rbac-note { font-size:11px; color:var(--text3); margin-top:4px; font-weight:400; }
+.set-rbac-cell { display:inline-block; min-width:1.2em; }
+.set-rbac-cell--edit { color:var(--accent); font-weight:700; }
+.set-rbac-cell--read { color:var(--green); }
+.set-rbac-cell--none { color:var(--text3); opacity:.4; }
+.set-audit-action { font-size:10px; font-weight:700; padding:2px 6px; border-radius:4px; }
+.set-audit-action--insert { background:color-mix(in srgb, var(--green) 15%, transparent); color:var(--green); }
+.set-audit-action--update { background:color-mix(in srgb, var(--accent) 15%, transparent); color:var(--accent); }
+.set-audit-action--delete { background:color-mix(in srgb, var(--red) 15%, transparent); color:var(--red); }
+.set-integ-ok { color:var(--green); font-weight:600; font-size:12px; }
+.set-integ-partial { color:var(--yellow); font-weight:600; font-size:12px; }
+.set-integ-info { color:var(--text2); font-size:12px; }
+
 /* ── SETTINGS TOOLBAR ─────────────────────────────────────────────────── */
 .set-toolbar {
   display:flex;

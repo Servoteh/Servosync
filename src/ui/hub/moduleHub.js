@@ -8,7 +8,7 @@
  *   - Sastanci              [u pripremi]
  *   - Planiranje proizvodnje [aktivno — Sprint F]
  *   - Kadrovska             [aktivno za hr/admin]
- *   - Podešavanja           [admin: svi tabovi; menadžment: održ. profili]
+ *   - Podešavanja           [admin: svi tabovi; menadžment: mašine, održ. profili, podeš. predmeta]
  *
  * Logika vidljivosti:
  *   - Kadrovska je vidljiva svima ali "u pripremi" za role bez canAccessKadrovska

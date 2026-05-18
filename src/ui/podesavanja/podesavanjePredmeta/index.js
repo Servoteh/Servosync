@@ -9,7 +9,7 @@ import {
   setPredmetAktivacijaRows,
   wirePredmetiTable,
 } from './predmetiTable.js';
-import { ensurePrioritetHydrated } from './prioritetService.js';
+import { ensurePrioritetHydrated } from '../../../services/predmetPrioritet.js';
 
 let _loadError = null;
 

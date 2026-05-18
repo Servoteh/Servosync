@@ -1,20 +1,25 @@
 /**
  * Podešavanja — root modula.
  *
- * Navigacija: levi sidebar sa headerom i grupama.
- * Pristup: admin vidi sve; menadžment samo maint-profiles i predmet-aktivacija.
- * Aktivni tab se persistuje u sessionStorage (SETTINGS_TAB).
+ * Navigacija: levi sidebar. Deep link: /podesavanja?tab=users (#tab=users).
+ * Pristup: admin — svi tabovi; menadžment — Mašine, Održ. profili, Podeš. predmeta.
  */
 
 import { escHtml } from '../../lib/dom.js';
-import { ssGet, ssSet } from '../../lib/storage.js';
-import { SESSION_KEYS, ROLE_LABELS } from '../../lib/constants.js';
-import { toggleTheme } from '../../lib/theme.js';
 import { onAuthChange, getAuth, canManageUsers, canAccessPodesavanja } from '../../state/auth.js';
 import { usersState } from '../../state/users.js';
+import {
+  readStoredPodesavanjaTab,
+  writeStoredPodesavanjaTab,
+  getPodesavanjaTabFromUrl,
+  syncPodesavanjaTabToUrl,
+  parsePodesavanjaTabFromLocation,
+} from '../../lib/podesavanjaTabs.js';
+import { toggleTheme } from '../../lib/theme.js';
+import { ROLE_LABELS } from '../../lib/constants.js';
 import { renderUsersTab, refreshUsers, wireUsersTab } from './usersTab.js';
 import { renderMastersTab } from './mastersTab.js';
-import { renderSystemTab } from './systemTab.js';
+import { renderSystemTab, wireSystemTab } from './systemTab.js';
 import {
   renderMaintProfilesTab,
   wireMaintProfilesTab,
@@ -35,49 +40,73 @@ import {
   renderMasineTab,
   wireMasineTab,
 } from './masineTab.js';
+import { renderUlogeTab, wireUlogeTab } from './ulogeTab.js';
+import { renderNotifikacijeTab, wireNotifikacijeTab } from './notifikacijeTab.js';
+import { renderIntegracijeTab, wireIntegracijeTab } from './integracijeTab.js';
+import {
+  renderAuditLogTab,
+  wireAuditLogTab,
+  refreshSettingsAuditLog,
+} from './auditLogTab.js';
 
 let _mountEl = null;
 let _onLogoutCb = null;
 let _onBackToHubCb = null;
 let _authUnsubscribe = null;
+let _popstateHandler = null;
 let _activeTab = 'users';
-
-/* ── Sidebar struktura ───────────────────────────────────────────────── */
+/** @type {Map<string, string>} */
+const _panelHtmlCache = new Map();
+/** @type {Set<string>} */
+const _loadedTabs = new Set();
 
 const SIDEBAR_GROUPS = [
   {
     label: 'Korisnici i pristup',
     items: [
-      { id: 'users',           icon: '👤', label: 'Korisnici',       adminOnly: true,  badgeKey: 'users' },
-      { id: 'uloge',           icon: '🛡', label: 'Uloge i dozvole', adminOnly: true,  badgeKey: 'uloge',   placeholder: true },
-      { id: 'timovi',          icon: '👥', label: 'Timovi',          adminOnly: true,  placeholder: true },
+      { id: 'users', icon: '👤', label: 'Korisnici', adminOnly: true, badgeKey: 'users' },
+      { id: 'uloge', icon: '🛡', label: 'Uloge i dozvole', adminOnly: true },
     ],
   },
   {
     label: 'Organizacija',
     items: [
-      { id: 'organizacija',    icon: '🏢', label: 'Organizacija',    adminOnly: true },
-      { id: 'odeljenja',       icon: '🏗', label: 'Odeljenja',       adminOnly: true,  placeholder: true },
+      { id: 'organizacija', icon: '🏢', label: 'Organizacija', adminOnly: true },
     ],
   },
   {
     label: 'Podaci',
     items: [
-      { id: 'masters',         icon: '🗄', label: 'Matični podaci',  adminOnly: true },
-      { id: 'masine',          icon: '🛠', label: 'Mašine',          adminOnly: false },
-      { id: 'maint-profiles',  icon: '🔧', label: 'Održ. profili',   adminOnly: false },
+      { id: 'masters', icon: '🗄', label: 'Matični podaci', adminOnly: true },
+      { id: 'masine', icon: '🛠', label: 'Mašine', adminOnly: false },
+      { id: 'maint-profiles', icon: '🔧', label: 'Održ. profili', adminOnly: false },
       { id: 'predmet-aktivacija', icon: '📋', label: 'Podeš. predmeta', adminOnly: false },
     ],
   },
   {
     label: 'Sistem',
     items: [
-      { id: 'integracije',     icon: '🔗', label: 'Integracije',     adminOnly: true,  badgeNew: true, placeholder: true },
-      { id: 'notifikacije',    icon: '🔔', label: 'Notifikacije',    adminOnly: true,  placeholder: true },
-      { id: 'audit-log',       icon: '📜', label: 'Audit log',       adminOnly: true,  placeholder: true },
+      { id: 'notifikacije', icon: '🔔', label: 'Notifikacije', adminOnly: true },
+      { id: 'integracije', icon: '🔗', label: 'Integracije', adminOnly: true },
+      { id: 'audit-log', icon: '📜', label: 'Audit log', adminOnly: true },
+      { id: 'system', icon: '⚙', label: 'Sistem', adminOnly: true },
     ],
   },
 ];
+
+const TAB_SUBTITLES = {
+  users: 'Korisnici i pristup',
+  uloge: 'Korisnici i pristup',
+  organizacija: 'Organizacija',
+  masters: 'Podaci',
+  masine: 'Podaci',
+  'maint-profiles': 'Podaci',
+  'predmet-aktivacija': 'Podaci',
+  notifikacije: 'Sistem',
+  integracije: 'Sistem',
+  'audit-log': 'Sistem',
+  system: 'Sistem',
+};
 
 function _visibleGroups() {
   const isAdmin = canManageUsers();
@@ -97,62 +126,99 @@ function _badgeValue(key) {
   return '';
 }
 
-/* Mapiranje tab → subtitle prikazan u TopNav-u */
-const TAB_SUBTITLES = {
-  users: 'Sistem i korisnici',
-  uloge: 'Sistem i korisnici',
-  timovi: 'Sistem i korisnici',
-  organizacija: 'Organizacija',
-  odeljenja: 'Organizacija',
-  masters: 'Podaci',
-  masine: 'Podaci',
-  'maint-profiles': 'Podaci',
-  'predmet-aktivacija': 'Podaci',
-  integracije: 'Sistem',
-  notifikacije: 'Sistem',
-  'audit-log': 'Sistem',
-};
+function _resolveInitialTab() {
+  const fromUrl = getPodesavanjaTabFromUrl();
+  if (fromUrl) return fromUrl;
+  return readStoredPodesavanjaTab('users');
+}
 
-/* ── PUBLIC ──────────────────────────────────────────────────────────── */
+function _invalidatePanelCache(tabId = null) {
+  if (tabId) _panelHtmlCache.delete(tabId);
+  else _panelHtmlCache.clear();
+}
 
 export async function renderPodesavanjaModule(mountEl, options = {}) {
   _mountEl = mountEl;
   _onLogoutCb = options.onLogout || null;
   _onBackToHubCb = options.onBackToHub || null;
-  _activeTab = ssGet(SESSION_KEYS.SETTINGS_TAB, 'users') || 'users';
 
+  _activeTab = _resolveInitialTab();
   const visible = _visibleTabs();
   if (!visible.some(t => t.id === _activeTab)) {
     _activeTab = visible[0]?.id || 'maint-profiles';
   }
+  writeStoredPodesavanjaTab(_activeTab);
+  syncPodesavanjaTabToUrl(_activeTab, { replace: true });
 
   _renderShell();
-
-  if (_activeTab === 'users') {
-    refreshUsers().then(() => _renderShell()).catch(e => console.warn('[podesavanja] users load failed', e));
-  }
-  if (_activeTab === 'maint-profiles') {
-    refreshMaintProfiles().then(() => _renderShell()).catch(e => console.warn('[podesavanja] maint profiles load failed', e));
-  }
-  if (_activeTab === 'predmet-aktivacija') {
-    refreshPredmetAktivacija().then(() => _renderShell()).catch(e => console.warn('[podesavanja] predmet aktivacija load failed', e));
-  }
-  if (_activeTab === 'organizacija') {
-    refreshOrgStructure().then(() => _renderShell()).catch(e => console.warn('[podesavanja] org structure load failed', e));
-  }
-  if (_activeTab === 'masine') {
-    refreshMaintMachinesTab().then(() => _renderShell()).catch(e => console.warn('[podesavanja] masine load failed', e));
-  }
+  await _loadActiveTabData(true);
 
   if (_authUnsubscribe) _authUnsubscribe();
-  _authUnsubscribe = onAuthChange(() => _renderShell());
+  _authUnsubscribe = onAuthChange(() => {
+    const vis = _visibleTabs();
+    if (!vis.some(t => t.id === _activeTab)) {
+      _activeTab = vis[0]?.id || 'maint-profiles';
+      writeStoredPodesavanjaTab(_activeTab);
+      syncPodesavanjaTabToUrl(_activeTab, { replace: true });
+    }
+    _renderShell();
+  });
+
+  if (_popstateHandler) window.removeEventListener('popstate', _popstateHandler);
+  _popstateHandler = () => {
+    const t = getPodesavanjaTabFromUrl();
+    if (!t || t === _activeTab) return;
+    if (!_visibleTabs().some(x => x.id === t)) return;
+    _activeTab = t;
+    writeStoredPodesavanjaTab(t);
+    _renderShell();
+    _loadActiveTabData(false).catch(e => console.warn('[podesavanja] popstate load', e));
+  };
+  window.addEventListener('popstate', _popstateHandler);
 }
 
 export function teardownPodesavanjaModule() {
-  if (_authUnsubscribe) { _authUnsubscribe(); _authUnsubscribe = null; }
+  if (_authUnsubscribe) {
+    _authUnsubscribe();
+    _authUnsubscribe = null;
+  }
+  if (_popstateHandler) {
+    window.removeEventListener('popstate', _popstateHandler);
+    _popstateHandler = null;
+  }
+  _panelHtmlCache.clear();
+  _loadedTabs.clear();
 }
 
-/* ── INTERNAL ─────────────────────────────────────────────────────────── */
+async function _loadActiveTabData(force) {
+  const t = _activeTab;
+  if (!force && _loadedTabs.has(t)) return;
+  try {
+    if (t === 'users') {
+      await refreshUsers(force);
+      _invalidatePanelCache('users');
+    } else if (t === 'maint-profiles') {
+      await refreshMaintProfiles();
+      _invalidatePanelCache('maint-profiles');
+    } else if (t === 'predmet-aktivacija') {
+      await refreshPredmetAktivacija();
+      _invalidatePanelCache('predmet-aktivacija');
+    } else if (t === 'organizacija') {
+      await refreshOrgStructure();
+      _invalidatePanelCache('organizacija');
+    } else if (t === 'masine') {
+      await refreshMaintMachinesTab();
+      _invalidatePanelCache('masine');
+    } else if (t === 'audit-log') {
+      await refreshSettingsAuditLog();
+      _invalidatePanelCache('audit-log');
+    }
+    _loadedTabs.add(t);
+  } catch (e) {
+    console.warn('[podesavanja] tab load failed', t, e);
+  }
+  _updatePanelOnly();
+}
 
 function _renderShell() {
   if (!_mountEl) return;
@@ -165,10 +231,11 @@ function _renderShell() {
   }
 
   const subtitle = TAB_SUBTITLES[_activeTab] || 'Podešavanja';
+  const panelHtml = _getPanelHtml(_activeTab);
 
   _mountEl.innerHTML = `
     <div class="set-shell">
-      ${_headerHtml(subtitle)}
+      ${_headerHtml()}
       <div class="set-layout">
         <nav class="set-sidebar" role="navigation" aria-label="Podešavanja navigacija">
           <div class="set-sidebar-header">
@@ -178,11 +245,9 @@ function _renderShell() {
           <div class="set-sidebar-items">
             ${_sidebarGroupsHtml()}
           </div>
-          <div class="set-sidebar-footer">v 1.0 · build 2026.05</div>
+          <div class="set-sidebar-footer">v 1.1 · build 2026.05</div>
         </nav>
-        <div class="set-content">
-          ${_panelHtml(_activeTab)}
-        </div>
+        <div class="set-content" id="setContentPanel">${panelHtml}</div>
       </div>
     </div>
   `;
@@ -192,6 +257,37 @@ function _renderShell() {
   _wireTabBody();
 }
 
+function _updatePanelOnly() {
+  const host = _mountEl?.querySelector('#setContentPanel');
+  if (!host) return;
+  host.innerHTML = _getPanelHtml(_activeTab);
+  _wireTabBody();
+}
+
+function _getPanelHtml(tab) {
+  if (_panelHtmlCache.has(tab) && tab !== 'users' && tab !== 'predmet-aktivacija') {
+    return _panelHtmlCache.get(tab);
+  }
+  const html = _renderPanelFresh(tab);
+  if (tab !== 'predmet-aktivacija') _panelHtmlCache.set(tab, html);
+  return html;
+}
+
+function _renderPanelFresh(tab) {
+  if (tab === 'users') return renderUsersTab();
+  if (tab === 'organizacija') return renderOrgStructureTab();
+  if (tab === 'maint-profiles') return renderMaintProfilesTab();
+  if (tab === 'predmet-aktivacija') return renderPodesavanjePredmetaPanel();
+  if (tab === 'masters') return renderMastersTab();
+  if (tab === 'masine') return renderMasineTab();
+  if (tab === 'uloge') return renderUlogeTab();
+  if (tab === 'notifikacije') return renderNotifikacijeTab();
+  if (tab === 'integracije') return renderIntegracijeTab();
+  if (tab === 'audit-log') return renderAuditLogTab();
+  if (tab === 'system') return renderSystemTab();
+  return '';
+}
+
 function _sidebarGroupsHtml() {
   return _visibleGroups().map(g => `
     <div class="set-sidebar-group">
@@ -199,9 +295,7 @@ function _sidebarGroupsHtml() {
       ${g.items.map(it => {
         const isActive = it.id === _activeTab;
         let badgeHtml = '';
-        if (it.badgeNew) {
-          badgeHtml = `<span class="set-sidebar-badge set-sidebar-badge--new">NEW</span>`;
-        } else if (it.badgeKey) {
+        if (it.badgeKey) {
           const val = _badgeValue(it.badgeKey);
           if (val !== '') {
             badgeHtml = `<span class="set-sidebar-badge" id="setSidebarBadge-${escHtml(it.id)}">${val}</span>`;
@@ -221,7 +315,7 @@ function _sidebarGroupsHtml() {
   `).join('');
 }
 
-function _headerHtml(_subtitle) {
+function _headerHtml() {
   const auth = getAuth();
   return `
     <header class="kadrovska-header">
@@ -244,35 +338,6 @@ function _headerHtml(_subtitle) {
         <button class="hub-logout" id="podLogoutBtn">Odjavi se</button>
       </div>
     </header>
-  `;
-}
-
-function _panelHtml(tab) {
-  const item = _visibleTabs().find(t => t.id === tab);
-  if (item?.placeholder) return _placeholderPanelHtml(item);
-  if (tab === 'users') return renderUsersTab();
-  if (tab === 'organizacija') return renderOrgStructureTab();
-  if (tab === 'maint-profiles') return renderMaintProfilesTab();
-  if (tab === 'predmet-aktivacija') return renderPodesavanjePredmetaPanel();
-  if (tab === 'masters') return renderMastersTab();
-  if (tab === 'masine') return renderMasineTab();
-  if (tab === 'system') return renderSystemTab();
-  return '';
-}
-
-function _placeholderPanelHtml(item) {
-  return `
-    <div class="set-page-header">
-      <div class="set-page-header-icon">${item.icon}</div>
-      <div>
-        <h2 class="set-page-header-title">${escHtml(item.label)}</h2>
-        <p class="set-page-header-sub">Ova sekcija je u pripremi</p>
-      </div>
-    </div>
-    <div class="kadrovska-empty" style="margin-top:20px">
-      <div class="kadrovska-empty-title">${escHtml(item.label)} — u izradi</div>
-      <div style="margin-top:6px">Biće dostupno u sledećoj fazi razvoja.</div>
-    </div>
   `;
 }
 
@@ -301,7 +366,6 @@ function _lockedScreenHtml() {
           <div class="auth-title">🔒 Pristup zabranjen</div>
           <div class="auth-subtitle">Podešavanja su dostupna samo korisnicima sa <strong>admin</strong> ili <strong>menadžment</strong> rolom.</div>
         </div>
-        <p class="form-hint" style="margin-top:14px">Javi se adminu ili HR-u da ti dodeli odgovarajuću rolu kroz Supabase SQL Editor.</p>
       </div>
     </main>
   `;
@@ -318,34 +382,33 @@ function _wireSidebar() {
     btn.addEventListener('click', () => {
       const t = btn.dataset.setTab;
       if (!t || t === _activeTab) return;
+      if (!parsePodesavanjaTabFromLocation(t)) return;
       _activeTab = t;
-      ssSet(SESSION_KEYS.SETTINGS_TAB, t);
+      writeStoredPodesavanjaTab(t);
+      syncPodesavanjaTabToUrl(t);
       _renderShell();
-      if (t === 'users') {
-        refreshUsers().then(() => _renderShell()).catch(e => console.warn('[podesavanja] users refresh failed', e));
-      }
-      if (t === 'maint-profiles') {
-        refreshMaintProfiles().then(() => _renderShell()).catch(e => console.warn('[podesavanja] maint profiles refresh failed', e));
-      }
-      if (t === 'predmet-aktivacija') {
-        refreshPredmetAktivacija().then(() => _renderShell()).catch(e => console.warn('[podesavanja] predmet aktivacija refresh failed', e));
-      }
-      if (t === 'organizacija') {
-        refreshOrgStructure().then(() => _renderShell()).catch(e => console.warn('[podesavanja] org structure refresh failed', e));
-      }
-      if (t === 'masine') {
-        refreshMaintMachinesTab().then(() => _renderShell()).catch(e => console.warn('[podesavanja] masine refresh failed', e));
-      }
+      _loadActiveTabData(false).catch(e => console.warn('[podesavanja] tab switch load', e));
     });
   });
 }
 
 function _wireTabBody() {
+  const onUsersChange = () => {
+    _invalidatePanelCache('users');
+    _updatePanelOnly();
+    _mountEl.querySelectorAll('#setSidebarBadge-users').forEach(b => {
+      b.textContent = String(usersState.items.length);
+    });
+  };
+
   if (_activeTab === 'users') {
-    wireUsersTab(_mountEl, { onChange: () => _renderShell() });
+    wireUsersTab(_mountEl, { onChange: onUsersChange });
   }
   if (_activeTab === 'maint-profiles') {
-    wireMaintProfilesTab(_mountEl, { onChange: () => _renderShell() });
+    wireMaintProfilesTab(_mountEl, { onChange: () => {
+      _invalidatePanelCache('maint-profiles');
+      _updatePanelOnly();
+    }});
   }
   if (_activeTab === 'predmet-aktivacija') {
     wirePodesavanjePredmetaPanel(_mountEl);
@@ -356,4 +419,16 @@ function _wireTabBody() {
   if (_activeTab === 'masine') {
     wireMasineTab(_mountEl);
   }
+  if (_activeTab === 'uloge') wireUlogeTab(_mountEl);
+  if (_activeTab === 'notifikacije') wireNotifikacijeTab(_mountEl);
+  if (_activeTab === 'integracije') wireIntegracijeTab(_mountEl);
+  if (_activeTab === 'audit-log') {
+    wireAuditLogTab(_mountEl, {
+      onRefresh: () => {
+        _invalidatePanelCache('audit-log');
+        _updatePanelOnly();
+      },
+    });
+  }
+  if (_activeTab === 'system') wireSystemTab(_mountEl);
 }
