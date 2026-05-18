@@ -183,6 +183,22 @@ export function setShowFinishedInGantt(v) {
   lsSet(STORAGE_KEYS.GANTT_SHOW_DONE, showFinishedInGantt ? '1' : '0');
 }
 
+/* ── Gantt: Samo pozicije sa dodeljenim datumom (persisted bool) ── */
+export let onlyWithDatesInGantt = lsGet(STORAGE_KEYS.GANTT_ONLY_WITH_DATES) === '1';
+
+export function setOnlyWithDatesInGantt(v) {
+  onlyWithDatesInGantt = !!v;
+  lsSet(STORAGE_KEYS.GANTT_ONLY_WITH_DATES, onlyWithDatesInGantt ? '1' : '0');
+}
+
+/* ── Plan tabela: Sakrij završene faze montaže (persisted bool) ── */
+export let hideDonePhasesInPlan = lsGet(STORAGE_KEYS.PLAN_HIDE_DONE_PHASES) === '1';
+
+export function setHideDonePhasesInPlan(v) {
+  hideDonePhasesInPlan = !!v;
+  lsSet(STORAGE_KEYS.PLAN_HIDE_DONE_PHASES, hideDonePhasesInPlan ? '1' : '0');
+}
+
 /* ── Gantt drag session (transient) ── */
 export const dragState = {
   current: null, // {ri, wpId, projectId, mode, originX, ...} ili null

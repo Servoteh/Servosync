@@ -27,6 +27,8 @@ import {
   getPhaseModel,
   ENGINEERS,
   VODJA,
+  hideDonePhasesInPlan,
+  setHideDonePhasesInPlan,
 } from '../../state/planMontaze.js';
 import { openModelDialog } from './modelDialog.js';
 import { openDescriptionDialog } from './descriptionDialog.js';
@@ -98,6 +100,10 @@ export function wirePlanSection(root, { onChange } = {}) {
       const evt = id === 'fSearch' ? 'input' : 'change';
       el.addEventListener(evt, _applyFilters);
     });
+  root.querySelector('#fHideDone')?.addEventListener('change', (ev) => {
+    setHideDonePhasesInPlan(ev.target.checked);
+    _applyFilters(ev);
+  });
   root.querySelector('#fReset')?.addEventListener('click', _resetFilters);
 
   /* Add phase */
@@ -169,6 +175,10 @@ function _planFiltersToolbarHtml() {
             <option value="hasrisk"${f.risk === 'hasrisk' ? ' selected' : ''}>Sa rizikom</option>
           </select>
         </label>
+        <label class="fb-field fb-field--checkbox">
+          <span>Sakrij završene</span>
+          <input type="checkbox" id="fHideDone" ${hideDonePhasesInPlan ? 'checked' : ''}>
+        </label>
         <div class="fb-actions">
           <span class="fb-count" id="filterCount">${_filterCountText()}</span>
           <button type="button" class="btn btn-ghost" id="fReset" title="Resetuj filtere">↺</button>
@@ -219,9 +229,14 @@ function _planTheadHtml() {
 
 function _planTbodyHtml() {
   const phases = getActivePhases();
-  const indices = planMontazeState.filteredIndices !== null
+  let indices = planMontazeState.filteredIndices !== null
     ? planMontazeState.filteredIndices
     : phases.map((_, i) => i);
+  // Toggle "Sakrij završene" je perzistent globalni — primenjuje se uvek,
+  // nezavisno od filteredIndices stanja (npr. kad nije triggerovan _applyFilters).
+  if (hideDonePhasesInPlan) {
+    indices = indices.filter(i => phases[i] && phases[i].status !== 2);
+  }
   if (!indices.length) {
     const cols = 9 + NUM_CHECKS + 5; /* approx */
     return `<tr><td colspan="${cols}" class="empty-row">Nema faza za prikazanim filterima.</td></tr>`;
@@ -457,6 +472,7 @@ function _applyFilters(ev) {
   const phases = getActivePhases();
   const indices = [];
   phases.forEach((row, i) => {
+    if (hideDonePhasesInPlan && row.status === 2) return;
     if (f.search && !row.name.toLowerCase().includes(f.search)) return;
     if (f.loc && row.loc !== f.loc) return;
     if (f.status !== '' && row.status !== parseInt(f.status, 10)) return;
@@ -470,7 +486,7 @@ function _applyFilters(ev) {
     if (f.risk === 'hasrisk' && calcRisk(row).level === 'none') return;
     indices.push(i);
   });
-  const any = f.search || f.loc || f.status !== '' || f.person || f.ready || f.dates || f.risk;
+  const any = f.search || f.loc || f.status !== '' || f.person || f.ready || f.dates || f.risk || hideDonePhasesInPlan;
   planMontazeState.filteredIndices = any ? indices : null;
   _rerenderTbody(root);
 }

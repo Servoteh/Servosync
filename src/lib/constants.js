@@ -21,6 +21,8 @@ export const STORAGE_KEYS = Object.freeze({
   LOC_COLOR: 'plan_montaze_loc_colors_v1',
   PHASE_MODEL: 'plan_montaze_phase_models_v1',
   GANTT_SHOW_DONE: 'plan_montaze_gantt_show_done_v1',
+  GANTT_ONLY_WITH_DATES: 'plan_montaze_gantt_only_with_dates_v1',
+  PLAN_HIDE_DONE_PHASES: 'plan_montaze_plan_hide_done_phases_v1',
   /* Kadrovska — cache + ostalo */
   /* v2: invalidacija 2026-04 — stari keš imao pogođen department nakon promene u bazi. */
   KADROVSKA: 'plan_montaze_kadrovska_v2',

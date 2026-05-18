@@ -26,6 +26,8 @@ import {
   lastSelectedDateIndex,
   showFinishedInGantt,
   setShowFinishedInGantt,
+  onlyWithDatesInGantt,
+  setOnlyWithDatesInGantt,
   getLocationColor,
   ENGINEERS,
   VODJA,
@@ -97,6 +99,12 @@ export function wireTotalGanttSection(root, { onChange } = {}) {
     onChange?.();
   });
 
+  /* Samo sa datumom toggle */
+  root.querySelector('#tgOnlyWithDates')?.addEventListener('change', (ev) => {
+    setOnlyWithDatesInGantt(ev.target.checked);
+    onChange?.();
+  });
+
   /* Day header click — selekcija kolone */
   root.querySelectorAll('.gantt-day-hdr').forEach(th => {
     th.addEventListener('click', (ev) => {
@@ -142,6 +150,9 @@ function _filtersHtml() {
       <label class="fb-field fb-field--checkbox"><span>Prikaži završene</span>
         <input type="checkbox" id="tgShowFinished" class="tg-show-finished-cb" ${showFinishedInGantt ? 'checked' : ''}>
       </label>
+      <label class="fb-field fb-field--checkbox"><span>Samo sa datumom</span>
+        <input type="checkbox" id="tgOnlyWithDates" class="tg-show-finished-cb" ${onlyWithDatesInGantt ? 'checked' : ''}>
+      </label>
       <div class="fb-actions tg-filter-actions">
         <button type="button" class="btn btn-ghost" id="tgReset" title="Resetuj filtere">↺ Reset</button>
         <span class="gantt-hint tg-gantt-hint">Drag bare · ručice za datume · Shift+klik na header</span>
@@ -185,6 +196,7 @@ function _tableHtml() {
       if (!totalGanttWPs[wp.id]) return;
       (wp.phases || []).forEach(ph => {
         if (!showFinishedInGantt && ph.status === 2) return;
+        if (onlyWithDatesInGantt && (!ph.start || !ph.end)) return;
         if (f.loc && ph.loc !== f.loc) return;
         if (f.lead && ph.person !== f.lead) return;
         if (f.engineer && ph.engineer !== f.engineer) return;
