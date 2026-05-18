@@ -1366,15 +1366,18 @@ export function formatSecondsHm(secs) {
 }
 
 /**
- * Procena planiranog tehnološkog vremena u sekundama:
- *   t_total = (tpz + tk * komada_total) * 60
- * (tpz, tk su u minutima u BigTehn-u.)
+ * Procena preostalog planiranog tehnološkog vremena u sekundama:
+ *   t = (tpz_if_not_started + tk * komada_preostalo) * 60
+ * tpz/tk su u minutama (BigTehn). TPZ se ne računa ako je već prijavljen bar jedan komad.
  */
 export function plannedSeconds(row) {
   const tpz = Number(row.tpz_min) || 0;
-  const tk  = Number(row.tk_min)  || 0;
-  const k   = Number(row.komada_total) || 0;
-  return Math.round((tpz + tk * k) * 60);
+  const tk = Number(row.tk_min) || 0;
+  const total = Number(row.komada_total) || 0;
+  const done = Math.max(0, Number(row.komada_done) || 0);
+  const remaining = Math.max(0, total - done);
+  const setupMin = done > 0 ? 0 : tpz;
+  return Math.round((setupMin + tk * remaining) * 60);
 }
 
 /**

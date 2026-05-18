@@ -1,37 +1,35 @@
--- =====================================================================
--- PP Sprint 1M-c — eliminisati redundantan JOIN u v_production_operations
--- =====================================================================
--- Cilj: spustiti RPC `plan_pp_open_ops_for_machine('8.4', 100, 0)` ispod
--- ~10 s. Posle 1M-a (force_custom_plan) + ANALYZE: 22.8 s baseline.
---
--- Sprint 1L+1M dijagnoza (vidi docs/migration/pp-sprint1l-status.md
--- i pp-sprint1m-status.md):
---   - Direct count(*) bez filtera: 6.5 s
---   - Direct SELECT * bez filtera: 10.1 s
---   - Direct SELECT min sa filterima: 35.8 s ← isto i posle ANALYZE
---   - RPC sa filterima: 22.8 s
---   - U planovima Test A/D vidi se `Join Filter: (wo.id = wo_1.id)`
---     sa Rows Removed by Join Filter = 138 904 729 — kartezijanski
---     self-join između dva pojavljivanja v_active_bigtehn_work_orders.
---
--- Uzrok: `v_production_operations` view dodaje DRUGI INNER JOIN na
--- `v_active_bigtehn_work_orders wo` samo da bi izvukao `wo.item_id`.
--- Prvi pojav `wo` već postoji u `v_production_operations_pre_g4`
--- (linija 142-144 u fix_v_production_operations_ready.sql). Planner
--- ne prepoznaje da su to ista grana → kartezijanski compare.
---
--- Refaktor:
---   1. `v_production_operations_pre_g4` SELECT lista — dodaj
---      `wo.item_id::integer AS item_id`.
---   2. `v_production_operations` — drop drugi JOIN, koristi `v.item_id`.
---   3. `v_production_operations_effective` — netaknuto (već koristi
---      `ops.item_id`).
---   4. `plan_pp_open_ops_for_machine` — netaknuto (već čita item_id
---      preko `e.*`).
---
--- DRAFT — NE izvršavati automatski; ručno aplicirati u Supabase Studio.
--- =====================================================================
+-- Plan proizvodnje P0: real_seconds = zbir trajanja prijava (finished - started),
+-- ne SUM(PrnTimer) koji se ponavlja na više redova u BigTehn-u.
+-- P1: plannedSeconds() u klijentu koristi preostalu količinu (komada_total - komada_done).
 
+CREATE OR REPLACE FUNCTION public.plan_tech_routing_real_seconds(
+  p_work_order_id bigint,
+  p_operacija numeric
+)
+RETURNS bigint
+LANGUAGE sql
+STABLE
+PARALLEL SAFE
+SET search_path = public
+AS $$
+  SELECT COALESCE(SUM(
+    CASE
+      WHEN t.finished_at IS NOT NULL
+       AND t.started_at IS NOT NULL
+       AND t.finished_at > t.started_at
+        THEN EXTRACT(EPOCH FROM (t.finished_at - t.started_at))
+      ELSE 0
+    END
+  ), 0)::bigint
+  FROM public.bigtehn_tech_routing_cache t
+  WHERE t.work_order_id = p_work_order_id
+    AND t.operacija = p_operacija;
+$$;
+
+COMMENT ON FUNCTION public.plan_tech_routing_real_seconds(bigint, numeric) IS
+  'Plan/Praćenje: stvarno vreme operacije = zbir (finished_at - started_at) po prijavama; PrnTimer nije sabiran.';
+
+GRANT EXECUTE ON FUNCTION public.plan_tech_routing_real_seconds(bigint, numeric) TO authenticated;
 
 -- DROP CASCADE: postojeći view-ovi + RPC zavisnost
 DROP VIEW IF EXISTS public.v_production_operations_effective CASCADE;
@@ -455,60 +453,5 @@ COMMENT ON FUNCTION public.plan_pp_open_ops_for_machine(text, integer, integer) 
 
 GRANT EXECUTE ON FUNCTION public.plan_pp_open_ops_for_machine(text, integer, integer) TO authenticated;
 REVOKE ALL ON FUNCTION public.plan_pp_open_ops_for_machine(text, integer, integer) FROM PUBLIC;
-
-
--- =====================================================================
--- VERIFIKACIJA POSLE APPLY-A
--- =====================================================================
---
--- 1. View-ovi i RPC postoje:
-/*
-SELECT n.nspname, c.relname, c.relkind
-FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname='public'
-  AND c.relname IN ('v_production_operations_pre_g4',
-                    'v_production_operations',
-                    'v_production_operations_effective')
-ORDER BY c.relname;
-
-SELECT proname FROM pg_proc
-WHERE proname = 'plan_pp_open_ops_for_machine'
-  AND pronamespace = 'public'::regnamespace;
-*/
---
--- 2. item_id se i dalje vraća (UI ne mora da menja):
-/*
-SELECT line_id, work_order_id, item_id, rn_ident_broj
-FROM public.v_production_operations_effective
-WHERE effective_machine_code = '8.4'
-LIMIT 5;
-*/
---
--- 3. Merenje (target < 10 s):
-/*
-EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
-SELECT * FROM public.plan_pp_open_ops_for_machine('8.4'::text, 100, 0);
--- Tražimo: nestao "Join Filter: (wo.id = wo_1.id)" sa 138M rows removed,
---          Execution Time < 10 000 ms.
-*/
-
-
--- =====================================================================
--- ROLLBACK
--- =====================================================================
-/*
--- Vraćanje na prethodnu verziju: re-pokrenuti fix_v_production_operations_ready.sql
--- (sadrži stari pre_g4 bez item_id + v_production_operations sa duplim JOIN-om).
--- DROP CASCADE pre re-apply-a:
-DROP VIEW IF EXISTS public.v_production_operations_effective CASCADE;
-DROP VIEW IF EXISTS public.v_production_operations CASCADE;
-DROP VIEW IF EXISTS public.v_production_operations_pre_g4 CASCADE;
--- Onda kopiraj sql/migrations/fix_v_production_operations_ready.sql u SQL Editor.
-*/
-
-
-DO $$ BEGIN
-  RAISE NOTICE 'PP 1M-c: eliminisan redundantan JOIN v_active_bigtehn_work_orders u v_production_operations. item_id sada vučen iz pre_g4 SELECT-a. plan_cache_mode=force_custom_plan zadržan. Pokreni verifikaciju #3 i izmeri Execution Time.';
-END $$;
 
 NOTIFY pgrst, 'reload schema';
