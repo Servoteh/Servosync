@@ -226,7 +226,7 @@ export function prioClass(p) {
 
 /** @param {HTMLElement} root */
 export function isPbMobile(root) {
-  return root?.closest('.pb-module')?.classList.contains('pb-module--mobile')
+  return root?.closest('.pb-module')?.classList.contains('pb-module--compact')
     ?? window.matchMedia('(max-width: 767px)').matches;
 }
 

@@ -55,16 +55,32 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   }
 }
 
-/* == TOPBAR (Sprint 2A: header + tabs spojeni u jedan red) == */
+/* == CHROME NAV (start | tabovi | end) — tabovi su sibling, ne u srednjoj koloni headera == */
 
-.pb-topbar {
+.pb-chrome-nav {
   display: grid;
   grid-template-columns: auto 1fr auto;
+  grid-template-areas: "start tabs end";
   align-items: center;
-  gap: 12px;
+  column-gap: 12px;
+  row-gap: 6px;
   padding: 4px 0;
   flex-shrink: 0;
-  min-height: 36px;
+}
+
+.pb-chrome-nav > .pb-topbar-start {
+  grid-area: start;
+}
+
+.pb-chrome-nav > .pb-tabs {
+  grid-area: tabs;
+  margin: 0;
+  border-bottom: none;
+  min-width: 0;
+}
+
+.pb-chrome-nav > .pb-topbar-end {
+  grid-area: end;
 }
 
 .pb-topbar-start {
@@ -75,11 +91,80 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
 }
 
 .pb-topbar-end {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+.pb-topbar-actions-pc {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.pb-more-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff);
+  color: var(--text2, #6b7280);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pb-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 120;
+  min-width: 160px;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.pb-more-menu[hidden] {
+  display: none;
+}
+
+.pb-more-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text, #111);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.pb-more-menu-item:hover {
+  background: var(--surface3, #f3f4f6);
+}
+
+.pb-more-menu-meta {
+  display: block;
+  padding: 6px 12px 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text3, #9ca3af);
 }
 
 .pb-topbar-brand {
@@ -103,13 +188,6 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   .pb-topbar-title {
     display: none;
   }
-}
-
-/* Tabovi u topbar-u — overflow-x ako mnogo tabova. */
-.pb-topbar .pb-tabs {
-  margin: 0;
-  border-bottom: none;
-  min-width: 0;
 }
 
 /* == LEGACY HEADER (zadržano za nazadnu kompatibilnost — neki tabovi i moduli koriste) == */
@@ -573,55 +651,101 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   }
 }
 
-@media (max-width: 767px) {
-  /* Topbar: desktop grid (start | tabovi | end) na telefonu gura tabove u
-     usku srednju kolonu i preklapanje. Ovde koristimo viewport media query
-     (ne samo .pb-module--mobile) da raspored uvek prati stvarnu širinu. */
-  body.module-projektni-biro:not(.hub-active) .pb-topbar {
-    display: grid;
+/* Kompaktan chrome: telefon, tablet, uži prozor (do 1024px). */
+@media (max-width: 1024px) {
+  body.module-projektni-biro:not(.hub-active) .pb-chrome-nav {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "pbMobHdrL pbMobHdrR"
-      "pbMobTabs pbMobTabs";
-    align-items: center;
+      "start end"
+      "tabs tabs";
     column-gap: 8px;
-    row-gap: 8px;
-  }
-
-  body.module-projektni-biro:not(.hub-active) .pb-topbar-start {
-    grid-area: pbMobHdrL;
-    min-width: 0;
-  }
-
-  body.module-projektni-biro:not(.hub-active) .pb-topbar-end {
-    grid-area: pbMobHdrR;
-    justify-self: end;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 4px 6px;
-  }
-
-  body.module-projektni-biro:not(.hub-active) .pb-topbar .pb-tabs {
-    grid-area: pbMobTabs;
-    width: 100%;
-    min-width: 0;
-    margin: 0;
-    justify-content: flex-start;
-    border-bottom: 1px solid var(--border, #e5e7eb);
-  }
-
-  body.module-projektni-biro:not(.hub-active) .pb-tabs {
-    flex-wrap: wrap;
     row-gap: 4px;
+    padding: 2px 0 4px;
   }
 
-  .pb-tab-btn {
-    min-height: 44px;
-    padding: 10px 12px;
+  body.module-projektni-biro:not(.hub-active) .pb-chrome-nav > .pb-tabs {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--border, #e5e7eb);
+    padding-bottom: 2px;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-chrome-nav > .pb-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-topbar-actions-pc {
+    display: none;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-more-btn {
+    display: inline-flex;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-back-btn-label,
+  body.module-projektni-biro:not(.hub-active) .pb-topbar-title {
+    display: none;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-back-btn {
+    padding: 8px 10px;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-module-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-tab-btn .pb-tab-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-tab-btn {
+    min-height: 36px;
+    min-width: 40px;
+    padding: 6px 10px;
     box-sizing: border-box;
+    justify-content: center;
   }
 
+  body.module-projektni-biro:not(.hub-active) .pb-context-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 2px 0 6px;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-context-field {
+    width: 100%;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-context-field.pb-context-field--grow {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
+    padding-top: 8px;
+  }
+
+  body.module-projektni-biro:not(.hub-active) .pb-chrome-pinned {
+    padding-top: max(4px, env(safe-area-inset-top, 0px));
+  }
+}
+
+@media (max-width: 767px) {
   .pb-tab-btn .pb-tab-icon {
     width: 1.125rem;
     height: 1.125rem;

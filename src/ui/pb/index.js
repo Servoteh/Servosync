@@ -33,9 +33,11 @@ import { renderPbPodesavanja } from './podesavanjaTab.js';
 
 let teardownResize = null;
 let _chromeSearchDebounceTimer = null;
+let _pbMoreDocHandler = null;
 
-function mqMobile() {
-  return window.matchMedia('(max-width: 767px)');
+/** Kompaktan chrome (tabovi, filteri) — širi prag od 767 zbog iOS / tablet / zoom. */
+function mqCompactChrome() {
+  return window.matchMedia('(max-width: 1024px)');
 }
 
 /* ── Inline SVG ikone (Lucide-compatible paths) ─── */
@@ -200,10 +202,10 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     const searchValue = state.moduleSearch ?? '';
     hub.innerHTML = `
       <div class="pb-chrome-pinned">
-      <header class="pb-topbar">
+      <div class="pb-chrome-nav" role="navigation" aria-label="Projektovanje navigacija">
         <div class="pb-topbar-start">
           <button type="button" class="pb-back-btn" id="pbBackBtn" aria-label="Nazad na module">
-            ${IC_BACK} Moduli
+            ${IC_BACK}<span class="pb-back-btn-label">Moduli</span>
           </button>
           <div class="pb-topbar-brand">
             <div class="pb-module-icon" aria-hidden="true">${IC_MODULE}</div>
@@ -219,12 +221,20 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
           ${isAdmin() ? pbTabBtn('podesavanja', 'Podešavanja', state.activeTab === 'podesavanja') : ''}
         </nav>
         <div class="pb-topbar-end">
-          <button type="button" class="pb-theme-btn" id="pbThemeBtn" aria-label="Tema">🌙</button>
-          ${auth.role ? `<span class="pb-role-badge">${escHtml(auth.role.toUpperCase())}</span>` : ''}
-          ${canEditProjektniBiro() ? `<button type="button" class="pb-primary-btn pb-new-desktop" id="pbNewDesk">${IC_PLUS} Novi zadatak</button>` : ''}
-          <button type="button" class="pb-logout-btn" id="pbLogoutBtn">Odjavi se</button>
+          <div class="pb-topbar-actions-pc">
+            <button type="button" class="pb-theme-btn" id="pbThemeBtn" aria-label="Tema">🌙</button>
+            ${auth.role ? `<span class="pb-role-badge">${escHtml(auth.role.toUpperCase())}</span>` : ''}
+            ${canEditProjektniBiro() ? `<button type="button" class="pb-primary-btn pb-new-desktop" id="pbNewDesk">${IC_PLUS} Novi zadatak</button>` : ''}
+            <button type="button" class="pb-logout-btn" id="pbLogoutBtn">Odjavi se</button>
+          </div>
+          <button type="button" class="pb-more-btn" id="pbMoreBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="pbMoreMenu" aria-label="Meni">⋮</button>
+          <div class="pb-more-menu" id="pbMoreMenu" role="menu" hidden>
+            <button type="button" class="pb-more-menu-item" id="pbMoreTheme" role="menuitem">Tema</button>
+            ${auth.role ? `<span class="pb-more-menu-meta" role="presentation">${escHtml(auth.role.toUpperCase())}</span>` : ''}
+            <button type="button" class="pb-more-menu-item" id="pbMoreLogout" role="menuitem">Odjavi se</button>
+          </div>
         </div>
-      </header>
+      </div>
       <div class="pb-context-row">
         <div class="pb-context-field">
           <span class="pb-context-label">Projekat</span>
@@ -253,6 +263,35 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       await logout();
       onLogout?.();
     });
+    const moreBtn = root.querySelector('#pbMoreBtn');
+    const moreMenu = root.querySelector('#pbMoreMenu');
+    const setMoreOpen = open => {
+      if (!moreBtn || !moreMenu) return;
+      moreMenu.hidden = !open;
+      moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    moreBtn?.addEventListener('click', e => {
+      e.stopPropagation();
+      setMoreOpen(moreMenu?.hidden !== false);
+    });
+    root.querySelector('#pbMoreTheme')?.addEventListener('click', () => {
+      toggleTheme();
+      setMoreOpen(false);
+    });
+    root.querySelector('#pbMoreLogout')?.addEventListener('click', async () => {
+      setMoreOpen(false);
+      await logout();
+      onLogout?.();
+    });
+    if (!_pbMoreDocHandler) {
+      _pbMoreDocHandler = e => {
+        if (!moreMenu || moreMenu.hidden) return;
+        if (e.target instanceof Node && moreBtn?.contains(e.target)) return;
+        if (e.target instanceof Node && moreMenu.contains(e.target)) return;
+        setMoreOpen(false);
+      };
+      document.addEventListener('click', _pbMoreDocHandler);
+    }
     root.querySelector('#pbProjectSel')?.addEventListener('change', e => {
       state.activeProject = e.target.value;
       savePbState(state);
@@ -412,8 +451,8 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     ${canEditProjektniBiro() ? '<button type="button" class="pb-fab" id="pbFab" aria-label="Novi zadatak">+</button>' : ''}
   `;
 
-  const mm = mqMobile();
-  const applyMq = () => root.classList.toggle('pb-module--mobile', mm.matches);
+  const mm = mqCompactChrome();
+  const applyMq = () => root.classList.toggle('pb-module--compact', mm.matches);
   applyMq();
   mm.addEventListener('change', applyMq);
   teardownResize = () => mm.removeEventListener('change', applyMq);
@@ -438,4 +477,8 @@ export function teardownPbModule() {
     /* ignore */
   }
   teardownResize = null;
+  if (_pbMoreDocHandler) {
+    document.removeEventListener('click', _pbMoreDocHandler);
+    _pbMoreDocHandler = null;
+  }
 }
