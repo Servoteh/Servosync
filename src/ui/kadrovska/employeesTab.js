@@ -59,80 +59,40 @@ import { openCertificatesModal } from './certificatesModal.js';
 import { openEmployeeAuditModal } from './employeeAuditModal.js';
 import { parseJmbg as parseJmbgLib, validateJmbg } from '../../lib/jmbg.js';
 import { askConfirm } from '../../lib/confirm.js';
+import { createColumnSort } from '../../lib/columnSort.js';
 
 let panelRef = null;
 let onChangeCb = null;
 
-/* C5: column sort state — persistira u sessionStorage. */
-const _empSortKey = 'pm_emp_sort_v1';
-let _empSort = (() => {
-  try {
-    const raw = sessionStorage.getItem(_empSortKey);
-    if (!raw) return { key: null, dir: null };
-    const [k, d] = raw.split(':');
-    if (!k || (d !== 'asc' && d !== 'desc')) return { key: null, dir: null };
-    return { key: k, dir: d };
-  } catch { return { key: null, dir: null }; }
-})();
+/* C5: quick filter chips — preglas „običnih" filtera za jedan klik. */
+let _empQuickFilter = 'all';
 
-function _persistEmpSort() {
-  try {
-    if (_empSort.key) sessionStorage.setItem(_empSortKey, `${_empSort.key}:${_empSort.dir}`);
-    else sessionStorage.removeItem(_empSortKey);
-  } catch { /* noop */ }
-}
+/* C5: bulk select za zaposlene — preživljava re-render kroz refresh. */
+const _empSelectedIds = new Set();
 
-function _empSortCycle(key) {
-  if (_empSort.key !== key) {
-    _empSort = { key, dir: 'asc' };
-  } else if (_empSort.dir === 'asc') {
-    _empSort = { key, dir: 'desc' };
-  } else {
-    /* desc → reset na default (prezime asc kroz compareEmployeesByLastFirst) */
-    _empSort = { key: null, dir: null };
-  }
-  _persistEmpSort();
-  refreshEmployeesTab();
-}
-
-function _empSortAccessor(e, key) {
-  switch (key) {
-    case 'name':          return (e.lastName || '') + ' ' + (e.firstName || '');
-    case 'position':      return e.positionName || e.position || '';
-    case 'department':    return e.departmentName || e.department || '';
-    case 'subDepartment': return e.subDepartmentName || '';
-    case 'email':         return e.email || '';
-    case 'medical':       return e.medicalExamExpires || '';
-    case 'status':        return e.isActive ? '1-aktivan' : '2-neaktivan';
-    default:              return '';
-  }
-}
-
-function _empApplySort(list) {
-  if (!_empSort.key) return list; /* default: leave caller's order (compareEmployeesByLastFirst) */
-  const sign = _empSort.dir === 'desc' ? -1 : 1;
-  return list.slice().sort((a, b) => {
-    const va = String(_empSortAccessor(a, _empSort.key) || '').toLowerCase();
-    const vb = String(_empSortAccessor(b, _empSort.key) || '').toLowerCase();
-    if (va === vb) return 0;
-    if (!va) return 1;  /* prazne na kraju */
-    if (!vb) return -1;
-    return va < vb ? -1 * sign : 1 * sign;
-  });
-}
-
-function _empUpdateSortIndicators() {
+function _empUpdateBulkBtn() {
   if (!panelRef) return;
-  panelRef.querySelectorAll('#kadrovskaTable th.sortable').forEach(th => {
-    const key = th.dataset.sortKey;
-    const ind = th.querySelector('.kadr-sort-ind');
-    th.classList.toggle('is-sorted', _empSort.key === key);
-    th.classList.toggle('is-sorted-desc', _empSort.key === key && _empSort.dir === 'desc');
-    if (ind) {
-      ind.textContent = _empSort.key === key ? (_empSort.dir === 'desc' ? '▼' : '▲') : '';
-    }
-  });
+  const btn = panelRef.querySelector('#empBulkActionsBtn');
+  if (!btn) return;
+  const n = _empSelectedIds.size;
+  btn.disabled = n === 0 || !canEditKadrovska();
+  btn.textContent = `⚙ Bulk (${n})`;
 }
+
+/* C5: column sort — koristi shared utility iz lib/columnSort.js. */
+const _empSort = createColumnSort({
+  storageKey: 'pm_emp_sort_v1',
+  accessors: {
+    name:          e => (e.lastName || '') + ' ' + (e.firstName || ''),
+    position:      e => e.positionName || e.position || '',
+    department:    e => e.departmentName || e.department || '',
+    subDepartment: e => e.subDepartmentName || '',
+    email:         e => e.email || '',
+    medical:       e => e.medicalExamExpires || '',
+    status:        e => e.isActive ? '1-aktivan' : '2-neaktivan',
+  },
+  onChange: () => refreshEmployeesTab(),
+});
 
 /* ─── HELPERS ────────────────────────────────────────────────────────── */
 
@@ -155,6 +115,14 @@ function maskSensitive(value) {
 export function renderEmployeesTab() {
   return `
     <div class="kadr-summary-strip" id="empSummary"></div>
+    <div class="kadr-quick-chips" id="empQuickChips" role="toolbar" aria-label="Brzi filteri">
+      <button class="kadr-chip is-active" data-quick="all" type="button">Svi</button>
+      <button class="kadr-chip" data-quick="active" type="button">✓ Aktivni</button>
+      <button class="kadr-chip" data-quick="med-soon" type="button" title="Lekarski ističe u narednih 30 dana">🩺 Lekarski &lt;30d</button>
+      <button class="kadr-chip" data-quick="bday-soon" type="button" title="Rođendani u narednih 30 dana">🎂 Rođendani &lt;30d</button>
+      <button class="kadr-chip" data-quick="missing-jmbg" type="button" title="Zaposleni bez upisanog JMBG-a">⚠ Bez JMBG</button>
+      <button class="kadr-chip" data-quick="no-email" type="button" title="Zaposleni bez email-a — neće dobijati notifikacije">📧 Bez email-a</button>
+    </div>
     <div class="kadrovska-toolbar">
       <input type="text" class="kadrovska-search" id="kadrovskaSearch" placeholder="Pretraga po imenu, poziciji, email-u…">
       <select class="kadrovska-filter" id="kadrovskaDeptFilter">
@@ -167,6 +135,7 @@ export function renderEmployeesTab() {
       </select>
       <div class="kadrovska-toolbar-spacer"></div>
       <span class="kadrovska-count" id="kadrovskaCount">0 zaposlenih</span>
+      <button class="btn btn-ghost" id="empBulkActionsBtn" disabled title="Selektuj redove za bulk akcije">⚙ Bulk (0)</button>
       <button class="btn btn-ghost" id="kadrovskaBulkBtn" title="Brzi unos više zaposlenih ili uvoz iz Excel/CSV">⚡ Brzi unos</button>
       <button class="btn btn-primary" id="kadrovskaAddBtn">+ Novi zaposleni</button>
     </div>
@@ -174,6 +143,7 @@ export function renderEmployeesTab() {
       <table class="kadrovska-table kadr-sortable" id="kadrovskaTable">
         <thead>
           <tr>
+            <th style="width:32px"><input type="checkbox" id="empSelAll" title="Selektuj sve vidljive"></th>
             <th data-sort-key="name" class="sortable">Ime i prezime <span class="kadr-sort-ind"></span></th>
             <th data-sort-key="position" class="sortable">Pozicija <span class="kadr-sort-ind"></span></th>
             <th data-sort-key="department" class="sortable col-hide-sm">Odeljenje <span class="kadr-sort-ind"></span></th>
@@ -189,7 +159,9 @@ export function renderEmployeesTab() {
       </table>
       <div class="kadrovska-empty" id="kadrovskaEmpty" style="display:none;margin-top:16px;">
         <div class="kadrovska-empty-title">Nema zaposlenih</div>
-        <div>Dodaj prvog zaposlenog preko dugmeta <strong>+ Novi zaposleni</strong>.</div>
+        <div>Dodaj prvog zaposlenog ili uvezi listu iz Excel/CSV.</div>
+        <button class="btn btn-primary kadr-empty-cta" data-cta-for="kadrovskaAddBtn">+ Novi zaposleni</button>
+        <button class="btn btn-ghost kadr-empty-cta" data-cta-for="kadrovskaBulkBtn">⚡ Brzi unos / Import</button>
       </div>
     </main>`;
 }
@@ -202,8 +174,37 @@ export async function wireEmployeesTab(panelEl, { onChange } = {}) {
   panelEl.querySelector('#kadrovskaDeptFilter').addEventListener('change', refreshEmployeesTab);
   panelEl.querySelector('#kadrovskaStatusFilter').addEventListener('change', refreshEmployeesTab);
   /* C5: column sort */
-  panelEl.querySelectorAll('#kadrovskaTable th.sortable').forEach(th => {
-    th.addEventListener('click', () => _empSortCycle(th.dataset.sortKey));
+  _empSort.wire(panelEl, '#kadrovskaTable');
+
+  /* C5: bulk select */
+  panelEl.querySelector('#empSelAll').addEventListener('change', e => {
+    const on = e.target.checked;
+    panelEl.querySelectorAll('.emp-row-sel').forEach(cb => {
+      if (cb.disabled) return;
+      cb.checked = on;
+      const id = cb.dataset.id;
+      if (on) _empSelectedIds.add(id); else _empSelectedIds.delete(id);
+    });
+    _empUpdateBulkBtn();
+  });
+  panelEl.addEventListener('change', e => {
+    const cb = e.target.closest('.emp-row-sel');
+    if (!cb) return;
+    const id = cb.dataset.id;
+    if (cb.checked) _empSelectedIds.add(id); else _empSelectedIds.delete(id);
+    _empUpdateBulkBtn();
+  });
+  panelEl.querySelector('#empBulkActionsBtn').addEventListener('click', openEmpBulkActionsModal);
+
+  /* C5: quick filter chips */
+  panelEl.querySelectorAll('#empQuickChips .kadr-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _empQuickFilter = btn.dataset.quick || 'all';
+      panelEl.querySelectorAll('#empQuickChips .kadr-chip').forEach(b => {
+        b.classList.toggle('is-active', b.dataset.quick === _empQuickFilter);
+      });
+      refreshEmployeesTab();
+    });
   });
   panelEl.querySelector('#kadrovskaAddBtn').addEventListener('click', () => openEmployeeModal(null));
   panelEl.querySelector('#kadrovskaBulkBtn')?.addEventListener('click', () => {
@@ -265,7 +266,35 @@ function applyFilters(list) {
   const q = (panelRef.querySelector('#kadrovskaSearch')?.value || '').trim().toLowerCase();
   const deptVal = panelRef.querySelector('#kadrovskaDeptFilter')?.value || '';
   const status = panelRef.querySelector('#kadrovskaStatusFilter')?.value || '';
+
+  /* Quick filter chip — primenjeno PRE običnih filtera; ne sukobljava se sa search-em. */
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const in30 = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const todayMd = todayIso.slice(5);
+  const in30Md  = in30.slice(5);
+
   return list.filter(e => {
+    /* Quick filter — preglas „običnog" status filtera samo kad je aktivan, ostali se i dalje primenjuju. */
+    if (_empQuickFilter !== 'all') {
+      if (_empQuickFilter === 'active' && !e.isActive) return false;
+      if (_empQuickFilter === 'med-soon') {
+        if (!e.isActive) return false;
+        if (!e.medicalExamExpires || e.medicalExamExpires > in30) return false;
+      }
+      if (_empQuickFilter === 'bday-soon') {
+        if (!e.isActive || !e.birthDate) return false;
+        const md = e.birthDate.slice(5);
+        const inRange = todayMd <= in30Md ? (md >= todayMd && md <= in30Md) : (md >= todayMd || md <= in30Md);
+        if (!inRange) return false;
+      }
+      if (_empQuickFilter === 'missing-jmbg') {
+        /* JMBG je 13 cifara; nije validan / nije postavljen / kraći od 13 */
+        if (e.personalId && /^\d{13}$/.test(e.personalId)) return false;
+      }
+      if (_empQuickFilter === 'no-email') {
+        if (e.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email)) return false;
+      }
+    }
     if (deptVal) {
       const deptId = parseInt(deptVal, 10);
       if (orgStructureState.departments.length && !isNaN(deptId)) {
@@ -317,8 +346,8 @@ export function refreshEmployeesTab() {
     if (curr && Array.from(deptSel.options).some(o => o.value === curr)) deptSel.value = curr;
   }
 
-  const filtered = _empApplySort(applyFilters(kadrovskaState.employees));
-  _empUpdateSortIndicators();
+  const filtered = _empSort.apply(applyFilters(kadrovskaState.employees));
+  _empSort.updateIndicators(panelRef, '#kadrovskaTable');
 
   const tabBadge = document.getElementById('kadrTabCountEmployees');
   if (tabBadge) tabBadge.textContent = String(kadrovskaState.employees.length);
@@ -392,6 +421,7 @@ export function refreshEmployeesTab() {
     }
 
     return `<tr data-id="${rowId}">
+      <td><input type="checkbox" class="emp-row-sel" data-id="${rowId}" ${edit ? '' : 'disabled'}></td>
       <td>
         <div class="emp-name">${escHtml(employeeDisplayName(e) || '—')}</div>
         ${sub ? `<div class="emp-sub col-hide-sm">${escHtml(sub)}</div>` : ''}
@@ -415,6 +445,12 @@ export function refreshEmployeesTab() {
     </tr>`;
   }).join('');
 
+
+  /* Vrati selekciju iz state-a (preživljava re-render). */
+  tbody.querySelectorAll('.emp-row-sel').forEach(cb => {
+    if (_empSelectedIds.has(cb.dataset.id)) cb.checked = true;
+  });
+  _empUpdateBulkBtn();
 
   onChangeCb?.();
 }
@@ -1056,6 +1092,113 @@ async function confirmHardDeleteEmployee(id) {
     console.error('[kadrovska] hard delete error', e);
     showToast('⚠ Greška pri brisanju');
   }
+}
+
+/* C5: Bulk akcije nad zaposlenima — Deaktiviraj / Aktiviraj. */
+
+function closeEmpBulkModal() {
+  document.getElementById('empBulkActionsModal')?.remove();
+}
+
+function openEmpBulkActionsModal() {
+  if (!canEditKadrovska() || _empSelectedIds.size === 0) return;
+  closeEmpBulkModal();
+  const ids = Array.from(_empSelectedIds);
+  const items = kadrovskaState.employees.filter(e => ids.includes(e.id));
+  if (!items.length) { showToast('⚠ Nema selektovanih'); return; }
+
+  const namesPreview = items.slice(0, 5).map(e => employeeDisplayName(e) || '—').join(', ');
+  const more = items.length > 5 ? ` … i još ${items.length - 5}` : '';
+  const activeCnt = items.filter(e => e.isActive).length;
+  const inactiveCnt = items.length - activeCnt;
+
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="kadr-modal-overlay" id="empBulkActionsModal" role="dialog" aria-modal="true">
+      <div class="kadr-modal">
+        <div class="kadr-modal-title">⚙ Bulk akcija — ${items.length} zaposlen(ih)</div>
+        <div class="kadr-modal-subtitle">${escHtml(namesPreview)}${escHtml(more)}</div>
+        <div class="kadr-modal-err" id="empBulkErr"></div>
+        <fieldset class="emp-section">
+          <legend>Izaberi akciju</legend>
+          <div class="emp-form-grid">
+            <div class="emp-field col-full">
+              <label>
+                <input type="radio" name="empBulkAct" value="deactivate" ${activeCnt > 0 ? 'checked' : ''} ${activeCnt === 0 ? 'disabled' : ''}>
+                Deaktiviraj selektovane (preporučeno; istorija se čuva)
+                ${activeCnt === 0 ? '<span class="emp-sub"> — niko nije aktivan</span>' : `<span class="emp-sub"> (${activeCnt} aktivnih)</span>`}
+              </label>
+            </div>
+            <div class="emp-field col-full">
+              <label>
+                <input type="radio" name="empBulkAct" value="activate" ${activeCnt === 0 && inactiveCnt > 0 ? 'checked' : ''} ${inactiveCnt === 0 ? 'disabled' : ''}>
+                Aktiviraj selektovane (vrati u aktivne)
+                ${inactiveCnt === 0 ? '<span class="emp-sub"> — svi su već aktivni</span>' : `<span class="emp-sub"> (${inactiveCnt} neaktivnih)</span>`}
+              </label>
+            </div>
+          </div>
+        </fieldset>
+        <div class="kadr-modal-actions">
+          <button type="button" class="btn" id="empBulkCancel">Otkaži</button>
+          <button type="button" class="btn btn-warning" id="empBulkApply">Primeni</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap.firstElementChild);
+  const m = document.getElementById('empBulkActionsModal');
+  m.querySelector('#empBulkCancel').addEventListener('click', closeEmpBulkModal);
+  m.addEventListener('click', e => { if (e.target === m) closeEmpBulkModal(); });
+  m.querySelector('#empBulkApply').addEventListener('click', () => applyEmpBulkAction(items));
+}
+
+async function applyEmpBulkAction(items) {
+  const err = document.getElementById('empBulkErr');
+  const btn = document.getElementById('empBulkApply');
+  err.textContent = ''; err.classList.remove('visible');
+  const act = document.querySelector('input[name="empBulkAct"]:checked')?.value;
+  if (!act) {
+    err.textContent = 'Izaberi akciju.';
+    err.classList.add('visible'); return;
+  }
+  const target = act === 'deactivate' ? items.filter(e => e.isActive) : items.filter(e => !e.isActive);
+  if (!target.length) {
+    err.textContent = 'Nema redova za ovu akciju.';
+    err.classList.add('visible'); return;
+  }
+  const ok = await askConfirm({
+    title: `${act === 'deactivate' ? 'Deaktiviranje' : 'Aktiviranje'} ${target.length} zaposlen(ih)`,
+    body: `${act === 'deactivate' ? 'Deaktivirati' : 'Aktivirati'} ${target.length} zaposlen(ih)? Istorija se ne briše; akcija je reverzibilna.`,
+    confirmLabel: act === 'deactivate' ? 'Deaktiviraj' : 'Aktiviraj',
+    danger: act === 'deactivate',
+  });
+  if (!ok) return;
+
+  btn.disabled = true; btn.textContent = '⏳ Obrada…';
+  let okCount = 0; let failCount = 0;
+  const setActiveVal = act !== 'deactivate';
+  for (const e of target) {
+    try {
+      if (getIsOnline() && hasSupabaseConfig() && !String(e.id).startsWith('local_')) {
+        const res = await updateEmployeeInDb({ ...e, isActive: setActiveVal });
+        if (!res || !res.length) { failCount++; continue; }
+        const saved = mapDbEmployee(res[0]);
+        const idx = kadrovskaState.employees.findIndex(x => x.id === saved.id);
+        if (idx >= 0) kadrovskaState.employees[idx] = saved;
+      } else {
+        e.isActive = setActiveVal;
+      }
+      okCount++;
+    } catch (ex) {
+      console.error('[kadrovska] bulk', ex);
+      failCount++;
+    }
+  }
+  saveEmployeesCache(kadrovskaState.employees);
+  closeEmpBulkModal();
+  _empSelectedIds.clear();
+  refreshEmployeesTab();
+  if (failCount === 0) showToast(`✅ ${act === 'deactivate' ? 'Deaktivirano' : 'Aktivirano'} ${okCount}`);
+  else showToast(`⚠ Promenjeno ${okCount}, neuspešno ${failCount}`);
 }
 
 /* Updating deprecated imports: saveEmployeeToDb je bio INSERT-only; update ide preko PATCH.

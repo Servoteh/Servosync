@@ -135,6 +135,17 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
     onLogoutCb?.();
   });
 
+  /* Delegated CTA handler — empty state dugme sa data-cta-for="<id>" klikne
+     primarno toolbar dugme. Standardizovan empty state UX. */
+  root.addEventListener('click', e => {
+    const cta = e.target.closest('[data-cta-for]');
+    if (!cta || cta.disabled) return;
+    const id = cta.dataset.ctaFor;
+    if (!id) return;
+    const target = root.querySelector('#' + id);
+    if (target && !target.disabled) target.click();
+  });
+
   /* Modal a11y: ESC zatvara najgornji modal + body scroll lock dok je modal otvoren.
      Idempotentno — bezbedno na svakom mount-u modula. */
   installModalA11y();

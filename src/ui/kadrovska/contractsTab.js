@@ -34,10 +34,25 @@ import {
 import { consumeKadrDashIntent } from '../../services/kadrovskaDashboard.js';
 import { renderSummaryChips, employeeOptionsHtml } from './shared.js';
 import { askConfirm } from '../../lib/confirm.js';
+import { createColumnSort } from '../../lib/columnSort.js';
 
 let panelRef = null;
 /** Set izabranih ID-jeva ugovora za bulk akcije. Survives re-render. */
 const selectedIds = new Set();
+
+/* C5: column sort — `filtered` su {c, status} wrap-ovi pa accessor uzima r.c. */
+const _conSort = createColumnSort({
+  storageKey: 'pm_con_sort_v1',
+  accessors: {
+    employee: r => employeeNameById(r.c.employeeId),
+    type:     r => r.c.type || '',
+    number:   r => r.c.number || '',
+    dateFrom: r => r.c.dateFrom || '',
+    dateTo:   r => r.c.dateTo || '',
+    status:   r => (r.status.key === 'active' ? '1' : r.status.key === 'expiring' ? '2' : r.status.key === 'expired' ? '3' : '4'),
+  },
+  onChange: () => refreshContractsTab(),
+});
 
 const CON_TYPE_OPTS = [
   { v: 'neodredjeno', l: 'Neodređeno vreme' },
@@ -86,17 +101,17 @@ export function renderContractsTab() {
       <button class="btn btn-primary" id="conAddBtn">+ Novi ugovor</button>
     </div>
     <main class="kadrovska-main">
-      <table class="kadrovska-table" id="conTable">
+      <table class="kadrovska-table kadr-sortable" id="conTable">
         <thead>
           <tr>
             <th style="width:32px"><input type="checkbox" id="conSelAll" title="Selektuj sve"></th>
-            <th>Zaposleni</th>
-            <th>Tip</th>
-            <th class="col-hide-sm">Br. ugovora</th>
+            <th data-sort-key="employee" class="sortable">Zaposleni <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="type" class="sortable">Tip <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="number" class="sortable col-hide-sm">Br. ugovora <span class="kadr-sort-ind"></span></th>
             <th class="col-hide-sm">Pozicija</th>
-            <th>Od</th>
-            <th>Do</th>
-            <th>Status</th>
+            <th data-sort-key="dateFrom" class="sortable">Od <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="dateTo" class="sortable">Do <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="status" class="sortable">Status <span class="kadr-sort-ind"></span></th>
             <th class="col-actions">Akcije</th>
           </tr>
         </thead>
@@ -104,7 +119,8 @@ export function renderContractsTab() {
       </table>
       <div class="kadrovska-empty" id="conEmpty" style="display:none;margin-top:16px;">
         <div class="kadrovska-empty-title">Nema ugovora</div>
-        <div>Dodaj prvi ugovor preko dugmeta <strong>+ Novi ugovor</strong>.</div>
+        <div>Dodaj prvi ugovor o radu — možeš generisati i PDF rešenje o zasnivanju radnog odnosa.</div>
+        <button class="btn btn-primary kadr-empty-cta" data-cta-for="conAddBtn">+ Novi ugovor</button>
       </div>
     </main>`;
 }
@@ -132,6 +148,8 @@ export async function wireContractsTab(panelEl) {
     if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
     updateBulkBtn();
   });
+
+  _conSort.wire(panelEl, '#conTable');
 
   await ensureEmployeesLoaded();
   await ensureContractsLoaded(true);
@@ -188,7 +206,7 @@ export function refreshContractsTab() {
   const statusF = panelRef.querySelector('#conStatusFilter')?.value || 'active';
 
   const enriched = kadrContractsState.items.map(c => ({ c, status: contractStatus(c) }));
-  const filtered = enriched.filter(({ c, status }) => {
+  const filteredRaw = enriched.filter(({ c, status }) => {
     if (empF && c.employeeId !== empF) return false;
     if (typeF && c.type !== typeF) return false;
     if (statusF === 'active' && status.key !== 'active' && status.key !== 'expiring') return false;
@@ -197,6 +215,8 @@ export function refreshContractsTab() {
     if (statusF === 'expired' && status.key !== 'expired') return false;
     return true;
   });
+  const filtered = _conSort.apply(filteredRaw);
+  _conSort.updateIndicators(panelRef, '#conTable');
 
   const badge = document.getElementById('kadrTabCountContracts');
   if (badge) badge.textContent = String(kadrContractsState.items.length);

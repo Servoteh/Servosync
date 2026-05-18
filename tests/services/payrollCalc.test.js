@@ -435,3 +435,143 @@ describe('payrollCalc — neplaćeno odsustvo (nop)', () => {
     expect(s2.godisnjiSati).toBe(0);
   });
 });
+
+/* ─── C5 additions — rubni slučajevi i regresija ────────────────────── */
+
+describe('payrollCalc — rubni slučajevi (C5)', () => {
+  it('Sve nule: prazan red sa transportom = samo transport, bez sati', () => {
+    /* Satnica sa hourlyTransportAmount=4000 — transport se uvek isplaćuje, čak i kad
+       zaposleni nije radio. Edge case za regresiju. */
+    const r = computeEarnings({
+      workType: 'ugovor',
+      terms: termsSatnica({ hourlyRate: 600, hourlyTransportAmount: 4000 }),
+      hours: emptyHours(),
+      terrain: { domestic: 0, foreign: 0 },
+      advanceAmount: 0,
+    });
+    expect(r.payableHours).toBe(0);
+    /* Ukupna zarada = transport ako termi to definišu (pravilo: transport ide čak i sa 0h). */
+    expect(r.ukupnaZarada).toBe(4000);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('Sve nule: prazan red i terms bez transporta → ukupna 0', () => {
+    const r = computeEarnings({
+      workType: 'ugovor',
+      terms: termsSatnica({ hourlyRate: 600, hourlyTransportAmount: 0 }),
+      hours: emptyHours(),
+      terrain: { domestic: 0, foreign: 0 },
+      advanceAmount: 0,
+    });
+    expect(r.ukupnaZarada).toBe(0);
+    expect(r.payableHours).toBe(0);
+  });
+
+  it('Kombinacija svih komponenti: fiksno + svi sati + terreni + dnevnice — bez grešaka', () => {
+    const r = computeEarnings({
+      workType: 'ugovor',
+      terms: termsFiksno({
+        fixedAmount: 100000,
+        fixedTransportComponent: 6000,
+        fixedExtraHourRate: 800,
+        terrainDomesticRate: 2500,
+        terrainForeignRate: 50,
+      }),
+      hours: emptyHours({
+        redovanRadSati: 160,
+        prekovremeniSati: 6,
+        praznikRadSati: 8,
+        dveMasineSati: 4,
+      }),
+      terrain: { domestic: 3, foreign: 1 },
+      advanceAmount: 40000,
+    });
+    /* Fiksno + ugovor: fixedTransportComponent JE već u fixedAmount, pa se ne dodaje posebno.
+       Ukupna = fixed_amount + extra × extra_rate + dom. dnevnica. */
+    const expectedExtra = (6 + 8 + 4) * 800; /* 14400 */
+    const expectedTerrainRsd = 3 * 2500;     /* 7500 */
+    const expectedRsd = 100000 + expectedExtra + expectedTerrainRsd; /* 121 900 */
+    expect(r.ukupnaZarada).toBe(expectedRsd);
+    /* devizno (terrainEur) — 1 dan × 50 */
+    expect(r.terrainEur).toBe(50);
+    expect(r.preostaloZaIsplatu).toBe(expectedRsd - 40000);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('Bolovanje 100% (povreda na radu) — sva sati × satnica × 1.0, ne 0.65', () => {
+    const r = computeEarnings({
+      workType: 'ugovor',
+      terms: termsSatnica({ hourlyRate: 600 }),
+      hours: emptyHours({ bolovanje100Sati: 80 }),
+      terrain: { domestic: 0, foreign: 0 },
+      advanceAmount: 0,
+    });
+    /* Satnica + weighted_full: 80 × 1.0 × 600 = 48000 (puna satnica) */
+    expect(r.payableHours).toBe(80);
+    expect(r.ukupnaZarada).toBeGreaterThanOrEqual(48000);
+  });
+
+  it('Avans veći od ukupne zarade daje negativan preostalo + warning', () => {
+    const r = computeEarnings({
+      workType: 'ugovor',
+      terms: termsFiksno({ fixedAmount: 50000 }),
+      hours: emptyHours({ redovanRadSati: 168 }),
+      terrain: { domestic: 0, foreign: 0 },
+      advanceAmount: 80000,
+    });
+    expect(r.preostaloZaIsplatu).toBe(-30000);
+    expect(r.warnings.map(w => w.code)).toContain('negative_remainder');
+  });
+
+  it('sanitizeHoursForWorkType: penzioner ne sme imati godišnji/bolovanje', () => {
+    const h = emptyHours({ redovanRadSati: 40, godisnjiSati: 8, bolovanje65Sati: 16 });
+    const { sanitized, warnings } = sanitizeHoursForWorkType(h, 'penzioner');
+    expect(sanitized.godisnjiSati).toBe(0);
+    expect(sanitized.bolovanje65Sati).toBe(0);
+    expect(sanitized.redovanRadSati).toBe(40);
+    expect(warnings.length).toBeGreaterThan(0);
+  });
+
+  it('gridRedovniUnitsOneDay: nop (neplaćeno) ne prelazi u Redovni Σ', () => {
+    /* Radni dan, nop → 0 u prikaznom Σ. */
+    const result = gridRedovniUnitsOneDay(
+      '2026-05-12', /* utorak */
+      { hours: 0, absence_code: 'nop', absence_subtype: null },
+      new Set(),
+    );
+    expect(result).toBe(0);
+  });
+
+  it('gridRedovniUnitsOneDay: praznik na vikend + GO = 8h GO ima prednost', () => {
+    /* 2026-01-01 je čvrsto praznik radni dan. */
+    const r = gridRedovniUnitsOneDay(
+      '2026-01-01',
+      { hours: 0, absence_code: 'go', absence_subtype: null },
+      new Set(['2026-01-01']),
+    );
+    expect(r).toBe(8);
+  });
+
+  it('computeMonthlyFond: neplaceno dani umanjuju fond', () => {
+    /* Februar 2026 = 20 radnih dana × 8h = 160h (default). */
+    const f0 = computeMonthlyFond(2026, 2, []);
+    expect(f0.fondSati).toBe(20 * 8);
+    expect(f0.radniDani).toBe(20);
+    /* Sa 5 neplaćenih dana: 20 × 8 − 5 × 8 = 120 */
+    const f5 = computeMonthlyFond(2026, 2, [], 5);
+    expect(f5.fondSati).toBe(120);
+    expect(f5.radniDani).toBe(20); /* radni dani ostaju isti — fond ima minus */
+  });
+
+  it('deriveCompensationModel: undefined / null daje fallback', () => {
+    expect(deriveCompensationModel(undefined)).toBeDefined();
+    expect(deriveCompensationModel(null)).toBeDefined();
+    expect(deriveCompensationModel({ compensationModel: 'fiksno' })).toBe('fiksno');
+    /* Legacy: salary_type='satnica' bez compensationModel → 'satnica' */
+    expect(deriveCompensationModel({ salaryType: 'satnica' })).toBe('satnica');
+  });
+
+  it('BOLOVANJE_OBICNO_FACTOR je 0.65 (zakonska stopa)', () => {
+    expect(BOLOVANJE_OBICNO_FACTOR).toBe(0.65);
+  });
+});

@@ -34,9 +34,23 @@ import {
 import { renderSummaryChips, employeeOptionsHtml } from './shared.js';
 import { renderOdsustvaPregledHtml, wireOdsustvaPregledTab } from './odsustvaPregledTab.js';
 import { askConfirm } from '../../lib/confirm.js';
+import { createColumnSort } from '../../lib/columnSort.js';
 
 let panelRef = null;       // listing sub-container
 let hostPanelRef = null;   // outer tab panel
+
+/* C5: column sort */
+const _absSort = createColumnSort({
+  storageKey: 'pm_abs_sort_v1',
+  accessors: {
+    employee: a => employeeNameById(a.employeeId),
+    type:     a => a.type || '',
+    dateFrom: a => a.dateFrom || '',
+    dateTo:   a => a.dateTo || '',
+    days:     a => Number(a.daysCount || 0),
+  },
+  onChange: () => refreshAbsencesTab(),
+});
 
 const ABS_TYPE_OPTS = [
   { v: 'godisnji', l: 'Godišnji odmor' },
@@ -154,14 +168,14 @@ function _renderListingHtml() {
       <button class="btn btn-primary" id="absAddBtn">+ Novo odsustvo</button>
     </div>
     <main class="kadrovska-main">
-      <table class="kadrovska-table" id="absTable">
+      <table class="kadrovska-table kadr-sortable" id="absTable">
         <thead>
           <tr>
-            <th>Zaposleni</th>
-            <th>Tip</th>
-            <th class="col-hide-sm">Od</th>
-            <th class="col-hide-sm">Do</th>
-            <th>Dana</th>
+            <th data-sort-key="employee" class="sortable">Zaposleni <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="type" class="sortable">Tip <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="dateFrom" class="sortable col-hide-sm">Od <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="dateTo" class="sortable col-hide-sm">Do <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="days" class="sortable">Dana <span class="kadr-sort-ind"></span></th>
             <th class="col-hide-sm">Napomena</th>
             <th class="col-actions">Akcije</th>
           </tr>
@@ -170,7 +184,8 @@ function _renderListingHtml() {
       </table>
       <div class="kadrovska-empty" id="absEmpty" style="display:none;margin-top:16px;">
         <div class="kadrovska-empty-title">Nema odsustava</div>
-        <div>Dodaj prvo odsustvo preko dugmeta <strong>+ Novo odsustvo</strong>.</div>
+        <div>Dodaj prvo odsustvo (godišnji, bolovanje, službeno…)</div>
+        <button class="btn btn-primary kadr-empty-cta" data-cta-for="absAddBtn">+ Novo odsustvo</button>
       </div>
     </main>`;
 }
@@ -182,6 +197,7 @@ async function _wireListingView(containerEl) {
   containerEl.querySelector('#absFromFilter')?.addEventListener('change', refreshAbsencesTab);
   containerEl.querySelector('#absToFilter')?.addEventListener('change', refreshAbsencesTab);
   containerEl.querySelector('#absAddBtn')?.addEventListener('click', () => openAbsenceModal(null));
+  _absSort.wire(containerEl, '#absTable');
   await ensureEmployeesLoaded();
   await ensureAbsencesLoaded(true);
   refreshAbsencesTab();
@@ -226,7 +242,8 @@ export function refreshAbsencesTab() {
   }
 
   populateEmpFilter();
-  const filtered = applyFilters(kadrAbsencesState.items);
+  const filtered = _absSort.apply(applyFilters(kadrAbsencesState.items));
+  _absSort.updateIndicators(panelRef, '#absTable');
 
   /* Top-tab badge */
   const badge = document.getElementById('kadrTabCountAbsences');

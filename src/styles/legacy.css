@@ -2377,6 +2377,53 @@ body.module-settings .set-shell > .set-layout {
   border-top: 3px solid var(--red, #ef4444);
 }
 
+/* Empty state CTA dugme (C5) */
+.kadrovska-empty .kadr-empty-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Quick filter chips (C5) — jednoklik filteri u Zaposleni / Odsustva. */
+.kadr-quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0 12px;
+  align-items: center;
+}
+.kadr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text2, var(--text3));
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.kadr-chip:hover {
+  border-color: var(--accent, #3b82f6);
+  color: var(--text);
+}
+.kadr-chip.is-active {
+  background: color-mix(in srgb, var(--accent, #3b82f6) 14%, transparent);
+  border-color: var(--accent, #3b82f6);
+  color: var(--accent, #3b82f6);
+  font-weight: 700;
+}
+
 /* Column sort headers (C5) — klik na th cikluje asc/desc/reset. */
 .kadr-sortable th.sortable {
   cursor: pointer;

@@ -31,8 +31,21 @@ import {
 import { renderSummaryChips, employeeOptionsHtml } from './shared.js';
 import { queuePayrollNotifications } from '../../services/hrNotifications.js';
 import { askConfirm } from '../../lib/confirm.js';
+import { createColumnSort } from '../../lib/columnSort.js';
 
 let panelRef = null;
+
+/* C5: column sort */
+const _whSort = createColumnSort({
+  storageKey: 'pm_wh_sort_v1',
+  accessors: {
+    date:     w => w.workDate || '',
+    employee: w => employeeNameById(w.employeeId),
+    hours:    w => Number(w.hours || 0),
+    overtime: w => Number(w.overtimeHours || 0),
+  },
+  onChange: () => refreshWorkHoursTab(),
+});
 
 export function renderWorkHoursTab() {
   return `
@@ -48,13 +61,13 @@ export function renderWorkHoursTab() {
       <button class="btn btn-primary" id="whAddBtn">+ Unesi sate</button>
     </div>
     <main class="kadrovska-main">
-      <table class="kadrovska-table" id="whTable">
+      <table class="kadrovska-table kadr-sortable" id="whTable">
         <thead>
           <tr>
-            <th>Datum</th>
-            <th>Zaposleni</th>
-            <th>Sati</th>
-            <th class="col-hide-sm">Prekovremeni</th>
+            <th data-sort-key="date" class="sortable">Datum <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="employee" class="sortable">Zaposleni <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="hours" class="sortable">Sati <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="overtime" class="sortable col-hide-sm">Prekovremeni <span class="kadr-sort-ind"></span></th>
             <th class="col-hide-sm">Projekat / Napomena</th>
             <th class="col-actions">Akcije</th>
           </tr>
@@ -81,7 +94,8 @@ export function renderWorkHoursTab() {
       </div>
       <div class="kadrovska-empty" id="whEmpty" style="display:none;margin-top:16px;">
         <div class="kadrovska-empty-title">Nema unetih sati</div>
-        <div>Unesi prvi zapis preko dugmeta <strong>+ Unesi sate</strong>.</div>
+        <div>Pojedinačan unos sati po danu — za masovne unose koristi <strong>Mesečni grid</strong>.</div>
+        <button class="btn btn-primary kadr-empty-cta" data-cta-for="whAddBtn">+ Unesi sate</button>
       </div>
     </main>`;
 }
@@ -122,6 +136,8 @@ export async function wireWorkHoursTab(panelEl) {
       btn.disabled = false; btn.textContent = '📧 Pošalji obračun';
     }
   });
+
+  _whSort.wire(panelEl, '#whTable');
 
   await ensureEmployeesLoaded();
   await ensureWorkHoursLoaded(true);
@@ -164,7 +180,8 @@ export function refreshWorkHoursTab() {
   }
 
   populateEmpFilter();
-  const filtered = applyFilters(kadrWorkHoursState.items);
+  const filtered = _whSort.apply(applyFilters(kadrWorkHoursState.items));
+  _whSort.updateIndicators(panelRef, '#whTable');
 
   const badge = document.getElementById('kadrTabCountHours');
   if (badge) badge.textContent = String(kadrWorkHoursState.items.length);
