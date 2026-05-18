@@ -82,8 +82,8 @@ export async function saveUserToDb(u) {
       payload,
     );
   }
-  console.warn('[saveUserToDb] INSERT blocked from UI. Add new roles via Supabase SQL Editor.');
-  showToast('ℹ Nove uloge se dodaju isključivo kroz Supabase SQL Editor.');
+  console.warn('[saveUserToDb] INSERT blocked — use Pozovi korisnika u Podešavanjima.');
+  showToast('ℹ Za novog korisnika koristi dugme „Pozovi korisnika” u Podešavanjima → Korisnici.');
   return null;
 }
 

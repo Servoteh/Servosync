@@ -333,7 +333,7 @@ function _wireTbody(root) {
 
 function _openUserModal(id) {
   if (!canManageUsers()) { showToast('⚠ Samo Admin može da menja uloge'); return; }
-  if (!id) { showToast('ℹ Nove uloge se dodaju kroz Supabase SQL Editor'); return; }
+  if (!id) { _openInviteModal(); return; }
   const u = usersState.items.find(x => x.id === id);
   if (!u) { showToast('⚠ Korisnik nije pronađen'); return; }
 
