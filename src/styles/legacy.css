@@ -671,8 +671,52 @@ textarea.note-area:focus { border-color: var(--accent); box-shadow: 0 0 0 2px va
 .cal-btn-clear:hover { background: color-mix(in srgb, var(--risk-high) 10%, transparent); }
 
 /* --- TOAST --- */
+/* Legacy single-toast (zadržano backward compatible za stranice koje pristupaju #toast direktno). */
 .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--border3); border-radius: var(--radius); padding: 10px 16px; font-size: 12px; color: var(--text); z-index: 2000; transform: translateY(60px); opacity: 0; transition: all 0.25s; box-shadow: var(--shadow-lg); }
 .toast.show { transform: translateY(0); opacity: 1; }
+
+/* Toast stack (C5) — više toastova jedan iznad drugog, slide-in/out. */
+.toast-stack {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2600;
+  display: flex;
+  flex-direction: column-reverse; /* novi se ubacuje dole, gura postojeće gore */
+  gap: 8px;
+  align-items: flex-end;
+  pointer-events: none; /* stack ne hvata klikove pozadine; pojedinačni .toast-item ih hvata */
+  max-width: calc(100vw - 48px);
+}
+.toast-item {
+  pointer-events: auto;
+  background: var(--surface2);
+  border: 1px solid var(--border3, var(--border));
+  border-left: 4px solid var(--text3);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--text);
+  box-shadow: var(--shadow-lg, 0 6px 16px rgba(0,0,0,.18));
+  transform: translateX(360px);
+  opacity: 0;
+  transition: transform 0.22s ease, opacity 0.22s ease;
+  cursor: pointer;
+  min-width: 220px;
+  max-width: 420px;
+  line-height: 1.4;
+  letter-spacing: 0.1px;
+}
+.toast-item.show { transform: translateX(0); opacity: 1; }
+.toast-item.t-success { border-left-color: #16a34a; }
+.toast-item.t-warn,
+.toast-item.t-error   { border-left-color: #dc2626; }
+.toast-item.t-info    { border-left-color: var(--accent, #3b82f6); }
+
+@media (max-width: 480px) {
+  .toast-stack { right: 8px; bottom: 12px; }
+  .toast-item { min-width: 0; max-width: calc(100vw - 32px); font-size: 12px; }
+}
 
 /* --- ROW ACTIONS --- */
 .td-actions { width: 70px; text-align: center; white-space: nowrap; }
@@ -2331,6 +2375,120 @@ body.module-settings .set-shell > .set-layout {
 }
 .kadr-modal-overlay.kadr-confirm--danger .kadr-modal {
   border-top: 3px solid var(--red, #ef4444);
+}
+
+/* Column sort headers (C5) — klik na th cikluje asc/desc/reset. */
+.kadr-sortable th.sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: background 0.12s;
+}
+.kadr-sortable th.sortable:hover {
+  background: color-mix(in srgb, var(--accent, #3b82f6) 8%, transparent);
+}
+.kadr-sortable th.sortable.is-sorted {
+  background: color-mix(in srgb, var(--accent, #3b82f6) 12%, transparent);
+  color: var(--text);
+}
+.kadr-sortable th.sortable .kadr-sort-ind {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 9px;
+  width: 10px;
+  color: var(--accent, #3b82f6);
+  letter-spacing: 0;
+  vertical-align: middle;
+}
+.kadr-sortable th.sortable:not(.is-sorted)::after {
+  content: "⇅";
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.25;
+  letter-spacing: 0;
+}
+.kadr-sortable th.sortable:not(.is-sorted):hover::after { opacity: 0.6; }
+
+/* Loading skeletons (C5) — shimmer placeholders dok podaci ne stignu. */
+.kadr-skel-block {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text3) 10%, transparent);
+  border-radius: 4px;
+}
+.kadr-skel-block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--text) 8%, transparent),
+    transparent
+  );
+  animation: kadrSkelShimmer 1.4s ease-in-out infinite;
+}
+@keyframes kadrSkelShimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.kadr-skel-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.kadr-skel-row:last-child { border-bottom: 0; }
+.kadr-skel-bar { height: 12px; }
+.kadr-skel-bar-sm { height: 10px; width: 30%; }
+.kadr-skel-bar-md { height: 12px; width: 55%; }
+.kadr-skel-bar-lg { height: 14px; width: 80%; }
+.kadr-skel-bar-xl { height: 16px; width: 100%; }
+.kadr-skel-circle { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; }
+
+.kadr-skel-table {
+  padding: 8px 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kadr-skel-block::after { animation: none; opacity: 0.5; }
+}
+
+/* Keyboard shortcuts modal (C5) */
+.kadr-shortcuts-modal { max-width: 480px; }
+.kadr-shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0 6px;
+}
+.kadr-shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  padding: 6px 4px;
+}
+.kadr-shortcut-row > span { color: var(--text); flex: 1; }
+.kadr-shortcut-row kbd {
+  display: inline-block;
+  min-width: 28px;
+  padding: 3px 8px;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  color: var(--text);
+  text-align: center;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.05);
 }
 
 /* Audit trail modal — istorija izmena */

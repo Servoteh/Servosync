@@ -15,7 +15,7 @@
  *   refreshEmployeesTab()
  */
 
-import { escHtml, showToast } from '../../lib/dom.js';
+import { escHtml, showToast, renderSkeleton } from '../../lib/dom.js';
 import { formatDate } from '../../lib/date.js';
 import {
   compareEmployeesByLastFirst,
@@ -63,6 +63,77 @@ import { askConfirm } from '../../lib/confirm.js';
 let panelRef = null;
 let onChangeCb = null;
 
+/* C5: column sort state — persistira u sessionStorage. */
+const _empSortKey = 'pm_emp_sort_v1';
+let _empSort = (() => {
+  try {
+    const raw = sessionStorage.getItem(_empSortKey);
+    if (!raw) return { key: null, dir: null };
+    const [k, d] = raw.split(':');
+    if (!k || (d !== 'asc' && d !== 'desc')) return { key: null, dir: null };
+    return { key: k, dir: d };
+  } catch { return { key: null, dir: null }; }
+})();
+
+function _persistEmpSort() {
+  try {
+    if (_empSort.key) sessionStorage.setItem(_empSortKey, `${_empSort.key}:${_empSort.dir}`);
+    else sessionStorage.removeItem(_empSortKey);
+  } catch { /* noop */ }
+}
+
+function _empSortCycle(key) {
+  if (_empSort.key !== key) {
+    _empSort = { key, dir: 'asc' };
+  } else if (_empSort.dir === 'asc') {
+    _empSort = { key, dir: 'desc' };
+  } else {
+    /* desc → reset na default (prezime asc kroz compareEmployeesByLastFirst) */
+    _empSort = { key: null, dir: null };
+  }
+  _persistEmpSort();
+  refreshEmployeesTab();
+}
+
+function _empSortAccessor(e, key) {
+  switch (key) {
+    case 'name':          return (e.lastName || '') + ' ' + (e.firstName || '');
+    case 'position':      return e.positionName || e.position || '';
+    case 'department':    return e.departmentName || e.department || '';
+    case 'subDepartment': return e.subDepartmentName || '';
+    case 'email':         return e.email || '';
+    case 'medical':       return e.medicalExamExpires || '';
+    case 'status':        return e.isActive ? '1-aktivan' : '2-neaktivan';
+    default:              return '';
+  }
+}
+
+function _empApplySort(list) {
+  if (!_empSort.key) return list; /* default: leave caller's order (compareEmployeesByLastFirst) */
+  const sign = _empSort.dir === 'desc' ? -1 : 1;
+  return list.slice().sort((a, b) => {
+    const va = String(_empSortAccessor(a, _empSort.key) || '').toLowerCase();
+    const vb = String(_empSortAccessor(b, _empSort.key) || '').toLowerCase();
+    if (va === vb) return 0;
+    if (!va) return 1;  /* prazne na kraju */
+    if (!vb) return -1;
+    return va < vb ? -1 * sign : 1 * sign;
+  });
+}
+
+function _empUpdateSortIndicators() {
+  if (!panelRef) return;
+  panelRef.querySelectorAll('#kadrovskaTable th.sortable').forEach(th => {
+    const key = th.dataset.sortKey;
+    const ind = th.querySelector('.kadr-sort-ind');
+    th.classList.toggle('is-sorted', _empSort.key === key);
+    th.classList.toggle('is-sorted-desc', _empSort.key === key && _empSort.dir === 'desc');
+    if (ind) {
+      ind.textContent = _empSort.key === key ? (_empSort.dir === 'desc' ? '▼' : '▲') : '';
+    }
+  });
+}
+
 /* ─── HELPERS ────────────────────────────────────────────────────────── */
 
 /** Tanki wrapper za centralnu lib/jmbg.js parser. */
@@ -100,17 +171,17 @@ export function renderEmployeesTab() {
       <button class="btn btn-primary" id="kadrovskaAddBtn">+ Novi zaposleni</button>
     </div>
     <main class="kadrovska-main">
-      <table class="kadrovska-table" id="kadrovskaTable">
+      <table class="kadrovska-table kadr-sortable" id="kadrovskaTable">
         <thead>
           <tr>
-            <th>Ime i prezime</th>
-            <th>Pozicija</th>
-            <th class="col-hide-sm">Odeljenje</th>
-            <th class="col-hide-sm">Pododeljenje</th>
+            <th data-sort-key="name" class="sortable">Ime i prezime <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="position" class="sortable">Pozicija <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="department" class="sortable col-hide-sm">Odeljenje <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="subDepartment" class="sortable col-hide-sm">Pododeljenje <span class="kadr-sort-ind"></span></th>
             <th class="col-hide-sm">Telefon</th>
-            <th class="col-hide-sm">Email</th>
-            <th class="col-hide-sm">Lekarski ističe</th>
-            <th>Status</th>
+            <th data-sort-key="email" class="sortable col-hide-sm">Email <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="medical" class="sortable col-hide-sm">Lekarski ističe <span class="kadr-sort-ind"></span></th>
+            <th data-sort-key="status" class="sortable">Status <span class="kadr-sort-ind"></span></th>
             <th class="col-actions">Akcije</th>
           </tr>
         </thead>
@@ -130,6 +201,10 @@ export async function wireEmployeesTab(panelEl, { onChange } = {}) {
   panelEl.querySelector('#kadrovskaSearch').addEventListener('input', refreshEmployeesTab);
   panelEl.querySelector('#kadrovskaDeptFilter').addEventListener('change', refreshEmployeesTab);
   panelEl.querySelector('#kadrovskaStatusFilter').addEventListener('change', refreshEmployeesTab);
+  /* C5: column sort */
+  panelEl.querySelectorAll('#kadrovskaTable th.sortable').forEach(th => {
+    th.addEventListener('click', () => _empSortCycle(th.dataset.sortKey));
+  });
   panelEl.querySelector('#kadrovskaAddBtn').addEventListener('click', () => openEmployeeModal(null));
   panelEl.querySelector('#kadrovskaBulkBtn')?.addEventListener('click', () => {
     if (!canEditKadrovska()) {
@@ -242,7 +317,8 @@ export function refreshEmployeesTab() {
     if (curr && Array.from(deptSel.options).some(o => o.value === curr)) deptSel.value = curr;
   }
 
-  const filtered = applyFilters(kadrovskaState.employees);
+  const filtered = _empApplySort(applyFilters(kadrovskaState.employees));
+  _empUpdateSortIndicators();
 
   const tabBadge = document.getElementById('kadrTabCountEmployees');
   if (tabBadge) tabBadge.textContent = String(kadrovskaState.employees.length);
@@ -586,7 +662,7 @@ function buildEmployeeModalHtml(emp) {
 
           ${isEdit && piiOk ? sectionHtml('Deca zaposlenog', `
             <div class="emp-field col-full">
-              <div id="empChildrenList" class="emp-children-list"><em>Učitavam…</em></div>
+              <div id="empChildrenList" class="emp-children-list">${renderSkeleton({ variant: 'list', rows: 2 })}</div>
               <div class="emp-children-add">
                 <input type="text" id="empChildNewName" placeholder="Ime deteta" maxlength="60">
                 <input type="date" id="empChildNewBirth">

@@ -336,7 +336,9 @@ export async function renderKadrovskaDashboard(rootEl, opts = {}) {
       <section class="kadr-dashboard__actions" aria-label="Šta čeka mene">
         <h2 class="kadr-dashboard__section-title">Šta čeka mene</h2>
         <ul class="kadr-dashboard__action-stack" id="kadrDashActionStack">
-          <li class="kadr-dashboard__action-item--empty">Učitavanje…</li>
+          <li class="kadr-dashboard__action-item--skeleton"><span class="kadr-skel-block kadr-skel-bar kadr-skel-bar-xl" style="height:36px"></span></li>
+          <li class="kadr-dashboard__action-item--skeleton"><span class="kadr-skel-block kadr-skel-bar kadr-skel-bar-lg" style="height:36px"></span></li>
+          <li class="kadr-dashboard__action-item--skeleton"><span class="kadr-skel-block kadr-skel-bar kadr-skel-bar-md" style="height:36px"></span></li>
         </ul>
       </section>
 

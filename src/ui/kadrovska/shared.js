@@ -62,6 +62,9 @@ export function kadrovskaHeaderHtml() {
         <button class="kadr-pending-badge" id="kadrPendingBadge" title="Mutacije čekaju da se sinhronizuju" hidden>
           ⏳ <span id="kadrPendingCount">0</span> čeka
         </button>
+        <button class="theme-toggle" id="kadrShortcutsBtn" title="Tastaturni prečice (pritisni ?)" aria-label="Tastaturni prečice">
+          ⌨
+        </button>
         <button class="theme-toggle" id="kadrThemeToggle" title="Promeni temu" aria-label="Promeni temu">
           <span class="theme-icon-dark">🌙</span>
           <span class="theme-icon-light">☀️</span>

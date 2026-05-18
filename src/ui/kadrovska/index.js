@@ -30,6 +30,7 @@ import {
   flushKadrPending,
 } from '../../services/kadrOfflineQueue.js';
 import { installModalA11y } from '../../lib/modalA11y.js';
+import { installKeyboardShortcuts } from '../../lib/keyboardShortcuts.js';
 
 import {
   kadrovskaHeaderHtml,
@@ -125,6 +126,10 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
     onBackToHubCb?.();
   });
   root.querySelector('#kadrThemeToggle').addEventListener('click', () => toggleTheme());
+  root.querySelector('#kadrShortcutsBtn')?.addEventListener('click', () => {
+    /* Simuliraj `?` keydown — koristimo isti openHelp put. */
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '?' }));
+  });
   root.querySelector('#kadrLogoutBtn').addEventListener('click', async () => {
     await logout();
     onLogoutCb?.();
@@ -133,6 +138,9 @@ export function renderKadrovskaModule(root, { onBackToHub, onLogout } = {}) {
   /* Modal a11y: ESC zatvara najgornji modal + body scroll lock dok je modal otvoren.
      Idempotentno — bezbedno na svakom mount-u modula. */
   installModalA11y();
+
+  /* Keyboard shortcuts: /, n, r, ? — Idempotentno. */
+  installKeyboardShortcuts();
 
   /* Offline queue: auto-flush + badge. Klik na badge = ručni retry. */
   installKadrAutoFlush();

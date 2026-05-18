@@ -223,6 +223,16 @@
 [data-theme="light"] .kadr-dashboard__action-pill.is-soon    { color: #9a3412; }
 [data-theme="light"] .kadr-dashboard__action-pill.is-warn    { color: #854d0e; }
 
+.kadr-dashboard__action-item--skeleton,
+li.kadr-dashboard__action-item--skeleton {
+  list-style: none;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  background: var(--surface, var(--surface2));
+}
+
 .kadr-dashboard__action-item--empty,
 li.kadr-dashboard__action-item--empty {
   list-style: none;

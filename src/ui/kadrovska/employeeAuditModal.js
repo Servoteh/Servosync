@@ -12,7 +12,7 @@
  *   openEmployeeAuditModal(employeeId)
  */
 
-import { escHtml, showToast } from '../../lib/dom.js';
+import { escHtml, showToast, renderSkeleton } from '../../lib/dom.js';
 import { formatDate } from '../../lib/date.js';
 import { isAdmin } from '../../state/auth.js';
 import { employeeDisplayName } from '../../lib/employeeNames.js';
@@ -136,7 +136,7 @@ export async function openEmployeeAuditModal(employeeId) {
       <div class="emp-modal emp-modal-wide">
         <div class="emp-modal-title">📒 Istorija izmena — ${escHtml(empName)}</div>
         <div class="emp-modal-subtitle">Hronologija svih izmena nad osetljivim tabelama (zarade, ugovori, GO, lekarski, sertifikati). Klikni red za detalje.</div>
-        <div id="empAuditList"><em class="emp-sub">Učitavam…</em></div>
+        <div id="empAuditList">${renderSkeleton({ variant: 'list', rows: 6 })}</div>
         <div class="emp-modal-actions">
           <button type="button" class="btn" id="empAuditClose">Zatvori</button>
         </div>

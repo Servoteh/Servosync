@@ -21,7 +21,7 @@
  * Bez framework-a / inline handler-a — sve preko `addEventListener`.
  */
 
-import { escHtml, showToast } from '../../lib/dom.js';
+import { escHtml, showToast, renderSkeleton } from '../../lib/dom.js';
 import {
   compareEmployeesByLastFirst,
   employeeDisplayName,
@@ -885,7 +885,7 @@ async function _onMonthChange() {
 async function _loadAndRender(yyyymm) {
   const wrap = _gridQ('#gridWrap');
   if (wrap) {
-    wrap.innerHTML = `<div style="padding:30px;color:var(--text3);font-size:12px;text-align:center">Učitavanje ${escHtml(yyyymm)}…</div>`;
+    wrap.innerHTML = renderSkeleton({ variant: 'table', rows: 8 });
   }
   const days = _gridDaysInMonth(yyyymm);
   if (getIsOnline() && hasSupabaseConfig()) {
