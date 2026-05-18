@@ -356,11 +356,12 @@ export function renderPlanTab(root, ctx) {
         </article>`;
     }).join('');
 
-    const th = (col, label, unit) => {
+    const th = (col, label, unit, extraClass = '') => {
       const active = sortCol === col;
       const arrow = active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
       const unitHtml = unit ? `<small class="pb-th-unit">${escHtml(unit)}</small>` : '';
-      return `<th scope="col"><button type="button" class="pb-th" data-sort="${escHtml(col)}"><span class="pb-th-label">${escHtml(label)}${arrow}</span>${unitHtml}</button></th>`;
+      const clsAttr = extraClass ? ` class="${escHtml(extraClass)}"` : '';
+      return `<th scope="col"${clsAttr}><button type="button" class="pb-th" data-sort="${escHtml(col)}"><span class="pb-th-label">${escHtml(label)}${arrow}</span>${unitHtml}</button></th>`;
     };
 
     const rowsHtml = _isMobile ? '' : sorted.map((t, i) => {
@@ -378,7 +379,7 @@ export function renderPlanTab(root, ctx) {
       return `<tr${trAttr}>
         ${selCell}
         <td>${i + 1}</td>
-        <td>${escHtml(t.naziv || '')}</td>
+        <td class="pb-sticky-left">${escHtml(t.naziv || '')}</td>
         <td>${escHtml(proj)}</td>
         <td>${escHtml(t.engineer_name || '—')}</td>
         <td>${escHtml(t.vrsta || '')}</td>
@@ -396,7 +397,7 @@ export function renderPlanTab(root, ctx) {
           </div>
         </td>
         <td><span class="${prioClass(t.prioritet)}">${escHtml(t.prioritet || '')}</span></td>
-        <td class="pb-row-actions">
+        <td class="pb-row-actions pb-sticky-right">
           ${canEdit ? `<button type="button" class="pb-icon-btn pb-act-edit" data-id="${escHtml(t.id)}" title="Izmeni">✏</button>` : ''}
           <button type="button" class="pb-icon-btn pb-act-desc" data-id="${escHtml(t.id)}" title="Opis">📄</button>
           ${canEdit ? `<button type="button" class="pb-icon-btn pb-act-prob ${String(t.problem || '').trim() ? 'pb-act-prob--active' : ''}" data-id="${escHtml(t.id)}" title="${String(t.problem || '').trim() ? 'Problem aktivan' : 'Problem'}">⚠</button>` : ''}
@@ -422,7 +423,7 @@ export function renderPlanTab(root, ctx) {
     const headerCells = [
       masterHeader,
       '<th>#</th>',
-      th('naziv', 'Naziv zadatka'),
+      th('naziv', 'Naziv zadatka', null, 'pb-sticky-left'),
       th('project', 'Projekat'),
       th('engineer', 'Inženjer'),
       th('vrsta', 'Vrsta'),
@@ -432,7 +433,7 @@ export function renderPlanTab(root, ctx) {
       th('status', 'Status'),
       th('pct', '%'),
       th('prio', 'Prioritet'),
-      '<th></th>',
+      '<th class="pb-sticky-right"></th>',
     ].filter(Boolean);
     const colCount = headerCells.length;
     const desktopBody = !_isMobile

@@ -1638,6 +1638,51 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
    skoro celu ćeliju). Bolje: ćelije ostaju FLAT, container border crta zaobljeno
    spolja. Mali slivers oko uglova kontejnera su prihvatljivi (~1-2px). */
 
+/* ── Sprint 2B: sticky leva (Naziv) + desna (Akcije) kolona ── */
+
+.pb-table .pb-sticky-left,
+.pb-table .pb-sticky-right {
+  position: sticky;
+  background-color: var(--surface, #fff);
+  z-index: 1;
+}
+
+.pb-table .pb-sticky-left { left: 0; }
+.pb-table .pb-sticky-right { right: 0; }
+
+/* Thead corner — sticky-top (z:1) + sticky-side → z:2 da pokrije i thead i sticky-side tbody. */
+.pb-table thead .pb-sticky-left,
+.pb-table thead .pb-sticky-right {
+  background-color: var(--surface3, #f9fafb);
+  z-index: 2;
+}
+
+/* Scroll-edge indikator: granica na "unutrašnjoj" strani sticky kolone. */
+.pb-table .pb-sticky-left { border-right: 1px solid var(--border, #e5e7eb); }
+.pb-table .pb-sticky-right { border-left: 1px solid var(--border, #e5e7eb); }
+
+/* Hover/selected overlay — radimo preko background-image (gradient) da preserviramo
+   semi-prozirni tint preko solid bg-a. background-color ostaje solid. */
+.pb-table tbody tr:hover > .pb-sticky-left,
+.pb-table tbody tr:hover > .pb-sticky-right {
+  background-image: linear-gradient(rgba(232, 82, 58, 0.04), rgba(232, 82, 58, 0.04));
+}
+
+.pb-row--selected > .pb-sticky-left,
+.pb-row--selected > .pb-sticky-right {
+  background-image: linear-gradient(rgba(232, 82, 58, 0.06), rgba(232, 82, 58, 0.06));
+}
+
+[data-theme="dark"] .pb-table tbody tr:hover > .pb-sticky-left,
+[data-theme="dark"] .pb-table tbody tr:hover > .pb-sticky-right {
+  background-image: linear-gradient(rgba(232, 82, 58, 0.06), rgba(232, 82, 58, 0.06));
+}
+
+/* Min-width na Naziv th — da sticky-left kolona ne kolapsira preuko na narrow viewport-u. */
+.pb-table thead .pb-sticky-left {
+  min-width: 200px;
+}
+
 .pb-table tbody tr {
   transition: background 0.1s;
 }
@@ -2265,6 +2310,8 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
 
 .pb-kanban-scroll {
   overflow-x: auto;
+  /* `clip` — sticky descendants (npr. col-head u Sprint 2B) bubble-uju do .pb-tab-body. */
+  overflow-y: clip;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   margin: 0 -12px;
@@ -2406,6 +2453,39 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
 .pb-kanban-older {
   margin: 8px 12px 12px;
   font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+/* ── Sprint 2B: per-column scroll na desktop-u (Kanban) ──
+   Svaka kolona ima svoju internu Y scroll oblast. Header ostaje vidljiv na vrhu kolone
+   tokom scroll-a. Različite kolone scrolluju nezavisno. */
+@media (min-width: 768px) {
+  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-kanban-scroll {
+    height: 100%;
+  }
+
+  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-kanban-board {
+    height: 100%;
+    align-items: stretch;
+    min-height: 0;
+  }
+
+  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-kanban-column {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-kanban-col-head {
+    flex-shrink: 0;
+  }
+
+  body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-kanban-cards {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
 }
 
 /* == GANTT == */
