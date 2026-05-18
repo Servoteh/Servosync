@@ -92,6 +92,7 @@ export function renderPayrollSubtab() {
         <div class="kadrovska-toolbar-spacer"></div>
         <button class="btn btn-ghost" id="payrReload">🔄 Osveži</button>
         <button class="btn btn-ghost" id="payrExport">📊 Excel</button>
+        <button class="btn btn-ghost" id="payrPdfAll" title="Otvori PDF sa svim obračunima za izabrani mesec (filtrirano + jedan dokument)">📄 PDF svi</button>
         <button class="btn btn-primary" id="payrInit" title="Kreiraj draft redove za sve aktivne zaposlene za izabrani mesec">+ Pripremi mesec</button>
         <button class="btn btn-warning" id="payrLockMonth" title="Markiraj sve finalizovane redove kao isplaćene — više ne mogu da se menjaju">🔒 Zaključaj mesec</button>
       </div>
@@ -144,6 +145,7 @@ export async function wirePayrollSubtab(panelEl) {
   panelEl.querySelector('#payrInit').addEventListener('click', initCurrentMonth);
   panelEl.querySelector('#payrExport').addEventListener('click', exportXlsx);
   panelEl.querySelector('#payrLockMonth').addEventListener('click', lockMonthBulk);
+  panelEl.querySelector('#payrPdfAll')?.addEventListener('click', openBulkPayslipsPdf);
 
   await ensureEmployeesLoaded();
   await reloadPeriod(true);
@@ -626,80 +628,13 @@ async function exportXlsx() {
 
 /* ── Plate slips PDF (C3.6) ────────────────────────────── */
 
-/**
- * Otvara print-friendly stranicu sa obračunom zarade za jednog zaposlenog
- * u izabranom mesecu. Browser print → "Save as PDF" daje fajl koji se može
- * arhivirati i poslati zaposlenom.
- *
- * Bez eksternog email integracija — admin/HR ručno šalje. Sledeća faza:
- * auto-email preko hr-notify-dispatch + arhiviranje u Supabase Storage.
- *
- * Status u trenutku štampe je informativan; PDF ostaje validan obračun
- * čak i ako se kasnije izmeni red (zbog audit log-a).
- */
-function openPayslipPdf(tr) {
-  if (!canAccessSalary()) { showToast('⚠ Samo administrator'); return; }
-  const id = tr.dataset.id;
-  const rows = kadrPayrollState.byPeriod.get(currentKey()) || [];
-  const r = rows.find(x => x.id === id);
-  if (!r) { showToast('⚠ Red nije pronađen'); return; }
-  const emp = kadrovskaState.employees.find(e => e.id === r.employeeId) || null;
-  const empName = payrollEmployeeName(r) || '—';
-  const period = `${MONTH_NAMES[r.periodMonth - 1] || r.periodMonth} ${r.periodYear}`;
-  const today = new Date();
-  const todayStr = formatDate(today.toISOString().slice(0, 10));
-  const protocol = `OZ-${r.periodYear}-${String(r.periodMonth).padStart(2, '0')}-${String(r.employeeId || '').slice(0, 8).toUpperCase()}`;
-
-  /* Live preview totals (K3.3 ako je dostupno; fallback na sirove vrednosti reda) */
-  const disp = computeDisplayTotals(r);
-  const useK33 = !!disp.payrollK33;
-  const totRsd = useK33 ? disp.totalRsd : (r.totalRsd || 0);
-  const totEur = useK33 ? disp.totalEur : (r.totalEur || 0);
-  const secRsd = useK33 ? disp.secondPartRsd : (r.secondPartRsd || 0);
-
-  const isHourly = r.salaryType === 'satnica';
-  const baseLabel = isHourly ? 'Satnica × Sati' : 'Fiksna plata';
-  const baseValue = isHourly
-    ? `${fmtNum(r.hourlyRate || 0)} × ${fmtNum(r.hoursWorked || 0)} = ${fmtRsd((r.hourlyRate || 0) * (r.hoursWorked || 0))}`
-    : fmtRsd(r.fixedSalary || 0);
-  const statusLbl = statusLabel(r.status);
-
-  const showJmbg = !!(emp?.personalId);
-  const positionLine = r.employeePosition || emp?.position || '';
-  const deptLine = r.employeeDepartment || emp?.department || '';
-
-  /* Detaljni breakdown za K3.3 (sati / praznici / bolovanje) */
-  const k33Detail = useK33 ? `
-    <h3 style="margin:18px 0 6px;font-size:11pt;color:#333;text-transform:uppercase;letter-spacing:0.3px;">Razlaganje sati</h3>
-    <table class="payslip-tbl">
-      <tbody>
-        <tr><td>Fond sati u mesecu</td><td class="num">${fmtNum(disp.fondSatiMeseca || 0)}</td></tr>
-        <tr><td>Redovan rad</td><td class="num">${fmtNum(disp.redovanRadSati || 0)}</td></tr>
-        ${disp.prekovremeniSati ? `<tr><td>Prekovremeni sati</td><td class="num">${fmtNum(disp.prekovremeniSati)}</td></tr>` : ''}
-        ${disp.praznikRadSati ? `<tr><td>Praznik — rad</td><td class="num">${fmtNum(disp.praznikRadSati)}</td></tr>` : ''}
-        ${disp.praznikPlaceniSati ? `<tr><td>Praznik — plaćen (slobodan)</td><td class="num">${fmtNum(disp.praznikPlaceniSati)}</td></tr>` : ''}
-        ${disp.godisnjiSati ? `<tr><td>Godišnji odmor</td><td class="num">${fmtNum(disp.godisnjiSati)}</td></tr>` : ''}
-        ${disp.slobodniDaniSati ? `<tr><td>Slobodni dani</td><td class="num">${fmtNum(disp.slobodniDaniSati)}</td></tr>` : ''}
-        ${disp.bolovanje65Sati ? `<tr><td>Bolovanje 65%</td><td class="num">${fmtNum(disp.bolovanje65Sati)}</td></tr>` : ''}
-        ${disp.bolovanje100Sati ? `<tr><td>Bolovanje 100% (povreda / trudnoća)</td><td class="num">${fmtNum(disp.bolovanje100Sati)}</td></tr>` : ''}
-        ${disp.dveMasineSati ? `<tr><td>Rad na 2 mašine</td><td class="num">${fmtNum(disp.dveMasineSati)}</td></tr>` : ''}
-        <tr class="payslip-sum-row"><td><strong>Σ plaćenih sati</strong></td><td class="num"><strong>${fmtNum(disp.payableHours || 0)}</strong></td></tr>
-      </tbody>
-    </table>
-  ` : '';
-
-  const warnings = useK33 && Array.isArray(disp.payrollWarnings) && disp.payrollWarnings.length
-    ? `<div class="payslip-warn"><strong>⚠ Upozorenja iz obračuna:</strong><ul style="margin:6px 0 0 16px;padding:0;">${disp.payrollWarnings.map(w => `<li>${escHtml(String(w))}</li>`).join('')}</ul></div>`
-    : '';
-
-  const html = `<!DOCTYPE html>
-<html lang="sr">
-<head>
-<meta charset="utf-8">
-<title>Obračun zarade — ${escHtml(empName)} — ${escHtml(period)}</title>
-<style>
+/** Deljen CSS za pojedinačni i bulk PDF — page-break omogućava više payslip-ova u jednom dokumentu. */
+function _payslipCss() {
+  return `
   @page { size: A4; margin: 1.8cm 1.6cm; }
-  body { font-family: 'Times New Roman', Georgia, serif; color:#111; font-size: 11pt; line-height: 1.45; }
+  body { font-family: 'Times New Roman', Georgia, serif; color:#111; font-size: 11pt; line-height: 1.45; margin: 0; }
+  .payslip-page { page-break-after: always; padding-bottom: 8px; }
+  .payslip-page:last-child { page-break-after: auto; }
   .doc-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; }
   .doc-head-left .company { font-weight: 700; font-size: 13pt; color:#000; }
   .doc-head-left .addr { font-size: 10pt; color: #555; }
@@ -751,7 +686,7 @@ function openPayslipPdf(tr) {
   .signs { margin-top: 36px; display:flex; justify-content: space-between; }
   .sign-box { width: 45%; text-align:center; }
   .sign-line { border-top:1px solid #333; padding-top:4px; font-size:9pt; color:#555; margin-top:40px; }
-  .print-actions { margin: 14px 0; text-align:center; }
+  .print-actions { margin: 14px 0; text-align:center; position: sticky; top: 0; background: rgba(255,255,255,0.95); padding: 10px 0; z-index: 10; }
   .print-actions button { padding: 8px 20px; font-size: 11pt; cursor:pointer; margin: 0 4px; }
   @media print { .print-actions { display:none; } }
   .footer-note {
@@ -761,112 +696,222 @@ function openPayslipPdf(tr) {
     font-size: 9pt;
     color: #777;
     line-height: 1.4;
-  }
-</style>
+  }`;
+}
+
+/**
+ * Body HTML za jedan payslip (bez DOCTYPE / html wrap-a).
+ * Koristi se i u pojedinačnom modal-u i u bulk dokumentu.
+ */
+function _buildPayslipBody(r, todayStr) {
+  const emp = kadrovskaState.employees.find(e => e.id === r.employeeId) || null;
+  const empName = payrollEmployeeName(r) || '—';
+  const period = `${MONTH_NAMES[r.periodMonth - 1] || r.periodMonth} ${r.periodYear}`;
+  const protocol = `OZ-${r.periodYear}-${String(r.periodMonth).padStart(2, '0')}-${String(r.employeeId || '').slice(0, 8).toUpperCase()}`;
+
+  const disp = computeDisplayTotals(r);
+  const useK33 = !!disp.payrollK33;
+  const totRsd = useK33 ? disp.totalRsd : (r.totalRsd || 0);
+  const totEur = useK33 ? disp.totalEur : (r.totalEur || 0);
+  const secRsd = useK33 ? disp.secondPartRsd : (r.secondPartRsd || 0);
+
+  const isHourly = r.salaryType === 'satnica';
+  const baseLabel = isHourly ? 'Satnica × Sati' : 'Fiksna plata';
+  const baseValue = isHourly
+    ? `${fmtNum(r.hourlyRate || 0)} × ${fmtNum(r.hoursWorked || 0)} = ${fmtRsd((r.hourlyRate || 0) * (r.hoursWorked || 0))}`
+    : fmtRsd(r.fixedSalary || 0);
+  const statusLbl = statusLabel(r.status);
+  const showJmbg = !!(emp?.personalId);
+  const positionLine = r.employeePosition || emp?.position || '';
+  const deptLine = r.employeeDepartment || emp?.department || '';
+
+  const k33Detail = useK33 ? `
+    <h3 style="margin:18px 0 6px;font-size:11pt;color:#333;text-transform:uppercase;letter-spacing:0.3px;">Razlaganje sati</h3>
+    <table class="payslip-tbl">
+      <tbody>
+        <tr><td>Fond sati u mesecu</td><td class="num">${fmtNum(disp.fondSatiMeseca || 0)}</td></tr>
+        <tr><td>Redovan rad</td><td class="num">${fmtNum(disp.redovanRadSati || 0)}</td></tr>
+        ${disp.prekovremeniSati ? `<tr><td>Prekovremeni sati</td><td class="num">${fmtNum(disp.prekovremeniSati)}</td></tr>` : ''}
+        ${disp.praznikRadSati ? `<tr><td>Praznik — rad</td><td class="num">${fmtNum(disp.praznikRadSati)}</td></tr>` : ''}
+        ${disp.praznikPlaceniSati ? `<tr><td>Praznik — plaćen (slobodan)</td><td class="num">${fmtNum(disp.praznikPlaceniSati)}</td></tr>` : ''}
+        ${disp.godisnjiSati ? `<tr><td>Godišnji odmor</td><td class="num">${fmtNum(disp.godisnjiSati)}</td></tr>` : ''}
+        ${disp.slobodniDaniSati ? `<tr><td>Slobodni dani</td><td class="num">${fmtNum(disp.slobodniDaniSati)}</td></tr>` : ''}
+        ${disp.bolovanje65Sati ? `<tr><td>Bolovanje 65%</td><td class="num">${fmtNum(disp.bolovanje65Sati)}</td></tr>` : ''}
+        ${disp.bolovanje100Sati ? `<tr><td>Bolovanje 100% (povreda / trudnoća)</td><td class="num">${fmtNum(disp.bolovanje100Sati)}</td></tr>` : ''}
+        ${disp.dveMasineSati ? `<tr><td>Rad na 2 mašine</td><td class="num">${fmtNum(disp.dveMasineSati)}</td></tr>` : ''}
+        <tr class="payslip-sum-row"><td><strong>Σ plaćenih sati</strong></td><td class="num"><strong>${fmtNum(disp.payableHours || 0)}</strong></td></tr>
+      </tbody>
+    </table>
+  ` : '';
+
+  const warnings = useK33 && Array.isArray(disp.payrollWarnings) && disp.payrollWarnings.length
+    ? `<div class="payslip-warn"><strong>⚠ Upozorenja iz obračuna:</strong><ul style="margin:6px 0 0 16px;padding:0;">${disp.payrollWarnings.map(w => `<li>${escHtml(String(w))}</li>`).join('')}</ul></div>`
+    : '';
+
+  return `
+  <div class="payslip-page">
+    <div class="doc-head">
+      <div class="doc-head-left">
+        <div class="company">SERVOTEH d.o.o.</div>
+        <div class="addr">Dobanovci · Kruševac</div>
+      </div>
+      <div class="doc-head-right">
+        <div class="proto">Br. obračuna: ${escHtml(protocol)}</div>
+        <div>Datum štampe: ${escHtml(todayStr)}</div>
+        <div>Status: ${escHtml(statusLbl)}</div>
+      </div>
+    </div>
+
+    <h1>Obračun zarade</h1>
+    <h2>za period: ${escHtml(period)}</h2>
+
+    <div class="meta">
+      <div class="meta-row"><span>Zaposleni:</span><strong>${escHtml(empName)}</strong></div>
+      ${showJmbg ? `<div class="meta-row"><span>JMBG:</span><strong>${escHtml(emp.personalId)}</strong></div>` : '<div></div>'}
+      ${positionLine ? `<div class="meta-row"><span>Radno mesto:</span><strong>${escHtml(positionLine)}</strong></div>` : '<div></div>'}
+      ${deptLine ? `<div class="meta-row"><span>Odeljenje:</span><strong>${escHtml(deptLine)}</strong></div>` : '<div></div>'}
+      <div class="meta-row"><span>Tip ugovora:</span><strong>${escHtml(r.salaryType || '—')}</strong></div>
+      ${emp?.workType ? `<div class="meta-row"><span>Tip rada:</span><strong>${escHtml(emp.workType)}</strong></div>` : '<div></div>'}
+    </div>
+
+    ${k33Detail}
+
+    <h3 style="margin:18px 0 6px;font-size:11pt;color:#333;text-transform:uppercase;letter-spacing:0.3px;">Stavke obračuna</h3>
+    <table class="payslip-tbl">
+      <tbody>
+        <tr>
+          <td>${escHtml(baseLabel)}</td>
+          <td class="num">${baseValue}</td>
+        </tr>
+        ${r.transportRsd ? `<tr><td>Prevoz</td><td class="num">${fmtRsd(r.transportRsd)}</td></tr>` : ''}
+        ${r.domesticDays ? `<tr><td>Dinarske dnevnice (${r.domesticDays} × ${fmtRsd(r.perDiemRsd || 0)})</td><td class="num">${fmtRsd((r.domesticDays || 0) * (r.perDiemRsd || 0))}</td></tr>` : ''}
+        ${r.foreignDays ? `<tr><td>Devizne dnevnice (${r.foreignDays} × ${fmtNum(r.perDiemEur || 0)} EUR)</td><td class="num">${fmtNum((r.foreignDays || 0) * (r.perDiemEur || 0))} EUR</td></tr>` : ''}
+      </tbody>
+    </table>
+
+    <div class="payslip-totals">
+      <div class="payslip-total-card primary">
+        <div class="lbl">UKUPNO RSD</div>
+        <div class="val">${fmtRsd(totRsd)}</div>
+      </div>
+      ${totEur ? `
+      <div class="payslip-total-card">
+        <div class="lbl">UKUPNO EUR (devizno)</div>
+        <div class="val">${fmtNum(totEur)} EUR</div>
+      </div>` : '<div></div>'}
+      <div class="payslip-total-card">
+        <div class="lbl">II deo (konačno)</div>
+        <div class="val">${fmtRsd(secRsd)}</div>
+      </div>
+    </div>
+
+    <table class="payslip-tbl" style="margin-top:14px;">
+      <tbody>
+        <tr>
+          <td>I deo — akontacija</td>
+          <td class="num">${fmtRsd(r.advanceAmount || 0)}</td>
+          <td style="width:40%;color:#555;">${r.advancePaidOn ? 'isplaćeno ' + escHtml(formatDate(r.advancePaidOn)) : 'datum: —'}</td>
+        </tr>
+        <tr>
+          <td>II deo — konačni iznos</td>
+          <td class="num">${fmtRsd(secRsd)}</td>
+          <td style="width:40%;color:#555;">${r.finalPaidOn ? 'isplaćeno ' + escHtml(formatDate(r.finalPaidOn)) : 'datum: —'}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    ${r.note ? `<p style="margin-top:14px;padding:8px 12px;background:#fafafa;border-left:3px solid #999;font-size:10pt;"><strong>Napomena:</strong> ${escHtml(r.note)}</p>` : ''}
+
+    ${warnings}
+
+    <div class="signs">
+      <div class="sign-box">
+        <div class="sign-line">Zaposleni — potpis</div>
+        <div>${escHtml(empName)}</div>
+      </div>
+      <div class="sign-box">
+        <div class="sign-line">Obračun pripremio</div>
+        <div>&nbsp;</div>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      Ovaj obračun je informativnog karaktera. Konačni iznosi za isplatu se obračunavaju u skladu sa
+      Zakonom o radu, Zakonom o porezu na dohodak građana i Zakonom o doprinosima za obavezno socijalno osiguranje.
+      Za detaljnije razjašnjenje obratite se računovodstvenoj službi.
+    </div>
+  </div>`;
+}
+
+function _openPayslipWindow(title, bodyHtml) {
+  const html = `<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="utf-8">
+<title>${escHtml(title)}</title>
+<style>${_payslipCss()}</style>
 </head>
 <body>
   <div class="print-actions">
     <button onclick="window.print()">🖨 Štampaj / Sačuvaj kao PDF</button>
     <button onclick="window.close()">Zatvori</button>
   </div>
-  <div class="doc-head">
-    <div class="doc-head-left">
-      <div class="company">SERVOTEH d.o.o.</div>
-      <div class="addr">Dobanovci · Kruševac</div>
-    </div>
-    <div class="doc-head-right">
-      <div class="proto">Br. obračuna: ${escHtml(protocol)}</div>
-      <div>Datum štampe: ${escHtml(todayStr)}</div>
-      <div>Status: ${escHtml(statusLbl)}</div>
-    </div>
-  </div>
-
-  <h1>Obračun zarade</h1>
-  <h2>za period: ${escHtml(period)}</h2>
-
-  <div class="meta">
-    <div class="meta-row"><span>Zaposleni:</span><strong>${escHtml(empName)}</strong></div>
-    ${showJmbg ? `<div class="meta-row"><span>JMBG:</span><strong>${escHtml(emp.personalId)}</strong></div>` : '<div></div>'}
-    ${positionLine ? `<div class="meta-row"><span>Radno mesto:</span><strong>${escHtml(positionLine)}</strong></div>` : '<div></div>'}
-    ${deptLine ? `<div class="meta-row"><span>Odeljenje:</span><strong>${escHtml(deptLine)}</strong></div>` : '<div></div>'}
-    <div class="meta-row"><span>Tip ugovora:</span><strong>${escHtml(r.salaryType || '—')}</strong></div>
-    ${emp?.workType ? `<div class="meta-row"><span>Tip rada:</span><strong>${escHtml(emp.workType)}</strong></div>` : '<div></div>'}
-  </div>
-
-  ${k33Detail}
-
-  <h3 style="margin:18px 0 6px;font-size:11pt;color:#333;text-transform:uppercase;letter-spacing:0.3px;">Stavke obračuna</h3>
-  <table class="payslip-tbl">
-    <tbody>
-      <tr>
-        <td>${escHtml(baseLabel)}</td>
-        <td class="num">${baseValue}</td>
-      </tr>
-      ${r.transportRsd ? `<tr><td>Prevoz</td><td class="num">${fmtRsd(r.transportRsd)}</td></tr>` : ''}
-      ${r.domesticDays ? `<tr><td>Dinarske dnevnice (${r.domesticDays} × ${fmtRsd(r.perDiemRsd || 0)})</td><td class="num">${fmtRsd((r.domesticDays || 0) * (r.perDiemRsd || 0))}</td></tr>` : ''}
-      ${r.foreignDays ? `<tr><td>Devizne dnevnice (${r.foreignDays} × ${fmtNum(r.perDiemEur || 0)} EUR)</td><td class="num">${fmtNum((r.foreignDays || 0) * (r.perDiemEur || 0))} EUR</td></tr>` : ''}
-    </tbody>
-  </table>
-
-  <div class="payslip-totals">
-    <div class="payslip-total-card primary">
-      <div class="lbl">UKUPNO RSD</div>
-      <div class="val">${fmtRsd(totRsd)}</div>
-    </div>
-    ${totEur ? `
-    <div class="payslip-total-card">
-      <div class="lbl">UKUPNO EUR (devizno)</div>
-      <div class="val">${fmtNum(totEur)} EUR</div>
-    </div>` : '<div></div>'}
-    <div class="payslip-total-card">
-      <div class="lbl">II deo (konačno)</div>
-      <div class="val">${fmtRsd(secRsd)}</div>
-    </div>
-  </div>
-
-  <table class="payslip-tbl" style="margin-top:14px;">
-    <tbody>
-      <tr>
-        <td>I deo — akontacija</td>
-        <td class="num">${fmtRsd(r.advanceAmount || 0)}</td>
-        <td style="width:40%;color:#555;">${r.advancePaidOn ? 'isplaćeno ' + escHtml(formatDate(r.advancePaidOn)) : 'datum: —'}</td>
-      </tr>
-      <tr>
-        <td>II deo — konačni iznos</td>
-        <td class="num">${fmtRsd(secRsd)}</td>
-        <td style="width:40%;color:#555;">${r.finalPaidOn ? 'isplaćeno ' + escHtml(formatDate(r.finalPaidOn)) : 'datum: —'}</td>
-      </tr>
-    </tbody>
-  </table>
-
-  ${r.note ? `<p style="margin-top:14px;padding:8px 12px;background:#fafafa;border-left:3px solid #999;font-size:10pt;"><strong>Napomena:</strong> ${escHtml(r.note)}</p>` : ''}
-
-  ${warnings}
-
-  <div class="signs">
-    <div class="sign-box">
-      <div class="sign-line">Zaposleni — potpis</div>
-      <div>${escHtml(empName)}</div>
-    </div>
-    <div class="sign-box">
-      <div class="sign-line">Obračun pripremio</div>
-      <div>&nbsp;</div>
-    </div>
-  </div>
-
-  <div class="footer-note">
-    Ovaj obračun je informativnog karaktera. Konačni iznosi za isplatu se obračunavaju u skladu sa
-    Zakonom o radu, Zakonom o porezu na dohodak građana i Zakonom o doprinosima za obavezno socijalno osiguranje.
-    Za detaljnije razjašnjenje obratite se računovodstvenoj službi.
-  </div>
+  ${bodyHtml}
 </body>
 </html>`;
-
   const w = window.open('', '_blank', 'width=900,height=1200,scrollbars=1');
-  if (!w) { showToast('⚠ Pop-up blocker je sprečio prozor'); return; }
+  if (!w) { showToast('⚠ Pop-up blocker je sprečio prozor'); return null; }
   w.document.open();
   w.document.write(html);
   w.document.close();
+  return w;
+}
+
+/**
+ * Otvara print-friendly stranicu sa obračunom zarade za jednog zaposlenog
+ * u izabranom mesecu. Browser print → "Save as PDF".
+ */
+function openPayslipPdf(tr) {
+  if (!canAccessSalary()) { showToast('⚠ Samo administrator'); return; }
+  const id = tr.dataset.id;
+  const rows = kadrPayrollState.byPeriod.get(currentKey()) || [];
+  const r = rows.find(x => x.id === id);
+  if (!r) { showToast('⚠ Red nije pronađen'); return; }
+  const empName = payrollEmployeeName(r) || '—';
+  const period = `${MONTH_NAMES[r.periodMonth - 1] || r.periodMonth} ${r.periodYear}`;
+  const todayStr = formatDate(new Date().toISOString().slice(0, 10));
+  _openPayslipWindow(`Obračun zarade — ${empName} — ${period}`, _buildPayslipBody(r, todayStr));
+}
+
+/**
+ * Otvara konsolidovan PDF sa SVIM trenutno filtriranim payslip-ovima.
+ * Svaki je na svojoj A4 stranici (page-break-after: always).
+ * Browser print → jedan PDF, N stranica. Nema ZIP-a / extern lib-a.
+ */
+function openBulkPayslipsPdf() {
+  if (!canAccessSalary()) { showToast('⚠ Samo administrator'); return; }
+  if (!rootEl) return;
+  const rows = kadrPayrollState.byPeriod.get(currentKey()) || [];
+  if (!rows.length) { showToast('Nema obračuna u ovom mesecu'); return; }
+
+  /* Primeni isti pretražni filter kao tabela — admin ne želi PDF zaposlenih koje ne vidi. */
+  const q = (rootEl.querySelector('#payrSearch').value || '').trim().toLowerCase();
+  const filtered = q
+    ? rows.filter(r => {
+        const hay = [payrollEmployeeName(r), r.employeeName, r.employeePosition, r.employeeDepartment].join(' ').toLowerCase();
+        return hay.includes(q);
+      })
+    : rows;
+  if (!filtered.length) { showToast('Nema zaposlenih u trenutnom filteru'); return; }
+
+  const sorted = filtered.slice().sort(comparePayrollRows);
+  const todayStr = formatDate(new Date().toISOString().slice(0, 10));
+  const period = `${MONTH_NAMES[sorted[0].periodMonth - 1] || sorted[0].periodMonth} ${sorted[0].periodYear}`;
+  const title = `Obračuni zarada — ${period} (${sorted.length} zaposlenih)`;
+  const body = sorted.map(r => _buildPayslipBody(r, todayStr)).join('\n');
+
+  showToast(`📄 Otvaram ${sorted.length} obračuna…`);
+  _openPayslipWindow(title, body);
 }
 
 /* ── Utils ──────────────────────────────────────────────── */

@@ -42,6 +42,10 @@ __pycache__/
 /_q*.txt
 /m_*.json
 /scripts/_mcp_*.sql
+# MCP scratch files u bilo kom subfolderu (.cursor/, docs/, sql/, ...) — payloadi mogu da curi
+**/_mcp_*.sql
+**/_mcp_*.json
+**/_mcp_*.txt
 
 # Root-level scratch files (MCP debug, ad-hoc chunks)
 /._*.json
