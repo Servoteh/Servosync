@@ -21,6 +21,7 @@ import {
   savePbGanttMonth,
   stopPbIzvestajiSpeech,
   pbErrorMessage,
+  syncPbModuleFilters,
 } from './shared.js';
 import { sortProjectsForPredmetPrioritet } from '../../services/projects.js';
 import { renderPlanTab } from './planTab.js';
@@ -31,6 +32,7 @@ import { renderAnaliza } from './analizaTab.js';
 import { renderPbPodesavanja } from './podesavanjaTab.js';
 
 let teardownResize = null;
+let _chromeSearchDebounceTimer = null;
 
 function mqMobile() {
   return window.matchMedia('(max-width: 767px)');
@@ -195,50 +197,52 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     const hub = root.querySelector('#pbHubSlot');
     if (!hub) return;
     const auth = getAuth();
+    const searchValue = state.moduleSearch ?? '';
     hub.innerHTML = `
       <div class="pb-chrome-pinned">
-      <header class="pb-header">
-        <div class="pb-header-left">
+      <header class="pb-topbar">
+        <div class="pb-topbar-start">
           <button type="button" class="pb-back-btn" id="pbBackBtn" aria-label="Nazad na module">
             ${IC_BACK} Moduli
           </button>
-          <div class="pb-header-brand">
+          <div class="pb-topbar-brand">
             <div class="pb-module-icon" aria-hidden="true">${IC_MODULE}</div>
-            <div>
-              <div class="pb-header-title">Projektovanje</div>
-              <div class="pb-header-sub">Projektni biro</div>
-            </div>
+            <div class="pb-topbar-title">Projektovanje</div>
           </div>
         </div>
-        <div class="pb-header-right">
+        <nav class="pb-tabs" role="tablist" aria-label="Projektni biro tabovi">
+          ${pbTabBtn('plan', 'Plan', state.activeTab === 'plan')}
+          ${pbTabBtn('kanban', 'Kanban', state.activeTab === 'kanban')}
+          ${pbTabBtn('gantt', 'Gantt', state.activeTab === 'gantt')}
+          ${pbTabBtn('izvestaji', 'Izveštaji', state.activeTab === 'izvestaji')}
+          ${pbTabBtn('analiza', 'Analiza', state.activeTab === 'analiza')}
+          ${isAdmin() ? pbTabBtn('podesavanja', 'Podešavanja', state.activeTab === 'podesavanja') : ''}
+        </nav>
+        <div class="pb-topbar-end">
           <button type="button" class="pb-theme-btn" id="pbThemeBtn" aria-label="Tema">🌙</button>
           ${auth.role ? `<span class="pb-role-badge">${escHtml(auth.role.toUpperCase())}</span>` : ''}
           ${canEditProjektniBiro() ? `<button type="button" class="pb-primary-btn pb-new-desktop" id="pbNewDesk">${IC_PLUS} Novi zadatak</button>` : ''}
           <button type="button" class="pb-logout-btn" id="pbLogoutBtn">Odjavi se</button>
         </div>
       </header>
-      <nav class="pb-tabs" role="tablist" aria-label="Projektni biro tabovi">
-        ${pbTabBtn('plan', 'Plan', state.activeTab === 'plan')}
-        ${pbTabBtn('kanban', 'Kanban', state.activeTab === 'kanban')}
-        ${pbTabBtn('gantt', 'Gantt', state.activeTab === 'gantt')}
-        ${pbTabBtn('izvestaji', 'Izveštaji', state.activeTab === 'izvestaji')}
-        ${pbTabBtn('analiza', 'Analiza', state.activeTab === 'analiza')}
-        ${isAdmin() ? pbTabBtn('podesavanja', 'Podešavanja', state.activeTab === 'podesavanja') : ''}
-      </nav>
-      <div class="pb-context-card">
-        <div class="pb-context-project-row">
+      <div class="pb-context-row">
+        <div class="pb-context-field">
           <span class="pb-context-label">Projekat</span>
-          <select id="pbProjectSel" class="pb-context-select pb-context-select--grow">
+          <select id="pbProjectSel" class="pb-context-select">
             <option value="all">Svi projekti</option>
             ${projects.map(p => `<option value="${escHtml(p.id)}" ${state.activeProject === p.id ? 'selected' : ''}>${escHtml(p.project_code)} — ${escHtml(p.project_name)}</option>`).join('')}
           </select>
         </div>
-        <div class="pb-context-project-row">
+        <div class="pb-context-field">
           <span class="pb-context-label">Inženjer</span>
-          <select id="pbEngineerSel" class="pb-context-select pb-context-select--grow">
+          <select id="pbEngineerSel" class="pb-context-select">
             <option value="all" ${state.activeEngineer === 'all' ? 'selected' : ''}>Svi inženjeri</option>
             ${engineers.map(en => `<option value="${escHtml(en.id)}" ${state.activeEngineer === en.id ? 'selected' : ''}>${escHtml(en.full_name)}</option>`).join('')}
           </select>
+        </div>
+        <div class="pb-context-field pb-context-field--grow">
+          <span class="pb-context-label">Pretraga</span>
+          <input type="search" id="pbChromeSearch" class="pb-context-search" placeholder="Pretraži po nazivu zadatka..." value="${escHtml(searchValue)}" />
         </div>
       </div>
       </div>`;
@@ -258,6 +262,15 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       state.activeEngineer = e.target.value || 'all';
       savePbState(state);
       loadAll();
+    });
+    root.querySelector('#pbChromeSearch')?.addEventListener('input', e => {
+      // Search se filtrira klijent-side u Plan/Kanban/Gantt tabu — ne mora loadAll().
+      state.moduleSearch = e.target.value || '';
+      syncPbModuleFilters({ moduleSearch: state.moduleSearch });
+      if (_chromeSearchDebounceTimer) clearTimeout(_chromeSearchDebounceTimer);
+      _chromeSearchDebounceTimer = setTimeout(() => {
+        void mountActiveTab();
+      }, 180);
     });
     root.querySelector('#pbNewDesk')?.addEventListener('click', () => {
       openTaskEditorModal({

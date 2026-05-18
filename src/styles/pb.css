@@ -50,7 +50,64 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   }
 }
 
-/* == HEADER == */
+/* == TOPBAR (Sprint 2A: header + tabs spojeni u jedan red) == */
+
+.pb-topbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  flex-shrink: 0;
+  min-height: 40px;
+}
+
+.pb-topbar-start {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pb-topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pb-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pb-topbar-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text, #111);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Skrivamo brand-title (samo) na narrow viewport-ima da tabovi imaju mesta. */
+@media (max-width: 1100px) {
+  .pb-topbar-title {
+    display: none;
+  }
+}
+
+/* Tabovi u topbar-u — overflow-x ako mnogo tabova. */
+.pb-topbar .pb-tabs {
+  margin: 0;
+  border-bottom: none;
+  min-width: 0;
+}
+
+/* == LEGACY HEADER (zadržano za nazadnu kompatibilnost — neki tabovi i moduli koriste) == */
 
 .pb-header {
   display: flex;
@@ -189,7 +246,47 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   background: var(--surface3, #f3f4f6);
 }
 
-/* == CONTEXT: tabovi → Projekat → Inženjeri (wrap, bez horizontalnog skrola) == */
+/* == CONTEXT ROW (Sprint 2A: flat row sa Projekat/Inženjer/Pretraga u jednom redu) == */
+
+.pb-context-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 10px;
+  padding: 6px 0 6px;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.pb-context-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+}
+
+.pb-context-field.pb-context-field--grow {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.pb-context-search {
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff);
+  color: var(--text, #111);
+  font-size: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pb-context-search:focus {
+  outline: none;
+  border-color: var(--accent, #E8523A);
+}
+
+/* == LEGACY CONTEXT CARD (zadržano za fallback / mobile) == */
 
 .pb-context-card {
   background: var(--surface, #fff);
@@ -574,11 +671,76 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
 /* == ALARMS == */
 
 .pb-alarm-box {
-  margin-bottom: 14px;
-  padding: 10px 12px;
+  margin-bottom: 10px;
   border-radius: 8px;
   background: rgba(255, 200, 80, 0.08);
   border: 1px solid rgba(255, 200, 80, 0.3);
+  overflow: hidden;
+}
+
+.pb-alarm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.pb-alarm-toggle:hover {
+  background: rgba(255, 200, 80, 0.12);
+}
+
+.pb-alarm-summary {
+  font-weight: 600;
+  color: var(--text, #111);
+  white-space: nowrap;
+}
+
+.pb-alarm-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.pb-alarm-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.pb-alarm-pill--red { background: rgba(192, 57, 43, 0.15); color: #c0392b; }
+.pb-alarm-pill--yellow { background: rgba(201, 148, 26, 0.15); color: #c9941a; }
+.pb-alarm-pill--green { background: rgba(30, 132, 73, 0.15); color: #1e8449; }
+
+[data-theme="dark"] .pb-alarm-pill--red { color: #f07178; }
+[data-theme="dark"] .pb-alarm-pill--yellow { color: #e6c86e; }
+[data-theme="dark"] .pb-alarm-pill--green { color: #6fcf97; }
+
+.pb-alarm-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text3, #6b7280);
+  transition: transform 0.2s;
+}
+
+.pb-alarm-chevron.open {
+  transform: rotate(180deg);
+}
+
+.pb-alarm-list {
+  padding: 4px 12px 10px;
+  border-top: 1px solid rgba(255, 200, 80, 0.3);
 }
 
 .pb-alarm {
@@ -3054,7 +3216,7 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   padding-top: env(safe-area-inset-top, 0px);
 }
 
-/* Jedini vertikalni scroll: dovoljno odstoja od zalepljenog header+tab+filter bloka. */
+/* Jedini vertikalni scroll: bez void-a posle Sprint 2A — chrome i tab-body se dodiruju. */
 body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-tab-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -3064,9 +3226,9 @@ body.desktop-erp-module.module-projektni-biro:not(.hub-active):not(.m-body) .pb-
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  scroll-padding-top: 20px;
-  margin-top: 8px;
-  padding-top: 28px;
+  scroll-padding-top: 8px;
+  margin-top: 0;
+  padding-top: 8px;
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }

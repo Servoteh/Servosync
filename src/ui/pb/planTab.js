@@ -36,6 +36,8 @@ const IC_REFRESH = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" 
 /* Inicijalno stanje panela "Opterećenost" — učitava se iz PB state-a pri prvom render-u. */
 let _loadOpen = false;
 let _loadOpenLoaded = false;
+/* Alarm box je default zatvoren — vidi se samo summary badge ("⚠ 3 alarma"). */
+let _alarmsOpen = false;
 
 /** Jednokratno vezivanje resize/scroll/Escape; callback se ažurira svakim paint() (renderPlanTab se ponovo poziva pri svakom ulasku u Plan tab). */
 let _pbPlanFloatViewportWired = false;
@@ -604,12 +606,30 @@ export function renderPlanTab(root, ctx) {
     const sorted = sortTasks(tasks, sortCol, sortDir);
     const alarms = buildAlarms(ctx.tasks || [], ctx.loadStats || []);
 
-    /* ── Alarms ── */
-    const alarmHtml = alarms.length
-      ? `<div class="pb-alarm-box" role="alert">
-          ${alarms.map(a => `<div class="pb-alarm pb-alarm--${escHtml(a.level)}">${escHtml(a.text)}</div>`).join('')}
-        </div>`
-      : '';
+    /* ── Alarms (collapsible — default zatvoren, summary badge pokazuje broj) ── */
+    let alarmHtml = '';
+    if (alarms.length) {
+      const counts = { red: 0, yellow: 0, green: 0 };
+      for (const a of alarms) {
+        if (a.level in counts) counts[a.level] += 1;
+      }
+      const summary = [
+        counts.red ? `<span class="pb-alarm-pill pb-alarm-pill--red">${counts.red} kritično</span>` : '',
+        counts.yellow ? `<span class="pb-alarm-pill pb-alarm-pill--yellow">${counts.yellow} upozorenja</span>` : '',
+        counts.green ? `<span class="pb-alarm-pill pb-alarm-pill--green">${counts.green} završeno</span>` : '',
+      ].filter(Boolean).join(' ');
+      alarmHtml = `
+        <div class="pb-alarm-box ${_alarmsOpen ? 'pb-alarm-box--open' : ''}" role="alert">
+          <button type="button" class="pb-alarm-toggle" id="pbAlarmsToggle" aria-expanded="${_alarmsOpen ? 'true' : 'false'}">
+            <span class="pb-alarm-summary">⚠ ${alarms.length} ${alarms.length === 1 ? 'alarm' : 'alarma'}</span>
+            <span class="pb-alarm-pills">${summary}</span>
+            <span class="pb-alarm-chevron ${_alarmsOpen ? 'open' : ''}">${IC_CHEVRON}</span>
+          </button>
+          ${_alarmsOpen ? `<div class="pb-alarm-list">
+            ${alarms.map(a => `<div class="pb-alarm pb-alarm--${escHtml(a.level)}">${escHtml(a.text)}</div>`).join('')}
+          </div>` : ''}
+        </div>`;
+    }
 
     /* ── Load section (collapsible) ── */
     const loadRowsHtml = (ctx.loadStats || []).map(r => {
@@ -669,10 +689,6 @@ export function renderPlanTab(root, ctx) {
 
     const filterHtml = `
       <div class="pb-filter-toolbar">
-        <div class="pb-ft-field">
-          <span class="pb-ft-label">Pretraga</span>
-          <input type="search" class="pb-ft-search" id="pbSearch" placeholder="Pretraži naziv..." value="${escHtml(filters.search)}" />
-        </div>
         <div class="pb-ft-field">
           <span class="pb-ft-label">Status</span>
           <select id="pbFStatus" class="pb-ft-select ${filters.status !== 'all' ? 'active' : ''}">
@@ -738,13 +754,12 @@ export function renderPlanTab(root, ctx) {
       content?.classList.toggle('open', _loadOpen);
       chevron?.classList.toggle('open', _loadOpen);
     });
-
-    root.querySelector('#pbSearch')?.addEventListener('input', e => {
-      filters.search = e.target.value;
-      syncPbModuleFilters({ moduleSearch: filters.search });
-      if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
-      _searchDebounceTimer = setTimeout(() => paintBody(), 180);
+    root.querySelector('#pbAlarmsToggle')?.addEventListener('click', () => {
+      _alarmsOpen = !_alarmsOpen;
+      paint();
     });
+
+    // #pbSearch je preseljen u chrome (index.js); listener više nije potreban.
     root.querySelector('#pbFStatus')?.addEventListener('change', e => {
       filters.status = e.target.value;
       syncPbModuleFilters({ moduleStatus: filters.status });
