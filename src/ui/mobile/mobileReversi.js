@@ -1,6 +1,8 @@
 /**
- * Mobilni Reversi hub — skeniranje, mašina (ljubičasto), operater (crveno),
- * pregled zaduženja (zeleno). Optimizovano za iOS/Android (safe-area, 72px tap).
+ * Mobilno izdavanje reznog alata — layout kao /m (Lokacije), druge funkcije.
+ *
+ * Ljubičasto: broj mašine | Crveno: operater | Zeleno: pregled zaduženja
+ * Plavo (primary): skeniranje RZN barkoda
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
@@ -16,7 +18,7 @@ import {
   fetchCuttingByMachine,
 } from '../../services/reversiService.js';
 import { openReversiScanOverlay } from '../reversi/scanOverlay.js';
-import { openQuickIssueModal } from '../reversi/quickIssueModal.js';
+import { openCuttingToolIssueScannerModal } from '../reversi/cuttingToolScannerModal.js';
 
 const SHELL = 'm-shell m-rev-shell';
 
@@ -27,7 +29,19 @@ function fmtDate(iso) {
   return d.toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'numeric', year: 'numeric' });
 }
 
-function headerHtml(title, sub, backAct = 'back') {
+/** Header kao SERVOTEH MAGACIN — naslov levo, odjava desno. */
+function magacinStyleHeaderHtml(title, sub) {
+  return `
+    <header class="m-header">
+      <div class="m-brand">
+        <div class="m-brand-title">${escHtml(title)}</div>
+        <div class="m-brand-sub">${escHtml(sub)}</div>
+      </div>
+      <button type="button" class="m-btn-ghost" data-act="backMagacin" aria-label="Nazad na magacin">⎋</button>
+    </header>`;
+}
+
+function subHeaderHtml(title, sub, backAct = 'back') {
   const auth = getAuth();
   const email = auth?.user?.email || '—';
   return `
@@ -37,7 +51,7 @@ function headerHtml(title, sub, backAct = 'back') {
         <div class="m-brand-title">${escHtml(title)}</div>
         <div class="m-brand-sub">${escHtml(sub)}</div>
       </div>
-      <button type="button" class="m-btn-ghost" data-act="home" aria-label="Početna">⌂</button>
+      <button type="button" class="m-btn-ghost" data-act="homeRezni" aria-label="Početna rezni alat">⌂</button>
     </header>
     <div class="m-user-strip">
       <span class="m-user-email">${escHtml(email)}</span>
@@ -50,7 +64,7 @@ function ctxStripHtml() {
   return `
     <div class="m-rev-ctx-strip">
       <span class="m-rev-ctx m-rev-ctx--machine ${m ? 'is-set' : ''}">
-        <span class="m-rev-ctx-label">Mašina</span>
+        <span class="m-rev-ctx-label">Broj mašine</span>
         <span class="m-rev-ctx-val">${m ? escHtml(m.rj_code) : '—'}</span>
       </span>
       <span class="m-rev-ctx m-rev-ctx--operator ${o ? 'is-set' : ''}">
@@ -60,7 +74,7 @@ function ctxStripHtml() {
     </div>`;
 }
 
-function bindNav(mountEl, ctx, defaultBack = '/m/reversi') {
+function bindSubNav(mountEl, ctx, defaultBack = '/m/rezni-alat') {
   mountEl.addEventListener('click', (ev) => {
     const act = ev.target.closest('[data-act]')?.dataset?.act;
     if (!act) return;
@@ -68,8 +82,8 @@ function bindNav(mountEl, ctx, defaultBack = '/m/reversi') {
       case 'back':
         ctx.onNavigate(defaultBack);
         break;
-      case 'home':
-        ctx.onNavigate('/m');
+      case 'homeRezni':
+        ctx.onNavigate('/m/rezni-alat');
         break;
       default:
         break;
@@ -78,38 +92,39 @@ function bindNav(mountEl, ctx, defaultBack = '/m/reversi') {
 }
 
 /**
+ * Posebna stranica — izdavanje reznog alata (kao /m za lokacije).
  * @param {HTMLElement} mountEl
  * @param {{ onNavigate: (path: string) => void }} ctx
  */
 export function renderMobileReversiHub(mountEl, ctx) {
   if (!canAccessReversi()) {
-    mountEl.innerHTML = `<div class="${SHELL}"><main class="m-main"><p>Nemate pristup modulu Reversi.</p></div>`;
+    mountEl.innerHTML = `<div class="${SHELL}"><main class="m-main"><p>Nemate pristup.</p></main></div>`;
     return { teardown: () => {} };
   }
 
   mountEl.innerHTML = `
-    <div class="${SHELL}">
-      ${headerHtml('REVERSI — ALATI', 'Zaduženja i rezni alat', 'home')}
+    <div class="${SHELL}" id="mRezniShell">
+      ${magacinStyleHeaderHtml('IZDAVANJE REZNOG ALATA', 'Reversi — zaduženje na mašinu')}
       ${ctxStripHtml()}
       <main class="m-main">
         ${
           canManageReversi()
-            ? `<button type="button" class="m-cta m-cta-rev-issue" data-act="issue">
+            ? `<button type="button" class="m-cta m-cta-primary" data-act="scan">
           <span class="m-cta-ico">📷</span>
           <span class="m-cta-txt">
-            <span class="m-cta-title">SKENIRAJ ALAT</span>
-            <span class="m-cta-sub">Rezni alat i ručni alat — barkod RZN / ALAT</span>
+            <span class="m-cta-title">SKENIRAJ REZNI ALAT</span>
+            <span class="m-cta-sub">Pritisni i usmeri na barkod RZN-…</span>
           </span>
         </button>`
-            : ''
+            : `<p class="m-muted m-rev-hint">Pregled zaduženja je dostupan; izdavanje samo za magacionera.</p>`
         }
         <div class="m-section-head">Pre izdavanja</div>
         <div class="m-cta-row">
           <button type="button" class="m-cta m-cta-rev-machine" data-act="machine">
             <span class="m-cta-ico">⚙</span>
             <span class="m-cta-txt">
-              <span class="m-cta-title">MAŠINA</span>
-              <span class="m-cta-sub">Broj mašine, ZADU-M-…</span>
+              <span class="m-cta-title">BROJ MAŠINE</span>
+              <span class="m-cta-sub">npr. 8.3, ZADU-M-…</span>
             </span>
           </button>
           <button type="button" class="m-cta m-cta-rev-operator" data-act="operator">
@@ -127,37 +142,29 @@ export function renderMobileReversiHub(mountEl, ctx) {
             <span class="m-cta-sub">Filter po osobi i broju mašine</span>
           </span>
         </button>
-        <button type="button" class="m-cta m-cta-secondary" data-act="desktop">
-          <span class="m-cta-ico">🖥</span>
-          <span class="m-cta-txt">
-            <span class="m-cta-title">PUN MODUL</span>
-            <span class="m-cta-sub">Inventar, magacin, štampa nalepnica</span>
-          </span>
-        </button>
       </main>
     </div>`;
 
   document.body.classList.add('m-body', 'm-rev-body');
-  bindNav(mountEl, ctx, '/m');
 
   mountEl.addEventListener('click', (ev) => {
     const act = ev.target.closest('[data-act]')?.dataset?.act;
-    if (!act || act === 'back' || act === 'home') return;
+    if (!act) return;
     switch (act) {
-      case 'issue':
-        ctx.onNavigate('/m/reversi/issue');
+      case 'backMagacin':
+        ctx.onNavigate('/m');
+        break;
+      case 'scan':
+        ctx.onNavigate('/m/rezni-alat/scan');
         break;
       case 'machine':
-        ctx.onNavigate('/m/reversi/machine');
+        ctx.onNavigate('/m/rezni-alat/masina');
         break;
       case 'operator':
-        ctx.onNavigate('/m/reversi/operator');
+        ctx.onNavigate('/m/rezni-alat/operater');
         break;
       case 'overview':
-        ctx.onNavigate('/m/reversi/overview');
-        break;
-      case 'desktop':
-        ctx.onNavigate('/reversi');
+        ctx.onNavigate('/m/rezni-alat/pregled');
         break;
       default:
         break;
@@ -210,7 +217,7 @@ export function renderMobileReversiMachine(mountEl, ctx) {
 
   mountEl.innerHTML = `
     <div class="${SHELL}">
-      ${headerHtml('MAŠINA', 'Broj mašine za rezni alat')}
+      ${subHeaderHtml('BROJ MAŠINE', 'Skeniraj ili izaberi mašinu')}
       <main class="m-main m-rev-form-main">
         <div class="m-rev-current m-rev-current--machine" id="mRevMachCurrent">
           ${cur ? `<strong class="rev-mono">${escHtml(cur.rj_code)}</strong> ${escHtml(cur.name || '')}` : '<span class="m-muted">Nije izabrana</span>'}
@@ -234,7 +241,7 @@ export function renderMobileReversiMachine(mountEl, ctx) {
     </div>`;
 
   document.body.classList.add('m-body', 'm-rev-body');
-  bindNav(mountEl, ctx);
+  bindSubNav(mountEl, ctx);
 
   void fetchMachines().then((r) => {
     machines = r.ok && Array.isArray(r.data) ? r.data : [];
@@ -243,7 +250,7 @@ export function renderMobileReversiMachine(mountEl, ctx) {
 
   mountEl.addEventListener('click', (ev) => {
     const act = ev.target.closest('[data-act]')?.dataset?.act;
-    if (!act || act === 'back' || act === 'home') return;
+    if (!act || act === 'back' || act === 'homeRezni') return;
     if (act === 'scanMachine') {
       openReversiScanOverlay({
         title: 'Skeniraj mašinu',
@@ -273,7 +280,7 @@ export function renderMobileReversiMachine(mountEl, ctx) {
       const hit = machines.find((m) => m.rj_code === code);
       setMobileRevMachine({ rj_code: code, name: hit?.name || '' });
       paint();
-      showToast('Mašina sačuvana');
+      showToast('Broj mašine sačuvan');
       return;
     }
     if (act === 'clearMachine') {
@@ -309,7 +316,7 @@ export function renderMobileReversiOperator(mountEl, ctx) {
 
   mountEl.innerHTML = `
     <div class="${SHELL}">
-      ${headerHtml('OPERATER', 'Ime radnika — ID kartica')}
+      ${subHeaderHtml('OPERATER', 'Skeniraj ID karticu radnika')}
       <main class="m-main m-rev-form-main">
         <div class="m-rev-current m-rev-current--operator" id="mRevOpCurrent">
           ${cur ? `<strong>${escHtml(cur.full_name)}</strong>` : '<span class="m-muted">Nije izabran</span>'}
@@ -328,11 +335,11 @@ export function renderMobileReversiOperator(mountEl, ctx) {
     </div>`;
 
   document.body.classList.add('m-body', 'm-rev-body');
-  bindNav(mountEl, ctx);
+  bindSubNav(mountEl, ctx);
 
   mountEl.addEventListener('click', (ev) => {
     const act = ev.target.closest('[data-act]')?.dataset?.act;
-    if (!act || act === 'back' || act === 'home') return;
+    if (!act || act === 'back' || act === 'homeRezni') return;
     if (act === 'scanOperator') {
       openReversiScanOverlay({
         title: 'Skeniraj operatera',
@@ -451,11 +458,11 @@ export async function renderMobileReversiOverview(mountEl, ctx) {
 
   mountEl.innerHTML = `
     <div class="${SHELL}">
-      ${headerHtml('PREGLED ZADUŽENJA', 'Rezni alat na mašinama')}
+      ${subHeaderHtml('PREGLED ZADUŽENJA', 'Rezni alat na mašinama')}
       <main class="m-main m-rev-overview-main">
         <div class="m-rev-filters">
           <label class="m-field m-field--compact">
-            <span class="m-field-label m-field-label--machine">Mašina</span>
+            <span class="m-field-label m-field-label--machine">Broj mašine</span>
             <input type="text" id="mRevFMachine" class="m-input" placeholder="npr. 8.3" value="${escHtml(state.machineFilter)}"/>
           </label>
           <label class="m-field m-field--compact">
@@ -473,7 +480,7 @@ export async function renderMobileReversiOverview(mountEl, ctx) {
     </div>`;
 
   document.body.classList.add('m-body', 'm-rev-body');
-  bindNav(mountEl, ctx);
+  bindSubNav(mountEl, ctx);
 
   let deb = null;
   mountEl.addEventListener('input', (ev) => {
@@ -499,39 +506,38 @@ export async function renderMobileReversiOverview(mountEl, ctx) {
 }
 
 /**
- * Izdavanje — rezni alat (scanner modal) ili Quick Issue ako nema mašine.
+ * Skeniranje i izdavanje reznog alata (modal kao na desktopu).
  * @param {HTMLElement} mountEl
  * @param {{ onNavigate: (path: string) => void }} ctx
  */
 export function renderMobileReversiIssue(mountEl, ctx) {
   if (!canManageReversi()) {
     showToast('Nemate pravo za izdavanje');
-    ctx.onNavigate('/m/reversi');
+    ctx.onNavigate('/m/rezni-alat');
+    return { teardown: () => {} };
+  }
+
+  const machine = getMobileRevMachine();
+  const operator = getMobileRevOperator();
+  if (!machine?.rj_code) {
+    showToast('Prvo izaberi broj mašine');
+    ctx.onNavigate('/m/rezni-alat/masina');
+    return { teardown: () => {} };
+  }
+  if (!operator?.id) {
+    showToast('Prvo izaberi operatera');
+    ctx.onNavigate('/m/rezni-alat/operater');
     return { teardown: () => {} };
   }
 
   mountEl.innerHTML = `<div class="m-shell m-shell-loading"><div class="m-loading-dot"></div></div>`;
   document.body.classList.add('m-body', 'm-rev-body', 'm-rev-issue-active');
 
-  const goBack = () => ctx.onNavigate('/m/reversi');
-  const machine = getMobileRevMachine();
-  const operator = getMobileRevOperator();
+  const goBack = () => ctx.onNavigate('/m/rezni-alat');
 
-  const preMachine = machine ? { rj_code: machine.rj_code, name: machine.name } : null;
-  const preEmployee = operator
-    ? { id: operator.id, full_name: operator.full_name }
-    : null;
-
-  openQuickIssueModal({
-    preselectedMachine: preMachine,
-    preselectedRecipient: operator
-      ? {
-          type: 'EMPLOYEE',
-          employee_id: operator.id,
-          employee_name: operator.full_name,
-          department: operator.department || '',
-        }
-      : null,
+  openCuttingToolIssueScannerModal({
+    preselectedMachine: { rj_code: machine.rj_code, name: machine.name },
+    preselectedEmployee: { id: operator.id, full_name: operator.full_name },
     mobileLayout: true,
     onClose: goBack,
     onSuccess: goBack,

@@ -33,11 +33,11 @@ function normalizePathname(pathname) {
      | 'history'
      | 'batch'
      | 'lookup'
-     | 'reversi'
-     | 'reversi-issue'
-     | 'reversi-machine'
-     | 'reversi-operator'
-     | 'reversi-overview'
+     | 'rezni-alat'
+     | 'rezni-alat-scan'
+     | 'rezni-alat-masina'
+     | 'rezni-alat-operater'
+     | 'rezni-alat-pregled'
  * }}
  */
 export function pathnameToRoute(pathname) {
@@ -75,20 +75,20 @@ export function pathnameToRoute(pathname) {
   if (p === '/m/lookup') {
     return { kind: 'mobile', mobileScreen: 'lookup' };
   }
-  if (p === '/m/reversi') {
-    return { kind: 'mobile', mobileScreen: 'reversi' };
+  if (p === '/m/rezni-alat' || p === '/m/reversi') {
+    return { kind: 'mobile', mobileScreen: 'rezni-alat' };
   }
-  if (p === '/m/reversi/issue') {
-    return { kind: 'mobile', mobileScreen: 'reversi-issue' };
+  if (p === '/m/rezni-alat/scan' || p === '/m/reversi/issue') {
+    return { kind: 'mobile', mobileScreen: 'rezni-alat-scan' };
   }
-  if (p === '/m/reversi/machine') {
-    return { kind: 'mobile', mobileScreen: 'reversi-machine' };
+  if (p === '/m/rezni-alat/masina' || p === '/m/reversi/machine') {
+    return { kind: 'mobile', mobileScreen: 'rezni-alat-masina' };
   }
-  if (p === '/m/reversi/operator') {
-    return { kind: 'mobile', mobileScreen: 'reversi-operator' };
+  if (p === '/m/rezni-alat/operater' || p === '/m/reversi/operator') {
+    return { kind: 'mobile', mobileScreen: 'rezni-alat-operater' };
   }
-  if (p === '/m/reversi/overview') {
-    return { kind: 'mobile', mobileScreen: 'reversi-overview' };
+  if (p === '/m/rezni-alat/pregled' || p === '/m/reversi/overview') {
+    return { kind: 'mobile', mobileScreen: 'rezni-alat-pregled' };
   }
   if (p === '/plan-montaze') {
     return { kind: 'module', moduleId: 'plan-montaze' };

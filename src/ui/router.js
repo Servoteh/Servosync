@@ -719,7 +719,7 @@ function showModulePlaceholder(moduleId, options = {}) {
  * vrati. Za sve ekrane koristi jedan `#app` mount — pojedinačni render-i
  * sami vraćaju teardown funkciju koju čuvamo u `currentMobileTeardown`.
  *
- * @param {'home'|'scan'|'manual'|'history'|'batch'|'lookup'|'reversi'|'reversi-issue'|'reversi-machine'|'reversi-operator'|'reversi-overview'} screen
+ * @param {'home'|'scan'|'manual'|'history'|'batch'|'lookup'|'rezni-alat'|'rezni-alat-scan'|'rezni-alat-masina'|'rezni-alat-operater'|'rezni-alat-pregled'} screen
  * @param {{ skipUrlSync?: boolean }} [opts]
  */
 async function showMobile(screen, opts = {}) {
@@ -729,11 +729,11 @@ async function showMobile(screen, opts = {}) {
   clearMount(leaving);
   if (!opts.skipUrlSync) {
     const revPaths = {
-      reversi: '/m/reversi',
-      'reversi-issue': '/m/reversi/issue',
-      'reversi-machine': '/m/reversi/machine',
-      'reversi-operator': '/m/reversi/operator',
-      'reversi-overview': '/m/reversi/overview',
+      'rezni-alat': '/m/rezni-alat',
+      'rezni-alat-scan': '/m/rezni-alat/scan',
+      'rezni-alat-masina': '/m/rezni-alat/masina',
+      'rezni-alat-operater': '/m/rezni-alat/operater',
+      'rezni-alat-pregled': '/m/rezni-alat/pregled',
     };
     const path = screen === 'home' ? '/m' : revPaths[screen] || `/m/${screen}`;
     syncBrowserUrl(path);
@@ -766,15 +766,15 @@ async function showMobile(screen, opts = {}) {
       result = await renderMobileBatch(mountEl, navCtx);
     } else if (screen === 'lookup') {
       result = await renderMobileLookup(mountEl, navCtx);
-    } else if (screen === 'reversi') {
+    } else if (screen === 'rezni-alat') {
       result = renderMobileReversiHub(mountEl, navCtx);
-    } else if (screen === 'reversi-issue') {
+    } else if (screen === 'rezni-alat-scan') {
       result = renderMobileReversiIssue(mountEl, navCtx);
-    } else if (screen === 'reversi-machine') {
+    } else if (screen === 'rezni-alat-masina') {
       result = renderMobileReversiMachine(mountEl, navCtx);
-    } else if (screen === 'reversi-operator') {
+    } else if (screen === 'rezni-alat-operater') {
       result = renderMobileReversiOperator(mountEl, navCtx);
-    } else if (screen === 'reversi-overview') {
+    } else if (screen === 'rezni-alat-pregled') {
       result = await renderMobileReversiOverview(mountEl, navCtx);
     } else {
       navigateToAppPath('/m');

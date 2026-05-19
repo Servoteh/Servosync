@@ -14,7 +14,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { getAuth, canAccessReversi, canManageReversi } from '../../state/auth.js';
+import { getAuth, canAccessReversi } from '../../state/auth.js';
 import { logout } from '../../services/auth.js';
 import { resetKadrovskaState } from '../../state/kadrovska.js';
 import {
@@ -96,39 +96,11 @@ export function renderMobileHome(mountEl, ctx) {
              fallback kad nema barkoda. -->
         ${
           canAccessReversi()
-            ? `<div class="m-section-head">Reversi — alati</div>
-        ${
-          canManageReversi()
-            ? `<button type="button" class="m-cta m-cta-rev-issue" data-act="revIssue">
-          <span class="m-cta-ico">📷</span>
+            ? `<button type="button" class="m-cta m-cta-rev-entry" data-act="rezniAlat">
+          <span class="m-cta-ico">🔧</span>
           <span class="m-cta-txt">
-            <span class="m-cta-title">SKENIRAJ ALAT</span>
-            <span class="m-cta-sub">Rezni i ručni alat — barkod RZN / ALAT</span>
-          </span>
-        </button>`
-            : ''
-        }
-        <div class="m-cta-row">
-          <button type="button" class="m-cta m-cta-rev-machine" data-act="revMachine">
-            <span class="m-cta-ico">⚙</span>
-            <span class="m-cta-txt">
-              <span class="m-cta-title">MAŠINA</span>
-              <span class="m-cta-sub">Broj mašine</span>
-            </span>
-          </button>
-          <button type="button" class="m-cta m-cta-rev-operator" data-act="revOperator">
-            <span class="m-cta-ico">👤</span>
-            <span class="m-cta-txt">
-              <span class="m-cta-title">OPERATER</span>
-              <span class="m-cta-sub">Ime radnika</span>
-            </span>
-          </button>
-        </div>
-        <button type="button" class="m-cta m-cta-rev-overview" data-act="revOverview">
-          <span class="m-cta-ico">📋</span>
-          <span class="m-cta-txt">
-            <span class="m-cta-title">PREGLED ZADUŽENJA</span>
-            <span class="m-cta-sub">Filter po osobi i mašini</span>
+            <span class="m-cta-title">IZDAVANJE REZNOG ALATA</span>
+            <span class="m-cta-sub">Mašina, operater, sken RZN, pregled zaduženja</span>
           </span>
         </button>`
             : ''
@@ -197,20 +169,8 @@ export function renderMobileHome(mountEl, ctx) {
       case 'scanWarehouse':
         ctx.onNavigate('/m/scan?cat=warehouse');
         break;
-      case 'revIssue':
-        ctx.onNavigate('/m/reversi/issue');
-        break;
-      case 'revMachine':
-        ctx.onNavigate('/m/reversi/machine');
-        break;
-      case 'revOperator':
-        ctx.onNavigate('/m/reversi/operator');
-        break;
-      case 'revOverview':
-        ctx.onNavigate('/m/reversi/overview');
-        break;
-      case 'reversi':
-        ctx.onNavigate('/m/reversi');
+      case 'rezniAlat':
+        ctx.onNavigate('/m/rezni-alat');
         break;
       case 'lookup':
         ctx.onNavigate('/m/lookup');

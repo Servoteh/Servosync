@@ -946,10 +946,21 @@ body.m-body #app {
 
 /* ── Reversi mobilni (ljubičasto / crveno / zeleno) ─────────────────────── */
 
+.m-cta-rev-entry {
+  background: linear-gradient(135deg, #0f766e 0%, #115e59 100%);
+  border-color: rgba(45, 212, 191, 0.4);
+  box-shadow: 0 4px 20px rgba(15, 118, 110, 0.35);
+}
+
 .m-cta-rev-issue {
   background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
   box-shadow: 0 4px 20px rgba(13, 148, 136, 0.35);
   border-color: rgba(45, 212, 191, 0.35);
+}
+
+.m-rev-hint {
+  padding: 12px 4px;
+  text-align: center;
 }
 
 .m-cta-rev-machine {
