@@ -41,7 +41,16 @@ import { openQuickIssueModal } from './quickIssueModal.js';
 import { rowsToCsv, CSV_BOM, parseCsv } from '../../lib/csv.js';
 import { formatRevAssetKind, parseRevAssetKindCsv, REV_ASSET_KIND_OPTIONS, REV_ASSET_KIND_LABEL } from '../../lib/revAssetKind.js';
 import { ICON_REZNI_MACHINING } from './revMachiningIcon.js';
-import { revIcon } from './revMockUi.js';
+import {
+  revActBtnHtml,
+  revDocStatusPillHtml,
+  revIcon,
+  revPageHeaderHtml,
+  revSearchFieldHtml,
+  revStatCardHtml,
+  revTableMetaHtml,
+  revToolStatusPillHtml,
+} from './revMockUi.js';
 
 const ICON_TAB_ZAD = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14h6"/><path d="M9 18h6"/></svg>`;
 const ICON_TAB_INV = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>`;
@@ -482,94 +491,86 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
 
       const myBlock =
         myIssued.length > 0
-          ? `<details class="rev-my-panel" ${myIssuedOpen ? 'open' : ''}>
+          ? `<details class="rev-my-panel rev-my-panel--mock" ${myIssuedOpen ? 'open' : ''}>
           <summary>Moja trenutna zaduženja <span class="rev-my-panel-badge">${myIssued.length}</span></summary>
           <ul class="rev-my-list">${myIssued.map((r) => `<li><strong>${escHtml(r.naziv)}</strong> <span class="rev-muted">(${escHtml(r.oznaka)})</span> · zadužio ${fmtDateShort(r.issued_at)}</li>`).join('')}</ul>
         </details>`
           : '';
 
+      const docSeg = [
+        ['sve', 'Sve'],
+        ['aktivno', 'U toku'],
+        ['prekoraceno', 'Rok istekao'],
+        ['vraceno', 'Završeno'],
+        ['otkazano', 'Otkazano'],
+      ]
+        .map(
+          ([id, lab]) =>
+            `<button type="button" class="rev-seg-btn ${docFilters.uiStatus === id ? 'is-on' : ''}" data-rev-doc-st="${id}">${lab}</button>`,
+        )
+        .join('');
+
+      const zadHdrActions = [
+        `<button type="button" class="rev-btn rev-btn--secondary" id="revBtnExportDocsCsv">${revIcon('download', 16, 'rev-ic')} CSV</button>`,
+        `<button type="button" class="rev-btn rev-btn--secondary" id="revBtnPrintZad">Štampa prikaza</button>`,
+        canManageReversi()
+          ? `<button type="button" class="rev-btn rev-btn--primary rev-quick-issue-btn" id="revBtnQuickIssue">${revIcon('plus', 16, 'rev-ic')} Quick Issue</button>`
+          : '',
+        canManageReversi()
+          ? `<button type="button" class="rev-btn rev-btn--primary" id="revBtnNewDoc">${revIcon('plus', 16, 'rev-ic')} Novo zaduženje</button>`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('');
+
       body.innerHTML = `
         <div class="rev-print-area">
-        <p class="rev-module-hint">Pregled <strong>revers dokumenata</strong>: izdavanje alata i robe kooperantu uz rok povraćaja. Jedan dokument može sadržati više stavki (alatki).</p>
-        <div class="rev-stat-grid rev-stat-grid--kpi-zad">
-          <div class="rev-stat-card rev-stat-card--primary">
-            <div class="rev-stat-label">Aktivna zaduženja</div>
-            <div class="rev-stat-value">${nAkt}</div>
-            <div class="rev-stat-hint">dokumenti u radu (otvoreni ili delimično vraćeni), u skladu sa filterom ispod</div>
-          </div>
-          <div class="rev-stat-card ${nOver > 0 ? 'rev-stat-card--alert' : ''}">
-            <div class="rev-stat-label">Prekoračen rok</div>
-            <div class="rev-stat-value">${nOver}</div>
-            <div class="rev-stat-hint">${nOver > 0 ? 'Rok je istekao, revers još nije zatvoren' : 'Nema aktivnih dokumenata sa isteklim rokom'}</div>
-          </div>
-          <div class="rev-stat-card rev-stat-card--ok">
-            <div class="rev-stat-label">Uspešno vraćeno</div>
-            <div class="rev-stat-value">${nRet}</div>
-            <div class="rev-stat-hint">dokumenti zatvoreni povraćajem</div>
-          </div>
-          <div class="rev-stat-card">
-            <div class="rev-stat-label">Otkazano</div>
-            <div class="rev-stat-value">${nCan}</div>
-            <div class="rev-stat-hint">poništeni dokumenti pre zatvaranja</div>
-          </div>
-          <div class="rev-stat-card rev-stat-card--teal">
-            <div class="rev-stat-label">Primaoci (aktivno)</div>
-            <div class="rev-stat-value">${nRecip}${nRecipTrunc ? '+' : ''}</div>
-            <div class="rev-stat-hint">${
-              nRecipTrunc
-                ? 'Različiti primaoci u uzorku; stvarni broj može biti veći'
-                : 'Različiti primaoci na aktivnim reversima (otvoreno / delimično)'
-            }</div>
-          </div>
+        ${revPageHeaderHtml({
+          title: 'Zaduženja',
+          subtitle:
+            'Pregled revers dokumenata — izdavanje alata i robe kooperantu uz rok povraćaja. Jedan dokument može sadržati više stavki.',
+          iconSvg: revIcon('clipboard', 20),
+          actionsHtml: zadHdrActions,
+        })}
+        <button type="button" class="rev-quick-fab rev-btn rev-btn--primary" id="revZadQuickIssueFab">${revIcon('plus', 16, 'rev-ic')} Quick Issue</button>
+        <div class="rev-stat-grid rev-stat-grid--mock rev-stat-grid--kpi-zad">
+          ${revStatCardHtml({ label: 'Aktivna zaduženja', value: nAkt, hint: 'u radu', iconName: 'clipboard' })}
+          ${revStatCardHtml({
+            label: 'Prekoračen rok',
+            value: nOver,
+            hint: nOver > 0 ? 'istekao rok' : 'nema',
+            iconName: 'alert',
+            tone: nOver > 0 ? 'warning' : 'default',
+          })}
+          ${revStatCardHtml({ label: 'Uspešno vraćeno', value: nRet, hint: 'zatvoreno', iconName: 'check', tone: 'success' })}
+          ${revStatCardHtml({ label: 'Otkazano', value: nCan, hint: 'poništeno', iconName: 'package' })}
+          ${revStatCardHtml({
+            label: 'Primaoci (aktivno)',
+            value: `${nRecip}${nRecipTrunc ? '+' : ''}`,
+            hint: nRecipTrunc ? 'uzorak' : 'aktivno',
+            iconName: 'user',
+          })}
         </div>
 
-        <div class="rev-panel rev-toolbar-panel">
-          <div class="rev-field rev-field--grow">
-            <label class="rev-field-label">Pretraga</label>
-            <input type="search" id="revDocSearch" class="rev-input rev-input--search" placeholder="Broj dokumenta ili ime primaoca…" value="${escHtml(docFilters.search)}"/>
-          </div>
-          <div class="rev-field rev-field--month">
-            <label class="rev-field-label">Mesec izdavanja</label>
-            <div class="rev-month-row">
-              <input type="month" id="revIssuedMonth" class="rev-input" value="${escHtml(docFilters.issuedMonth)}"/>
-              <button type="button" class="rev-btn rev-btn--secondary" id="revIssuedMonthAll" title="Prikaži sve mesece">Svi</button>
+        <div class="rev-toolbar-mock">
+          ${revSearchFieldHtml('revDocSearch', docFilters.search, 'Broj dokumenta ili ime primaoca…')}
+          <div class="rev-toolbar-mock__group">
+            <span class="rev-toolbar-mock__label">Mesec</span>
+            <div class="rev-month-mock">
+              <input type="month" id="revIssuedMonth" class="rev-input rev-input--compact" value="${escHtml(docFilters.issuedMonth)}"/>
+              <button type="button" class="rev-btn rev-btn--secondary rev-btn--sm" id="revIssuedMonthAll" title="Prikaži sve mesece">Svi</button>
             </div>
           </div>
-          <div class="rev-field">
-            <label class="rev-field-label">Status dokumenta</label>
-            <div class="rev-seg" role="group">
-              ${(
-                [
-                  ['sve', 'Sve'],
-                  ['aktivno', 'U toku'],
-                  ['prekoraceno', 'Rok istekao'],
-                  ['vraceno', 'Završeno'],
-                  ['otkazano', 'Otkazano'],
-                ] 
-              )
-                .map(
-                  ([id, lab]) => `
-                <button type="button" class="rev-seg-btn ${docFilters.uiStatus === id ? 'is-on' : ''}" data-rev-doc-st="${id}">${lab}</button>`,
-                )
-                .join('')}
-            </div>
+          <div class="rev-toolbar-mock__group">
+            <span class="rev-toolbar-mock__label">Status</span>
+            <div class="rev-seg-mock" role="group">${docSeg}</div>
           </div>
-          <div class="rev-field">
-            <label class="rev-field-label">Tip dokumenta</label>
-            <select id="revDocType" class="rev-select">
-              <option value="" ${docFilters.doc_type === '' ? 'selected' : ''}>Svi tipovi</option>
-              <option value="TOOL" ${docFilters.doc_type === 'TOOL' ? 'selected' : ''}>Revers alata</option>
-              <option value="COOPERATION_GOODS" ${docFilters.doc_type === 'COOPERATION_GOODS' ? 'selected' : ''}>Kooperaciona roba</option>
-            </select>
-          </div>
-          <div class="rev-toolbar-actions">
-            <button type="button" class="rev-btn rev-btn--secondary" id="revBtnExportDocsCsv">Export CSV</button>
-            <button type="button" class="rev-btn rev-btn--secondary" id="revBtnPrintZad">Štampa prikaza</button>
-            ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revBtnQuickIssue">+ Quick Issue</button>` : ''}
-            ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revBtnNewDoc">+ Novo zaduženje</button>` : ''}
-          </div>
+          <select id="revDocType" class="rev-select rev-select--compact" title="Tip dokumenta">
+            <option value="" ${docFilters.doc_type === '' ? 'selected' : ''}>Svi tipovi</option>
+            <option value="TOOL" ${docFilters.doc_type === 'TOOL' ? 'selected' : ''}>Revers alata</option>
+            <option value="COOPERATION_GOODS" ${docFilters.doc_type === 'COOPERATION_GOODS' ? 'selected' : ''}>Kooperaciona roba</option>
+          </select>
         </div>
-        <button type="button" class="rev-quick-fab rev-btn rev-btn--primary" id="revZadQuickIssueFab">+ Quick Issue</button>
         ${myBlock}
         <div id="revDocTableHost"></div>
         </div>`;
@@ -583,10 +584,13 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
       } else {
         const today = new Date().toISOString().slice(0, 10);
         dtHost.innerHTML = `
-          <div class="rev-table-shell">
-            <table class="rev-data-table">
+          <div class="rev-table-shell rev-table-shell--mock">
+            ${revTableMetaHtml({
+              left: `Prikazano <strong>${rows.length}</strong>${docsTotal != null ? ` od ${docsTotal} dokumenata` : ''}`,
+            })}
+            <table class="rev-data-table rev-data-table--mock rev-data-table--zebra">
               <thead><tr>
-                <th>Br. dokumenta</th><th>Datum izdavanja</th><th>Primalac</th><th class="rev-th-num">Stavki</th><th>Rok povraćaja</th><th>Status</th><th class="rev-th-actions">Akcije</th>
+                <th>Br. dokumenta</th><th>Datum izdavanja</th><th>Primalac</th><th class="rev-th-num">Stavki</th><th>Rok povraćaja</th><th>Status</th><th class="rev-col-actions">Akcije</th>
               </tr></thead>
               <tbody>${rows
                 .map((d) => {
@@ -599,7 +603,6 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
                   const av = avatarHueClass(rl);
                   const canRet =
                     canManageReversi() && (d.status === 'OPEN' || d.status === 'PARTIALLY_RETURNED');
-                  const st = docStatusPresentation(d.status);
                   return `<tr data-doc-id="${escHtml(d.id)}" class="${overdue ? 'is-overdue' : ''}">
                     <td><span class="rev-mono rev-linkish">${escHtml(d.doc_number)}</span></td>
                     <td class="rev-td-muted">${fmtDateShort(d.issued_at)}</td>
@@ -611,11 +614,11 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
                     </td>
                     <td class="rev-td-center"><span class="rev-count-pill">${escHtml(String(d.line_count ?? 0))}</span></td>
                     <td class="${overdue ? 'rev-td-warn' : ''}">${d.expected_return_date ? fmtDateShort(d.expected_return_date) : '—'}${overdue ? ' <span class="rev-warn-icon" title="Prekoračen rok">!</span>' : ''}</td>
-                    <td><span class="rev-pill ${st.cls}">${escHtml(st.text)}</span></td>
+                    <td>${revDocStatusPillHtml(d.status)}</td>
                     <td class="rev-td-actions">
-                      <button type="button" class="rev-act-btn" title="Detalji" data-act="det" data-id="${escHtml(d.id)}">👁</button>
-                      ${canRet ? `<button type="button" class="rev-act-btn" title="Potvrdi povraćaj" data-act="ret" data-id="${escHtml(d.id)}">↩</button>` : ''}
-                      <button type="button" class="rev-act-btn" title="Potpisnica PDF" data-act="pdf" data-pdf-btn="${escHtml(d.id)}" data-num="${escHtml(d.doc_number)}">📄</button>
+                      ${revActBtnHtml('eye', 'Detalji', `data-act="det" data-id="${escHtml(d.id)}"`)}
+                      ${canRet ? revActBtnHtml('arrowLeft', 'Potvrdi povraćaj', `data-act="ret" data-id="${escHtml(d.id)}"`) : ''}
+                      ${revActBtnHtml('fileText', 'Potpisnica PDF', `data-act="pdf" data-pdf-btn="${escHtml(d.id)}" data-num="${escHtml(d.doc_number)}"`)}
                     </td>
                   </tr>`;
                 })
@@ -646,14 +649,14 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
             const num = btn.getAttribute('data-num');
             const doc = rows.find((r) => r.id === did);
             btn.disabled = true;
-            btn.textContent = '⏳';
+            btn.setAttribute('aria-busy', 'true');
             try {
               await handleReversalPdfClick({ docId: did, docNumber: num, docRow: doc });
             } catch (e) {
               showToast(`Greška pri generisanju PDF-a: ${e instanceof Error ? e.message : String(e)}`, 'error');
             } finally {
               btn.disabled = false;
-              btn.textContent = '📄';
+              btn.removeAttribute('aria-busy');
             }
           });
         });
@@ -803,65 +806,19 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
 
     body.innerHTML = `
       <div class="rev-print-area">
-      <p class="rev-module-hint"><strong>Inventar</strong>: svaki red u tabeli je <strong>jedna evidencijska jedinica</strong> (jedan fizički komad alata). Ista oznaka može se pojaviti u više redova ako postoji više primeraka.</p>
-      <div class="rev-stat-grid">
-        <div class="rev-stat-card rev-stat-card--primary">
-          <div class="rev-stat-label">Aktivne jedinice</div>
-          <div class="rev-stat-value">${nActTotal}</div>
-          <div class="rev-stat-hint">Ukupan broj alata u statusu „aktivan” (svaki komad = jedna stavka)</div>
-        </div>
-        <div class="rev-stat-card rev-stat-card--ok">
-          <div class="rev-stat-label">Slobodno u magacinu</div>
-          <div class="rev-stat-value">${nMag}${moreThanSample ? '+' : ''}</div>
-          <div class="rev-stat-hint">${statCardHintMagZad} Nije na aktivnom reversu.</div>
-        </div>
-        <div class="rev-stat-card rev-stat-card--amber">
-          <div class="rev-stat-label">Na reversu</div>
-          <div class="rev-stat-value">${nZad}${moreThanSample ? '+' : ''}</div>
-          <div class="rev-stat-hint">${statCardHintMagZad} Trenutno izdato aktivnim dokumentom.</div>
-        </div>
-        <div class="rev-stat-card ${nScrap > 0 ? 'rev-stat-card--alert' : ''}">
-          <div class="rev-stat-label">Otpisano (rashod)</div>
-          <div class="rev-stat-value">${nScrap}</div>
-          <div class="rev-stat-hint">Jedinice u statusu otpisan — više se ne izdaju</div>
-        </div>
-      </div>
-
-      <div class="rev-panel rev-toolbar-panel">
-        <div class="rev-field rev-field--grow">
-          <label class="rev-field-label">Pretraga po oznaci ili nazivu</label>
-          <input type="search" id="revToolSearch" class="rev-input rev-input--search" placeholder="npr. AL-001 ili naziv alata…" value="${escHtml(toolFilters.search)}"/>
-        </div>
-        <div class="rev-field">
-          <label class="rev-field-label">Klasa stavke</label>
-          <select id="revToolKind" class="rev-select">
-            <option value="ALL" ${toolFilters.asset_kind === 'ALL' || !toolFilters.asset_kind ? 'selected' : ''}>Sve</option>
-            ${REV_ASSET_KIND_OPTIONS.map(
-              (k) =>
-                `<option value="${escHtml(k)}" ${toolFilters.asset_kind === k ? 'selected' : ''}>${escHtml(REV_ASSET_KIND_LABEL[k])}</option>`,
-            ).join('')}
-          </select>
-        </div>
-        <div class="rev-field">
-          <label class="rev-field-label">Status u evidenciji</label>
-          <select id="revToolSt" class="rev-select">
-            <option value="active" ${toolFilters.status === 'active' ? 'selected' : ''}>Aktivan (može se izdati)</option>
-            <option value="scrapped" ${toolFilters.status === 'scrapped' ? 'selected' : ''}>Otpisan</option>
-            <option value="lost" ${toolFilters.status === 'lost' ? 'selected' : ''}>Izgubljen</option>
-            <option value="all" ${toolFilters.status === 'all' ? 'selected' : ''}>Svi zapisi</option>
-          </select>
-        </div>
-        <div class="rev-toolbar-actions rev-toolbar-actions--wide">
-          ${
-            canManageReversi()
-              ? `<button type="button" class="rev-btn rev-btn--primary rev-quick-issue-btn" id="revInvQuickIssue">+ Quick Issue</button>`
-              : ''
-          }
-          ${
-            canManageReversi()
-              ? `<div class="rev-split" id="revInvAddSplit">
+      ${revPageHeaderHtml({
+        title: 'Inventar alata i opreme',
+        subtitle:
+          'Svaki red je jedna evidencijska jedinica (jedan fizički komad). Ista oznaka može imati više primeraka.',
+        iconSvg: revIcon('boxes', 20),
+        actionsHtml: [
+          canManageReversi()
+            ? `<button type="button" class="rev-btn rev-btn--primary rev-quick-issue-btn" id="revInvQuickIssue">${revIcon('plus', 16, 'rev-ic')} Quick Issue</button>`
+            : '',
+          canManageReversi()
+            ? `<div class="rev-split" id="revInvAddSplit">
             <div class="rev-split-main">
-              <button type="button" class="rev-btn rev-btn--primary rev-split-primary" id="revBtnAddTool">+ Nova jedinica</button>
+              <button type="button" class="rev-btn rev-btn--primary rev-split-primary" id="revBtnAddTool">${revIcon('plus', 16, 'rev-ic')} Nova jedinica</button>
               <button type="button" class="rev-btn rev-btn--primary rev-split-caret" id="revInvAddCaret" aria-expanded="false" aria-haspopup="true" title="Još akcija za unos">▾</button>
             </div>
             <div class="rev-split-dropdown" id="revInvAddMenu" role="menu">
@@ -869,22 +826,63 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
               <button type="button" class="rev-split-item" role="menuitem" id="revToolCatalogStub">Iz kataloga…</button>
             </div>
           </div>`
-              : ''
-          }
-          <button type="button" class="rev-btn rev-btn--secondary" id="revBtnExportToolsCsv">Export CSV</button>
-        </div>
+            : '',
+          `<button type="button" class="rev-btn rev-btn--secondary" id="revBtnExportToolsCsv">${revIcon('download', 16, 'rev-ic')} CSV</button>`,
+        ]
+          .filter(Boolean)
+          .join(''),
+      })}
+      <button type="button" class="rev-quick-fab rev-btn rev-btn--primary" id="revInvQuickIssueFab">${revIcon('plus', 16, 'rev-ic')} Quick Issue</button>
+      <div class="rev-stat-grid rev-stat-grid--mock">
+        ${revStatCardHtml({ label: 'Aktivne jedinice', value: nActTotal, hint: 'aktivan', iconName: 'wrench' })}
+        ${revStatCardHtml({
+          label: 'Slobodno u magacinu',
+          value: `${nMag}${moreThanSample ? '+' : ''}`,
+          hint: 'slobodno',
+          iconName: 'warehouse',
+          tone: 'success',
+        })}
+        ${revStatCardHtml({
+          label: 'Na reversu',
+          value: `${nZad}${moreThanSample ? '+' : ''}`,
+          hint: 'izdato',
+          iconName: 'clipboard',
+        })}
+        ${revStatCardHtml({
+          label: 'Otpisano',
+          value: nScrap,
+          hint: 'rashod',
+          iconName: 'alert',
+          tone: nScrap > 0 ? 'warning' : 'default',
+        })}
+      </div>
+
+      <div class="rev-toolbar-mock">
+        ${revSearchFieldHtml('revToolSearch', toolFilters.search, 'Pretraga po oznaci, nazivu ili barkodu…')}
+        <select id="revToolKind" class="rev-select rev-select--compact" title="Klasa stavke">
+          <option value="ALL" ${toolFilters.asset_kind === 'ALL' || !toolFilters.asset_kind ? 'selected' : ''}>Sve klase</option>
+          ${REV_ASSET_KIND_OPTIONS.map(
+            (k) =>
+              `<option value="${escHtml(k)}" ${toolFilters.asset_kind === k ? 'selected' : ''}>${escHtml(REV_ASSET_KIND_LABEL[k])}</option>`,
+          ).join('')}
+        </select>
+        <select id="revToolSt" class="rev-select rev-select--compact" title="Status u evidenciji">
+          <option value="active" ${toolFilters.status === 'active' ? 'selected' : ''}>Aktivan</option>
+          <option value="scrapped" ${toolFilters.status === 'scrapped' ? 'selected' : ''}>Otpisan</option>
+          <option value="lost" ${toolFilters.status === 'lost' ? 'selected' : ''}>Izgubljen</option>
+          <option value="all" ${toolFilters.status === 'all' ? 'selected' : ''}>Svi zapisi</option>
+        </select>
       </div>
       <input type="file" id="revToolCsvFile" accept=".csv,text/csv" hidden />
       ${
         canManageReversi() && toolSelected.size > 0
-          ? `<div class="rev-bulk-bar">
-        <span>${toolSelected.size} odabrano</span>
-        <button type="button" class="rev-btn rev-btn--primary" id="revInvBulkPrint">Štampa nalepnica (${toolSelected.size})</button>
-        <button type="button" class="rev-btn rev-btn--secondary" id="revInvBulkClear">Poništi izbor</button>
+          ? `<div class="rev-bulk-bar" role="region" aria-label="Bulk akcije">
+        <span><strong>${toolSelected.size}</strong> izabrano</span>
+        <button type="button" class="rev-btn rev-btn--primary" id="revInvBulkPrint">Štampa nalepnica</button>
+        <button type="button" class="rev-btn rev-btn--secondary" id="revInvBulkClear">Poništi</button>
       </div>`
           : ''
       }
-      <button type="button" class="rev-quick-fab rev-btn rev-btn--primary" id="revInvQuickIssueFab">+ Quick Issue</button>
       <div id="revToolGridHost"></div>
       </div>`;
 
@@ -893,33 +891,39 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
       gh.innerHTML = `<div class="rev-empty-card"><p>Nema jedinica koje odgovaraju filteru.</p><p class="rev-muted">Proširite pretragu ili izaberite „Svi zapisi“ u statusu.</p>${canManageReversi() ? '<p class="rev-muted">Novi komad unosite kao posebnu jedinicu u evidenciji.</p>' : ''}</div>`;
     } else {
       gh.innerHTML = `
-        <div class="rev-table-shell">
-          <table class="rev-data-table">
+        <div class="rev-table-shell rev-table-shell--mock">
+          ${revTableMetaHtml({
+            left: `Prikazano <strong>${trows.length}</strong>${toolsTotal != null ? ` od ${toolsTotal} jedinica` : ''}`,
+          })}
+          <table class="rev-data-table rev-data-table--mock rev-data-table--zebra">
             <thead><tr>
-              ${canManageReversi() ? '<th class="rev-th-cb"><input type="checkbox" id="revInvSelAll"/></th>' : ''}
-              <th>Oznaka</th><th>Klasa</th><th>Naziv / opis</th><th>Zaduženje i lokacija</th><th>Status jedinice</th><th class="rev-th-actions">Akcije</th>
+              ${canManageReversi() ? '<th class="rev-th-cb"><input type="checkbox" id="revInvSelAll" title="Izaberi sve"/></th>' : ''}
+              <th class="rev-col-kat">Oznaka</th><th>Klasa</th><th>Naziv / opis</th><th>Zaduženje i lokacija</th><th class="rev-col-status">Status</th><th class="rev-col-actions">Akcije</th>
             </tr></thead>
             <tbody>${trows
               .map((t) => {
                 const issued = !!t.issued_holder;
-                const st = toolStatusPresentation(t);
                 const iss = toolIssuanceCellHtml(t);
                 const showZaduži = canManageReversi() && !issued && t.status === 'active';
                 const sel = toolSelected.has(t.id);
-                return `<tr class="${sel ? 'rev-data-row--selected' : ''}">
+                const kat = `<div class="rev-rzn-idstack">
+                  <span class="rev-mono rev-strong">${escHtml(t.oznaka)}</span>
+                  ${t.barcode ? `<span class="rev-mono rev-rzn-barcode">${escHtml(t.barcode)}</span>` : ''}
+                </div>`;
+                return `<tr class="rev-data-row${sel ? ' rev-data-row--selected' : ''}">
                   ${
                     canManageReversi()
                       ? `<td class="rev-td-cb"><input type="checkbox" data-rev-inv-select="${escHtml(t.id)}" ${sel ? 'checked' : ''} ${t.barcode ? '' : 'disabled title="Nema barkoda"'}/></td>`
                       : ''
                   }
-                  <td class="rev-mono rev-strong">${escHtml(t.oznaka)}${t.barcode ? `<div class="rev-mono rev-muted rev-rzn-barcode">${escHtml(t.barcode)}</div>` : ''}</td>
+                  <td>${kat}</td>
                   <td><span class="rev-pill rev-pill--muted rev-pill--sm">${escHtml(formatRevAssetKind(t.asset_kind))}</span></td>
                   <td>${escHtml(t.naziv)}</td>
                   <td>${iss}</td>
-                  <td><span class="rev-pill ${st.cls} rev-pill--sm">${escHtml(st.text)}</span></td>
+                  <td>${revToolStatusPillHtml(t)}</td>
                   <td class="rev-td-actions">
-                    <button type="button" class="rev-act-btn" data-tool-det="${escHtml(t.id)}" title="Pregled jedinice">👁</button>
-                    ${showZaduži ? `<button type="button" class="rev-act-btn rev-act-btn--primary" data-tool-zad="${escHtml(t.id)}" title="Izdaj na revers">+</button>` : ''}
+                    ${revActBtnHtml('eye', 'Pregled jedinice', `data-tool-det="${escHtml(t.id)}"`)}
+                    ${showZaduži ? `<button type="button" class="rev-act-btn rev-act-btn--primary rev-act-btn--mock" title="Izdaj na revers" data-tool-zad="${escHtml(t.id)}">${revIcon('plus', 16)}</button>` : ''}
                   </td>
                 </tr>`;
               })

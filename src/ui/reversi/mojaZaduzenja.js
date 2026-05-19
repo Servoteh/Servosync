@@ -1,12 +1,5 @@
 /**
  * Reversi — tab "Moja zaduženja" (Sprint RZ-4): mobilni self-service.
- *
- * Operater (rola "korisnik" ili bilo ko) vidi:
- *   - hand-tool zaduženja (v_rev_my_issued_tools)
- *   - rezni alat na mašinama na kojima trenutno radi (v_rev_my_machines_cutting_tools)
- *     fallback: rezni alat koji je on potpisao (v_rev_my_issued_cutting_tools)
- *
- * Layout je single-column, tap-friendly za telefon.
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
@@ -18,15 +11,9 @@ import {
 import { openCuttingToolReturnScannerModal } from './cuttingToolScannerModal.js';
 import { openQuickReturnModal } from './quickReturnModal.js';
 import { formatRevAssetKind } from '../../lib/revAssetKind.js';
+import { revFmtDate, revIcon, revPageHeaderHtml } from './revMockUi.js';
 
 let bodyRoot = null;
-
-function fmtDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10);
-  return d.toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'numeric', year: 'numeric' });
-}
 
 function isOverdue(iso) {
   if (!iso) return false;
@@ -36,7 +23,7 @@ function isOverdue(iso) {
 
 function handToolCard(r) {
   const overdue = isOverdue(r.expected_return_date);
-  return `<article class="rev-mz-card ${overdue ? 'is-overdue' : ''}">
+  return `<article class="rev-mz-card rev-mz-card--mock ${overdue ? 'is-overdue' : ''}">
     <header class="rev-mz-card-head">
       <span class="rev-mono rev-strong">${escHtml(r.oznaka || '')}</span>
       <span class="rev-mz-doc">${escHtml(r.doc_number || '')}</span>
@@ -48,14 +35,14 @@ function handToolCard(r) {
       ${r.pribor ? `<div class="rev-mz-meta">Pribor: ${escHtml(r.pribor)}</div>` : ''}
     </div>
     <footer class="rev-mz-card-foot">
-      <span>Zadužen ${escHtml(fmtDate(r.issued_at))}</span>
-      ${r.expected_return_date ? `<span class="${overdue ? 'rev-warn' : ''}">Rok ${escHtml(fmtDate(r.expected_return_date))}${overdue ? ' ⚠' : ''}</span>` : ''}
+      <span>Zadužen ${escHtml(revFmtDate(r.issued_at))}</span>
+      ${r.expected_return_date ? `<span class="${overdue ? 'rev-warn' : ''}">Rok ${escHtml(revFmtDate(r.expected_return_date))}${overdue ? ' !' : ''}</span>` : ''}
     </footer>
   </article>`;
 }
 
 function cuttingCard(r) {
-  return `<article class="rev-mz-card">
+  return `<article class="rev-mz-card rev-mz-card--mock">
     <header class="rev-mz-card-head">
       <span class="rev-mono rev-strong">${escHtml(r.barcode || '')}</span>
       <span class="rev-mz-mchip">${escHtml(r.recipient_machine_code || '—')}</span>
@@ -67,15 +54,13 @@ function cuttingCard(r) {
       ${r.issued_to_employee_name ? `<div class="rev-mz-meta">Potpisao: ${escHtml(r.issued_to_employee_name)}</div>` : ''}
     </div>
     <footer class="rev-mz-card-foot">
-      <span>Zadužen ${escHtml(fmtDate(r.issued_at))}</span>
+      <span>Zadužen ${escHtml(revFmtDate(r.issued_at))}</span>
       <span class="rev-muted">${escHtml(r.doc_number || '')}</span>
     </footer>
   </article>`;
 }
 
-/**
- * @param {HTMLElement} body Mount tačka
- */
+/** @param {HTMLElement} body Mount tačka */
 export async function renderMojaZaduzenjaTab(body) {
   bodyRoot = body;
   body.innerHTML = '<div class="rev-loading-card">Učitavam tvoja zaduženja…</div>';
@@ -90,8 +75,6 @@ export async function renderMojaZaduzenjaTab(body) {
   const machineRows = machines.ok && Array.isArray(machines.data) ? machines.data : [];
   const signedRows = signed.ok && Array.isArray(signed.data) ? signed.data : [];
 
-  /* Spojimo machineRows + signedRows i deduplikujemo po line_id (operater može
-   * potpisati alat za mašinu na kojoj trenutno NE radi — nikad ne propustimo). */
   const seen = new Set();
   const cuttingRows = [];
   for (const list of [machineRows, signedRows]) {
@@ -103,7 +86,6 @@ export async function renderMojaZaduzenjaTab(body) {
     }
   }
 
-  /* Grupiši rezni alat po mašini */
   const byMachine = new Map();
   for (const r of cuttingRows) {
     const k = r.recipient_machine_code || '—';
@@ -113,15 +95,17 @@ export async function renderMojaZaduzenjaTab(body) {
   const machineKeys = Array.from(byMachine.keys()).sort();
 
   body.innerHTML = `
-    <div class="rev-mz-shell">
-      <header class="rev-mz-header">
-        <h2 class="rev-mz-title">Moja zaduženja</h2>
-        <p class="rev-muted rev-mz-subtitle">Trenutno stanje alata na vama i na vašim mašinama.</p>
-      </header>
+    <div class="rev-mz-shell rev-mz-shell--mock">
+      ${revPageHeaderHtml({
+        title: 'Moja zaduženja',
+        subtitle: 'Trenutno stanje alata na vama i na vašim mašinama.',
+        iconSvg: revIcon('user', 20),
+      })}
+      <button type="button" class="rev-quick-fab rev-btn rev-btn--primary" id="revMzQuickReturnFab">${revIcon('camera', 16, 'rev-ic')} Skeniraj</button>
 
       <section class="rev-mz-section">
         <div class="rev-mz-section-head">
-          <h3>Rezni alat na mašinama</h3>
+          <h3>${revIcon('scissors', 16, 'rev-ic rev-ic--inline')} Rezni alat na mašinama</h3>
           <span class="rev-mz-count">${cuttingRows.length}</span>
         </div>
         ${
@@ -137,15 +121,15 @@ export async function renderMojaZaduzenjaTab(body) {
                 )
                 .join('')
         }
-        <div class="rev-mz-actions">
-          <button type="button" class="rev-btn rev-btn--secondary" id="revMzReturn">↩ Vrati alat (skener)</button>
-          <button type="button" class="rev-btn rev-btn--secondary" id="revMzQuickReturn">Skeniraj vraćanje</button>
+        <div class="rev-mz-fab-actions">
+          <button type="button" class="rev-btn rev-btn--secondary" id="revMzReturn">${revIcon('arrowLeft', 16, 'rev-ic')} Vrati alat (skener)</button>
+          <button type="button" class="rev-btn rev-btn--primary" id="revMzQuickReturn">${revIcon('camera', 16, 'rev-ic')} Skeniraj povraćaj</button>
         </div>
       </section>
 
       <section class="rev-mz-section">
         <div class="rev-mz-section-head">
-          <h3>Ručni alat (lično zaduženje)</h3>
+          <h3>${revIcon('wrench', 16, 'rev-ic rev-ic--inline')} Ručni alat (lično zaduženje)</h3>
           <span class="rev-mz-count">${handRows.length}</span>
         </div>
         ${
@@ -156,6 +140,12 @@ export async function renderMojaZaduzenjaTab(body) {
       </section>
     </div>`;
 
+  const openQr = () => {
+    openQuickReturnModal({
+      onSuccess: () => void renderMojaZaduzenjaTab(body),
+    });
+  };
+
   body.querySelector('#revMzReturn')?.addEventListener('click', () => {
     openCuttingToolReturnScannerModal({
       onSuccess: () => {
@@ -164,11 +154,8 @@ export async function renderMojaZaduzenjaTab(body) {
       },
     });
   });
-  body.querySelector('#revMzQuickReturn')?.addEventListener('click', () => {
-    openQuickReturnModal({
-      onSuccess: () => void renderMojaZaduzenjaTab(body),
-    });
-  });
+  body.querySelector('#revMzQuickReturn')?.addEventListener('click', openQr);
+  body.querySelector('#revMzQuickReturnFab')?.addEventListener('click', openQr);
 }
 
 export function teardownMojaZaduzenjaTab() {

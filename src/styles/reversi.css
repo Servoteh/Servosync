@@ -1422,6 +1422,21 @@ html[data-theme='light'] .rev-stat-card--teal .rev-stat-value {
   gap: 10px;
 }
 
+.module-reversi .rev-mz-card--mock {
+  border-radius: 8px;
+  border-color: var(--rev-border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.module-reversi .rev-mz-shell--mock .rev-mz-section-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
 .module-reversi .rev-mz-card {
   background: var(--rev-card-bg, #fff);
   border: 1px solid var(--rev-border, #e0e0e0);
@@ -2624,6 +2639,54 @@ html[data-theme='light'] .rev-stat-card--mock-warn {
 
 .rev-mag-stat-grid.rev-stat-grid--mock {
   gap: 12px;
+}
+
+.rev-stat-grid--mock {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+@media (min-width: 1100px) {
+  .rev-stat-grid--kpi-zad.rev-stat-grid--mock {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.rev-month-mock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rev-month-mock .rev-input--compact {
+  min-width: 140px;
+}
+
+.rev-my-panel--mock {
+  margin: 12px 0;
+  padding: 12px 16px;
+  background: var(--rev-surface);
+  border: 1px solid var(--rev-border);
+  border-radius: 8px;
+}
+
+.rev-my-panel--mock summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--rev-text);
+}
+
+.rev-mz-shell--mock .rev-mz-section {
+  margin-top: 20px;
+}
+
+.rev-mz-fab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .rev-toolbar-mock {
