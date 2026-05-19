@@ -11,7 +11,17 @@ import {
   getMagacinLocationId,
   seedCuttingToolStock,
 } from '../../services/reversiService.js';
-import { ICON_REZNI_MACHINING } from './revMachiningIcon.js';
+import {
+  revActBtnHtml,
+  revFmtDate,
+  revGrupaBadgeHtml,
+  revIcon,
+  revLocPillHtml,
+  revPageHeaderHtml,
+  revSearchFieldHtml,
+  revStatCardHtml,
+  revTableMetaHtml,
+} from './revMockUi.js';
 import { openBulkImportModal, openImportRollbackModal } from './bulkImportModal.js';
 import { openBulkPrintLabelsModal } from './bulkPrintLabelsModal.js';
 import { openQuickIssueModal } from './quickIssueModal.js';
@@ -101,12 +111,6 @@ function statusStockPill(p) {
   return `<span class="rev-status-pill rev-status-pill--ok">${dot}${escHtml(p.label)}</span>`;
 }
 
-function grupaBadge(g) {
-  return g === 'CUTTING'
-    ? `<span class="rev-grupa-badge--cut">${ICON_REZNI_MACHINING} Rezni</span>`
-    : '<span class="rev-grupa-badge--hand">🔧 Ručni</span>';
-}
-
 function magacinStatsHtml(rows) {
   const total = rows.length;
   const handUnits = rows.filter((r) => r.grupa === 'HAND' && Number(r.in_warehouse_qty) > 0).length;
@@ -143,17 +147,15 @@ function magacinStatsHtml(rows) {
 
 function renderPageHeader() {
   const qi = canManageReversi()
-    ? `<button type="button" class="rev-btn rev-btn--primary rev-quick-issue-btn" id="revMagQuickIssue">+ Quick Issue</button>`
+    ? `<button type="button" class="rev-btn rev-btn--primary rev-quick-issue-btn" id="revMagQuickIssue">${revIcon('plus', 16, 'rev-ic')} Quick Issue</button>`
     : '';
-  return `
-    <header class="rev-page-header rev-mag-page-header">
-      <div class="rev-page-header__icon" aria-hidden="true">📦</div>
-      <div class="rev-page-header__text">
-        <h2 class="rev-page-header__title">Magacin</h2>
-        <p class="rev-page-header__desc">Ručni i rezni artikli — prema zalihi u magacinu ili opciono ceo inventar po lokacijama primaoca.</p>
-      </div>
-      ${qi}
-    </header>
+  return `${revPageHeaderHtml({
+    title: 'Magacin',
+    subtitle:
+      'Jedinstveni pregled ručnog i reznog alata u magacinu — zalihe po WAREHOUSE lokacijama ili opciono ceo inventar po primaocima.',
+    iconSvg: revIcon('package', 20),
+    actionsHtml: qi,
+  })}
     <button type="button" class="rev-quick-fab rev-btn rev-btn--primary" id="revMagQuickIssueFab">+ Quick Issue</button>`;
 }
 
@@ -169,59 +171,39 @@ function renderBulkBar() {
 
 function renderToolbar() {
   const klase = uniqueKlase(state.rows);
-  return `
-    <div class="rev-rzn-toolbar rev-mag-toolbar">
-      <div class="rev-rzn-toolbar__row rev-rzn-toolbar__row--filters rev-mag-toolbar__main">
-        <div class="rev-field rev-field--grow">
-          <label class="rev-field-label">Pretraga</label>
-          <input type="search" id="revMagSearch" class="rev-input rev-input--search"
-            placeholder="Oznaka, naziv, barkod…" value="${escHtml(state.search)}"/>
-        </div>
-        <div class="rev-field">
-          <label class="rev-field-label">Grupa</label>
-          <div class="rev-seg" role="group">
-            ${[
-              ['ALL', 'Sve'],
-              ['HAND', 'Ručni'],
-              ['CUTTING', 'Rezni'],
-            ]
-              .map(
-                ([id, lab]) => `
-              <button type="button" class="rev-seg-btn ${state.grupa === id ? 'is-on' : ''}" data-mag-grupa="${id}">${lab}</button>`,
-              )
-              .join('')}
-          </div>
-        </div>
-        ${
-          klase.length > 0
-            ? `<div class="rev-field">
-          <label class="rev-field-label">Klasa</label>
-          <select id="revMagKlasa" class="rev-select">
-            <option value="" ${state.klasa === '' ? 'selected' : ''}>Sve</option>
-            ${klase.map((k) => `<option value="${escHtml(k)}" ${state.klasa === k ? 'selected' : ''}>${escHtml(k)}</option>`).join('')}
-          </select>
-        </div>`
-            : ''
-        }
-        <div class="rev-field">
-          <label class="rev-field-label" style="display:flex;align-items:center;gap:6px;white-space:nowrap">
-            <input type="checkbox" id="revMagAllLoc" ${state.showAllLocations ? 'checked' : ''}/>
-            Sve lokacije
-          </label>
-        </div>
-        <div class="rev-field">
-          <label class="rev-field-label" style="display:flex;align-items:center;gap:6px;white-space:nowrap">
-            <input type="checkbox" id="revMagInclZero" ${state.includeZero ? 'checked' : ''}/>
-            Nulta stanja
-          </label>
-        </div>
-        <span class="rev-mag-toolbar__spacer"></span>
-        <button type="button" class="rev-btn rev-btn--excel" id="revMagExcel">Excel</button>
-        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--secondary rev-btn--sm" id="revMagBulkImport" title="Bulk import">📥</button>` : ''}
-        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--secondary rev-btn--sm" id="revMagImportRollback" title="Storno importa">🔄</button>` : ''}
-        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revMagNewHand">+ Novi artikal</button>` : ''}
-      </div>
-    </div>`;
+  const segBtns = [
+    ['ALL', 'Sve'],
+    ['HAND', 'Ručni'],
+    ['CUTTING', 'Rezni'],
+  ]
+    .map(
+      ([id, lab]) =>
+        `<button type="button" class="rev-seg-btn ${state.grupa === id ? 'is-on' : ''}" data-mag-grupa="${id}">${lab}</button>`,
+    )
+    .join('');
+  return `<div class="rev-toolbar-mock">
+    ${revSearchFieldHtml('revMagSearch', state.search, 'Pretraga po kataloškom broju, nazivu ili barkodu…')}
+    <div class="rev-toolbar-mock__group">
+      <span class="rev-toolbar-mock__label">Grupa</span>
+      <div class="rev-seg-mock" role="group">${segBtns}</div>
+    </div>
+    ${
+      klase.length > 0
+        ? `<select id="revMagKlasa" class="rev-select rev-select--compact" title="Klasa">
+        <option value="" ${state.klasa === '' ? 'selected' : ''}>Sve klase</option>
+        ${klase.map((k) => `<option value="${escHtml(k)}" ${state.klasa === k ? 'selected' : ''}>${escHtml(k)}</option>`).join('')}
+      </select>`
+        : ''
+    }
+    <label class="rev-chk-mock"><input type="checkbox" id="revMagInclZero" ${state.includeZero ? 'checked' : ''}/> Prikaži i nulta stanja</label>
+    <label class="rev-chk-mock"><input type="checkbox" id="revMagAllLoc" ${state.showAllLocations ? 'checked' : ''}/> Sve lokacije</label>
+    <div class="rev-toolbar-mock__actions">
+      <button type="button" class="rev-btn rev-btn--excel" id="revMagExcel">${revIcon('download', 16, 'rev-ic')} Excel</button>
+      ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--secondary rev-btn--sm" id="revMagBulkImport" title="Bulk import">📥</button>` : ''}
+      ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--secondary rev-btn--sm" id="revMagImportRollback" title="Storno">🔄</button>` : ''}
+      ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revMagNewHand">${revIcon('plus', 16, 'rev-ic')} Novi artikal</button>` : ''}
+    </div>
+  </div>`;
 }
 
 function downloadCsv(filename, csvBody) {
@@ -267,19 +249,24 @@ function renderTable() {
     return `<div class="rev-empty-card"><p>Nema artikala u magacinu prema filteru.</p></div>`;
   }
 
+  const meta = revTableMetaHtml({
+    left: `${state.rows.length} artikala prikazano`,
+    right: 'Sortirano po: <strong>Kataloški broj ↑</strong>',
+  });
   return `
-    <div class="rev-table-shell rev-table-shell--rzn">
-      <table class="rev-data-table rev-data-table--zebra">
+    <div class="rev-table-shell rev-table-shell--mock">
+      ${meta}
+      <table class="rev-data-table rev-data-table--mock rev-data-table--zebra">
         <thead><tr>
           ${canManageReversi() ? '<th class="rev-th-cb"><input type="checkbox" id="revMagSelAll" title="Izaberi sve"/></th>' : ''}
-          <th>Kataloški broj</th>
+          <th class="rev-col-kat">Kataloški broj</th>
           <th>Naziv</th>
-          <th>Grupa</th>
-          <th>Lokacija / primalac</th>
-          <th class="rev-th-num">Količina</th>
-          <th>Status</th>
-          <th>Ažurirano</th>
-          ${canManageReversi() ? '<th class="rev-th-actions">Akcije</th>' : ''}
+          <th class="rev-col-grupa">Grupa</th>
+          <th class="rev-col-loc">Lokacija</th>
+          <th class="rev-col-qty">Količina</th>
+          <th class="rev-col-status">Status</th>
+          <th class="rev-col-date">Ažurirano</th>
+          ${canManageReversi() ? '<th class="rev-col-actions">Akcije</th>' : ''}
         </tr></thead>
         <tbody>${state.rows
           .map((r) => {
@@ -295,7 +282,7 @@ function renderTable() {
                   ? '<span class="rev-mag-kpi-thumb">1 kom</span>'
                   : '';
             const sel = state.selected.has(r.item_id);
-            return `<tr data-mag-row="${escHtml(r.item_id)}" class="${sel ? 'rev-data-row--selected' : ''}">
+            return `<tr class="rev-data-row${sel ? ' rev-data-row--selected' : ''}" data-mag-row="${escHtml(r.item_id)}">
               ${
                 canManageReversi()
                   ? `<td class="rev-td-cb"><input type="checkbox" data-rev-select="${escHtml(r.item_id)}" ${sel ? 'checked' : ''}/></td>`
@@ -303,25 +290,22 @@ function renderTable() {
               }
               <td>${kat}</td>
               <td>${escHtml(r.naziv || '')}</td>
-              <td>${grupaBadge(r.grupa)}</td>
+              <td>${revGrupaBadgeHtml(r.grupa)}</td>
               <td>${
                 (() => {
-                  if (r.grupa === 'HAND') return '<span class="rev-muted">—</span>';
-                  const lab = String(r.location_label || '').trim();
+                  if (r.grupa === 'HAND') return revLocPillHtml('');
                   const code = String(r.location_code || '').trim();
-                  if (lab && code && lab !== code) {
-                    return `<span title="${escHtml(code)}">${escHtml(lab)}</span> <span class="rev-mono rev-muted" style="font-size:11px">${escHtml(code)}</span>`;
-                  }
-                  if (lab) return `<span>${escHtml(lab)}</span>`;
-                  if (code) return `<span class="rev-mono rev-muted">${escHtml(code)}</span>`;
-                  return '<span class="rev-muted">—</span>';
+                  const lab = String(r.location_label || '').trim();
+                  return revLocPillHtml(code || lab);
                 })()
               }</td>
-              <td class="rev-td-num">
-                <div class="rev-mag-stock-pill">
-                  <span class="${p.cls}">${escHtml(String(p.qty))}</span>
-                  <span class="rev-unit-muted">${escHtml(r.unit || 'kom')}</span>
-                  ${minLine}
+              <td class="rev-col-qty">
+                <div class="rev-qty-stack">
+                  <div class="rev-qty-stack__main">
+                    <span class="${p.cls}">${escHtml(String(p.qty))}</span>
+                    <span class="rev-unit-muted">${escHtml(r.unit || 'kom')}</span>
+                  </div>
+                  ${p.minQ > 0 || r.grupa === 'HAND' ? `<div class="rev-qty-stack__min">min. ${escHtml(String(r.grupa === 'HAND' ? 1 : p.minQ))}</div>` : ''}
                 </div>
               </td>
               <td>${statusStockPill(p)}</td>
@@ -329,11 +313,11 @@ function renderTable() {
               ${
                 canManageReversi()
                   ? `<td class="rev-td-actions">
-                <button type="button" class="rev-act-btn" title="Pregled" data-mag-eye="${escHtml(r.item_id)}">👁</button>
+                ${revActBtnHtml('eye', 'Pregled', `data-mag-eye="${escHtml(r.item_id)}"`)}
                 ${
                   r.grupa === 'CUTTING'
-                    ? `<button type="button" class="rev-act-btn" title="Dopuna / izmena zalihe" data-mag-topup="${escHtml(r.item_id)}">✎</button>`
-                    : '<button type="button" class="rev-act-btn" title="Ručni alat — izmene u Inventaru" data-mag-hand-hint>✎</button>'
+                    ? revActBtnHtml('pencil', 'Dopuna zalihe', `data-mag-topup="${escHtml(r.item_id)}"`)
+                    : revActBtnHtml('pencil', 'Inventar', 'data-mag-hand-hint')
                 }
               </td>`
                   : ''

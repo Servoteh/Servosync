@@ -41,6 +41,7 @@ import { openQuickIssueModal } from './quickIssueModal.js';
 import { rowsToCsv, CSV_BOM, parseCsv } from '../../lib/csv.js';
 import { formatRevAssetKind, parseRevAssetKindCsv, REV_ASSET_KIND_OPTIONS, REV_ASSET_KIND_LABEL } from '../../lib/revAssetKind.js';
 import { ICON_REZNI_MACHINING } from './revMachiningIcon.js';
+import { revIcon } from './revMockUi.js';
 
 const ICON_TAB_ZAD = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14h6"/><path d="M9 18h6"/></svg>`;
 const ICON_TAB_INV = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>`;
@@ -330,7 +331,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
               <span class="rev-back-arrow">←</span> Moduli
             </button>
             <div class="rev-brand">
-              <div class="rev-brand-icon" aria-hidden="true">↻</div>
+              <div class="rev-brand-icon" aria-hidden="true">${revIcon('rotate', 22, 'rev-ic')}</div>
               <div class="rev-brand-text">
                 <h1 class="rev-brand-title">Reversi</h1>
                 <span class="rev-brand-sub">Alat, radna odeća, cipele i zaštitna oprema</span>

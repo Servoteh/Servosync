@@ -13,6 +13,16 @@ import {
   printCuttingToolLabel,
 } from './cuttingToolModals.js';
 import { ICON_REZNI_MACHINING } from './revMachiningIcon.js';
+import {
+  revActBtnHtml,
+  revFmtDate,
+  revIcon,
+  revIconRezni,
+  revPageHeaderHtml,
+  revSearchFieldHtml,
+  revStatCardHtml,
+  revTableMetaHtml,
+} from './revMockUi.js';
 import { renderByMachineSubview, renderByEmployeeSubview } from './cuttingByViews.js';
 import { renderMapaSubview } from './revMapaSubview.js';
 import { openQuickIssueModal } from './quickIssueModal.js';
@@ -267,60 +277,17 @@ function renderStats() {
   const naM = st?.sumMach ?? '—';
   const uM = st?.sumWh ?? '—';
   const low = st?.low ?? '—';
-  const katalogHint = st?.truncated
-    ? `Procena: prvih ${st.sampleSize} od ${st.totalSymbols} u katalogu`
-    : 'U katalogu (prema filteru)';
-  const activeHint = st?.truncated
-    ? `U učitanom uzorku (${st.sampleSize} šifri)`
-    : 'Aktivne šifre u prikazu';
-
-  return `
-    <div class="rev-rzn-stats">
-      <div class="rev-rzn-stat-card rev-rzn-stat-card--with-icon">
-        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--coral" aria-hidden="true">${ICON_REZNI_MACHINING}</div>
-        <div class="rev-rzn-stat-card__body">
-          <div class="rev-rzn-stat-card__label">Ukupno šifri</div>
-          <div class="rev-rzn-stat-card__value">${escHtml(String(tot))}</div>
-          <div class="rev-rzn-stat-card__hint">${escHtml(katalogHint)}</div>
-        </div>
-      </div>
-      <div class="rev-rzn-stat-card rev-rzn-stat-card--with-icon rev-rzn-stat-card--ok">
-        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--ok" aria-hidden="true">✓</div>
-        <div class="rev-rzn-stat-card__body">
-          <div class="rev-rzn-stat-card__label">Aktivne</div>
-          <div class="rev-rzn-stat-card__value">${escHtml(String(akt))}</div>
-          <div class="rev-rzn-stat-card__hint">${escHtml(activeHint)}</div>
-        </div>
-      </div>
-      <div class="rev-rzn-stat-card rev-rzn-stat-card--with-icon">
-        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--coral" aria-hidden="true">⚙</div>
-        <div class="rev-rzn-stat-card__body">
-          <div class="rev-rzn-stat-card__label">Na mašinama</div>
-          <div class="rev-rzn-stat-card__value">${escHtml(String(naM))}</div>
-          <div class="rev-rzn-stat-card__hint">Kom na mašinama (uzorak)</div>
-        </div>
-      </div>
-      <div class="rev-rzn-stat-card rev-rzn-stat-card--with-icon">
-        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--coral" aria-hidden="true">🏭</div>
-        <div class="rev-rzn-stat-card__body">
-          <div class="rev-rzn-stat-card__label">U magacinu</div>
-          <div class="rev-rzn-stat-card__value">${escHtml(String(uM))}</div>
-          <div class="rev-rzn-stat-card__hint">Kom u skladištu</div>
-        </div>
-      </div>
-      <div class="rev-rzn-stat-card rev-rzn-stat-card--with-icon rev-rzn-stat-card--alert">
-        <div class="rev-rzn-stat-card__icon rev-rzn-stat-card__icon--alert" aria-hidden="true">⚠</div>
-        <div class="rev-rzn-stat-card__body">
-          <div class="rev-rzn-stat-card__label">Niska zaliha</div>
-          <div class="rev-rzn-stat-card__value">${escHtml(String(low))}</div>
-          <div class="rev-rzn-stat-card__hint">Ispod minimuma (uzorak)</div>
-        </div>
-      </div>
-    </div>`;
+  return `<div class="rev-rzn-stats rev-rzn-stats--mock">
+    ${revStatCardHtml({ label: 'Ukupno šifri', value: tot, hint: 'u katalogu', iconName: 'scissors' })}
+    ${revStatCardHtml({ label: 'Aktivne', value: akt, hint: 'dostupne', iconName: 'check', tone: 'success' })}
+    ${revStatCardHtml({ label: 'Na mašinama', value: naM, hint: 'komada', iconName: 'cog' })}
+    ${revStatCardHtml({ label: 'U magacinu', value: uM, hint: 'komada', iconName: 'warehouse' })}
+    ${revStatCardHtml({ label: 'Niska zaliha', value: low, hint: 'ispod minimuma', iconName: 'alert', tone: 'warning' })}
+  </div>`;
 }
 
 function colCount() {
-  return canManageReversi() ? 10 : 9;
+  return canManageReversi() ? 9 : 8;
 }
 
 function renderTable() {
@@ -346,7 +313,7 @@ function renderTable() {
         Number(t.on_machines_qty) > 0
           ? `<button type="button" class="rev-rzn-mach-hit rev-rzn-mach-hit--active" data-rzn-toggle-m="${escHtml(t.id)}">
               <span class="rev-rzn-mach-qty">&gt; <span class="rev-td-num__main">${escHtml(String(t.on_machines_qty))}</span> <span class="rev-rzn-mach-locs">(${escHtml(String(locCount))})</span></span>
-              <span class="rev-rzn-chevron${exp ? ' is-open' : ''}" aria-hidden="true">›</span>
+              <span class="rev-rzn-chevron${exp ? ' is-open' : ''}" aria-hidden="true">${revIcon('chevron', 14, 'rev-ic rev-rzn-chevron-ic')}</span>
             </button>`
           : `<span class="rev-muted">0</span>`;
 
@@ -382,31 +349,41 @@ function renderTable() {
           </td>
           <td>${escHtml(t.naziv || '')}</td>
           <td>${klBadge}</td>
-          <td class="rev-td-num">${escHtml(String(minQ))}</td>
           <td class="rev-td-num">${escHtml(String(Number(t.in_warehouse_qty) || 0))} <span class="rev-unit-muted">${escHtml(t.unit || 'kom')}</span></td>
           <td class="rev-td-num rev-td-num--mach">${omCell}</td>
-          <td class="rev-td-num">
-            <div class="${uClass}">${escHtml(String(uk))} <span class="rev-unit-muted">${escHtml(t.unit || 'kom')}</span></div>
+          <td class="rev-col-qty">
+            <div class="rev-qty-stack">
+              <div class="rev-qty-stack__main">
+                <span class="${uClass}">${escHtml(String(uk))}</span>
+                <span class="rev-unit-muted">${escHtml(t.unit || 'kom')}</span>
+              </div>
+              ${minQ > 0 ? `<div class="rev-qty-stack__min">min. ${escHtml(String(minQ))}</div>` : ''}
+            </div>
           </td>
           <td>${statusPill(t.status)}</td>
           <td class="rev-td-actions">
-            <button type="button" class="rev-act-btn" title="Štampaj nalepnicu" data-rzn-print="${escHtml(t.id)}">🏷</button>
-            <button type="button" class="rev-act-btn" title="Pregled" data-rzn-det="${escHtml(t.id)}">👁</button>
-            ${canManageReversi() ? `<button type="button" class="rev-act-btn" title="Izmena" data-rzn-edit="${escHtml(t.id)}">✎</button>` : ''}
+            ${revActBtnHtml('printer', 'Štampaj nalepnicu', `data-rzn-print="${escHtml(t.id)}"`)}
+            ${revActBtnHtml('eye', 'Pregled', `data-rzn-det="${escHtml(t.id)}"`)}
+            ${canManageReversi() ? revActBtnHtml('pencil', 'Izmena', `data-rzn-edit="${escHtml(t.id)}"`) : ''}
           </td>
         </tr>${expandRow}`;
     })
     .join('');
 
+  const selN = state.selected.size;
+  const meta = revTableMetaHtml({
+    left: `${state.rows.length} šifri prikazano${selN > 0 ? ` · <span class="rev-meta-sel">${selN} odabrano</span>` : ''}`,
+    right: 'Sortirano po: <strong>Oznaka ↑</strong>',
+  });
   return `
-    <div class="rev-table-shell rev-table-shell--rzn">
-      <table class="rev-data-table rev-data-table--rzn rev-data-table--zebra">
+    <div class="rev-table-shell rev-table-shell--mock">
+      ${meta}
+      <table class="rev-data-table rev-data-table--mock rev-data-table--rzn rev-data-table--zebra">
         <thead><tr>
           ${canManageReversi() ? '<th class="rev-th-cb"><input type="checkbox" id="revRznSelAll"/></th>' : ''}
-          <th>Oznaka</th>
+          <th class="rev-col-oznaka">Oznaka</th>
           <th>Naziv</th>
           <th>Klasa</th>
-          <th class="rev-th-num">Min.</th>
           <th class="rev-th-num">U magacinu</th>
           <th class="rev-th-num rev-th-num--mach-h">Na mašinama</th>
           <th class="rev-th-num">Ukupno</th>
@@ -631,12 +608,12 @@ function wireTable(refreshAll) {
       const t = state.rows.find((x) => x.id === id);
       if (!t) return;
       btn.disabled = true;
-      btn.textContent = '⏳';
+      btn.innerHTML = '…';
       try {
         await printCuttingToolLabel(t, 1);
       } finally {
         btn.disabled = false;
-        btn.textContent = '🏷';
+        btn.innerHTML = revIcon('printer', 16);
       }
     });
   });
@@ -648,7 +625,7 @@ function wireTable(refreshAll) {
 }
 
 function subTabStripHtml(active) {
-  return `<nav class="rev-subtab-strip rev-subtab-strip--coral" role="tablist" aria-label="Rezni alat pod-tabovi">
+  return `<nav class="rev-subtab-strip rev-subtab-strip--mock rev-subtab-strip--coral" role="tablist" aria-label="Rezni alat pod-tabovi">
     ${SUB_TABS.map(
       (t) =>
         `<button type="button" role="tab" class="rev-subtab rev-subtab--sm ${t.id === active ? 'is-active' : ''}" data-rzn-sub="${escHtml(t.id)}">${escHtml(t.label)}</button>`,
@@ -687,7 +664,13 @@ export async function renderReznialatTab(body, opts = {}) {
   if (!SUB_TABS.find((t) => t.id === activeSub)) activeSub = 'katalog';
 
   const renderShell = () => {
-    body.innerHTML = `${subTabStripHtml(activeSub)}<div id="revRznSubHost"></div>`;
+    const header = revPageHeaderHtml({
+      title: 'Rezni alat',
+      subtitle:
+        'Katalog šifri — jedna šifra → količina po lokaciji. Stanje na mašinama se gomila iz aktivnih reversa.',
+      iconSvg: revIconRezni(20),
+    });
+    body.innerHTML = `<div class="rev-rzn-shell">${header}${subTabStripHtml(activeSub)}<div id="revRznSubHost"></div></div>`;
     body.querySelectorAll('[data-rzn-sub]').forEach((btn) => {
       btn.addEventListener('click', () => {
         activeSub = btn.getAttribute('data-rzn-sub') || 'katalog';
