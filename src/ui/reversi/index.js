@@ -59,11 +59,11 @@ const ICON_TAB_MOJ = `<svg class="rev-tab-icon" width="16" height="16" viewBox="
 const ICON_TAB_MAG = `<svg class="rev-tab-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4"/><path d="M12 11v10"/></svg>`;
 
 const TABS = [
-  { id: 'moja', label: 'Moja zaduženja' },
-  { id: 'magacin', label: 'Magacin' },
-  { id: 'zaduzenja', label: 'Zaduženja' },
-  { id: 'inventar', label: 'Inventar alata i opreme' },
-  { id: 'rezni-alat', label: 'Rezni alat' },
+  { id: 'moja', label: 'Moja zaduženja', shortLabel: 'Moja' },
+  { id: 'magacin', label: 'Magacin', shortLabel: 'Magacin' },
+  { id: 'zaduzenja', label: 'Zaduženja', shortLabel: 'Zaduženja' },
+  { id: 'inventar', label: 'Inventar alata i opreme', shortLabel: 'Inventar' },
+  { id: 'rezni-alat', label: 'Rezni alat', shortLabel: 'Rezni alat' },
 ];
 
 let mountRoot = null;
@@ -371,7 +371,8 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
             return `
           <button type="button" role="tab" class="rev-strip-tab ${activeTab === t.id ? 'is-active' : ''}" data-rev-tab="${escHtml(t.id)}">
             ${icon}
-            <span class="rev-strip-label">${escHtml(t.label)}</span>
+            <span class="rev-strip-label rev-strip-label--full">${escHtml(t.label)}</span>
+            <span class="rev-strip-label rev-strip-label--short">${escHtml(t.shortLabel || t.label)}</span>
             <span class="rev-strip-count ${activeTab === t.id ? 'is-active' : ''}" data-rev-tab-count="${escHtml(t.id)}">${escHtml(countLabel(cnt))}</span>
           </button>`;
           },
@@ -393,7 +394,20 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
         accumulatedDocs = [];
         accumulatedTools = [];
         paintChrome();
+        scrollActiveRevTabIntoView();
         void refreshBody();
+      });
+    });
+    scrollActiveRevTabIntoView();
+  }
+
+  function scrollActiveRevTabIntoView() {
+    if (typeof window === 'undefined' || window.innerWidth > 768) return;
+    requestAnimationFrame(() => {
+      root.querySelector('.rev-strip-tab.is-active')?.scrollIntoView({
+        inline: 'center',
+        block: 'nearest',
+        behavior: 'smooth',
       });
     });
   }
