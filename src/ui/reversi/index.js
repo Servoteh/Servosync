@@ -799,11 +799,6 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
 
     const moreThanSample = invStats.ok && (invStats.data?.total ?? 0) > (invStats.data?.rows?.length ?? 0);
 
-    const sampleN = invStats.data?.rows?.length ?? 0;
-    const statCardHintMagZad = moreThanSample
-      ? `Procena iz prvih ${sampleN} jedinica; ukupno aktivnih u bazi: ${nActTotal}.`
-      : 'Kompletan skup aktivnih jedinica u bazi.';
-
     body.innerHTML = `
       <div class="rev-print-area">
       ${revPageHeaderHtml({
