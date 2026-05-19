@@ -1677,7 +1677,7 @@ async function renderPanel(host, tabId) {
     const rows = repRes?.rows ?? null;
     const err =
       repRes === null
-        ? `<p class="loc-warn">Ne mogu da učitam pregled. Proveri da li je primenjena migracija <code>add_loc_report_by_locations_rpc.sql</code> i RLS prava.</p>`
+        ? `<p class="loc-warn">Ne mogu da učitam pregled (greška servera). Osveži stranicu; ako se ponavlja, prijavi administratoru.</p>`
         : '';
 
     const locOptions = (Array.isArray(locs) ? locs : [])
