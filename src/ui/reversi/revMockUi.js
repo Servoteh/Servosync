@@ -76,7 +76,7 @@ export function revPageHeaderHtml(p) {
 export function revStatCardHtml(p) {
   const warn = p.tone === 'warning';
   const ok = p.tone === 'success';
-  return `<motionless-div class="rev-stat-card rev-stat-card--mock ${warn ? 'rev-stat-card--mock-warn' : ''}">
+  return `<div class="rev-stat-card rev-stat-card--mock ${warn ? 'rev-stat-card--mock-warn' : ''}">
     <div class="rev-stat-card__iconbox ${warn ? 'rev-stat-card__iconbox--warn' : ok ? 'rev-stat-card__iconbox--ok' : ''}" aria-hidden="true">${revIcon(p.iconName, 20)}</div>
     <div class="rev-stat-card__body">
       <div class="rev-stat-card__label">${escHtml(p.label)}</div>
