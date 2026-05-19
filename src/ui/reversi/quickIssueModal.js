@@ -4,22 +4,30 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 import { canManageReversi } from '../../state/auth.js';
-import { startScan, stopScan } from '../../services/barcode.js';
 import {
-  fetchEmployeeByCardBarcode,
   fetchEmployees,
-  fetchHandToolByBarcode,
-  fetchCuttingToolByBarcode,
   fetchMachines,
   issueReversal,
   issueCuttingReversal,
 } from '../../services/reversiService.js';
+import { openReversiScanOverlay } from './scanOverlay.js';
 
 /** @param {string} raw */
 function parseMachineScan(raw) {
   const t = String(raw || '').trim();
   if (/^ZADU-M-/i.test(t)) return t.replace(/^ZADU-M-/i, '').trim();
   return t;
+}
+
+/** @param {Array<{ kind: string }>} lines */
+export function splitLinesForRpc(lines) {
+  const hand = [];
+  const cutting = [];
+  for (const ln of lines) {
+    if (ln.kind === 'HAND') hand.push(ln);
+    else if (ln.kind === 'CUTTING') cutting.push(ln);
+  }
+  return { hand, cutting };
 }
 
 function defaultReturnDate() {
@@ -59,7 +67,6 @@ export function openQuickIssueModal(opts = {}) {
     lines: [],
     expectedReturnDate: defaultReturnDate(),
     pending: false,
-    scanCtrl: null,
     empSearch: '',
     employees: [],
     machineCode: opts.preselectedMachine?.rj_code || '',
@@ -74,7 +81,6 @@ export function openQuickIssueModal(opts = {}) {
   document.body.appendChild(overlay);
 
   const close = () => {
-    stopScan(state.scanCtrl);
     overlay.remove();
   };
   overlay.querySelector('[data-rev-qi-close]')?.addEventListener('click', close);
@@ -167,10 +173,6 @@ export function openQuickIssueModal(opts = {}) {
           <button type="button" class="rev-btn rev-btn--secondary" id="revQiScanTool">Skeniraj alat</button>
           <button type="button" class="rev-btn" id="revQiPickTool" disabled title="Koristi skener">Izaberi sa liste</button>
         </div>
-        <div id="revQiVideoWrap" class="rev-qi-video-wrap" hidden>
-          <video id="revQiVideo" playsinline muted></video>
-          <button type="button" class="rev-btn" id="revQiStopScan">Zaustavi skener</button>
-        </div>
       </section>
       <section class="rev-qi-section">
         <label>Rok povraćaja
@@ -232,51 +234,95 @@ export function openQuickIssueModal(opts = {}) {
     overlay.querySelector('#revQiMachine')?.addEventListener('change', (e) => {
       state.machineCode = e.target.value;
     });
-    overlay.querySelector('#revQiScanMachine')?.addEventListener('click', () => startVideoScan('machine'));
-    overlay.querySelector('#revQiScanCard')?.addEventListener('click', () => startVideoScan('card'));
-    overlay.querySelector('#revQiScanTool')?.addEventListener('click', () => startVideoScan('tool'));
-    overlay.querySelector('#revQiStopScan')?.addEventListener('click', () => {
-      stopScan(state.scanCtrl);
-      state.scanCtrl = null;
-      overlay.querySelector('#revQiVideoWrap')?.setAttribute('hidden', '');
+    overlay.querySelector('#revQiScanMachine')?.addEventListener('click', () => {
+      openReversiScanOverlay({
+        title: 'Skeniraj mašinu',
+        hint: 'Barkod ZADU-M-… sa nalepnice mašine',
+        acceptUnknown: true,
+        continuous: false,
+        onResult: async (parsed) => {
+          void handleMachineScan(parsed.barcode);
+        },
+      });
+    });
+    overlay.querySelector('#revQiScanCard')?.addEventListener('click', () => {
+      openReversiScanOverlay({
+        title: 'Skeniraj karticu',
+        hint: 'ID kartica radnika',
+        acceptKinds: ['EMPLOYEE'],
+        continuous: false,
+        onResult: async (parsed) => {
+          const emp = parsed.data;
+          if (!emp?.id) {
+            showToast('Kartica nije prepoznata');
+            return;
+          }
+          state.recipient = {
+            type: 'EMPLOYEE',
+            employee_id: emp.id,
+            employee_name: emp.full_name,
+            department: emp.department || '',
+          };
+          paint();
+        },
+      });
+    });
+    overlay.querySelector('#revQiScanTool')?.addEventListener('click', () => {
+      openReversiScanOverlay({
+        title: 'Skeniraj alat',
+        hint: 'ALAT-… ili RZN-…',
+        acceptKinds: ['HAND', 'CUTTING'],
+        continuous: true,
+        onResult: async (parsed) => {
+          await handleToolParsed(parsed);
+        },
+      });
     });
 
     overlay.querySelector('#revQiSubmit')?.addEventListener('click', () => void submit());
   }
 
-  async function startVideoScan(mode) {
-    const wrap = overlay.querySelector('#revQiVideoWrap');
-    const video = overlay.querySelector('#revQiVideo');
-    if (!video) return;
-    wrap?.removeAttribute('hidden');
-    stopScan(state.scanCtrl);
-    state.scanCtrl = await startScan(video, {
-      decodeProfile: 'item',
-      onResult: (text) => {
-        stopScan(state.scanCtrl);
-        state.scanCtrl = null;
-        wrap?.setAttribute('hidden', '');
-        if (mode === 'card') void handleCardScan(text);
-        else if (mode === 'machine') void handleMachineScan(text);
-        else void handleToolScan(text);
-      },
-      onError: (err) => showToast(String(err?.message || err)),
-    });
-  }
-
-  async function handleCardScan(raw) {
-    const r = await fetchEmployeeByCardBarcode(raw.trim());
-    if (!r.ok || !r.data?.id) {
-      showToast('Kartica nije prepoznata');
+  async function handleToolParsed(parsed) {
+    const bc = parsed.barcode;
+    if (/^ZADU-M-/i.test(bc)) {
+      void handleMachineScan(bc);
       return;
     }
-    state.recipient = {
-      type: 'EMPLOYEE',
-      employee_id: r.data.id,
-      employee_name: r.data.full_name,
-      department: r.data.department || '',
-    };
-    paint();
+    if (parsed.kind === 'HAND') {
+      const tool = parsed.data;
+      if (!tool?.id) {
+        showToast('Ručni alat nije pronađen');
+        return;
+      }
+      if (tool.issued_holder) {
+        showToast('Alat je već zadužen');
+        return;
+      }
+      const ln = { kind: 'HAND', tool, qty: 1 };
+      const k = lineKey(ln);
+      if (state.lines.some((x) => lineKey(x) === k)) {
+        showToast('Alat je već na listi');
+        return;
+      }
+      state.lines.push(ln);
+      paint();
+      return;
+    }
+    if (parsed.kind === 'CUTTING') {
+      const tool = parsed.data;
+      if (!tool?.id) {
+        showToast('Rezni alat nije pronađen');
+        return;
+      }
+      const qtyStr = window.prompt('Količina za zaduženje:', '1');
+      const qty = Math.max(1, Math.floor(Number(qtyStr) || 1));
+      const ln = { kind: 'CUTTING', tool, qty };
+      const k = lineKey(ln);
+      const ex = state.lines.find((x) => lineKey(x) === k);
+      if (ex) ex.qty += qty;
+      else state.lines.push(ln);
+      paint();
+    }
   }
 
   async function handleMachineScan(raw) {
@@ -291,57 +337,11 @@ export function openQuickIssueModal(opts = {}) {
     paint();
   }
 
-  async function handleToolScan(raw) {
-    const bc = raw.trim();
-    if (/^ZADU-M-/i.test(bc)) {
-      void handleMachineScan(bc);
-      return;
-    }
-    if (/^ALAT-/i.test(bc)) {
-      const tr = await fetchHandToolByBarcode(bc);
-      if (!tr.ok || !tr.data?.id) {
-        showToast('Ručni alat nije pronađen');
-        return;
-      }
-      if (tr.data.issued_holder) {
-        showToast('Alat je već zadužen');
-        return;
-      }
-      const ln = { kind: 'HAND', tool: tr.data, qty: 1 };
-      const k = lineKey(ln);
-      if (state.lines.some((x) => lineKey(x) === k)) {
-        showToast('Alat je već na listi');
-        return;
-      }
-      state.lines.push(ln);
-      paint();
-      return;
-    }
-    if (/^RZN-/i.test(bc)) {
-      const cr = await fetchCuttingToolByBarcode(bc);
-      if (!cr.ok || !cr.data?.id) {
-        showToast('Rezni alat nije pronađen');
-        return;
-      }
-      const qtyStr = window.prompt('Količina za zaduženje:', '1');
-      const qty = Math.max(1, Math.floor(Number(qtyStr) || 1));
-      const ln = { kind: 'CUTTING', tool: cr.data, qty };
-      const k = lineKey(ln);
-      const ex = state.lines.find((x) => lineKey(x) === k);
-      if (ex) ex.qty += qty;
-      else state.lines.push(ln);
-      paint();
-      return;
-    }
-    showToast('Nepoznat format barkoda');
-  }
-
   async function submit() {
     if (!state.recipient || state.lines.length === 0) return;
     state.pending = true;
     paint();
-    const hand = state.lines.filter((l) => l.kind === 'HAND');
-    const cutting = state.lines.filter((l) => l.kind === 'CUTTING');
+    const { hand, cutting } = splitLinesForRpc(state.lines);
     const machineCode = effectiveMachineCode();
     if (cutting.length > 0 && !machineCode) {
       state.pending = false;
