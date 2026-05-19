@@ -19,6 +19,7 @@ import { showToast } from './lib/dom.js';
 import { restoreSession } from './services/auth.js';
 import { loadAndApplyUserRole } from './services/userRoles.js';
 import { initRouter } from './ui/router.js';
+import { isCapacitorNative, isMobileWebClient } from './lib/mobileClient.js';
 
 const root = document.getElementById('app');
 if (!root) {
@@ -41,21 +42,20 @@ if (!root) {
  * `window.location.pathname` kao izvor istine — `history.replaceState`
  * je dovoljan i ne kreira lažan back-entry.
  */
-function redirectToMobileIfNative() {
+function redirectToMobileShellEarly() {
   try {
-    const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
-    if (!isNative) return;
-    const p = window.location.pathname;
-    if (!p || p === '/' || p === '/index.html' || p === '/hub') {
+    const p = window.location.pathname || '/';
+    const isEntry = !p || p === '/' || p === '/index.html' || p === '/hub';
+    if (!isEntry) return;
+
+    if (isCapacitorNative() || isMobileWebClient()) {
       history.replaceState(null, '', '/m');
     }
   } catch (e) {
-    /* Capacitor bridge ponekad nije spreman dok se WebView inicijalizuje —
-     * u tom slučaju ostavljamo trenutnu rutu. */
-    console.warn('[main] capacitor native detection failed', e);
+    console.warn('[main] mobile shell redirect failed', e);
   }
 }
-redirectToMobileIfNative();
+redirectToMobileShellEarly();
 
 /**
  * Bootstrap sekvenca:

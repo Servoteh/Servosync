@@ -291,6 +291,17 @@ body.m-body #app {
   opacity: 0.5;
 }
 
+.m-footer-link {
+  border: none;
+  background: none;
+  color: #6b7b8e;
+  font-size: 12px;
+  font-family: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 4px;
+}
+
 /* ── Lookup ekran (pretraga po broju crteža) ──────────────────────────────
  * Layout: search input gore, pa vertical scroll liste grupe HALA → police.
  * Kartice su veće od history kartica jer pokazuju više metadata-a (broj

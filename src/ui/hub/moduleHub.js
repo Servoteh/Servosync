@@ -36,7 +36,7 @@ import {
   canAccessSelfService,
 } from '../../state/auth.js';
 
-export function renderModuleHub({ onModuleSelect, onLogout }) {
+export function renderModuleHub({ onModuleSelect, onNavigatePath, onLogout }) {
   const auth = getAuth();
   const settingsHidden = !canAccessPodesavanja();
 
@@ -79,6 +79,10 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
           <span class="hub-quick-links-sep" aria-hidden="true">·</span>
           <a href="/reversi" class="hub-quick-link" data-module="reversi">Reversi</a>
           <span class="hub-quick-links-sep" aria-hidden="true">·</span>
+          <a href="/m" class="hub-quick-link hub-quick-link--mobile" data-mobile-path="/m">📱 Magacin</a>
+          <span class="hub-quick-links-sep" aria-hidden="true">·</span>
+          <a href="/m/rezni-alat" class="hub-quick-link hub-quick-link--mobile" data-mobile-path="/m/rezni-alat">📱 Rezni alat</a>
+          <span class="hub-quick-links-sep" aria-hidden="true">·</span>
           <a href="/moj-profil" class="hub-quick-link" data-module="moj-profil">Moj profil</a>
         </nav>
       </div>
@@ -112,6 +116,17 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
           <div class="hub-card-footer">
             <span class="hub-card-cta">Otvori →</span>
             <span class="hub-card-badge badge-active">Aktivno</span>
+          </div>
+        </button>
+
+        <button type="button" class="hub-card hub-card--mobile-magacin" data-mobile-path="/m" aria-label="Otvori mobilni magacin">
+          <div class="hub-card-icon" aria-hidden="true">📱</div>
+          <div class="hub-card-title">Mobilni magacin</div>
+          <div class="hub-card-subtitle">iPhone / Android u hali</div>
+          <div class="hub-card-desc">Skeniranje lokacija i izdavanje reznog alata. Otvori: <strong>/m</strong></div>
+          <div class="hub-card-footer">
+            <span class="hub-card-cta">Otvori /m →</span>
+            <span class="hub-card-badge badge-active">Mobilno</span>
           </div>
         </button>
 
@@ -240,6 +255,21 @@ export function renderModuleHub({ onModuleSelect, onLogout }) {
     a.addEventListener('click', e => {
       e.preventDefault();
       trySelectModule(a.dataset.module);
+    });
+  });
+
+  container.querySelectorAll('[data-mobile-path]').forEach(el => {
+    el.addEventListener('click', () => {
+      const path = el.getAttribute('data-mobile-path');
+      if (path && onNavigatePath) onNavigatePath(path);
+    });
+  });
+
+  container.querySelectorAll('a.hub-quick-link[data-mobile-path]').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const path = a.getAttribute('data-mobile-path');
+      if (path && onNavigatePath) onNavigatePath(path);
     });
   });
 

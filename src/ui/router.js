@@ -14,6 +14,7 @@ import {
   buildMaintenanceMachinePath,
 } from '../lib/appPaths.js';
 import { initTheme } from '../lib/theme.js';
+import { shouldPreferMobileShell } from '../lib/mobileClient.js';
 import { renderLoginScreen } from './auth/loginScreen.js';
 import {
   renderResetPasswordScreen,
@@ -206,7 +207,7 @@ function showLogin() {
         history.replaceState(null, '', saved);
         applyRouteFromLocation();
       } else {
-        showHub();
+        goAfterLogin();
       }
     },
     onForgotPassword: () => {
@@ -282,6 +283,36 @@ function showSelfService() {
   }
 }
 
+/** Posle prijave: iPhone/Android Safari → /m, inače hub. */
+function goAfterLogin() {
+  if (shouldPreferMobileShell()) {
+    history.replaceState(null, '', '/m');
+    applyRouteFromLocation();
+    return;
+  }
+  showHub();
+}
+
+/**
+ * Desktop modul na mobilu → odgovarajući /m/* ekran.
+ * @param {string} moduleId
+ * @returns {boolean}
+ */
+function redirectModuleToMobileIfNeeded(moduleId) {
+  if (!shouldPreferMobileShell()) return false;
+  if (moduleId === 'reversi' && canAccessReversi()) {
+    syncBrowserUrl('/m/rezni-alat', { replace: true });
+    showMobile('rezni-alat', { skipUrlSync: true });
+    return true;
+  }
+  if (moduleId === 'lokacije-delova' && canAccessLokacije()) {
+    syncBrowserUrl('/m', { replace: true });
+    showMobile('home', { skipUrlSync: true });
+    return true;
+  }
+  return false;
+}
+
 function showHub() {
   const leaving = currentScreen;
   currentScreen = 'hub';
@@ -291,6 +322,7 @@ function showHub() {
   setStoredModule(null);
   const screen = renderModuleHub({
     onModuleSelect: (moduleId) => navigateToModule(moduleId),
+    onNavigatePath: (path) => navigateToAppPath(path),
     onLogout: () => {
       resetKadrovskaState();
       showLogin();
@@ -300,6 +332,8 @@ function showHub() {
 }
 
 function showModulePlaceholder(moduleId, options = {}) {
+  if (redirectModuleToMobileIfNeeded(moduleId)) return;
+
   const leaving = currentScreen;
   currentScreen = moduleId;
   clearMount(leaving);
@@ -969,13 +1003,13 @@ function applyRouteFromLocation() {
     return;
   }
 
-  /* `/` uvek prikazuje hub sa svim karticama modula (ne „resume” poslednjeg modula). */
-  if (route.kind === 'session') {
-    showHub();
-    return;
-  }
-
-  if (route.kind === 'hub') {
+  /* `/` — na telefonu Safari ide na mobilni magacin (/m), ne desktop hub. */
+  if (route.kind === 'session' || route.kind === 'hub') {
+    if (shouldPreferMobileShell()) {
+      syncBrowserUrl('/m', { replace: true });
+      showMobile('home', { skipUrlSync: true });
+      return;
+    }
     showHub();
     return;
   }
@@ -1002,7 +1036,7 @@ function applyRouteFromLocation() {
   }
 
   if (route.kind === 'mobile') {
-    if (!canAccessLokacije()) {
+    if (!canAccessLokacije() && !canAccessReversi()) {
       showToast('🔒 Za mobilni shell je potrebna prijava.');
       syncBrowserUrl('/', { replace: true });
       showHub();
@@ -1033,6 +1067,7 @@ function navigateToModule(moduleId) {
     return;
   }
   if (!assertModuleAllowed(moduleId)) return;
+  if (redirectModuleToMobileIfNeeded(moduleId)) return;
   syncBrowserUrl(pathForModule(moduleId));
   showModulePlaceholder(moduleId, { skipUrlSync: true });
 }

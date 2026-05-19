@@ -23,6 +23,7 @@ import {
   flushPendingMovements,
 } from '../../services/offlineQueue.js';
 import { openScanMoveModal } from '../lokacije/scanModal.js';
+import { setDesktopForced } from '../../lib/mobileClient.js';
 
 const SHELL_ID = 'mobileShell';
 
@@ -134,6 +135,8 @@ export function renderMobileHome(mountEl, ctx) {
         <span>v.${__APP_VERSION__ || '1'}</span>
         <span class="m-dot">·</span>
         <span id="mNetIndicator">${navigator.onLine ? '🟢 online' : '🔴 offline'}</span>
+        <span class="m-dot">·</span>
+        <button type="button" class="m-footer-link" data-act="desktopHub">Desktop hub</button>
       </footer>
     </div>
   `;
@@ -171,6 +174,10 @@ export function renderMobileHome(mountEl, ctx) {
         break;
       case 'rezniAlat':
         ctx.onNavigate('/m/rezni-alat');
+        break;
+      case 'desktopHub':
+        setDesktopForced(true);
+        ctx.onNavigate('/hub?desktop=1');
         break;
       case 'lookup':
         ctx.onNavigate('/m/lookup');
