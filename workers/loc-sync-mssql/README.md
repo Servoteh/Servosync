@@ -122,6 +122,29 @@ Svi flag-ovi: `node scripts/backfill-bigtehn-work-orders.js --help`.
 
 **Bezbednost:** skripta koristi `SUPABASE_SERVICE_ROLE_KEY` (zaobilazi RLS) — pokreći je samo sa admin mašine, nikad iz browser-a.
 
+## Resync samo `naziv_dela` (TP nazivi) iz MSSQL
+
+Posle pogrešnog SQL UPDATE-a koji je prepisao `bigtehn_work_orders_cache.naziv_dela` nazivom predmeta. **Ne dira** `bigtehn_items_cache`.
+
+Pokrenuti **iz ovog foldera** (`workers/loc-sync-mssql`), ne iz korena monorepa:
+
+```bash
+cd workers/loc-sync-mssql
+npm install
+npm run resync:naziv-dela -- --prefix=9811
+# ili:
+node scripts/resync-bigtehn-naziv-dela-prefix.js --prefix=9811
+```
+
+Na **bridge VM** (`C:\servoteh\servoteh-bridge`): posle `git pull` proveri da postoji fajl
+`scripts/resync-bigtehn-naziv-dela-prefix.js` i folder `src/` (logger, config, mssqlClient).
+Ako fajl ne postoji — repozitorijum na VM-u nije ažuriran; povuci izmene ili kopiraj ceo `workers/loc-sync-mssql`.
+
+`MODULE NOT FOUND` — tipično:
+- pogrešan `cd` (mora biti folder gde je `package.json` + `scripts/` + `src/`);
+- nema fajla skripte (stari `git pull` na bridge-u);
+- nije urađen `npm install` (`Cannot find package 'mssql'`).
+
 ## Backfill: Planiranje proizvodnje bez vremenskog prozora
 
 Skripta u `scripts/backfill-production-cache.js` povlači kompletan set podataka koji koristi modul **Planiranje proizvodnje**:

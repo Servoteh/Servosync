@@ -1,4 +1,4 @@
--- Action stack: „Nedostaje grid” samo za HR — admin ima ceo obuhvat i lista je suviše dugački šum.
+-- Action stack: „Nedostaje grid” za HR koji nije admin (admin+hr ne — izbegnut šum na pregledu).
 -- Depends: add_kadr_dashboard_action_stack_rpc.sql (ostali blokovi ostaju HR/admin).
 
 CREATE OR REPLACE FUNCTION public.kadr_dashboard_action_stack(
@@ -150,8 +150,8 @@ BEGIN
     ), '[]'::jsonb);
   END IF;
 
-  -- 7. Zaposleni bez upisanih sati za prošli mesec (samo HR)
-  IF v_is_hr THEN
+  -- 7. Zaposleni bez upisanih sati za prošli mesec (samo HR bez admin — admin+hr i dalje nema šuma)
+  IF v_is_hr AND NOT v_is_admin THEN
     v_items := v_items || COALESCE((
       SELECT jsonb_agg(x.obj)
       FROM (
@@ -234,7 +234,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.kadr_dashboard_action_stack(int) IS
-  'Top akcije za Kadrovska dashboard; missing_grid_prev_month samo za HR.';
+  'Top akcije za Kadrovska dashboard; missing_grid_prev_month samo za HR (ne i za admin).';
 
 REVOKE ALL ON FUNCTION public.kadr_dashboard_action_stack(int) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.kadr_dashboard_action_stack(int) TO authenticated, service_role;

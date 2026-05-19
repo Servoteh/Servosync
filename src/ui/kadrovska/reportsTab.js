@@ -52,7 +52,7 @@ import { openMedicalExamsModal } from './medicalExamsModal.js';
 import { CERT_TYPE_LABELS, loadAllCertificateStatus } from '../../services/certificates.js';
 import { openCertificatesModal } from './certificatesModal.js';
 import { AUDIT_TABLE_LABELS, loadAuditLog, diffAuditRow } from '../../services/auditLog.js';
-import { loadHrNotifConfig } from '../../services/hrNotifications.js';
+import { triggerWeeklyRiskSummary } from '../../services/hrNotifications.js';
 import { renderSummaryChips } from './shared.js';
 import { loadXlsx } from '../../lib/xlsx.js';
 import { downloadCsv } from '../../lib/csv.js';
@@ -504,7 +504,7 @@ export function renderReportsTab() {
               </select>
             </label>
             <button type="button" class="btn btn-ghost" id="repRiskExport" title="Izvoz u Excel">📊 Excel</button>
-            <button type="button" class="btn btn-ghost" id="repRiskEmail" title="Otvori mailto sa sažetkom za HR primaoce">📧 Pošalji HR-u</button>
+            <button type="button" class="btn btn-ghost" id="repRiskEmail" title="Stavi nedeljni risk pregled u queue (HR email iz Notifikacije)">📧 Pošalji HR-u</button>
             <span class="kadr-count" id="repRiskCount">0 zaposlenih</span>
           </div>
         </div>
@@ -2266,93 +2266,27 @@ async function _exportRiskXlsx() {
   showToast('📊 Izvezeno');
 }
 
-/**
- * Otvara mailto link sa pred-popunjenim risk sažetkom za HR primaoce
- * iz kadr_notification_config.email_recipients. Bez DB izmena —
- * admin/HR mora ručno da klikne "Send" u email klijentu.
- *
- * Za prave auto-cron (svakog ponedeljka) — primeni migraciju
- * sql/migrations/add_kadr_weekly_risk_summary.sql + zakaži pg_cron job.
- */
+/** Queue nedeljni risk summary u kadr_notification_log (`kadr_trigger_weekly_risk_summary`). */
 async function _emailRiskToHr() {
   if (!canViewEmployeePii()) { showToast('⚠ Samo HR/admin'); return; }
-  if (!_riskCache.length) { showToast('Pre slanja, otvori Risk izveštaj barem jednom'); return; }
-
-  /* Učitaj primaoce iz HR config-a; ako nema — pitaj admin-a da podesi. */
-  let recipients = [];
+  const btn = panelRoot?.querySelector('#repRiskEmail');
+  if (btn) { btn.disabled = true; btn.textContent = 'Queue…'; }
   try {
-    const cfg = await loadHrNotifConfig();
-    recipients = Array.isArray(cfg?.emailRecipients) ? cfg.emailRecipients : [];
-  } catch (e) {
-    console.warn('[reports] risk email — config load failed', e);
-  }
-  if (!recipients.length) {
-    showToast('⚠ Nema email primalaca u Notifikacije → Podešavanja');
-    return;
-  }
-
-  const high = _riskCache.filter(r => r.level === 'high');
-  const medium = _riskCache.filter(r => r.level === 'medium');
-  const medSoon = _riskCache.filter(r => r.medExpDays != null && r.medExpDays >= 0 && r.medExpDays <= 60);
-  const conSoon = _riskCache.filter(r => r.conExpDays != null && r.conExpDays >= 0 && r.conExpDays <= 60);
-
-  const today = _isoToday();
-  const subject = `[Servoteh HR] Risk pregled — ${today}`;
-
-  const lines = [];
-  lines.push(`Servoteh HR — risk pregled za ${today}`);
-  lines.push('='.repeat(50));
-  lines.push('');
-  lines.push(`Visok rizik: ${high.length}`);
-  lines.push(`Srednji rizik: ${medium.length}`);
-  lines.push(`Lekarski ističe (≤60d): ${medSoon.length}`);
-  lines.push(`Ugovori ističu (≤60d): ${conSoon.length}`);
-  lines.push('');
-
-  if (high.length) {
-    lines.push('VISOK RIZIK');
-    lines.push('-'.repeat(50));
-    for (const r of high.slice(0, 30)) {
-      lines.push(`• ${employeeDisplayName(r.emp) || '—'}${r.emp.department ? ' (' + r.emp.department + ')' : ''}: ${r.reasons.join(' · ')}`);
+    const n = await triggerWeeklyRiskSummary();
+    if (n === null) {
+      showToast('⚠ Nije moguće (offline ili nema prava)');
+      return;
     }
-    if (high.length > 30) lines.push(`  ... i još ${high.length - 30}`);
-    lines.push('');
-  }
-  if (medium.length) {
-    lines.push('SREDNJI RIZIK');
-    lines.push('-'.repeat(50));
-    for (const r of medium.slice(0, 30)) {
-      lines.push(`• ${employeeDisplayName(r.emp) || '—'}${r.emp.department ? ' (' + r.emp.department + ')' : ''}: ${r.reasons.join(' · ')}`);
+    if (n === 0) {
+      showToast('ℹ Nema novih redova u queue — proveri Notifikacije (email lista, uključeno) ili trenutno nema rizika za prijavu');
+    } else {
+      showToast(`📧 U queue: ${n} email(ova). Pošalji iz taba Notifikacije ili dispatch.`);
     }
-    if (medium.length > 30) lines.push(`  ... i još ${medium.length - 30}`);
-    lines.push('');
-  }
-
-  lines.push('---');
-  lines.push('Detalji u app-u: Kadrovska → Izveštaji → Rizik');
-  lines.push('Generisano: ' + new Date().toLocaleString('sr-RS'));
-
-  const body = lines.join('\n');
-
-  /* mailto: ograničenje na ~2000 char je realnost u nekim browser-ima/klijentima.
-     Ako tekst pređe 1800, šaljemo samo summary linije + napomenu da je puna lista u app-u. */
-  const MAX = 1800;
-  let finalBody = body;
-  if (finalBody.length > MAX) {
-    const head = lines.slice(0, 8).join('\n');
-    finalBody = head + '\n\n[Lista zaposlenih je predugačka za email; otvori Risk izveštaj u app-u i koristi Excel export.]';
-  }
-
-  const mailto = `mailto:${encodeURIComponent(recipients.join(','))}`
-    + `?subject=${encodeURIComponent(subject)}`
-    + `&body=${encodeURIComponent(finalBody)}`;
-
-  /* Pokušaj location.href; neki klijenti neće reagovati ako nema mail handlera. */
-  try {
-    window.location.href = mailto;
-    showToast(`📧 Otvoren mail klijent za ${recipients.length} primalaca`);
-  } catch (e) {
-    showToast('⚠ Nije moguće otvoriti mail klijent');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '📧 Pošalji HR-u';
+    }
   }
 }
 

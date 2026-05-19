@@ -40,6 +40,7 @@ const TYPE_LABELS = {
   birthday: 'Rođendan',
   child_birthday: 'Rođendan deteta',
   work_anniversary: 'Godišnjica rada',
+  weekly_risk_summary: 'Risk pregled (nedeljni)',
 };
 const STATUS_LABELS = {
   queued: '⏳ U redu',

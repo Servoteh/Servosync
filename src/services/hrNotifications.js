@@ -159,6 +159,26 @@ export async function triggerScheduleHrReminders() {
 }
 
 /**
+ * Ručno okida `kadr_trigger_weekly_risk_summary()` — stavlja nedeljni risk
+ * pregled u `kadr_notification_log` (isti sadržaj kao pg_cron → queue funkcija).
+ * @returns {Promise<number|null>} broj upisanih redova, ili null
+ */
+export async function triggerWeeklyRiskSummary() {
+  if (!getIsOnline() || !isHrOrAdmin()) return null;
+  const data = await sbReq(
+    'rpc/kadr_trigger_weekly_risk_summary',
+    'POST',
+    {},
+  );
+  if (data === null) return null;
+  if (Array.isArray(data) && data.length > 0) {
+    const val = Object.values(data[0])[0];
+    return Number(val ?? 0);
+  }
+  return typeof data === 'number' ? data : null;
+}
+
+/**
  * Upisuje email + WhatsApp obračun sati za sve zaposlene koji imaju
  * upisane sate za dati mesec. Koristi SECURITY DEFINER SQL funkciju.
  * @param {number} year  – YYYY

@@ -285,6 +285,8 @@ GRANT EXECUTE ON FUNCTION public.kadr_queue_weekly_risk_summary() TO authenticat
 -- ───────────────────────────────────────────────────────────
 -- Wrapper sa proverom HR/admin uloge — za ručno okidanje iz UI
 -- (auth.uid() ne važi u pg_cron kontekstu, zato je odvojeno).
+-- U SQL Editoru / psql kao postgres nema JWT-a — dozvoljeno ako je session_user
+-- superuser ili postgres/supabase_admin (održavanje).
 -- ───────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.kadr_trigger_weekly_risk_summary()
 RETURNS int
@@ -293,7 +295,15 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  IF NOT public.current_user_is_hr() AND NOT public.current_user_is_admin() THEN
+  IF NOT (
+      public.current_user_is_hr()
+      OR public.current_user_is_admin()
+      OR session_user::text IN ('postgres', 'supabase_admin')
+      OR EXISTS (
+        SELECT 1 FROM pg_roles r
+        WHERE r.rolname = session_user::name AND r.rolsuper
+      )
+  ) THEN
     RAISE EXCEPTION 'Access denied: HR or admin only';
   END IF;
   RETURN public.kadr_queue_weekly_risk_summary();
@@ -301,7 +311,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.kadr_trigger_weekly_risk_summary() IS
-  'UI wrapper: ručno okidanje weekly risk summary; proverava HR/admin RLS.';
+  'UI wrapper: weekly risk summary; HR/admin preko JWT, ili superuser/postgres u SQL Editoru.';
 
 REVOKE ALL ON FUNCTION public.kadr_trigger_weekly_risk_summary() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.kadr_trigger_weekly_risk_summary() TO authenticated, service_role;

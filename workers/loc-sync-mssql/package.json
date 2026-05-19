@@ -15,7 +15,8 @@
     "backfill:production": "node scripts/backfill-production-cache.js --scope=open",
     "backfill:production:dry": "node scripts/backfill-production-cache.js --scope=open --dry-run",
     "backfill:production:full": "node scripts/backfill-production-cache.js --scope=all",
-    "backfill:production:full:dry": "node scripts/backfill-production-cache.js --scope=all --dry-run"
+    "backfill:production:full:dry": "node scripts/backfill-production-cache.js --scope=all --dry-run",
+    "resync:naziv-dela": "node scripts/resync-bigtehn-naziv-dela-prefix.js"
   },
   "engines": {
     "node": ">=20"
