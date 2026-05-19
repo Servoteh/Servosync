@@ -644,6 +644,16 @@ async function startIosLocationShelfQrHybrid(videoEl, constraintsWithVideo, hand
  * }} handlers
  * @returns {Promise<ScanController>}
  */
+/** @param {ScanController|null|undefined} ctrl */
+export function stopScan(ctrl) {
+  if (!ctrl) return;
+  try {
+    ctrl.stop();
+  } catch (e) {
+    console.warn('[barcode] stopScan failed', e);
+  }
+}
+
 export async function startScan(videoEl, { onResult, onError, forceDeviceId, decodeProfile } = {}) {
   if (!videoEl) throw new Error('Video element is required.');
   if (typeof onResult !== 'function') throw new Error('onResult handler is required.');
