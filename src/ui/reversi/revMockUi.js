@@ -37,6 +37,11 @@ const P = {
     '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
   boxes:
     '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+  fileText:
+    '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  arrowLeft: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  camera:
+    '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
 };
 
 /** @param {keyof typeof P} name @param {number} [size] @param {string} [cls] */
@@ -134,6 +139,35 @@ export function revFmtDate(d) {
   } catch {
     return '—';
   }
+}
+
+/** @param {string} status rev_documents.status */
+export function revDocStatusPillHtml(status) {
+  const m = {
+    OPEN: { cls: 'rev-status-pill--ok', text: 'Aktivno' },
+    PARTIALLY_RETURNED: { cls: 'rev-status-pill--warn', text: 'Delimično vraćeno' },
+    RETURNED: { cls: 'rev-status-pill--ok', text: 'Vraćeno' },
+    CANCELLED: { cls: 'rev-status-pill--neutral', text: 'Otkazano' },
+  };
+  const p = m[status] || { cls: 'rev-status-pill--neutral', text: String(status || '—') };
+  return `<span class="rev-status-pill ${p.cls}"><span class="rev-status-pill__dot"></span>${escHtml(p.text)}</span>`;
+}
+
+/** @param {{ status?: string, issued_holder?: unknown }} tool */
+export function revToolStatusPillHtml(tool) {
+  let cls = 'rev-status-pill--neutral';
+  let text = tool.status || '—';
+  if (tool.status === 'scrapped') {
+    cls = 'rev-status-pill--neutral';
+    text = 'Otpisan';
+  } else if (tool.status === 'lost') {
+    cls = 'rev-status-pill--danger';
+    text = 'Izgubljen';
+  } else if (tool.status === 'active') {
+    cls = tool.issued_holder ? 'rev-status-pill--warn' : 'rev-status-pill--ok';
+    text = tool.issued_holder ? 'Na reversu' : 'Aktivan';
+  }
+  return `<span class="rev-status-pill ${cls}"><span class="rev-status-pill__dot"></span>${escHtml(text)}</span>`;
 }
 
 /**
