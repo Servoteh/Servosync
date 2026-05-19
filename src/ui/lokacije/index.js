@@ -1789,7 +1789,7 @@ async function renderPanel(host, tabId) {
             <button type="button" class="btn btn-xs" id="locRepExport" title="CSV trenutnog skupa filtera">Export CSV</button>
           </div>
         </div>
-        <p class="loc-muted">Klik na red otvara istoriju. „📋 RN/TP“ otvara tehnološki postupak (operacije + prijave) iz BigTehn cache-a. „TP“ štampa nalepnicu ako postoji prepoznatljiv barkod. Isti crtež može imati više redova (različite police / količine po smeštaju).</p>
+        <p class="loc-muted">Samo radni nalozi (BigTehn RN), ne alati iz reversa na magacinu. Klik na red otvara istoriju. „📋 RN/TP“ otvara tehnološki postupak. Isti crtež može imati više redova (različite police / količine).</p>
         <div class="loc-table-wrap">
           <table class="loc-table">
             <thead><tr>

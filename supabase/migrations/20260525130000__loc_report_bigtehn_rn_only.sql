@@ -1,6 +1,4 @@
--- Lokacije: loc_report_parts_by_locations — batch BigTehn join (izbegava statement timeout).
--- Problem: LATERAL + TRIM(ident_broj) skenira ceo cache po placement-u (~250×36k).
--- Rešenje: kandidati ident_broj po batch-u + jedan join na bigtehn_wo_cache_ident_idx.
+-- Pregled po lokacijama: samo BigTehn RN (bez rev_tools / drugih item_ref_table).
 
 CREATE OR REPLACE FUNCTION public.loc_report_parts_by_locations(
   p_drawing_no text DEFAULT NULL,
@@ -294,16 +292,6 @@ END;
 $fn$;
 
 COMMENT ON FUNCTION public.loc_report_parts_by_locations IS
-  'Lokacije v2: batch join na BigTehn cache (index ident_broj); 9400/legacy TP varijante + jedinstven fuzzy match.';
-
-REVOKE ALL ON FUNCTION public.loc_report_parts_by_locations(
-  text, text, text, text, uuid, text, text, boolean, int, int
-) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.loc_report_parts_by_locations(
-  text, text, text, text, uuid, text, text, boolean, int, int
-) FROM anon;
-GRANT EXECUTE ON FUNCTION public.loc_report_parts_by_locations(
-  text, text, text, text, uuid, text, text, boolean, int, int
-) TO authenticated;
+  'Lokacije: pregled smeštaja samo za bigtehn_rn (bez rev_tools). Batch join na cache.';
 
 NOTIFY pgrst, 'reload schema';
