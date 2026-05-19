@@ -72,7 +72,7 @@ export async function dispatchOptionalNetworkLabelPrint(args) {
  * @typedef {'barcode'|'qr'} ShelfCodeType
  */
 
-const FORMAT_DIMS = {
+export const FORMAT_DIMS = {
   'wide-200x99': {
     w: '200mm',
     h: '99mm',

@@ -16,8 +16,7 @@ import {
   getMagacinLocationId,
   seedCuttingToolStock,
 } from '../../services/reversiService.js';
-import { buildTspCuttingToolLabelProgram } from '../../lib/tspl2.js';
-import { dispatchOptionalNetworkLabelPrint } from '../lokacije/labelsPrint.js';
+import { printReversiLabelsBatch } from './reversiLabelsPrint.js';
 
 const KLASE = ['glodalo', 'burgija', 'pločica', 'držač', 'narez', 'urezna', 'razvrtač', 'ostalo'];
 
@@ -380,45 +379,18 @@ export async function printCuttingToolLabel(tool, copies = 1) {
     showToast('Nema barkoda za štampu');
     return { ok: false, reason: 'no_barcode' };
   }
-  let tspl2 = '';
-  try {
-    tspl2 = buildTspCuttingToolLabelProgram({
-      barcode: tool.barcode,
-      oznaka: tool.oznaka,
-      naziv: tool.naziv,
-      klasa: tool.klasa,
-      compatible_machine_codes: tool.compatible_machine_codes || [],
-      copies,
-    });
-  } catch (e) {
-    console.error('[reversi/rezni] TSPL2 build', e);
-    showToast(`Greška: ${e?.message || e}`);
-    return { ok: false, reason: 'tspl2_build_failed' };
-  }
-
-  const res = await dispatchOptionalNetworkLabelPrint({
-    mode: 'cutting_tool',
-    payload: {
-      tool: {
-        id: tool.id,
-        barcode: tool.barcode,
-        oznaka: tool.oznaka,
-        naziv: tool.naziv,
-        klasa: tool.klasa,
-      },
-      copies,
-      tspl2,
-    },
+  const row = {
+    grupa: 'CUTTING',
+    barcode: tool.barcode,
+    oznaka: tool.oznaka,
+    naziv: tool.naziv,
+    klasa: tool.klasa,
+    compatible_machine_codes: tool.compatible_machine_codes || [],
+  };
+  const res = await printReversiLabelsBatch([row], {
+    format: 'tsc',
+    template: 'standard',
+    copies,
   });
-
-  if (res.ok) {
-    showToast(`Nalepnica poslata štampaču (${copies}×)`);
-    return { ok: true };
-  }
-  if (res.reason === 'no_proxy_url') {
-    showToast('LAN proxy nije postavljen — koristi browser print');
-    return { ok: false, reason: 'no_proxy_url' };
-  }
-  showToast(`Štampač nije dostupan: ${res.reason}`);
-  return { ok: false, reason: res.reason };
+  return { ok: !!res.ok, reason: res.proxy?.reason };
 }

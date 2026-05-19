@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { composeMultiLabelTspl } from '../../src/ui/reversi/bulkPrintLabelsModal.js';
+import { composeMultiLabelTspl } from '../../src/ui/reversi/reversiLabelsPrint.js';
 
 describe('composeMultiLabelTspl', () => {
   const rows = [
