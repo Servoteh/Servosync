@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildTspLabelProgram, buildTspShelfLabelProgram } from '../../src/lib/tspl2.js';
+import {
+  buildTspLabelProgram,
+  buildTspShelfLabelProgram,
+  buildTspHandToolLabelProgram,
+  buildTspMiniInsertLabelProgram,
+} from '../../src/lib/tspl2.js';
 
 describe('buildTspLabelProgram', () => {
   const baseSpec = {
@@ -175,5 +180,35 @@ describe('buildTspShelfLabelProgram', () => {
     expect(b).toMatch(/BARCODE [\d]+,[\d]+,"128M"/);
     expect(a).not.toContain('QRCODE ');
     expect(b).not.toContain('QRCODE ');
+  });
+});
+
+describe('buildTspHandToolLabelProgram', () => {
+  it('snapshot: typical hand tool label', () => {
+    const out = buildTspHandToolLabelProgram({
+      barcode: 'ALAT-000042',
+      oznaka: 'KL-12',
+      naziv: 'Kljuc 12mm',
+      asset_kind: 'Alat',
+      serial: 'SN-99',
+      copies: 1,
+    });
+    expect(out).toMatchSnapshot();
+    expect(out).not.toContain('SIZE');
+    expect(out).toContain('ALAT-000042');
+  });
+});
+
+describe('buildTspMiniInsertLabelProgram', () => {
+  it('snapshot: mini insert plate label', () => {
+    const out = buildTspMiniInsertLabelProgram({
+      barcode: 'RZN-000100',
+      oznaka: 'PL-01',
+      klasa: 'plocica',
+      copies: 1,
+    });
+    expect(out).toMatchSnapshot();
+    expect(out).not.toContain('GAP');
+    expect(out).toContain('BARCODE');
   });
 });

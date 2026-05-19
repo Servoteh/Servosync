@@ -14,9 +14,13 @@ import {
 } from './cuttingToolModals.js';
 import { ICON_REZNI_MACHINING } from './revMachiningIcon.js';
 import { renderByMachineSubview, renderByEmployeeSubview } from './cuttingByViews.js';
+import { renderMapaSubview } from './revMapaSubview.js';
+
+const MAPA_MACHINE_FILTER_KEY = 'sess:rev_rzn_mapa_machine';
 
 const SUB_TAB_KEY = 'sess:rev_rzn_sub_tab';
 const SUB_TABS = [
+  { id: 'mapa', label: 'Pregled' },
   { id: 'katalog', label: 'Katalog' },
   { id: 'masine', label: 'Po mašinama' },
   { id: 'zaposleni', label: 'Po zaposlenima' },
@@ -705,8 +709,20 @@ export async function renderReznialatTab(body, opts = {}) {
     state.offset = 0;
     state.rows = [];
     state.expanded.clear();
-    if (activeSub === 'masine') {
-      await renderByMachineSubview(subHost);
+    if (activeSub === 'mapa') {
+      await renderMapaSubview(subHost, {
+        onNavigateMachine: (code) => {
+          ssSet(MAPA_MACHINE_FILTER_KEY, code);
+          activeSub = 'masine';
+          ssSet(SUB_TAB_KEY, 'masine');
+          renderShell();
+          void renderActiveSub();
+        },
+      });
+    } else if (activeSub === 'masine') {
+      const pre = ssGet(MAPA_MACHINE_FILTER_KEY, '');
+      await renderByMachineSubview(subHost, { initialSearch: pre || '' });
+      if (pre) ssSet(MAPA_MACHINE_FILTER_KEY, '');
     } else if (activeSub === 'zaposleni') {
       await renderByEmployeeSubview(subHost);
     } else {

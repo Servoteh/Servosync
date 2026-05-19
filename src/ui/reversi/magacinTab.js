@@ -13,6 +13,8 @@ import {
 } from '../../services/reversiService.js';
 import { ICON_REZNI_MACHINING } from './revMachiningIcon.js';
 import { openBulkImportModal, openImportRollbackModal } from './bulkImportModal.js';
+import { openBulkPrintLabelsModal } from './bulkPrintLabelsModal.js';
+import { openQuickIssueModal } from './quickIssueModal.js';
 
 const state = {
   rows: [],
@@ -25,6 +27,7 @@ const state = {
   searchDeb: null,
   locations: [],
   magacinId: null,
+  selected: new Set(),
 };
 
 let bodyRoot = null;
@@ -139,6 +142,9 @@ function magacinStatsHtml(rows) {
 }
 
 function renderPageHeader() {
+  const qi = canManageReversi()
+    ? `<button type="button" class="rev-btn rev-btn--primary rev-quick-issue-btn" id="revMagQuickIssue">+ Quick Issue</button>`
+    : '';
   return `
     <header class="rev-page-header rev-mag-page-header">
       <div class="rev-page-header__icon" aria-hidden="true">📦</div>
@@ -146,7 +152,19 @@ function renderPageHeader() {
         <h2 class="rev-page-header__title">Magacin</h2>
         <p class="rev-page-header__desc">Ručni i rezni artikli — prema zalihi u magacinu ili opciono ceo inventar po lokacijama primaoca.</p>
       </div>
-    </header>`;
+      ${qi}
+    </header>
+    <button type="button" class="rev-quick-fab rev-btn rev-btn--primary" id="revMagQuickIssueFab">+ Quick Issue</button>`;
+}
+
+function renderBulkBar() {
+  const n = state.selected.size;
+  if (!canManageReversi() || n === 0) return '';
+  return `<div class="rev-bulk-bar">
+    <span>${n} odabrano</span>
+    <button type="button" class="rev-btn rev-btn--primary" id="revMagBulkPrint">Štampa nalepnica (${n})</button>
+    <button type="button" class="rev-btn rev-btn--secondary" id="revMagBulkClear">Poništi izbor</button>
+  </div>`;
 }
 
 function renderToolbar() {
@@ -256,6 +274,7 @@ function renderTable() {
     <div class="rev-table-shell rev-table-shell--rzn">
       <table class="rev-data-table rev-data-table--zebra">
         <thead><tr>
+          ${canManageReversi() ? '<th class="rev-th-cb"><input type="checkbox" id="revMagSelAll" title="Izaberi sve"/></th>' : ''}
           <th>Kataloški broj</th>
           <th>Naziv</th>
           <th>Grupa</th>
@@ -278,7 +297,13 @@ function renderTable() {
                 : r.grupa === 'HAND'
                   ? '<span class="rev-mag-kpi-thumb">1 kom</span>'
                   : '';
-            return `<tr data-mag-row="${escHtml(r.item_id)}">
+            const sel = state.selected.has(r.item_id);
+            return `<tr data-mag-row="${escHtml(r.item_id)}" class="${sel ? 'rev-data-row--selected' : ''}">
+              ${
+                canManageReversi()
+                  ? `<td class="rev-td-cb"><input type="checkbox" data-rev-select="${escHtml(r.item_id)}" ${sel ? 'checked' : ''}/></td>`
+                  : ''
+              }
               <td>${kat}</td>
               <td>${escHtml(r.naziv || '')}</td>
               <td>${grupaBadge(r.grupa)}</td>
@@ -361,6 +386,30 @@ function bindEvents(refreshAll) {
   });
   r.querySelector('#revMagNewHand')?.addEventListener('click', () => {
     showToast('Koristi tab „Inventar alata i opreme“ → Nova jedinica');
+  });
+  const openQi = () => openQuickIssueModal({ onSuccess: () => void refreshAll() });
+  r.querySelector('#revMagQuickIssue')?.addEventListener('click', openQi);
+  r.querySelector('#revMagQuickIssueFab')?.addEventListener('click', openQi);
+  r.querySelector('#revMagSelAll')?.addEventListener('change', (e) => {
+    if (e.target.checked) state.rows.forEach((row) => state.selected.add(row.item_id));
+    else state.selected.clear();
+    void refreshAll();
+  });
+  r.querySelectorAll('[data-rev-select]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const id = cb.getAttribute('data-rev-select');
+      if (cb.checked) state.selected.add(id);
+      else state.selected.delete(id);
+      void refreshAll();
+    });
+  });
+  r.querySelector('#revMagBulkClear')?.addEventListener('click', () => {
+    state.selected.clear();
+    void refreshAll();
+  });
+  r.querySelector('#revMagBulkPrint')?.addEventListener('click', () => {
+    const picked = state.rows.filter((row) => state.selected.has(row.item_id));
+    openBulkPrintLabelsModal({ rows: picked });
   });
   r.querySelectorAll('[data-mag-eye]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -467,6 +516,7 @@ export async function renderMagacinTab(body) {
         ${renderPageHeader()}
         ${magacinStatsHtml(state.rows)}
         ${renderToolbar()}
+        ${renderBulkBar()}
         ${renderTable()}
       </div>`;
     bindEvents(refreshAll);
@@ -482,5 +532,6 @@ export function teardownMagacinTab() {
   state.search = '';
   state.klasa = '';
   state.showAllLocations = false;
+  state.selected.clear();
   clearTimeout(state.searchDeb);
 }

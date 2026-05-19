@@ -1,0 +1,20 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildTspHandToolLabelProgram > snapshot: typical hand tool label 1`] = `
+"CLS
+TEXT 24,12,"4",0,1,1,"KL-12"
+TEXT 24,71,"2",0,1,1,"Kljuc 12mm"
+TEXT 24,118,"1",0,1,1,"Alat: SN-99"
+BARCODE 24,260,"128M",165,1,0,2,4,"ALAT-000042"
+PRINT 1,1
+"
+`;
+
+exports[`buildTspMiniInsertLabelProgram > snapshot: mini insert plate label 1`] = `
+"CLS
+TEXT 12,6,"2",0,1,1,"PL-01"
+TEXT 12,35,"1",0,1,1,"plocica"
+BARCODE 12,71,"128M",94,0,0,2,3,"RZN-000100"
+PRINT 1,1
+"
+`;

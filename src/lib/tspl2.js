@@ -373,3 +373,78 @@ export function buildTspCuttingToolLabelProgram(tool) {
   lines.push(`PRINT ${copies},1`);
   return lines.join('\r\n') + '\r\n';
 }
+
+/**
+ * TSPL2 nalepnica ručnog alata (80.34×40.3mm, isti profil kao rezni).
+ * NE šalje SIZE/GAP/DENSITY.
+ *
+ * @param {{ barcode: string, oznaka?: string, naziv?: string, asset_kind?: string,
+ *   serial?: string, copies?: number }} tool
+ * @returns {string}
+ */
+export function buildTspHandToolLabelProgram(tool) {
+  const barcode = String(tool?.barcode || '').trim();
+  if (!barcode) throw new Error('buildTspHandToolLabelProgram: barcode je obavezan');
+
+  const oznaka = String(tool?.oznaka || '').trim();
+  const naziv = String(tool?.naziv || '').trim();
+  const assetKind = String(tool?.asset_kind || '').trim();
+  const serial = String(tool?.serial || tool?.serijski_broj || '').trim();
+  const copies = Math.max(1, Math.floor(Number(tool?.copies) || 1));
+
+  const lines = [];
+  lines.push('CLS');
+
+  if (oznaka) {
+    lines.push(`TEXT ${mm(2)},${mm(1)},"4",0,1,1,${tsplStr(truncFit(oznaka, 22))}`);
+  }
+  if (naziv) {
+    lines.push(`TEXT ${mm(2)},${mm(6)},"2",0,1,1,${tsplStr(truncFit(naziv, 38))}`);
+  }
+  const kindLine = [assetKind, serial].filter(Boolean).join(': ');
+  if (kindLine) {
+    lines.push(`TEXT ${mm(2)},${mm(10)},"1",0,1,1,${tsplStr(truncFit(kindLine, 42))}`);
+  }
+
+  const BC_X = mm(2);
+  const BC_Y = mm(22);
+  const BC_H = mm(14);
+  lines.push(`BARCODE ${BC_X},${BC_Y},"128M",${BC_H},1,0,2,4,${tsplStr(barcode)}`);
+
+  lines.push(`PRINT ${copies},1`);
+  return lines.join('\r\n') + '\r\n';
+}
+
+/**
+ * Mini nalepnica 30×15mm (glodačke pločice). Pretpostavlja da je štampač već
+ * podešen na 30×15 u TSC admin-u — NE šalje SIZE/GAP/DENSITY.
+ *
+ * @param {{ barcode: string, oznaka?: string, klasa?: string, copies?: number }} spec
+ * @returns {string}
+ */
+export function buildTspMiniInsertLabelProgram(spec) {
+  const barcode = String(spec?.barcode || '').trim();
+  if (!barcode) throw new Error('buildTspMiniInsertLabelProgram: barcode je obavezan');
+
+  const oznaka = String(spec?.oznaka || '').trim();
+  const klasa = String(spec?.klasa || '').trim();
+  const copies = Math.max(1, Math.floor(Number(spec?.copies) || 1));
+
+  const lines = [];
+  lines.push('CLS');
+
+  if (oznaka) {
+    lines.push(`TEXT ${mm(1)},${mm(0.5)},"2",0,1,1,${tsplStr(truncFit(oznaka, 14))}`);
+  }
+  if (klasa && klasa !== oznaka) {
+    lines.push(`TEXT ${mm(1)},${mm(3)},"1",0,1,1,${tsplStr(truncFit(klasa, 18))}`);
+  }
+
+  const BC_X = mm(1);
+  const BC_Y = mm(6);
+  const BC_H = mm(8);
+  lines.push(`BARCODE ${BC_X},${BC_Y},"128M",${BC_H},0,0,2,3,${tsplStr(barcode)}`);
+
+  lines.push(`PRINT ${copies},1`);
+  return lines.join('\r\n') + '\r\n';
+}

@@ -122,8 +122,9 @@ async function loadMachines() {
   machineState.rows = r.data || [];
 }
 
-/** @param {HTMLElement} body */
-export async function renderByMachineSubview(body) {
+/** @param {HTMLElement} body @param {{ initialSearch?: string }} [opts] */
+export async function renderByMachineSubview(body, opts = {}) {
+  if (opts.initialSearch) machineState.search = String(opts.initialSearch);
   body.innerHTML = '<div class="rev-loading-card">Učitavanje pregleda po mašinama…</div>';
   await loadMachines();
 

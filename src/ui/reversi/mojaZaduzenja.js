@@ -16,6 +16,7 @@ import {
   fetchMyMachinesCuttingTools,
 } from '../../services/reversiService.js';
 import { openCuttingToolReturnScannerModal } from './cuttingToolScannerModal.js';
+import { openQuickReturnModal } from './quickReturnModal.js';
 import { formatRevAssetKind } from '../../lib/revAssetKind.js';
 
 let bodyRoot = null;
@@ -138,6 +139,7 @@ export async function renderMojaZaduzenjaTab(body) {
         }
         <div class="rev-mz-actions">
           <button type="button" class="rev-btn rev-btn--secondary" id="revMzReturn">↩ Vrati alat (skener)</button>
+          <button type="button" class="rev-btn rev-btn--secondary" id="revMzQuickReturn">Skeniraj vraćanje</button>
         </div>
       </section>
 
@@ -160,6 +162,11 @@ export async function renderMojaZaduzenjaTab(body) {
         showToast('Povraćaj kreiran — osveži listu');
         void renderMojaZaduzenjaTab(body);
       },
+    });
+  });
+  body.querySelector('#revMzQuickReturn')?.addEventListener('click', () => {
+    openQuickReturnModal({
+      onSuccess: () => void renderMojaZaduzenjaTab(body),
     });
   });
 }

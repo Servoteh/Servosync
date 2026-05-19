@@ -36,6 +36,8 @@ import {
 import { renderMojaZaduzenjaTab, teardownMojaZaduzenjaTab } from './mojaZaduzenja.js';
 import { renderMagacinTab, teardownMagacinTab } from './magacinTab.js';
 import { teardownCuttingByViews } from './cuttingByViews.js';
+import { openBulkPrintLabelsModal } from './bulkPrintLabelsModal.js';
+import { openQuickIssueModal } from './quickIssueModal.js';
 import { rowsToCsv, CSV_BOM, parseCsv } from '../../lib/csv.js';
 import { formatRevAssetKind, parseRevAssetKindCsv, REV_ASSET_KIND_OPTIONS, REV_ASSET_KIND_LABEL } from '../../lib/revAssetKind.js';
 import { ICON_REZNI_MACHINING } from './revMachiningIcon.js';
@@ -59,6 +61,7 @@ let docsOffset = 0;
 let toolsOffset = 0;
 let accumulatedDocs = [];
 let accumulatedTools = [];
+const toolSelected = new Set();
 const PAGE = 25;
 
 function loadTab() {
@@ -561,9 +564,11 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
           <div class="rev-toolbar-actions">
             <button type="button" class="rev-btn rev-btn--secondary" id="revBtnExportDocsCsv">Export CSV</button>
             <button type="button" class="rev-btn rev-btn--secondary" id="revBtnPrintZad">Štampa prikaza</button>
+            ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revBtnQuickIssue">+ Quick Issue</button>` : ''}
             ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revBtnNewDoc">+ Novo zaduženje</button>` : ''}
           </div>
         </div>
+        <button type="button" class="rev-quick-fab rev-btn rev-btn--primary" id="revZadQuickIssueFab">+ Quick Issue</button>
         ${myBlock}
         <div id="revDocTableHost"></div>
         </div>`;
@@ -671,6 +676,9 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
         });
       }
 
+      const openQiZad = () => openQuickIssueModal({ onSuccess: () => void refreshBody() });
+      body.querySelector('#revBtnQuickIssue')?.addEventListener('click', openQiZad);
+      body.querySelector('#revZadQuickIssueFab')?.addEventListener('click', openQiZad);
       body.querySelector('#revBtnNewDoc')?.addEventListener('click', () =>
         openIssueReversalModal({ onSuccess: () => void refreshBody() }),
       );
@@ -845,6 +853,11 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
         <div class="rev-toolbar-actions rev-toolbar-actions--wide">
           ${
             canManageReversi()
+              ? `<button type="button" class="rev-btn rev-btn--primary rev-quick-issue-btn" id="revInvQuickIssue">+ Quick Issue</button>`
+              : ''
+          }
+          ${
+            canManageReversi()
               ? `<div class="rev-split" id="revInvAddSplit">
             <div class="rev-split-main">
               <button type="button" class="rev-btn rev-btn--primary rev-split-primary" id="revBtnAddTool">+ Nova jedinica</button>
@@ -861,6 +874,16 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
         </div>
       </div>
       <input type="file" id="revToolCsvFile" accept=".csv,text/csv" hidden />
+      ${
+        canManageReversi() && toolSelected.size > 0
+          ? `<div class="rev-bulk-bar">
+        <span>${toolSelected.size} odabrano</span>
+        <button type="button" class="rev-btn rev-btn--primary" id="revInvBulkPrint">Štampa nalepnica (${toolSelected.size})</button>
+        <button type="button" class="rev-btn rev-btn--secondary" id="revInvBulkClear">Poništi izbor</button>
+      </div>`
+          : ''
+      }
+      <button type="button" class="rev-quick-fab rev-btn rev-btn--primary" id="revInvQuickIssueFab">+ Quick Issue</button>
       <div id="revToolGridHost"></div>
       </div>`;
 
@@ -872,6 +895,7 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
         <div class="rev-table-shell">
           <table class="rev-data-table">
             <thead><tr>
+              ${canManageReversi() ? '<th class="rev-th-cb"><input type="checkbox" id="revInvSelAll"/></th>' : ''}
               <th>Oznaka</th><th>Klasa</th><th>Naziv / opis</th><th>Zaduženje i lokacija</th><th>Status jedinice</th><th class="rev-th-actions">Akcije</th>
             </tr></thead>
             <tbody>${trows
@@ -880,8 +904,14 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
                 const st = toolStatusPresentation(t);
                 const iss = toolIssuanceCellHtml(t);
                 const showZaduži = canManageReversi() && !issued && t.status === 'active';
-                return `<tr>
-                  <td class="rev-mono rev-strong">${escHtml(t.oznaka)}</td>
+                const sel = toolSelected.has(t.id);
+                return `<tr class="${sel ? 'rev-data-row--selected' : ''}">
+                  ${
+                    canManageReversi()
+                      ? `<td class="rev-td-cb"><input type="checkbox" data-rev-inv-select="${escHtml(t.id)}" ${sel ? 'checked' : ''} ${t.barcode ? '' : 'disabled title="Nema barkoda"'}/></td>`
+                      : ''
+                  }
+                  <td class="rev-mono rev-strong">${escHtml(t.oznaka)}${t.barcode ? `<div class="rev-mono rev-muted rev-rzn-barcode">${escHtml(t.barcode)}</div>` : ''}</td>
                   <td><span class="rev-pill rev-pill--muted rev-pill--sm">${escHtml(formatRevAssetKind(t.asset_kind))}</span></td>
                   <td>${escHtml(t.naziv)}</td>
                   <td>${iss}</td>
@@ -920,6 +950,42 @@ export function renderReversiModule(root, { onBackToHub, onLogout } = {}) {
         void refreshBody();
       });
     }
+
+    const openQiInv = () => openQuickIssueModal({ onSuccess: () => void refreshBody() });
+    body.querySelector('#revInvQuickIssue')?.addEventListener('click', openQiInv);
+    body.querySelector('#revInvQuickIssueFab')?.addEventListener('click', openQiInv);
+    body.querySelector('#revInvSelAll')?.addEventListener('change', (e) => {
+      if (e.target.checked) trows.forEach((t) => { if (t.barcode) toolSelected.add(t.id); });
+      else toolSelected.clear();
+      void refreshBody();
+    });
+    body.querySelectorAll('[data-rev-inv-select]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const id = cb.getAttribute('data-rev-inv-select');
+        if (cb.checked) toolSelected.add(id);
+        else toolSelected.delete(id);
+        void refreshBody();
+      });
+    });
+    body.querySelector('#revInvBulkClear')?.addEventListener('click', () => {
+      toolSelected.clear();
+      void refreshBody();
+    });
+    body.querySelector('#revInvBulkPrint')?.addEventListener('click', () => {
+      const picked = trows
+        .filter((t) => toolSelected.has(t.id))
+        .map((t) => ({
+          grupa: 'HAND',
+          kind: 'HAND',
+          item_id: t.id,
+          barcode: t.barcode,
+          oznaka: t.oznaka,
+          naziv: t.naziv,
+          asset_kind: t.asset_kind,
+          serijski_broj: t.serijski_broj,
+        }));
+      openBulkPrintLabelsModal({ rows: picked });
+    });
 
     body.querySelector('#revBtnAddTool')?.addEventListener('click', () =>
       openAddToolModal({ onSuccess: () => void refreshBody() }),

@@ -193,7 +193,7 @@ export async function fetchTools(params = {}) {
     const search = params.search && String(params.search).trim();
     if (search) {
       const enc = encodeURIComponent(`*${search}*`);
-      parts.push(`or=(oznaka.ilike.${enc},naziv.ilike.${enc})`);
+      parts.push(`or=(oznaka.ilike.${enc},naziv.ilike.${enc},barcode.ilike.${enc})`);
     }
 
     const ak = params.asset_kind && String(params.asset_kind).trim();
@@ -630,6 +630,63 @@ export async function fetchCuttingToolByBarcode(barcode) {
       `rev_cutting_tool_catalog?barcode=eq.${encodeURIComponent(barcode)}&select=*&limit=1`,
     );
     return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  })();
+}
+
+/**
+ * Ručni alat po barkodu (ALAT-…) sa proverom aktivnog zaduženja.
+ * @param {string} barcode
+ */
+export async function fetchHandToolByBarcode(barcode) {
+  return wrap(async () => {
+    const bc = String(barcode || '').trim();
+    if (!bc) return null;
+    const rows = await sbReq(`rev_tools?barcode=eq.${encodeURIComponent(bc)}&select=*&limit=1`);
+    const tool = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    if (!tool?.id) return null;
+    const lines = await sbReq(
+      `rev_document_lines?tool_id=eq.${encodeURIComponent(tool.id)}&line_status=eq.ISSUED&select=*,rev_documents(doc_number,status,recipient_type,recipient_employee_name,recipient_department,recipient_company_name)`,
+    );
+    let issued_holder = null;
+    for (const ln of Array.isArray(lines) ? lines : []) {
+      const doc = Array.isArray(ln.rev_documents) ? ln.rev_documents[0] : ln.rev_documents;
+      if (doc && (doc.status === 'OPEN' || doc.status === 'PARTIALLY_RETURNED')) {
+        issued_holder = { line: ln, doc };
+        break;
+      }
+    }
+    return { ...tool, issued_holder };
+  })();
+}
+
+/**
+ * Otvorena ISSUED linija ručnog alata po barkodu (za quick return).
+ * @param {string} barcode
+ */
+export async function fetchOpenHandLineByToolBarcode(barcode) {
+  return wrap(async () => {
+    const bc = String(barcode || '').trim();
+    if (!bc) return null;
+    const rows = await sbReq(`rev_tools?barcode=eq.${encodeURIComponent(bc)}&select=*&limit=1`);
+    const tool = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    if (!tool?.id) return null;
+    const lines = await sbReq(
+      `rev_document_lines?tool_id=eq.${encodeURIComponent(tool.id)}&line_status=eq.ISSUED&select=*,rev_documents(doc_number,status,recipient_employee_name,recipient_department,recipient_company_name)`,
+    );
+    for (const ln of Array.isArray(lines) ? lines : []) {
+      const doc = Array.isArray(ln.rev_documents) ? ln.rev_documents[0] : ln.rev_documents;
+      if (doc && (doc.status === 'OPEN' || doc.status === 'PARTIALLY_RETURNED')) {
+        return {
+          line_id: ln.id,
+          document_id: doc.id,
+          doc_number: doc.doc_number,
+          tool,
+          recipient_label:
+            doc.recipient_employee_name || doc.recipient_department || doc.recipient_company_name || '—',
+        };
+      }
+    }
+    return null;
   })();
 }
 

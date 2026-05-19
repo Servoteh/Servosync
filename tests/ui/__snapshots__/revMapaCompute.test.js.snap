@@ -1,0 +1,29 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`computeAgingBuckets > classifies fresh, aging, and overdue documents 1`] = `
+{
+  "aging": 1,
+  "fresh": 1,
+  "overdue": 1,
+  "total": 3,
+}
+`;
+
+exports[`computeMachineLoadCards > aggregates symbols per machine with fill percent 1`] = `
+[
+  {
+    "fill_pct": 10,
+    "machine_code": "8.3",
+    "machine_name": "CNC 8.3",
+    "overdue_count": 0,
+    "symbol_count": 2,
+  },
+  {
+    "fill_pct": 5,
+    "machine_code": "10.1",
+    "machine_name": "CNC 10.1",
+    "overdue_count": 1,
+    "symbol_count": 1,
+  },
+]
+`;
