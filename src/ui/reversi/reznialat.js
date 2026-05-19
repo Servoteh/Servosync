@@ -10,8 +10,8 @@ import { fetchCuttingToolCatalog, fetchMachines } from '../../services/reversiSe
 import {
   openAddCuttingToolModal,
   openCuttingToolDetailsModal,
-  printCuttingToolLabel,
 } from './cuttingToolModals.js';
+import { openBulkPrintLabelsModal } from './bulkPrintLabelsModal.js';
 import { ICON_REZNI_MACHINING } from './revMachiningIcon.js';
 import {
   revActBtnHtml,
@@ -522,27 +522,43 @@ function wireToolbarAndFilters(refreshAll) {
     void exportExcel();
   });
 
-  r.querySelector('#revRznPrintSel')?.addEventListener('click', async () => {
-    if (state.selected.size === 0) {
-      showToast('Nema označenih šifri');
-      return;
-    }
-    const items = state.rows.filter((x) => state.selected.has(x.id));
-    const btn = r.querySelector('#revRznPrintSel');
-    btn.disabled = true;
-    const prev = btn.textContent;
-    btn.textContent = `Štampam ${items.length}…`;
-    let ok = 0;
-    let fail = 0;
-    for (const t of items) {
-      const res = await printCuttingToolLabel(t, 1);
-      if (res.ok) ok += 1;
-      else fail += 1;
-    }
-    btn.disabled = false;
-    btn.textContent = prev;
-    syncPrintBtnLabel();
-    showToast(`Štampa: ${ok} uspešno, ${fail} neuspešno`);
+  r.querySelector('#revRznPrintSel')?.addEventListener('click', () => {
+    openBulkPrintLabelsModalForCatalog(state, () => {
+      state.selected.clear();
+      syncPrintBtnLabel();
+    });
+  });
+}
+
+/** @param {typeof state} st */
+function catalogRowsForPrint(st) {
+  const picked = st.rows.filter((x) => st.selected.has(x.id) && x.barcode);
+  return picked.map((t) => ({
+    grupa: 'CUTTING',
+    kind: 'CUTTING',
+    item_id: t.id,
+    barcode: t.barcode,
+    oznaka: t.oznaka,
+    naziv: t.naziv,
+    klasa: t.klasa,
+    compatible_machine_codes: t.compatible_machine_codes || [],
+  }));
+}
+
+/** @param {typeof state} st @param {() => void} [onPrinted] */
+function openBulkPrintLabelsModalForCatalog(st, onPrinted) {
+  if (st.selected.size === 0) {
+    showToast('Nema označenih šifri');
+    return;
+  }
+  const rows = catalogRowsForPrint(st);
+  if (!rows.length) {
+    showToast('Označene stavke nemaju barkod');
+    return;
+  }
+  openBulkPrintLabelsModal({
+    rows,
+    onPrinted,
   });
 }
 
@@ -603,18 +619,27 @@ function wireTable(refreshAll) {
     });
   });
   r.querySelectorAll('[data-rzn-print]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-rzn-print');
       const t = state.rows.find((x) => x.id === id);
-      if (!t) return;
-      btn.disabled = true;
-      btn.innerHTML = '…';
-      try {
-        await printCuttingToolLabel(t, 1);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = revIcon('printer', 16);
+      if (!t?.barcode) {
+        showToast('Nema barkoda za štampu');
+        return;
       }
+      openBulkPrintLabelsModal({
+        rows: [
+          {
+            grupa: 'CUTTING',
+            kind: 'CUTTING',
+            item_id: t.id,
+            barcode: t.barcode,
+            oznaka: t.oznaka,
+            naziv: t.naziv,
+            klasa: t.klasa,
+            compatible_machine_codes: t.compatible_machine_codes || [],
+          },
+        ],
+      });
     });
   });
 

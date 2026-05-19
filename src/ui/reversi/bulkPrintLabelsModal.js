@@ -28,11 +28,11 @@ function barcodeSvgHtml(value) {
 }
 
 const FORMAT_OPTIONS = [
-  ['tsc', 'TSC 80×40 mm (termalni — podrazumevano)'],
-  ['a4-105x74', 'A4 · 105×74,25 mm (2 u redu)'],
-  ['a4-large', 'A4 · 80×80 mm (2×2)'],
-  ['a4-grid', 'A4 kompakt 3-kolona'],
-  ['wide-200x99', '200×99 mm (široka)'],
+  ['a4-105x74', 'A4 2×4 — 105×74 mm (8 po listu)'],
+  ['a4-large', 'A4 2×2 — 100×70 mm (4 po listu)'],
+  ['a4-grid', 'A4 3×8 — 70×40 mm (24 po listu)'],
+  ['wide-200x99', '200×99 mm (široka, 1 po stranici)'],
+  ['tsc', 'TSC 80×40 mm (termalni LAN)'],
 ];
 
 /**
@@ -50,7 +50,7 @@ export function openBulkPrintLabelsModal(opts = {}) {
   }
 
   const id = `revBulkLbl_${Date.now()}`;
-  const state = { format: 'tsc', template: 'standard', copies: 1 };
+  const state = { format: 'a4-105x74', template: 'standard', copies: 1 };
 
   const shell = document.createElement('div');
   shell.innerHTML = `
@@ -83,13 +83,18 @@ export function openBulkPrintLabelsModal(opts = {}) {
     if (!body || !foot) return;
 
     const tscOnly = state.format === 'tsc';
+    const totalLabels = rows.length * state.copies;
+    const previewRows = rows.slice(0, 6);
+    const moreN = rows.length - previewRows.length;
 
     body.innerHTML = `
       <p class="rev-muted" style="font-size:12px;margin:0 0 10px">
-        Isti formati kao u modulu <strong>Lokacije → Štampa nalepnica</strong>. TSC šalje TSPL2 na LAN proxy; A4 formati otvaraju browser (Ctrl+P).
+        Isti formati kao <strong>Lokacije → Štampa nalepnica polica</strong>. A4: jedan prozor, Ctrl+P (margine None). TSC: TSPL2 na LAN + isti sadržaj u browseru.
       </p>
-      <ul class="rev-bulk-lbl-list">
-        ${rows
+      <p class="rev-bulk-lbl-total">Ukupno nalepnica: <strong>${totalLabels}</strong> (${rows.length} stavki × ${state.copies} kopija)</p>
+      <div class="rev-bulk-lbl-preview-title">Pregled (${previewRows.length}${moreN > 0 ? ` od ${rows.length}` : ''})</div>
+      <ul class="rev-bulk-lbl-list rev-bulk-lbl-list--preview">
+        ${previewRows
           .map(
             (r) => `<li class="rev-bulk-lbl-item">
             <div class="rev-bulk-lbl-thumb">${barcodeSvgHtml(r.barcode)}</div>
@@ -101,6 +106,7 @@ export function openBulkPrintLabelsModal(opts = {}) {
           )
           .join('')}
       </ul>
+      ${moreN > 0 ? `<p class="rev-muted rev-bulk-lbl-more">+ još ${moreN} stavki u štampi</p>` : ''}
       <div class="rev-form-grid" style="grid-template-columns:1fr 1fr;gap:12px">
         <label class="rev-field">
           <span class="rev-field-label">Format (kao Lokacije)</span>
@@ -131,7 +137,7 @@ export function openBulkPrintLabelsModal(opts = {}) {
     foot.innerHTML = `
       <button type="button" class="rev-btn" data-rev-bulk-close>Otkaži</button>
       <button type="button" class="rev-btn rev-btn--secondary" id="revBulkPreview">Preview u novom tabu</button>
-      <button type="button" class="rev-btn rev-btn--primary" id="revBulkPrint">Štampaj</button>`;
+      <button type="button" class="rev-btn rev-btn--primary" id="revBulkPrint">Štampaj (${totalLabels})</button>`;
 
     foot.querySelectorAll('[data-rev-bulk-close]').forEach((b) => b.addEventListener('click', close));
 
@@ -143,8 +149,9 @@ export function openBulkPrintLabelsModal(opts = {}) {
     body.querySelector('#revBulkTpl')?.addEventListener('change', (e) => {
       state.template = e.target.value === 'mini' ? 'mini' : 'standard';
     });
-    body.querySelector('#revBulkCopies')?.addEventListener('change', (e) => {
+    body.querySelector('#revBulkCopies')?.addEventListener('input', (e) => {
       state.copies = Math.max(1, Math.min(50, Math.floor(Number(e.target.value) || 1)));
+      paint();
     });
 
     foot.querySelector('#revBulkPreview')?.addEventListener('click', async () => {

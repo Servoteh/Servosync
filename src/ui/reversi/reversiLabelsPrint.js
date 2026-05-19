@@ -53,7 +53,7 @@ function reversiLabelHtmlShell(count, format) {
   const isTsc = format === 'tsc';
   const pageRule = isTsc
     ? `@page { size: ${dims.w} ${dims.h}; margin: 0; }`
-    : `@page { size: A4; margin: ${dims.pageMargins != null ? dims.pageMargins : '8mm'}; }`;
+    : `@page { size: A4; margin: 0; }`;
   const gapScreen = dims.gapScreen != null ? dims.gapScreen : '4mm';
   const gapPrint = dims.gapPrint != null ? dims.gapPrint : '0';
 
@@ -142,10 +142,15 @@ function buildReversiLabelHtmlBlock(row, index, isTsc) {
       <div class="lbl-footline">${escHtml(barcode)}</div>
     </div>`;
   }
+  const klasaLine = row.klasa
+    ? `<div style="font-size:8pt;text-align:center;margin-bottom:1mm">${escHtml(row.klasa)}</div>`
+    : '';
   return `<div class="label fmt-browser">
+    <div style="font-size:11pt;font-weight:700;text-align:center;line-height:1.1">${escHtml(oznaka)}</div>
+    <div style="font-size:9pt;text-align:center;margin:1mm 0">${escHtml(naziv.slice(0, 48))}</div>
+    ${klasaLine}
     <div class="label-codebox"><svg id="bc_${index}" class="label-barcode"></svg></div>
-    <div class="label-footline">${escHtml(oznaka)} — ${escHtml(barcode)}</div>
-    <div style="font-size:9pt;text-align:center;margin-top:2px">${escHtml(naziv.slice(0, 42))}</div>
+    <div class="label-footline">${escHtml(barcode)}</div>
   </div>`;
 }
 
@@ -245,7 +250,17 @@ export async function printReversiLabelsBatch(rows, opts = {}) {
     flat.forEach((row, i) => {
       const svg = w.document.getElementById(`bc_${i}`);
       if (!svg || !row.barcode) return;
-      const tall = isTsc ? 80 : format === 'wide-200x99' ? 148 : format === 'a4-large' ? 92 : 72;
+      const tall = isTsc
+        ? 80
+        : format === 'wide-200x99'
+          ? 148
+          : format === 'a4-105x74'
+            ? 86
+            : format === 'a4-large'
+              ? 92
+              : format === 'a4-grid'
+                ? 58
+                : 72;
       try {
         JsBarcode(svg, String(row.barcode).trim(), {
           format: 'CODE128',

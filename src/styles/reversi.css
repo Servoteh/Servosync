@@ -2247,6 +2247,30 @@ html[data-theme='dark'] .rev-klasa-badge--razvrtac {
   height: 40px;
 }
 
+.rev-bulk-lbl-total {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.rev-bulk-lbl-preview-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rev-text2);
+  margin-bottom: 6px;
+}
+
+.rev-bulk-lbl-list--preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  max-height: 200px;
+}
+
+.rev-bulk-lbl-more {
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+
 .rev-radio-row {
   display: block;
   margin: 6px 0;
