@@ -1580,6 +1580,7 @@ async function renderPanel(host, tabId) {
      * jer prazni stringovi u poređenju ostaju „ispred“ pravih vrednosti i zbunjuju prikaz. */
     const rows = Array.isArray(plac)
       ? plac
+          .filter(r => String(r.item_ref_table || '').toLowerCase() === 'bigtehn_rn')
           .map(r => {
             const loc = r.location_id != null ? locIdx.get(String(r.location_id)) : null;
             const locCell = loc
