@@ -604,6 +604,7 @@ function showModulePlaceholder(moduleId, options = {}) {
           resetKadrovskaState();
           showLogin();
         },
+        initialSearch: window.location.search,
       });
     } catch (e) {
       console.error('[router] Projektni biro render failed', e);

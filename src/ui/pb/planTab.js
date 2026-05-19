@@ -886,7 +886,7 @@ export function renderPlanTab(root, ctx) {
         </div>
         <div class="pb-ft-toggles">
           <button type="button" class="pb-ft-toggle ${filters.problemOnly ? 'active' : ''}" id="pbFProb">⚠ Problemi</button>
-          <button type="button" class="pb-ft-toggle ${filters.unassignedOnly ? 'active' : ''}" id="pbFUnassigned">⊘ Ne dodeljeni</button>
+          <button type="button" class="pb-ft-toggle ${filters.unassignedOnly ? 'active' : ''}" id="pbFUnassigned">⊘ Ne dodeljen</button>
           <button type="button" class="pb-ft-toggle ${filters.showDone ? 'active' : ''}" id="pbFDoneBtn">☐ Završeni</button>
         </div>
         ${viewsBlock}

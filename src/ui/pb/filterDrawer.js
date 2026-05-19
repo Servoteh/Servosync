@@ -16,6 +16,8 @@ export function openPbFilterDrawer(moduleRoot) {
   moduleRoot.classList.add('pb-module--filter-open');
   const btn = moduleRoot.querySelector('#pbOpenFilters');
   btn?.setAttribute('aria-expanded', 'true');
+  const panel = moduleRoot.querySelector('.pb-filter-drawer-panel');
+  panel?.focus();
 }
 
 /** @param {HTMLElement} moduleRoot */
@@ -26,6 +28,8 @@ export function closePbFilterDrawer(moduleRoot) {
   moduleRoot.classList.remove('pb-module--filter-open');
   const btn = moduleRoot.querySelector('#pbOpenFilters');
   btn?.setAttribute('aria-expanded', 'false');
+  moduleRoot._pbFilterTrapCleanup?.();
+  moduleRoot._pbFilterTrapCleanup = null;
 }
 
 /**
@@ -63,22 +67,66 @@ export function countPbActiveFilters(chrome, plan) {
   return n;
 }
 
+function trapFocusInDrawer(moduleRoot) {
+  moduleRoot._pbFilterTrapCleanup?.();
+  const panel = moduleRoot.querySelector('.pb-filter-drawer-panel');
+  if (!panel) return;
+
+  const focusables = () => Array.from(panel.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )).filter(el => el.offsetParent !== null);
+
+  const onKey = e => {
+    if (e.key !== 'Tab' || moduleRoot.querySelector('#pbFilterDrawer')?.hidden) return;
+    const items = focusables();
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
+  document.addEventListener('keydown', onKey);
+  moduleRoot._pbFilterTrapCleanup = () => document.removeEventListener('keydown', onKey);
+}
+
 /**
  * @param {HTMLElement} moduleRoot
+ * @param {{ onApply?: () => void }} [opts]
  */
-export function wirePbFilterDrawer(moduleRoot) {
+export function wirePbFilterDrawer(moduleRoot, opts = {}) {
   if (moduleRoot._pbFilterDrawerWired) return;
   moduleRoot._pbFilterDrawerWired = true;
 
-  moduleRoot.querySelector('#pbOpenFilters')?.addEventListener('click', () => {
+  const toggle = () => {
     const drawer = moduleRoot.querySelector('#pbFilterDrawer');
-    if (drawer?.hidden) openPbFilterDrawer(moduleRoot);
-    else closePbFilterDrawer(moduleRoot);
-  });
+    if (drawer?.hidden) {
+      openPbFilterDrawer(moduleRoot);
+      trapFocusInDrawer(moduleRoot);
+    } else {
+      closePbFilterDrawer(moduleRoot);
+    }
+  };
+
+  moduleRoot.querySelector('#pbOpenFilters')?.addEventListener('click', toggle);
   moduleRoot.querySelector('#pbFilterDrawerClose')?.addEventListener('click', () => {
     closePbFilterDrawer(moduleRoot);
   });
   moduleRoot.querySelector('#pbFilterDrawerBackdrop')?.addEventListener('click', () => {
     closePbFilterDrawer(moduleRoot);
+  });
+  moduleRoot.querySelector('#pbFilterDrawerApply')?.addEventListener('click', () => {
+    opts.onApply?.();
+    closePbFilterDrawer(moduleRoot);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !moduleRoot.querySelector('#pbFilterDrawer')?.hidden) {
+      closePbFilterDrawer(moduleRoot);
+    }
   });
 }

@@ -122,6 +122,7 @@ export function renderIzvestaji(root, ctx) {
             </tr></thead>
             <tbody>${cells}</tbody>
           </table>
+          <p class="pb-cal-legend pb-muted"><span class="pb-cal-legend-dot" aria-hidden="true">•</span> broj sati unet za taj dan (vidljivo u ćeliji)</p>
         </section>
 
         <section class="pb-izv-form-wrap">

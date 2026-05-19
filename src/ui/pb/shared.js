@@ -3,6 +3,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
+import { buildPbModuleUrl } from './pbUrl.js';
 import {
   createPbTask,
   updatePbTask,
@@ -287,7 +288,10 @@ export function openTaskEditorModal(opts) {
     <div class="modal-panel pb-task-panel" role="dialog" aria-label="${isNew ? 'Novi zadatak' : 'Izmeni zadatak'}">
       <div class="pb-modal-head">
         <h2>${isNew ? 'Novi zadatak' : 'Izmena zadatka'}</h2>
-        <button type="button" class="btn btn-ghost pb-close-modal" aria-label="Zatvori">✕</button>
+        <div class="pb-modal-head-actions">
+          ${!isNew && t.id ? '<button type="button" class="btn btn-sm btn-ghost" id="pbTfCopyLink" title="Kopiraj link na zadatak">🔗 Link</button>' : ''}
+          <button type="button" class="btn btn-ghost pb-close-modal" aria-label="Zatvori">✕</button>
+        </div>
       </div>
       <div class="pb-task-form">
         <div class="pb-task-form-scroll">
@@ -754,6 +758,24 @@ export function openTaskEditorModal(opts) {
   }
 
   document.body.appendChild(wrap);
+
+  wrap.querySelector('#pbTfCopyLink')?.addEventListener('click', async () => {
+    if (!t.id) return;
+    const st = loadPbState();
+    const path = buildPbModuleUrl({
+      tab: st.activeTab || 'plan',
+      predmet: t.project_id || st.activeProject,
+      inzenjer: t.employee_id || undefined,
+      rn: t.id,
+    });
+    const url = `${window.location.origin}${path}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Link kopiran');
+    } catch {
+      showToast(url);
+    }
+  });
 
   panelEl?.querySelectorAll('.pb-date-input-wrap').forEach((wrap) => {
     const textInp = /** @type {HTMLInputElement|null} */ (wrap.querySelector('.pb-task-date-dmy'));

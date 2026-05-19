@@ -767,6 +767,63 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   display: none;
 }
 
+.pb-offline-banner {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  background: #fef3c7;
+  color: #92400e;
+  border-bottom: 1px solid #fcd34d;
+}
+
+.pb-filter-drawer-foot {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border, #e5e7eb);
+  position: sticky;
+  bottom: 0;
+  background: var(--surface, #fff);
+}
+
+.pb-filter-drawer-foot .btn {
+  width: 100%;
+}
+
+.pb-chrome-filter-hint {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  background: var(--surface2, #f3f4f6);
+  border-radius: 6px;
+  color: var(--text2, #6b7280);
+}
+
+.pb-an-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.pb-an-toolbar .pb-an-proj {
+  flex: 1 1 200px;
+}
+
+.pb-cal-legend {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+}
+
+.pb-cal-legend-dot {
+  color: var(--accent, #E8523A);
+  font-weight: 700;
+}
+
+.pb-modal-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .pb-readonly-banner {
   padding: 8px 12px;
   margin: 0 0 6px;

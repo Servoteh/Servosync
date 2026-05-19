@@ -138,6 +138,7 @@ function kanbanCardHtml(t, columnStatus, canEdit) {
  *   engineers: object[],
  *   search: string,
  *   showDone: boolean,
+ *   chromeFilterActive?: boolean,
  *   onRefresh: () => void,
  *   onSwitchToPlanShowDone: () => void,
  * }} ctx
@@ -262,6 +263,9 @@ export function renderKanbanTab(root, ctx) {
     });
   }
 
-  root.innerHTML = buildHtml();
+  const hint = ctx.chromeFilterActive
+    ? '<p class="pb-chrome-filter-hint" role="note">Kanban prikazuje zadatke već sužene filterima u traci (projekat, inženjer ili pretraga).</p>'
+    : '';
+  root.innerHTML = hint + buildHtml();
   wire();
 }
