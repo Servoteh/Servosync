@@ -5,6 +5,7 @@ import './styles/planProizvodnje.css';
 import './styles/sastanci.css';
 import './styles/maintenance.css';
 import './styles/pb.css';
+import './styles/pb-eng-tips.css';
 import './styles/stampaNalepnica.css';
 import './styles/mobile.css';
 /* Reversi na kraju — preklapa deljene stilove bez !important gde god je moguće */

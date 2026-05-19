@@ -1,0 +1,126 @@
+.pb-saveti-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.pb-saveti-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.pb-saveti-search {
+  flex: 1 1 240px;
+  max-width: 480px;
+}
+.pb-saveti-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 16px;
+}
+.pb-saveti-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface2);
+  border: 1px solid var(--border1);
+  cursor: pointer;
+  font-size: 13px;
+}
+.pb-saveti-chip[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.pb-saveti-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+.pb-saveti-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.pb-tips-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.pb-tip-card {
+  background: var(--surface1);
+  border: 1px solid var(--border1);
+  border-radius: 8px;
+  padding: 14px;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+.pb-tip-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.pb-tip-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.pb-tip-cat-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 11px;
+}
+.pb-tip-draft-badge {
+  background: var(--surface3);
+  color: var(--text2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+.pb-tip-card-title {
+  margin: 8px 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.pb-tip-card-excerpt {
+  color: var(--text2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.pb-tip-card-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.pb-tip-tag {
+  background: var(--surface2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 4px;
+  font-size: 11px;
+}
+.pb-tip-like-btn {
+  background: transparent;
+  border: 1px solid var(--border1);
+  border-radius: 999px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.pb-tip-like-btn.liked {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+@media (max-width: 640px) {
+  .pb-tips-list {
+    grid-template-columns: 1fr;
+  }
+}

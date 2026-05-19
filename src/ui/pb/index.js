@@ -66,6 +66,7 @@ const TAB_EMOJI = {
   gantt:       '📈',
   izvestaji:   '📑',
   analiza:     '📊',
+  saveti:      '📚',
   podesavanja: '⚙️',
 };
 
@@ -364,6 +365,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
           ${pbTabBtn('gantt', 'Gantt', state.activeTab === 'gantt')}
           ${pbTabBtn('izvestaji', 'Izveštaji', state.activeTab === 'izvestaji')}
           ${pbTabBtn('analiza', 'Analiza', state.activeTab === 'analiza')}
+          ${pbTabBtn('saveti', 'Saveti', state.activeTab === 'saveti')}
           ${isAdmin() ? pbTabBtn('podesavanja', 'Podešavanja', state.activeTab === 'podesavanja') : ''}
         </nav>
         <div class="pb-topbar-end">
@@ -551,6 +553,14 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
         engineers,
         projects,
         initialProjectId: state.activeProject !== 'all' ? state.activeProject : null,
+      });
+      return;
+    }
+    if (tab === 'saveti') {
+      const { renderSavetiTab } = await import('./savetiTab.js');
+      renderSavetiTab(body, {
+        projects,
+        onRefresh: () => loadAll(true),
       });
       return;
     }

@@ -87,6 +87,8 @@ export const SESSION_KEYS = Object.freeze({
   SAST_AKCIONI_VIEW: 'sastanci:akcioni_view',
   /** Moj profil — aktivni sub-tab ('zahtevi'|'odsustva') */
   MOJ_PROFIL_TAB: 'plan_montaze_moj_profil_tab_v1',
+  /** PB Saveti — filter (bez search polja) */
+  PB_ENG_TIPS_FILTER: 'plan_montaze_pb_eng_tips_filter_v1',
 });
 
 /* ── Role hijerarhija (priority: admin > leadpm > pm > menadzment > hr > viewer) ── */
