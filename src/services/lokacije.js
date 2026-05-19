@@ -59,7 +59,13 @@ export async function fetchPlacements({
 } = {}) {
   const l = Math.max(1, Math.min(Number(limit) || 200, 500));
   const o = Math.max(0, Number(offset) || 0);
-  const parts = [`select=*`, `order=updated_at.desc`, `limit=${l}`, `offset=${o}`];
+  const parts = [
+    `select=*`,
+    `item_ref_table=eq.bigtehn_rn`,
+    `order=updated_at.desc`,
+    `limit=${l}`,
+    `offset=${o}`,
+  ];
 
   const s = typeof search === 'string' ? search.trim() : '';
   if (s) {
@@ -197,6 +203,7 @@ export async function fetchPlacementsByDrawing(drawingNo) {
    * ima više od 200 istih crteža, pokažemo samo najskorije (updated_at DESC). */
   const rows = await sbReq(
     `loc_item_placements?select=*` +
+      `&item_ref_table=eq.bigtehn_rn` +
       `&or=(drawing_no.ilike.${enc},item_ref_id.ilike.${enc})` +
       `&order=updated_at.desc&limit=200`,
   );

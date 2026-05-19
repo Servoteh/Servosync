@@ -1626,7 +1626,7 @@ async function renderPanel(host, tabId) {
       <div class="kadr-panel active loc-panel">
         ${err}
         ${locToolbarHtml({ extra: searchHtml })}
-        <p class="loc-muted">Klik na red otvara istoriju premeštanja. <strong>Nalog</strong> = broj predmeta (<code>order_no</code>). <strong>Tehnološki postupak</strong> = broj TP iz placement-a za <code>bigtehn_rn</code>. <strong>Crtež</strong> = <code>drawing_no</code> iz placement-a (prazno prikazuje „—“ dok se ne upiše). <strong>Lokacija</strong> = šifra police − šifra hale roditelja (<code>parent_id</code>). Isti crtež može imati više redova (različite police).</p>
+        <p class="loc-muted">Samo radni nalozi (BigTehn RN), ne alati iz reversa na magacinu. Klik na red otvara istoriju. <strong>Nalog</strong> = predmet (<code>order_no</code>). <strong>TP</strong> = <code>item_ref_id</code>. Isti crtež može imati više redova (različite police).</p>
         <div class="loc-table-wrap">
           <table class="loc-table">
             <thead><tr><th>Nalog</th><th>Tehnološki postupak</th><th>Crtež</th><th>Lokacija</th><th class="loc-qty-cell">Količina</th><th>Status</th></tr></thead>
