@@ -35,6 +35,9 @@ export const STORAGE_KEYS = Object.freeze({
   REVERSI_TAB: 'plan_montaze_reversi_active_tab_v1',
   /** Reversi — filter meseca izdavanja (YYYY-MM), sessionStorage */
   REVERSI_ISSUED_MONTH: 'plan_montaze_reversi_issued_month_v1',
+  /** Mobilni Reversi — izabrana mašina / operater (sessionStorage, JSON) */
+  MOB_REV_MACHINE: 'plan_montaze_mob_rev_machine_v1',
+  MOB_REV_OPERATOR: 'plan_montaze_mob_rev_operator_v1',
   /* Podešavanja */
   USERS_CACHE: 'plan_montaze_users_v1',
   /* Theme */

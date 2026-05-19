@@ -58,6 +58,13 @@ import {
 import { renderMobileHistory } from './mobile/mobileHistory.js';
 import { renderMobileBatch } from './mobile/mobileBatch.js';
 import { renderMobileLookup } from './mobile/mobileLookup.js';
+import {
+  renderMobileReversiHub,
+  renderMobileReversiMachine,
+  renderMobileReversiOperator,
+  renderMobileReversiOverview,
+  renderMobileReversiIssue,
+} from './mobile/mobileReversi.js';
 import { installAutoFlush } from '../services/offlineQueue.js';
 import { registerMobilePWA } from '../lib/pwa.js';
 import {
@@ -712,7 +719,7 @@ function showModulePlaceholder(moduleId, options = {}) {
  * vrati. Za sve ekrane koristi jedan `#app` mount — pojedinačni render-i
  * sami vraćaju teardown funkciju koju čuvamo u `currentMobileTeardown`.
  *
- * @param {'home'|'scan'|'manual'|'history'|'batch'} screen
+ * @param {'home'|'scan'|'manual'|'history'|'batch'|'lookup'|'reversi'|'reversi-issue'|'reversi-machine'|'reversi-operator'|'reversi-overview'} screen
  * @param {{ skipUrlSync?: boolean }} [opts]
  */
 async function showMobile(screen, opts = {}) {
@@ -721,8 +728,14 @@ async function showMobile(screen, opts = {}) {
   currentScreen = nextScreen;
   clearMount(leaving);
   if (!opts.skipUrlSync) {
-    const path =
-      screen === 'home' ? '/m' : `/m/${screen}`;
+    const revPaths = {
+      reversi: '/m/reversi',
+      'reversi-issue': '/m/reversi/issue',
+      'reversi-machine': '/m/reversi/machine',
+      'reversi-operator': '/m/reversi/operator',
+      'reversi-overview': '/m/reversi/overview',
+    };
+    const path = screen === 'home' ? '/m' : revPaths[screen] || `/m/${screen}`;
     syncBrowserUrl(path);
   }
   setStoredModule(null);
@@ -753,6 +766,16 @@ async function showMobile(screen, opts = {}) {
       result = await renderMobileBatch(mountEl, navCtx);
     } else if (screen === 'lookup') {
       result = await renderMobileLookup(mountEl, navCtx);
+    } else if (screen === 'reversi') {
+      result = renderMobileReversiHub(mountEl, navCtx);
+    } else if (screen === 'reversi-issue') {
+      result = renderMobileReversiIssue(mountEl, navCtx);
+    } else if (screen === 'reversi-machine') {
+      result = renderMobileReversiMachine(mountEl, navCtx);
+    } else if (screen === 'reversi-operator') {
+      result = renderMobileReversiOperator(mountEl, navCtx);
+    } else if (screen === 'reversi-overview') {
+      result = await renderMobileReversiOverview(mountEl, navCtx);
     } else {
       navigateToAppPath('/m');
       return;

@@ -943,3 +943,261 @@ body.m-body #app {
     transform: scale(0.9);
   }
 }
+
+/* ── Reversi mobilni (ljubičasto / crveno / zeleno) ─────────────────────── */
+
+.m-cta-rev-issue {
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  box-shadow: 0 4px 20px rgba(13, 148, 136, 0.35);
+  border-color: rgba(45, 212, 191, 0.35);
+}
+
+.m-cta-rev-machine {
+  background: linear-gradient(135deg, #4c1d95 0%, #6d28d9 100%);
+  border-color: rgba(167, 139, 250, 0.45);
+  box-shadow: 0 4px 16px rgba(109, 40, 217, 0.3);
+}
+
+.m-cta-rev-operator {
+  background: linear-gradient(135deg, #991b1b 0%, #dc2626 100%);
+  border-color: rgba(248, 113, 113, 0.45);
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3);
+}
+
+.m-cta-rev-overview {
+  background: linear-gradient(135deg, #14532d 0%, #16a34a 100%);
+  border-color: rgba(74, 222, 128, 0.45);
+  box-shadow: 0 4px 16px rgba(22, 163, 74, 0.3);
+}
+
+.m-cta--full {
+  width: 100%;
+}
+
+.m-rev-ctx-strip {
+  display: flex;
+  gap: 10px;
+  padding: 10px 20px;
+  background: #0f1620;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.m-rev-ctx {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  font-size: 12px;
+}
+
+.m-rev-ctx.is-set {
+  border-style: solid;
+}
+
+.m-rev-ctx--machine.is-set {
+  border-color: rgba(167, 139, 250, 0.6);
+  background: rgba(109, 40, 217, 0.12);
+}
+
+.m-rev-ctx--operator.is-set {
+  border-color: rgba(248, 113, 113, 0.6);
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.m-rev-ctx-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 2px;
+}
+
+.m-rev-ctx-val {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-rev-form-main {
+  gap: 16px;
+}
+
+.m-rev-current {
+  padding: 16px;
+  border-radius: 12px;
+  font-size: 18px;
+  text-align: center;
+}
+
+.m-rev-current--machine {
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  background: rgba(109, 40, 217, 0.15);
+}
+
+.m-rev-current--operator {
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.m-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.m-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8aa0b7;
+}
+
+.m-field-label--machine {
+  color: #c4b5fd;
+}
+
+.m-field-label--operator {
+  color: #fca5a5;
+}
+
+.m-select,
+.m-input {
+  min-height: 52px;
+  padding: 12px 14px;
+  font-size: 17px;
+  background: #0a0e14;
+  color: #eef2f7;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  font-family: inherit;
+}
+
+.m-select:focus,
+.m-input:focus {
+  outline: none;
+  border-color: #4db3ff;
+  box-shadow: 0 0 0 3px rgba(77, 179, 255, 0.2);
+}
+
+.m-rev-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.m-btn {
+  flex: 1;
+  min-height: 52px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.m-btn-primary {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+}
+
+.m-btn-ghost {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #eef2f7;
+}
+
+.m-muted {
+  color: #8aa0b7;
+  font-size: 14px;
+}
+
+.m-back-btn {
+  flex-shrink: 0;
+}
+
+.m-rev-overview-main {
+  padding-bottom: 24px;
+}
+
+.m-rev-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.m-field--compact .m-input {
+  min-height: 48px;
+}
+
+.m-rev-overview-meta {
+  margin: 0 4px;
+  font-size: 13px;
+  color: #8aa0b7;
+}
+
+.m-rev-overview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+}
+
+.m-rev-card {
+  padding: 14px;
+  border-radius: 12px;
+  background: #121a26;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.m-rev-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.m-rev-card-machine {
+  font-weight: 700;
+  color: #c4b5fd;
+}
+
+.m-rev-card-qty {
+  font-weight: 700;
+  color: #86efac;
+}
+
+.m-rev-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.m-rev-card-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: #8aa0b7;
+}
+
+.m-rev-empty {
+  text-align: center;
+  padding: 24px;
+}
+
+body.m-rev-body .m-header .m-brand {
+  flex: 1;
+  text-align: center;
+}
+
+body.m-rev-body .m-header .m-brand-title {
+  font-size: 16px;
+}

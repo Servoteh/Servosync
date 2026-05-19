@@ -3104,3 +3104,56 @@ html[data-theme='light'] .rev-loc-pill {
   width: 22px;
   height: 22px;
 }
+
+/* Mobilni pun ekran — Quick Issue / scanner na /m/reversi/* */
+body.m-rev-issue-active .rev-modal--mobile-full,
+.rev-modal--mobile-full {
+  padding: 0;
+  align-items: stretch;
+}
+
+.rev-modal--mobile-full .kadr-modal,
+.rev-modal--mobile-full .rev-modal {
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rev-modal--mobile-full .kadr-modal-body,
+.rev-modal--mobile-full .rev-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: env(safe-area-inset-bottom, 12px);
+}
+
+.rev-modal--mobile-full .rev-btn--lg,
+.rev-modal--mobile-full .rev-scan-cam-btn {
+  width: 100%;
+  min-height: 56px;
+  font-size: 17px;
+  margin-bottom: 10px;
+}
+
+.rev-modal--mobile-full .rev-qi-recipient.is-set {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.rev-modal--mobile-full .rev-qi-machine-fixed {
+  border-left: 4px solid #a78bfa;
+  padding-left: 12px;
+}
+
+.rev-modal--mobile-full .rev-scan-pill.is-on:first-child {
+  border-color: rgba(167, 139, 250, 0.5);
+}
+
+.rev-modal--mobile-full .rev-scan-pill.is-on:nth-child(2) {
+  border-color: rgba(248, 113, 113, 0.5);
+}

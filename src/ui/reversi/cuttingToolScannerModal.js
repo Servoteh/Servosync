@@ -23,6 +23,7 @@ import {
   fetchMyIssuedCuttingTools,
   confirmCuttingReturn,
 } from '../../services/reversiService.js';
+import { openReversiScanOverlay } from './scanOverlay.js';
 
 function modalShell(title, bodyHtml, footerHtml, id) {
   const wrap = document.createElement('div');
@@ -55,13 +56,23 @@ function attachClose(root, onClose) {
 
 /**
  * Modal za skenirano zaduženje reznog alata.
- * @param {{ onSuccess?: (result: object) => void }} [opts]
+ * @param {{
+ *   onSuccess?: (result: object) => void,
+ *   onClose?: () => void,
+ *   preselectedMachine?: { rj_code: string, name?: string }|null,
+ *   preselectedEmployee?: { id: string, full_name: string }|null,
+ *   mobileLayout?: boolean,
+ * }} [opts]
  */
 export function openCuttingToolIssueScannerModal(opts = {}) {
   const id = `revRznScan_${Date.now()}`;
   const state = {
-    machine: null, // { rj_code, name }
-    employee: null, // { id, full_name }
+    machine: opts.preselectedMachine
+      ? { rj_code: opts.preselectedMachine.rj_code, name: opts.preselectedMachine.name || '' }
+      : null,
+    employee: opts.preselectedEmployee
+      ? { id: opts.preselectedEmployee.id, full_name: opts.preselectedEmployee.full_name }
+      : null,
     lines: [], // [{ catalog_id, oznaka, naziv, klasa, unit, quantity, compatible }]
     machines: [],
     employees: [],
@@ -78,6 +89,7 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
     `<div id="revRznScanFoot"></div>`,
     id,
   );
+  if (opts.mobileLayout) overlay.classList.add('rev-modal--mobile-full');
   document.body.appendChild(overlay);
   attachClose(overlay, opts.onClose);
 
@@ -87,6 +99,12 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
     const [m, e] = await Promise.all([fetchMachines(), fetchEmployeesAny('')]);
     state.machines = m.ok && Array.isArray(m.data) ? m.data : [];
     state.employees = e.ok && Array.isArray(e.data) ? e.data : [];
+    if (state.machine?.rj_code && !state.machines.some((mm) => mm.rj_code === state.machine.rj_code)) {
+      state.machines = [
+        { rj_code: state.machine.rj_code, name: state.machine.name || '' },
+        ...state.machines,
+      ];
+    }
     paint();
   }
 
@@ -152,6 +170,11 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
       <div class="rev-scan-grid">
         <div class="rev-scan-input-row">
           <label class="rev-field-label">Skeniraj barkod (alat / radnik / mašina)</label>
+          ${
+            opts.mobileLayout
+              ? `<button type="button" class="rev-btn rev-btn--primary rev-btn--lg rev-scan-cam-btn" id="revRznCamScan">📷 Skeniraj kamerom</button>`
+              : ''
+          }
           <input type="text" id="revRznScanIn" class="rev-input rev-input--scan" placeholder="Skeniraj ili otkucaj kod… (Enter za potvrdu)" autocomplete="off" autofocus value="${escHtml(state.lastInput)}"/>
           <p class="rev-muted rev-scan-hint">Prefiksi: <code>RZN-</code> = alat, <code>ZADU-M-</code> = mašina, ostalo = ID kartica radnika.</p>
         </div>
@@ -296,6 +319,18 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
     });
 
     overlay.querySelector('#revRznScanSubmit')?.addEventListener('click', submit);
+
+    overlay.querySelector('#revRznCamScan')?.addEventListener('click', () => {
+      openReversiScanOverlay({
+        title: 'Skeniraj barkod',
+        hint: 'RZN- alat, ZADU-M- mašina, ID kartica',
+        acceptUnknown: true,
+        continuous: true,
+        onResult: async (parsed) => {
+          await handleScannedInput(parsed.barcode);
+        },
+      });
+    });
   }
 
   async function handleScannedInput(raw) {
