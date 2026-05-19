@@ -224,13 +224,16 @@ export async function renderMaintVehiclesPanel(host, opts) {
   const state = { q: new URLSearchParams(window.location.search).get('q') || '', dueOnly: false };
 
   const load = async () => {
+    if (!host.isConnected) return;
     host.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Učitavam vozila…</p></div>`;
     const assets = await fetchMaintAssets({ type: 'vehicle', q: state.q, includeArchived: false, limit: 1000 });
+    if (!host.isConnected) return;
     if (!Array.isArray(assets)) {
       host.innerHTML = `<div class="mnt-panel"><p class="mnt-muted">Ne mogu da učitam vozila. Proveri RLS ili migracije.</p></div>`;
       return;
     }
     const details = await fetchMaintVehicleDetails(assets.map(a => a.asset_id));
+    if (!host.isConnected) return;
     render(mergeVehicles(assets, details));
   };
 

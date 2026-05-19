@@ -289,7 +289,8 @@ function headerHtml() {
  */
 function subnavHtml(section, machineCode, tab, onNavigateToPath) {
   const dashActive = section === 'dashboard' ? ' mnt-subnav-active' : '';
-  const assetsActive = ['assets', 'assetsMachines', 'assetsVehicles', 'assetsIt', 'assetsFacilities', 'machines', 'catalog', 'locations'].includes(section) ? ' mnt-subnav-active' : '';
+  const assetsActive = ['assets', 'assetsMachines', 'assetsIt', 'assetsFacilities', 'machines', 'catalog', 'locations'].includes(section) ? ' mnt-subnav-active' : '';
+  const vehiclesActive = section === 'assetsVehicles' ? ' mnt-subnav-active' : '';
   const preventiveActive = ['preventive', 'board'].includes(section) ? ' mnt-subnav-active' : '';
   const calendarActive = section === 'calendar' ? ' mnt-subnav-active' : '';
   const inventoryActive = section === 'inventory' ? ' mnt-subnav-active' : '';
@@ -304,6 +305,7 @@ function subnavHtml(section, machineCode, tab, onNavigateToPath) {
       <button type="button" class="mnt-subnav-btn${dashActive}" data-mnt-nav="/maintenance">Pregled</button>
       <button type="button" class="mnt-subnav-btn${woActive}" data-mnt-nav="/maintenance/work-orders">Radni nalozi</button>
       <button type="button" class="mnt-subnav-btn${assetsActive}" data-mnt-nav="/maintenance/assets">Sredstva</button>
+      <button type="button" class="mnt-subnav-btn${vehiclesActive}" data-mnt-nav="/maintenance/assets/vehicles">Vozila</button>
       <button type="button" class="mnt-subnav-btn${preventiveActive}" data-mnt-nav="/maintenance/preventive">Preventiva</button>
       <button type="button" class="mnt-subnav-btn${calendarActive}" data-mnt-nav="/maintenance/calendar">Kalendar</button>
       <button type="button" class="mnt-subnav-btn${inventoryActive}" data-mnt-nav="/maintenance/inventory">Zalihe i dobavljači</button>

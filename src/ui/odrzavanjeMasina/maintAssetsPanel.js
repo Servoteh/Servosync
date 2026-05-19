@@ -6,7 +6,9 @@ import { escHtml, showToast } from '../../lib/dom.js';
 import { fetchMaintAssets, insertMaintAsset, patchMaintAsset } from '../../services/maintenance.js';
 import { canManageMaintCatalog } from './maintCatalogTab.js';
 
-const ASSET_TYPES = ['machine', 'vehicle', 'it', 'facility'];
+/* Vozila se vode u zasebnom top-level tab-u (/maintenance/assets/vehicles)
+   pa se ne pojavljuju u dropdown-u na Sredstvima. */
+const ASSET_TYPES = ['machine', 'it', 'facility'];
 const ASSET_STATUSES = ['running', 'degraded', 'down', 'maintenance'];
 
 function assetTypeLabel(t) {
@@ -70,7 +72,7 @@ function openAssetModal(opts) {
   }
 
   const typeOpts = ASSET_TYPES.filter(t => t !== 'machine').map(t => {
-    const selected = String(row?.asset_type || forcedType || 'vehicle') === t ? ' selected' : '';
+    const selected = String(row?.asset_type || forcedType || 'it') === t ? ' selected' : '';
     return `<option value="${escHtml(t)}"${selected}>${escHtml(assetTypeLabel(t))}</option>`;
   }).join('');
   const statusOpts = ASSET_STATUSES.map(s => {
@@ -83,7 +85,7 @@ function openAssetModal(opts) {
   wrap.innerHTML = `
     <div class="kadr-modal" style="max-width:560px">
       <div class="kadr-modal-title">${isEdit ? 'Izmeni sredstvo' : 'Novo sredstvo'}</div>
-      <div class="kadr-modal-subtitle">Vozila, IT i objekti kroz <code>maint_assets</code>. Mašine se vode u katalogu mašina.</div>
+      <div class="kadr-modal-subtitle">IT i objekti kroz <code>maint_assets</code>. Mašine se vode u katalogu mašina; vozila u zasebnom tabu.</div>
       <div class="kadr-modal-err" id="mntAssetErr"></div>
       <form id="mntAssetForm">
         <div class="mnt-asset-form-grid">
@@ -198,7 +200,7 @@ export async function renderMaintAssetsPanel(host, opts) {
     <div class="mnt-assets-head">
       <div>
         <h3 style="font-size:16px;margin:0 0 4px">Sredstva</h3>
-        <p class="mnt-muted" style="margin:0">Jedinstven CMMS registar. Mašine su povezane sa katalogom mašina; vozila, IT i objekti se vode direktno ovde.</p>
+        <p class="mnt-muted" style="margin:0">Jedinstven CMMS registar. Mašine su povezane sa katalogom mašina; IT i objekti se vode direktno ovde. Vozila imaju zaseban tab.</p>
       </div>
       ${canManage ? '<button type="button" class="btn" id="mntAssetAdd">+ Novo sredstvo</button>' : ''}
     </div>
@@ -236,7 +238,7 @@ export async function renderMaintAssetsPanel(host, opts) {
   host.querySelector('#mntAssetAdd')?.addEventListener('click', () => {
     openAssetModal({
       prof,
-      forcedType: forcedType !== 'all' && forcedType !== 'machine' ? forcedType : 'vehicle',
+      forcedType: forcedType !== 'all' && forcedType !== 'machine' ? forcedType : 'it',
       onSaved: () => renderMaintAssetsPanel(host, opts),
     });
   });
