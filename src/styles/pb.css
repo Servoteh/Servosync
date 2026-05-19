@@ -1296,6 +1296,14 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body {
   gap: 6px;
 }
 
+.pb-ft-toggle-text {
+  white-space: nowrap;
+}
+
+.pb-ft-toggle-ico {
+  margin-right: 0.25em;
+}
+
 .pb-ft-toggle {
   display: inline-flex;
   align-items: center;
