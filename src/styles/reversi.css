@@ -2256,6 +2256,36 @@ html[data-theme='dark'] .rev-klasa-badge--razvrtac {
   }
 }
 
+.rev-mag-toolbar .rev-mag-toolbar__main {
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+}
+
+.rev-mag-toolbar__spacer {
+  flex: 1 1 12px;
+  min-width: 8px;
+}
+
+.rev-qi-machine-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.rev-qi-machine-pick .rev-select {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+
+.rev-qi-machine-fixed {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--rev-surface2);
+  border-radius: var(--rev-radius-sm);
+}
+
 .rev-qi-section {
   margin-bottom: 16px;
 }

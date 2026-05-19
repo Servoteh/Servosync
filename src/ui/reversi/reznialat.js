@@ -15,6 +15,7 @@ import {
 import { ICON_REZNI_MACHINING } from './revMachiningIcon.js';
 import { renderByMachineSubview, renderByEmployeeSubview } from './cuttingByViews.js';
 import { renderMapaSubview } from './revMapaSubview.js';
+import { openQuickIssueModal } from './quickIssueModal.js';
 
 const MAPA_MACHINE_FILTER_KEY = 'sess:rev_rzn_mapa_machine';
 
@@ -250,6 +251,7 @@ function renderToolbar() {
             : ''
         }
         ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revRznScanIssue"><span class="rev-btn-ic" aria-hidden="true">📠</span>Zaduženje (skener)</button>` : ''}
+        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--outline-coral" id="revRznQuickIssue">Quick Issue</button>` : ''}
         <button type="button" class="rev-btn rev-btn--outline-coral" id="revRznScanReturn"><span class="rev-btn-ic" aria-hidden="true">↩</span>Povraćaj (skener)</button>
         <span class="rev-rzn-toolbar__spacer"></span>
         <button type="button" class="rev-btn rev-btn--excel" id="revRznExcel"><span class="rev-btn-ic" aria-hidden="true">📗</span>Excel</button>
@@ -519,6 +521,22 @@ function wireToolbarAndFilters(refreshAll) {
   });
   r.querySelector('#revRznScanIssue')?.addEventListener('click', () => {
     if (typeof onIssueScan === 'function') onIssueScan();
+  });
+  r.querySelector('#revRznQuickIssue')?.addEventListener('click', () => {
+    const mc = state.machine?.trim() || '';
+    const pre = mc
+      ? {
+          rj_code: mc,
+          name: state.machines.find((m) => m.rj_code === mc)?.name || '',
+        }
+      : null;
+    openQuickIssueModal({
+      preselectedMachine: pre,
+      onSuccess: () => {
+        state.offset = 0;
+        void refreshAll();
+      },
+    });
   });
   r.querySelector('#revRznScanReturn')?.addEventListener('click', () => {
     if (typeof onReturnScan === 'function') onReturnScan();

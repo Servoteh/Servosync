@@ -119,17 +119,17 @@ function magacinStatsHtml(rows) {
   return `
     <div class="rev-mag-stat-grid">
       <div class="rev-stat-card rev-stat-card--primary">
-        <div class="rev-stat-label">Ukupno u prikazu</div>
+        <div class="rev-stat-label">Ukupno</div>
         <div class="rev-stat-value">${total}</div>
-        <div class="rev-stat-hint">${state.showAllLocations ? 'Ukupno aktivnih (sve lokacije)' : 'Redova (filter)'}</div>
+        <div class="rev-stat-hint">${state.showAllLocations ? 'Sve lokacije' : 'U prikazu'}</div>
       </div>
       <div class="rev-stat-card">
-        <div class="rev-stat-label">Ručni (slobodno)</div>
+        <div class="rev-stat-label">Ručni</div>
         <div class="rev-stat-value">${handUnits}</div>
-        <div class="rev-stat-hint">Jedinica u magacinu</div>
+        <div class="rev-stat-hint">Slobodno u magacinu</div>
       </div>
       <div class="rev-stat-card rev-stat-card--amber">
-        <div class="rev-stat-label">Rezni (kom)</div>
+        <div class="rev-stat-label">Rezni</div>
         <div class="rev-stat-value">${rezniKom}</div>
         <div class="rev-stat-hint">Zbir WAREHOUSE</div>
       </div>
@@ -170,8 +170,8 @@ function renderBulkBar() {
 function renderToolbar() {
   const klase = uniqueKlase(state.rows);
   return `
-    <div class="rev-rzn-toolbar">
-      <div class="rev-rzn-toolbar__row rev-rzn-toolbar__row--filters">
+    <div class="rev-rzn-toolbar rev-mag-toolbar">
+      <div class="rev-rzn-toolbar__row rev-rzn-toolbar__row--filters rev-mag-toolbar__main">
         <div class="rev-field rev-field--grow">
           <label class="rev-field-label">Pretraga</label>
           <input type="search" id="revMagSearch" class="rev-input rev-input--search"
@@ -215,14 +215,11 @@ function renderToolbar() {
             Nulta stanja
           </label>
         </div>
-      </div>
-      <div class="rev-rzn-toolbar__row rev-rzn-toolbar__row--actions">
+        <span class="rev-mag-toolbar__spacer"></span>
         <button type="button" class="rev-btn rev-btn--excel" id="revMagExcel">Excel</button>
-        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--secondary" id="revMagBulkImport">📥 Bulk import</button>` : ''}
-        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--secondary" id="revMagImportRollback" title="Storniraj poslednji bulk import">🔄 Storno importa</button>` : ''}
-        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revMagNewHand">+ Novi ručni artikal</button>` : ''}
-        <span class="rev-rzn-toolbar__spacer"></span>
-        <span class="rev-muted" style="font-size:12px">Novi rezni unos: tab Rezni alat → Nova šifra</span>
+        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--secondary rev-btn--sm" id="revMagBulkImport" title="Bulk import">📥</button>` : ''}
+        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--secondary rev-btn--sm" id="revMagImportRollback" title="Storno importa">🔄</button>` : ''}
+        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revMagNewHand">+ Novi artikal</button>` : ''}
       </div>
     </div>`;
 }
@@ -309,6 +306,7 @@ function renderTable() {
               <td>${grupaBadge(r.grupa)}</td>
               <td>${
                 (() => {
+                  if (r.grupa === 'HAND') return '<span class="rev-muted">—</span>';
                   const lab = String(r.location_label || '').trim();
                   const code = String(r.location_code || '').trim();
                   if (lab && code && lab !== code) {

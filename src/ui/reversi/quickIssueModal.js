@@ -10,9 +10,17 @@ import {
   fetchEmployees,
   fetchHandToolByBarcode,
   fetchCuttingToolByBarcode,
+  fetchMachines,
   issueReversal,
   issueCuttingReversal,
 } from '../../services/reversiService.js';
+
+/** @param {string} raw */
+function parseMachineScan(raw) {
+  const t = String(raw || '').trim();
+  if (/^ZADU-M-/i.test(t)) return t.replace(/^ZADU-M-/i, '').trim();
+  return t;
+}
 
 function defaultReturnDate() {
   const d = new Date();
@@ -54,7 +62,13 @@ export function openQuickIssueModal(opts = {}) {
     scanCtrl: null,
     empSearch: '',
     employees: [],
+    machineCode: opts.preselectedMachine?.rj_code || '',
+    machines: [],
   };
+
+  const hasCuttingLines = () => state.lines.some((l) => l.kind === 'CUTTING');
+  const effectiveMachineCode = () =>
+    opts.preselectedMachine?.rj_code || state.machineCode?.trim() || '';
 
   const overlay = modalShell('Quick Issue', 'revQiBody', 'revQiFoot', id);
   document.body.appendChild(overlay);
@@ -71,6 +85,11 @@ export function openQuickIssueModal(opts = {}) {
   async function loadEmployees(q) {
     const r = await fetchEmployees(q);
     state.employees = r.ok && Array.isArray(r.data) ? r.data : [];
+  }
+
+  async function loadMachines() {
+    const r = await fetchMachines();
+    state.machines = r.ok && Array.isArray(r.data) ? r.data : [];
   }
 
   function lineKey(ln) {
@@ -118,6 +137,29 @@ export function openQuickIssueModal(opts = {}) {
         <h3 class="rev-h3">Primalac</h3>
         ${recip}
       </section>
+      ${
+        hasCuttingLines() || state.lines.length === 0
+          ? `<section class="rev-qi-section">
+        <h3 class="rev-h3">Mašina (rezni alat)</h3>
+        ${
+          opts.preselectedMachine?.rj_code
+            ? `<p class="rev-qi-machine-fixed"><span class="rev-mono rev-strong">${escHtml(opts.preselectedMachine.rj_code)}</span> ${escHtml(opts.preselectedMachine.name || '')}</p>`
+            : `<div class="rev-qi-machine-pick">
+            <select id="revQiMachine" class="rev-select">
+              <option value="">— Izaberi mašinu —</option>
+              ${state.machines
+                .map(
+                  (m) =>
+                    `<option value="${escHtml(m.rj_code)}" ${state.machineCode === m.rj_code ? 'selected' : ''}>${escHtml(m.rj_code)} ${escHtml(m.name || '')}</option>`,
+                )
+                .join('')}
+            </select>
+            <button type="button" class="rev-btn rev-btn--secondary rev-btn--sm" id="revQiScanMachine">Skeniraj ZADU-M-…</button>
+          </div>`
+        }
+      </section>`
+          : ''
+      }
       <section class="rev-qi-section">
         <h3 class="rev-h3">Alati</h3>
         <div class="rev-qi-chips">${chips}</div>
@@ -138,7 +180,7 @@ export function openQuickIssueModal(opts = {}) {
 
     foot.innerHTML = `
       <button type="button" class="rev-btn" data-rev-qi-close>Otkaži</button>
-      <button type="button" class="rev-btn rev-btn--primary rev-btn--lg" id="revQiSubmit" ${state.lines.length && state.recipient && !state.pending ? '' : 'disabled'}>
+      <button type="button" class="rev-btn rev-btn--primary rev-btn--lg" id="revQiSubmit" ${state.lines.length && state.recipient && (!hasCuttingLines() || effectiveMachineCode()) && !state.pending ? '' : 'disabled'}>
         ${state.pending ? 'Izdajem…' : `Izdaj (${state.lines.length} stavki)`}
       </button>`;
 
@@ -187,6 +229,10 @@ export function openQuickIssueModal(opts = {}) {
       });
     });
 
+    overlay.querySelector('#revQiMachine')?.addEventListener('change', (e) => {
+      state.machineCode = e.target.value;
+    });
+    overlay.querySelector('#revQiScanMachine')?.addEventListener('click', () => startVideoScan('machine'));
     overlay.querySelector('#revQiScanCard')?.addEventListener('click', () => startVideoScan('card'));
     overlay.querySelector('#revQiScanTool')?.addEventListener('click', () => startVideoScan('tool'));
     overlay.querySelector('#revQiStopScan')?.addEventListener('click', () => {
@@ -211,6 +257,7 @@ export function openQuickIssueModal(opts = {}) {
         state.scanCtrl = null;
         wrap?.setAttribute('hidden', '');
         if (mode === 'card') void handleCardScan(text);
+        else if (mode === 'machine') void handleMachineScan(text);
         else void handleToolScan(text);
       },
       onError: (err) => showToast(String(err?.message || err)),
@@ -232,8 +279,24 @@ export function openQuickIssueModal(opts = {}) {
     paint();
   }
 
+  async function handleMachineScan(raw) {
+    const code = parseMachineScan(raw);
+    if (!code) {
+      showToast('Nepoznat format mašine');
+      return;
+    }
+    const hit = state.machines.find((m) => String(m.rj_code) === code);
+    state.machineCode = hit ? hit.rj_code : code;
+    if (!hit) showToast(`Mašina ${code} — proveri kod pre izdavanja`);
+    paint();
+  }
+
   async function handleToolScan(raw) {
     const bc = raw.trim();
+    if (/^ZADU-M-/i.test(bc)) {
+      void handleMachineScan(bc);
+      return;
+    }
     if (/^ALAT-/i.test(bc)) {
       const tr = await fetchHandToolByBarcode(bc);
       if (!tr.ok || !tr.data?.id) {
@@ -279,6 +342,13 @@ export function openQuickIssueModal(opts = {}) {
     paint();
     const hand = state.lines.filter((l) => l.kind === 'HAND');
     const cutting = state.lines.filter((l) => l.kind === 'CUTTING');
+    const machineCode = effectiveMachineCode();
+    if (cutting.length > 0 && !machineCode) {
+      state.pending = false;
+      showToast('Izaberi mašinu za rezni alat');
+      paint();
+      return;
+    }
     let issued = 0;
 
     if (hand.length > 0) {
@@ -309,7 +379,7 @@ export function openQuickIssueModal(opts = {}) {
 
     for (const ln of cutting) {
       const payload = {
-        recipient_machine_code: opts.preselectedMachine?.rj_code || null,
+        recipient_machine_code: machineCode,
         issued_to_employee_id: state.recipient.employee_id,
         issued_to_employee_name: state.recipient.employee_name,
         expected_return_date: state.expectedReturnDate || null,
@@ -331,5 +401,5 @@ export function openQuickIssueModal(opts = {}) {
     opts.onSuccess?.();
   }
 
-  void loadEmployees('').then(paint);
+  void Promise.all([loadEmployees(''), loadMachines()]).then(paint);
 }
