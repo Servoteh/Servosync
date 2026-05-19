@@ -198,11 +198,13 @@ export function composeMultiLabelTspl(rows, template, copies) {
   return chunks.join('\r\n');
 }
 
+export { composeMultiLabelTspl as composeReversiBatchTspl };
+
 /**
  * Batch štampa — isti obrazac kao Lokacije (browser + opcioni TSC proxy).
  *
  * @param {object[]} rows
- * @param {{ format?: ReversiLabelFormat, template?: ReversiTsplTemplate, copies?: number }} [opts]
+ * @param {{ format?: ReversiLabelFormat, template?: ReversiTsplTemplate, copies?: number, dryRun?: boolean }} [opts]
  */
 export async function printReversiLabelsBatch(rows, opts = {}) {
   if (!Array.isArray(rows) || !rows.length) {
@@ -264,7 +266,7 @@ export async function printReversiLabelsBatch(rows, opts = {}) {
 
   let tspl2 = '';
   let proxyRes = { ok: false, reason: 'no_proxy_url' };
-  if (isTsc) {
+  if (isTsc && !opts.dryRun) {
     try {
       tspl2 = composeMultiLabelTspl(rows, template, copies);
     } catch (e) {
@@ -273,7 +275,7 @@ export async function printReversiLabelsBatch(rows, opts = {}) {
       return { ok: false, reason: 'tspl2_build_failed' };
     }
     proxyRes = await dispatchOptionalNetworkLabelPrint({
-      mode: 'reversi_bulk',
+      mode: 'reversi_batch',
       count: flat.length,
       payload: {
         format,

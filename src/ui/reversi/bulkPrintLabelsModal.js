@@ -130,6 +130,7 @@ export function openBulkPrintLabelsModal(opts = {}) {
 
     foot.innerHTML = `
       <button type="button" class="rev-btn" data-rev-bulk-close>Otkaži</button>
+      <button type="button" class="rev-btn rev-btn--secondary" id="revBulkPreview">Preview u novom tabu</button>
       <button type="button" class="rev-btn rev-btn--primary" id="revBulkPrint">Štampaj</button>`;
 
     foot.querySelectorAll('[data-rev-bulk-close]').forEach((b) => b.addEventListener('click', close));
@@ -146,16 +147,28 @@ export function openBulkPrintLabelsModal(opts = {}) {
       state.copies = Math.max(1, Math.min(50, Math.floor(Number(e.target.value) || 1)));
     });
 
+    foot.querySelector('#revBulkPreview')?.addEventListener('click', async () => {
+      await printReversiLabelsBatch(rows, {
+        format: state.format,
+        template: state.template,
+        copies: state.copies,
+        dryRun: true,
+      });
+    });
+
     foot.querySelector('#revBulkPrint')?.addEventListener('click', async () => {
       const btn = foot.querySelector('#revBulkPrint');
       if (btn) btn.disabled = true;
+      const total = rows.length * state.copies;
       await printReversiLabelsBatch(rows, {
         format: state.format,
         template: state.template,
         copies: state.copies,
       });
       if (btn) btn.disabled = false;
+      showToast(`Pripremljeno ${total} nalepnica za štampu`);
       close();
+      opts.onPrinted?.();
     });
   }
 

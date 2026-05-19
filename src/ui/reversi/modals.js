@@ -3,6 +3,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
+import { printReversiLabelsBatch } from './reversiLabelsPrint.js';
 import {
   fetchAvailableTools,
   fetchEmployees,
@@ -605,6 +606,10 @@ export function openAddToolModal({ onSuccess } = {}) {
       <label>Serijski broj <input type="text" id="revAddSn" class="input"/></label>
       <label>Datum kupovine <input type="date" id="revAddDt" class="input"/></label>
       <label>Napomena <textarea id="revAddNo" rows="2" class="input"></textarea></label>
+      <label class="rev-chk-mock" style="grid-column:1/-1">
+        <input type="checkbox" id="revAddPrintLbl" checked/>
+        Odmah odštampaj nalepnicu (ALAT-…)
+      </label>
     </div>`,
     `<button type="button" class="btn" data-rev-close>Otkaži</button>
      <button type="button" class="btn btn-primary" id="revAddSubmit">Sačuvaj</button>`,
@@ -648,6 +653,24 @@ export function openAddToolModal({ onSuccess } = {}) {
       showToast(pl.error || 'Početni smeštaj nije uspeo');
     }
     clearMagacinLocationCache();
+    const tool = ins.data;
+    const printLbl = overlay.querySelector('#revAddPrintLbl')?.checked;
+    if (printLbl && tool?.barcode) {
+      await printReversiLabelsBatch(
+        [
+          {
+            grupa: 'HAND',
+            kind: 'HAND',
+            barcode: tool.barcode,
+            oznaka: tool.oznaka || oz,
+            naziv: tool.naziv || nz,
+            asset_kind: tool.asset_kind || assetKind,
+            serijski_broj: tool.serijski_broj,
+          },
+        ],
+        { format: 'tsc', copies: 1 },
+      );
+    }
     showToast('Alat dodat');
     closeOverlay(overlay);
     onSuccess?.();
