@@ -14,7 +14,8 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { getAuth, canAccessReversi } from '../../state/auth.js';
+import { enableMobileBack } from '../../lib/mobileBack.js';
+import { getAuth, canAccessReversi, canAccessLokacije } from '../../state/auth.js';
 import { logout } from '../../services/auth.js';
 import { resetKadrovskaState } from '../../state/kadrovska.js';
 import {
@@ -44,7 +45,7 @@ export function renderMobileHome(mountEl, ctx) {
       <header class="m-header">
         <div class="m-brand">
           <div class="m-brand-title">SERVOTEH MAGACIN</div>
-          <div class="m-brand-sub">Lokacije i premeštanje</div>
+          <div class="m-brand-sub">Lokacije · reversi · barkod</div>
         </div>
         <button type="button" class="m-btn-ghost" data-act="logout" aria-label="Odjavi se">⎋</button>
       </header>
@@ -91,21 +92,35 @@ export function renderMobileHome(mountEl, ctx) {
           </button>
         </div>
 
-        <!-- 3. Sekundarne akcije — manje vizuelne težine. Pretraga je read-only
-             flow (ne premešta komad, samo pokazuje gde je), ručni unos je
-             fallback kad nema barkoda. -->
+        <!-- 3. Pun ERP modul — opciono, sa povratkom na /m. -->
+        <div class="m-section-head">Moduli</div>
+        <div class="m-cta-row">
+          ${
+            canAccessLokacije()
+              ? `<button type="button" class="m-cta m-cta-secondary" data-act="lokacijeModule">
+            <span class="m-cta-ico">📦</span>
+            <span class="m-cta-txt">
+              <span class="m-cta-title">LOKACIJE</span>
+              <span class="m-cta-sub">Pregled, izveštaji, master</span>
+            </span>
+          </button>`
+              : ''
+          }
+          ${
+            canAccessReversi()
+              ? `<button type="button" class="m-cta m-cta-secondary" data-act="reversiHub">
+            <span class="m-cta-ico">🔁</span>
+            <span class="m-cta-txt">
+              <span class="m-cta-title">REVERSI</span>
+              <span class="m-cta-sub">Barkod zaduženja i povraćaji</span>
+            </span>
+          </button>`
+              : ''
+          }
+        </div>
+
+        <!-- 4. Sekundarne akcije — manje vizuelne težine. -->
         <div class="m-section-head">Ostalo</div>
-        ${
-          canAccessReversi()
-            ? `<button type="button" class="m-cta m-cta-secondary" data-act="reversi">
-          <span class="m-cta-ico">🔁</span>
-          <span class="m-cta-txt">
-            <span class="m-cta-title">REVERSI — ALATI</span>
-            <span class="m-cta-sub">Zaduženja, inventar, povraćaji</span>
-          </span>
-        </button>`
-            : ''
-        }
         <button type="button" class="m-cta m-cta-secondary" data-act="lookup">
           <span class="m-cta-ico">🔍</span>
           <span class="m-cta-txt">
@@ -169,8 +184,12 @@ export function renderMobileHome(mountEl, ctx) {
       case 'scanWarehouse':
         ctx.onNavigate('/m/scan?cat=warehouse');
         break;
-      case 'reversi':
-        ctx.onNavigate('/reversi');
+      case 'reversiHub':
+        ctx.onNavigate('/m/reversi');
+        break;
+      case 'lokacijeModule':
+        enableMobileBack();
+        ctx.onNavigate('/lokacije-delova');
         break;
       case 'lookup':
         ctx.onNavigate('/m/lookup');

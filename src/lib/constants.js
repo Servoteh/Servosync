@@ -75,6 +75,8 @@ export const SESSION_KEYS = Object.freeze({
   SETTINGS_TAB: 'servosync_settings_tab_v1',
   /** Posle login-a: pun path + query (npr. /maintenance/machines/8.3?tab=checks) */
   POST_LOGIN_REDIRECT: 'plan_montaze_v51_post_login_redirect_v1',
+  /** Mobilni magacin PWA: „Nazad" iz punog modula vodi na /m umesto hub-a ('1'). */
+  MOBILE_BACK: 'servosync_mobile_back_v1',
   /** Sastanci: lista / kalendar u tabu Sastanci */
   SAST_SASTANCI_VIEW: 'sastanci:sastanci_view',
   /** Jednokratni otvor Akcioni plan sa "moje" filterom (string '1' pa briši) */

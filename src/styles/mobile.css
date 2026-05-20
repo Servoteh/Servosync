@@ -250,6 +250,19 @@ body.m-body #app {
   gap: 12px;
 }
 
+.m-cta-full {
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+}
+
+.m-muted-block {
+  margin: 4px 4px 8px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(238, 242, 247, 0.65);
+}
+
 /* ── Section header u m-main ───────────────────────────────────────────────
  * Mali, muted naslov iznad grupe dugmadi ("Dodaj na lokaciju", "Ostalo").
  * Cilj: vizuelno podeliti primary CTA od prečica i sekundarnih akcija, bez
