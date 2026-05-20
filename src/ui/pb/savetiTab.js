@@ -8,7 +8,7 @@
 
 import { escHtml, showToast } from '../../lib/dom.js';
 
-import { getIsOnline } from '../../state/auth.js';
+import { getIsOnline, isAdmin } from '../../state/auth.js';
 
 import {
 
@@ -610,6 +610,10 @@ async function loadCategoriesAndTips(_mountEl, ctx) {
 
     setEngTipsCanWrite(canWrite);
 
+    if (isAdmin() && !snapshotEngTips().filter.includeDrafts) {
+      setEngTipsFilter({ includeDrafts: true });
+    }
+
     await reloadTips();
 
   } catch (err) {
@@ -646,7 +650,7 @@ async function reloadTips() {
 
       myOnly: filter.myOnly,
 
-      includeDrafts: filter.includeDrafts,
+      includeDrafts: filter.includeDrafts || isAdmin(),
 
       sort: filter.sort,
 

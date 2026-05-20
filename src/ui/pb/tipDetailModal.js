@@ -126,13 +126,17 @@ function renderDetail(wrap, tip, ctx) {
     }
   });
 
+  wrap.querySelectorAll('.pb-close-modal').forEach(btn => {
+    btn.addEventListener('click', ctx.close);
+  });
+
   wrap.querySelector('#pbTipEditBtn')?.addEventListener('click', () => {
     ctx.close();
     openTipEditorModal({
       tip,
       projects: ctx.projects,
       categories: ctx.categories,
-      canEdit: ctx.canWrite,
+      canEdit: canManage,
       onSaved: () => ctx.onChanged?.(),
     });
   });
