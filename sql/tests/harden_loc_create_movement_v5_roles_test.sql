@@ -90,6 +90,10 @@ ON CONFLICT (id) DO NOTHING;
 
 SET LOCAL row_security = on;
 
+RESET ROLE;
+GRANT SELECT ON TABLE public.loc_location_movements TO authenticated;
+GRANT SELECT ON TABLE public.loc_item_placements TO authenticated;
+
 -- =========================================================================
 -- 1) Helper sanity — funkcija postoji
 -- =========================================================================
@@ -244,8 +248,9 @@ SELECT is(
 -- =========================================================================
 -- 9) Nije autentifikovan (JWT nije postavljen) → not_authenticated
 -- =========================================================================
-SELECT set_config('request.jwt.claim.sub', '', true);
-SELECT set_config('request.jwt.claims', '', true);
+/* Prazan string ne briše prethodni sub GUC — koristimo nevalidan UUID da auth.uid() vrati NULL. */
+SELECT set_config('request.jwt.claim.sub', 'not-a-valid-uuid', true);
+SELECT set_config('request.jwt.claims', '{}', true);
 
 SELECT is(
   public.loc_create_movement(jsonb_build_object(

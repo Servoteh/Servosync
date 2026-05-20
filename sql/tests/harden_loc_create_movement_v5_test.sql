@@ -48,8 +48,11 @@ ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, is_active = EXCLUDED.is_
 
 SET LOCAL row_security = on;
 
--- ─── Postavi authenticated context ───────────────────────────────────────
 RESET ROLE;
+GRANT SELECT ON TABLE public.loc_location_movements TO authenticated;
+GRANT SELECT ON TABLE public.loc_item_placements TO authenticated;
+
+-- ─── Postavi authenticated context ───────────────────────────────────────
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims',
                   jsonb_build_object('email','pgtap-user-1@ci.local')::text,
