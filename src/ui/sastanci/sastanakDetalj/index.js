@@ -51,7 +51,15 @@ export async function renderSastanakDetalj(host, { sastanakId, onBack, onNavigat
 
   host.innerHTML = `
     <div class="sast-detalj" id="sastDetaljRoot">
-      <div class="sast-detalj-loading">Učitavam sastanak…</div>
+      <div class="sast-skeleton sast-detalj-loading" aria-busy="true" aria-label="Učitavam sastanak">
+        <div class="sast-skeleton-line sast-skeleton-line--lg"></div>
+        <div class="sast-skeleton-line sast-skeleton-line--md"></div>
+        <div class="sast-skeleton-row">
+          <div class="sast-skeleton-avatar"></div>
+          <div class="sast-skeleton-line sast-skeleton-line--sm" style="flex:1"></div>
+        </div>
+        <div class="sast-skeleton-line sast-skeleton-line--md"></div>
+      </div>
     </div>
   `;
 
@@ -245,8 +253,16 @@ function wireActionButtons(host, sastanak, canWrite, onReload) {
           btn.disabled = false; return;
         }
         // 1) Zaključaj + snapshot
-        const zakljucan = await zakljucajSaSapisanikom(sastanak.id);
-        if (!zakljucan) { showToast('⚠ Zaključavanje nije uspelo'); btn.disabled = false; return; }
+        const lockResult = await zakljucajSaSapisanikom(sastanak.id);
+        if (!lockResult?.ok) {
+          const msg = lockResult?.reason === 'already_locked'
+            ? 'Sastanak je već zaključan — otvori Arhiva tab.'
+            : (lockResult?.error || 'Zaključavanje nije uspelo');
+          showToast(`⚠ ${msg}`);
+          btn.disabled = false;
+          if (lockResult?.reason === 'already_locked') onReload();
+          return;
+        }
 
         showToast('🔒 Zaključano. Generisujem PDF…');
 

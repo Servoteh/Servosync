@@ -1,10 +1,9 @@
 import { escHtml } from '../../lib/dom.js';
 import { formatDate } from '../../lib/date.js';
-import { getCurrentUser, getIsOnline } from '../../state/auth.js';
+import { getCurrentUser } from '../../state/auth.js';
 import { loadAkcije, AKCIJA_STATUSI } from '../../services/akcioniPlan.js';
 import { loadPmTeme, TEMA_STATUSI } from '../../services/pmTeme.js';
-import { loadSastanci, SASTANAK_TIPOVI } from '../../services/sastanci.js';
-import { sbReq } from '../../services/supabase.js';
+import { loadSastanciForUcesnik, SASTANAK_TIPOVI } from '../../services/sastanci.js';
 import { navigateToSastanakDetalj } from './index.js';
 import { renderStatusBadge } from './statusBadge.js';
 import { renderEmptyStateHtml } from './emptyState.js';
@@ -63,14 +62,7 @@ export function teardownMojRadTab() {
 }
 
 async function loadSastanciZaUcesnika(email) {
-  if (!getIsOnline()) return [];
-  const ucesnici = await sbReq(
-    `sastanak_ucesnici?email=eq.${encodeURIComponent(email)}&select=sastanak_id&limit=200`,
-  );
-  const ids = [...new Set((Array.isArray(ucesnici) ? ucesnici : []).map(u => u.sastanak_id).filter(Boolean))];
-  if (!ids.length) return [];
-  const rows = await loadSastanci({ limit: 200 });
-  return rows.filter(s => ids.includes(s.id) && s.status !== 'zakljucan');
+  return loadSastanciForUcesnik(email, { excludeLocked: true, limit: 50 });
 }
 
 function matchRokFilter(akcija) {

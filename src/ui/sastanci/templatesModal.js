@@ -26,7 +26,7 @@ export function openTemplatesModal({ canEdit, onInstantiated }) {
         <h3>📋 Templati sastanaka</h3>
         <button type="button" class="sast-modal-close" aria-label="Zatvori">✕</button>
       </header>
-      <div class="sst-tpl-bod" id="sstTplBody">Učitavam…</div>
+      <div class="sast-tpl-bod" id="sstTplBody">Učitavam…</div>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -39,7 +39,7 @@ export function openTemplatesModal({ canEdit, onInstantiated }) {
     const body = overlay.querySelector('#sstTplBody');
     if (!list.length) {
       body.innerHTML = `
-        <div class="sst-tpl-empty">
+        <div class="sast-tpl-empty">
           <p>Još nema šablona. Kreiraj prvi (npr. <strong>Nedeljni PM sastanak</strong>).</p>
           ${canEdit ? '<button type="button" class="btn btn-primary" data-seed>+ Kreiraj \"Nedeljni PM sastanak\" (predlog)</button>' : ''}
         </div>
@@ -57,10 +57,10 @@ export function openTemplatesModal({ canEdit, onInstantiated }) {
     }
     const today = new Date();
     body.innerHTML = `
-      <div class="sst-tpl-top">
+      <div class="sast-tpl-top">
         ${canEdit ? '<button type="button" class="btn btn-primary" id="sstAddTpl">+ Novi templat</button>' : ''}
       </div>
-      <table class="sast-table sst-tpl-tbl">
+      <table class="sast-table sast-tpl-tbl">
         <thead>
           <tr>
             <th>Naziv</th><th>Cadence</th><th>Sledeći (procena)</th><th>Aktivan</th>
@@ -72,7 +72,7 @@ export function openTemplatesModal({ canEdit, onInstantiated }) {
             const nextD = nextOccurrence(t, today);
             return `
               <tr>
-                <td><strong>${escHtml(t.naziv)}</strong> <span class="sst-sm">${escHtml(t.tip)}</span></td>
+                <td><strong>${escHtml(t.naziv)}</strong> <span class="sast-sm">${escHtml(t.tip)}</span></td>
                 <td>${escHtml(CADS[t.cadence] || t.cadence)}</td>
                 <td>${escHtml(nextD)}</td>
                 <td>${t.isActive ? 'da' : 'ne'}</td>
@@ -118,7 +118,7 @@ export function openTemplatesModal({ canEdit, onInstantiated }) {
       <div class="sast-modal">
         <header class="sast-modal-header"><h3>${isEdit ? 'Uredi templat' : 'Novi templat'}</h3>
           <button type="button" class="sast-modal-close" data-x>✕</button></header>
-        <div class="sst-form-tpl sast-modal-body">
+        <div class="sast-form-tpl sast-modal-body">
           <form id="tplF" class="sast-form">
             <label class="sast-form-row"><span>Naziv *</span>
               <input name="naziv" required maxlength="200" value="${escHtml(t.naziv || '')}"></label>

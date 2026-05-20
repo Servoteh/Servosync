@@ -48,19 +48,19 @@ export async function renderSastanciTab(host, { canEdit }) {
 
   host.innerHTML = `
     <div class="sast-section" id="sstRoot">
-      <div class="sst-view-bar">
-        <div class="sst-toggle" role="group" aria-label="Prikaz">
-          <button type="button" class="sst-tgl-btn${view === 'lista' ? ' is-on' : ''}" data-v="lista" title="Lista">📋 Lista</button>
-          <button type="button" class="sst-tgl-btn${view === 'kalendar' ? ' is-on' : ''}" data-v="kalendar" title="Kalendar">📅 Kalendar</button>
-          <button type="button" class="sst-tgl-btn${view === 'nedelja' ? ' is-on' : ''}" data-v="nedelja" title="Nedeljni pregled">📆 Nedelja</button>
+      <div class="sast-view-bar">
+        <div class="sast-toggle" role="group" aria-label="Prikaz">
+          <button type="button" class="sast-tgl-btn${view === 'lista' ? ' is-on' : ''}" data-v="lista" title="Lista">📋 Lista</button>
+          <button type="button" class="sast-tgl-btn${view === 'kalendar' ? ' is-on' : ''}" data-v="kalendar" title="Kalendar">📅 Kalendar</button>
+          <button type="button" class="sast-tgl-btn${view === 'nedelja' ? ' is-on' : ''}" data-v="nedelja" title="Nedeljni pregled">📆 Nedelja</button>
         </div>
-        <div class="sst-toolbar-actions sst-ttpl">
+        <div class="sast-toolbar-actions sast-ttpl">
           ${canEdit ? '<button type="button" class="btn" id="sstOpenTpl">📋 Templati</button>' : ''}
           ${canEdit ? '<button class="btn btn-primary" id="newSastanakBtn">+ Novi sastanak</button>' : ''}
         </div>
       </div>
-      <div class="sst-toolbar-2">
-        <div class="sst-filters">
+      <div class="sast-toolbar-2">
+        <div class="sast-filters">
           <select id="ssFiltTip" class="sast-input">
             <option value="">Svi tipovi</option>
             ${Object.entries(SASTANAK_TIPOVI).map(([k, v]) => `<option value="${k}">${escHtml(v)}</option>`).join('')}
@@ -77,7 +77,7 @@ export async function renderSastanciTab(host, { canEdit }) {
           <input type="date" id="ssFiltTo" class="sast-input" title="Do datuma" value="${filters.toDate}">
         </div>
       </div>
-      <div id="ssBody" class="sast-table-wrap sst-body-host"></div>
+      <div id="ssBody" class="sast-table-wrap sast-body-host"></div>
     </div>
   `;
 
@@ -111,10 +111,10 @@ export async function renderSastanciTab(host, { canEdit }) {
     });
   });
 
-  host.querySelectorAll('.sst-tgl-btn').forEach(b => {
+  host.querySelectorAll('.sast-tgl-btn').forEach(b => {
     b.addEventListener('click', () => {
       setView(b.dataset.v);
-      host.querySelectorAll('.sst-tgl-btn').forEach(x => x.classList.toggle('is-on', x === b));
+      host.querySelectorAll('.sast-tgl-btn').forEach(x => x.classList.toggle('is-on', x === b));
       void renderAll(host, canEdit);
     });
   });
@@ -131,7 +131,7 @@ async function renderAll(host, canEdit) {
 
 async function renderWeek(host, canEdit) {
   const body = host.querySelector('#ssBody');
-  body.innerHTML = '<div class="sst-loading">Učitavam nedelju…</div>';
+  body.innerHTML = '<div class="sast-loading">Učitavam nedelju…</div>';
   const start = new Date();
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
@@ -157,7 +157,7 @@ export function teardownSastanciTab() {
 
 async function renderCal(host, canEdit) {
   const body = host.querySelector('#ssBody');
-  body.innerHTML = '<div class="sst-loading">Učitavam kalendar…</div>';
+  body.innerHTML = '<div class="sast-loading">Učitavam kalendar…</div>';
   const { y, m } = getOrInitCalMonth();
   const d0 = new Date(y, m, 1);
   const d1 = new Date(y, m + 1, 0);
@@ -198,7 +198,7 @@ async function renderCal(host, canEdit) {
 
 async function renderRowsTable(host, canEdit) {
   const body = host.querySelector('#ssBody');
-  body.innerHTML = '<div class="sst-loading">Učitavam sastanke…</div>';
+  body.innerHTML = '<div class="sast-loading">Učitavam sastanke…</div>';
 
   cachedSastanci = await loadSastanci({
     tip: filters.tip || null,
@@ -219,7 +219,7 @@ async function renderRowsTable(host, canEdit) {
   }
 
   body.innerHTML = `
-    <table class="sast-table sst-table-sast sast-table-clickable">
+    <table class="sast-table sast-table-sast sast-table-clickable">
       <thead>
         <tr>
           <th>Datum & vreme</th>
@@ -249,7 +249,7 @@ async function renderRowsTable(host, canEdit) {
     });
   });
 
-  body.querySelectorAll('.sst-rowact').forEach(btn => {
+  body.querySelectorAll('.sast-rowact').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = btn.dataset.id;
@@ -320,35 +320,35 @@ function renderSastanakRow(s, canEdit, nP, nU) {
   const statusSpan = renderStatusBadge(st, { kind: 'sastanak', label: stLabel });
   const actions = [];
   if (st === 'planiran') {
-    actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="pripremi" data-id="${s.id}">Pripremi</button>`);
+    actions.push(`<button type="button" class="btn btn-sm sast-rowact" data-action="pripremi" data-id="${s.id}">Pripremi</button>`);
     if (canEdit) {
-      actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="open" data-id="${s.id}">Uredi</button>`);
-      actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="delete" data-id="${s.id}">Otkaži</button>`);
+      actions.push(`<button type="button" class="btn btn-sm sast-rowact" data-action="open" data-id="${s.id}">Uredi</button>`);
+      actions.push(`<button type="button" class="btn btn-sm sast-rowact" data-action="delete" data-id="${s.id}">Otkaži</button>`);
     }
   } else if (st === 'u_toku') {
-    actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="zap" data-id="${s.id}">Otvori zapisnik</button>`);
+    actions.push(`<button type="button" class="btn btn-sm sast-rowact" data-action="zap" data-id="${s.id}">Otvori zapisnik</button>`);
   } else if (st === 'zavrsen' || st === 'zakljucan') {
-    actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="open" data-id="${s.id}">Otvori</button>`);
+    actions.push(`<button type="button" class="btn btn-sm sast-rowact" data-action="open" data-id="${s.id}">Otvori</button>`);
     if (isAdminOrMenadzment()) {
-      actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="otvori-sast" data-id="${s.id}">Otvori ponovo</button>`);
+      actions.push(`<button type="button" class="btn btn-sm sast-rowact" data-action="otvori-sast" data-id="${s.id}">Otvori ponovo</button>`);
     }
     if (st === 'zakljucan' && canEdit) {
-      actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="arh" data-id="${s.id}">Arhiviraj</button>`);
+      actions.push(`<button type="button" class="btn btn-sm sast-rowact" data-action="arh" data-id="${s.id}">Arhiviraj</button>`);
     }
   } else {
-    actions.push(`<button type="button" class="btn btn-sm sst-rowact" data-action="open" data-id="${s.id}">Otvori</button>`);
+    actions.push(`<button type="button" class="btn btn-sm sast-rowact" data-action="open" data-id="${s.id}">Otvori</button>`);
   }
 
   return `
     <tr data-id="${s.id}">
       <td>
         <strong>${escHtml(formatDate(s.datum))}</strong>
-        ${s.vreme ? `<br><small class="sst-ttm">${escHtml(s.vreme.slice(0, 5))}</small>` : ''}
+        ${s.vreme ? `<br><small class="sast-ttm">${escHtml(s.vreme.slice(0, 5))}</small>` : ''}
       </td>
-      <td><strong>${escHtml(s.naslov)}</strong>${projLabel ? `<div class="sst-sub">${projLabel}</div>` : ''}</td>
+      <td><strong>${escHtml(s.naslov)}</strong>${projLabel ? `<div class="sast-sub">${projLabel}</div>` : ''}</td>
       <td><span class="sast-tip-badge sast-tip-${escHtml(s.tip)}">${escHtml(tipLabel)}</span></td>
       <td>${escHtml(s.mesto || '—')}</td>
-      <td class="sst-ucn">${nU ? `${nP} / ${nU}` : '—'}</td>
+      <td class="sast-ucn">${nU ? `${nP} / ${nU}` : '—'}</td>
       <td>${statusSpan}</td>
       <td class="sas-ta-wrap">${actions.join(' ')}</td>
     </tr>

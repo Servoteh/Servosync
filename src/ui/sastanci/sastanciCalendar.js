@@ -53,23 +53,23 @@ export function renderSastanciCalendarView(host, p) {
       <div class="sast-cal-dow">
         ${DOWH.map(h => `<div class="sast-cal-dowc">${h}</div>`).join('')}
       </div>
-      <div class="sst-cal-grid" role="grid">
+      <div class="sast-cal-grid" role="grid">
         ${cells.map(c => {
           if (c.empty) {
-            return '<div class="sst-cal-day sst-cal-day--pad"></div>';
+            return '<div class="sast-cal-day sast-cal-day--pad"></div>';
           }
           const n = c.list.length;
           const more = n > 3;
           const show = c.list.slice(0, 3);
           return `
-            <div class="sst-cal-day" data-ymd="${c.key}" role="gridcell" tabindex="0">
-              <div class="sst-cal-dayn">${c.day}</div>
-              <div class="sst-cal-dots">
+            <div class="sast-cal-day" data-ymd="${c.key}" role="gridcell" tabindex="0">
+              <div class="sast-cal-dayn">${c.day}</div>
+              <div class="sast-cal-dots">
                 ${show.map(s => {
                   const st = s.status || 'planiran';
-                  return `<span class="sst-cal-dot sastanak-status-pill sastanak-status-${escHtml(st)}" title="${escHtml(s.naslov || '')}"></span>`;
+                  return `<span class="sast-cal-dot sastanak-status-pill sastanak-status-${escHtml(st)}" title="${escHtml(s.naslov || '')}"></span>`;
                 }).join('')}
-                ${more ? `<span class="sst-cal-more">+${n - 3}</span>` : ''}
+                ${more ? `<span class="sast-cal-more">+${n - 3}</span>` : ''}
               </div>
             </div>
           `;
@@ -92,7 +92,7 @@ export function renderSastanciCalendarView(host, p) {
   });
   host.querySelector('[data-cal=td]')?.addEventListener('click', () => onToday?.());
 
-  host.querySelectorAll('.sst-cal-day[data-ymd]').forEach(el => {
+  host.querySelectorAll('.sast-cal-day[data-ymd]').forEach(el => {
     const open = () => {
       const ymd = el.dataset.ymd;
       const list = byDay.get(ymd) || [];
@@ -108,16 +108,16 @@ export function renderSastanciCalendarView(host, p) {
 
 function openDayDrawer(ymd, list, { onRowAction, canEdit }) {
   const overlay = document.createElement('div');
-  overlay.className = 'sast-modal-overlay sst-cal-drawer-ov';
+  overlay.className = 'sast-modal-overlay sast-cal-drawer-ov';
   const pretty = ymd.split('-').reverse().join('.');
 
   overlay.innerHTML = `
-    <div class="sst-cal-drawer" role="dialog" aria-modal="true">
-      <header class="sst-cal-dr-h">
+    <div class="sast-cal-drawer" role="dialog" aria-modal="true">
+      <header class="sast-cal-dr-h">
         <h3>Sastanci — ${escHtml(pretty)}</h3>
         <button type="button" class="sast-modal-close" aria-label="Zatvori">✕</button>
       </header>
-      <div class="sst-cal-dr-b">
+      <div class="sast-cal-dr-b">
         <table class="sast-table sast-table-compact">
           <thead><tr>
             <th>Vreme</th><th>Naslov</th><th>Status</th><th class="sast-th-actions">Akcije</th>

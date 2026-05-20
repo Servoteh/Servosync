@@ -119,7 +119,7 @@ export async function loadAkcije(filters = {}) {
   if (filters.openOnly) {
     params.push(`effective_status=in.(otvoren,u_toku,kasni)`);
   }
-  params.push(`limit=${filters.limit || 500}`);
+  params.push(`limit=${filters.limit || 200}`);
 
   const data = await sbReq(`v_akcioni_plan?${params.join('&')}`);
   return Array.isArray(data) ? data.map(mapDbAkcija) : [];

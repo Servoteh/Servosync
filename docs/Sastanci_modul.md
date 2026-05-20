@@ -25,13 +25,18 @@ Aktivni tab je u [state/sastanci.js](../src/state/sastanci.js) (`activeTab`), **
 
 | Tab (UI) | `activeTab` | Fajl |
 |----------|----------------|------|
-| Pregled | `dashboard` | [dashboardTab.js](../src/ui/sastanci/dashboardTab.js) — KPI, 3 widgeta (sledeći sastanak, moje akcije, moje teme), sekcije ispod. |
-| Sastanci | `sastanci` | [sastanciTab.js](../src/ui/sastanci/sastanciTab.js) + [sastanciCalendar.js](../src/ui/sastanci/sastanciCalendar.js) — lista / kalendar, templati ([templatesModal.js](../src/ui/sastanci/templatesModal.js)). |
-| PM teme | `pm-teme` | [pmTemeTab.js](../src/ui/sastanci/pmTemeTab.js) — sub-tabovi; nakon CTA sa Pregleda: `SAST_INTENT_PM_MOJE`. |
+| Pregled | `dashboard` | [dashboardTab.js](../src/ui/sastanci/dashboardTab.js) — KPI (RPC `sast_dashboard_stats`), 3 widgeta, sekcije ispod. |
+| Sastanci | `sastanci` | [sastanciTab.js](../src/ui/sastanci/sastanciTab.js) — lista / kalendar / nedelja; [templatesModal.js](../src/ui/sastanci/templatesModal.js). |
+| Moj rad | `moj-rad` | [mojRadTab.js](../src/ui/sastanci/mojRadTab.js) — moje akcije, teme, sastanci (`loadSastanciForUcesnik`). |
+| Akcioni plan | `akcioni-plan` | [akcioniPlanTab.js](../src/ui/sastanci/akcioniPlanTab.js) — lista / kanban; `SAST_INTENT_AKCIJONI_MOJE`. |
+| PM teme | `pm-teme` | [pmTemeTab.js](../src/ui/sastanci/pmTemeTab.js) — admin meni ⚙ |
 | Po projektu | `pregled-projekti` | [pregledPoProjektuTab.js](../src/ui/sastanci/pregledPoProjektuTab.js) |
-| Akcioni plan | `akcioni-plan` | [akcioniPlanTab.js](../src/ui/sastanci/akcioniPlanTab.js) — filter „Samo moje” + `SAST_INTENT_AKCIJONI_MOJE` |
+| Draft teme | `draft-teme` | [draftTemePanel.js](../src/ui/sastanci/draftTemePanel.js) |
+| Šabloni | `sabloni` | [sabloniTab.js](../src/ui/sastanci/sabloniTab.js) |
 | Arhiva | `arhiva` | [arhivaTab.js](../src/ui/sastanci/arhivaTab.js) |
-| Podešavanja | `podesavanja-notif` | [podesavanjaNotifikacijaTab.js](../src/ui/sastanci/podesavanjaNotifikacijaTab.js) — 6 toggle-a za email notifikacije. Deep link: `/sastanci/podesavanja-notifikacija`. |
+| Podešavanja | `podesavanja-notif` | [podesavanjaNotifikacijaTab.js](../src/ui/sastanci/podesavanjaNotifikacijaTab.js) — deep link: `/sastanci/podesavanja-notifikacija`. |
+
+**Detalj sastanka** (`/sastanci/<uuid>`): [sastanakDetalj/index.js](../src/ui/sastanci/sastanakDetalj/index.js) — Priprema | Zapisnik | Odluke | Akcije | Arhiva.
 
 **Zajednički UI:** [index.js](../src/ui/sastanci/index.js) — root + **FAB** [quickAddTemaButton.js](../src/ui/sastanci/quickAddTemaButton.js) (nova PM tema). Modali: [sastanakModal.js](../src/ui/sastanci/sastanakModal.js), [createSastanakModal.js](../src/ui/sastanci/createSastanakModal.js), [fazaBPlaceholder.js](../src/ui/sastanci/fazaBPlaceholder.js) (meso za Fazu B: pun detalj sastanka).
 
@@ -41,7 +46,7 @@ Aktivni tab je u [state/sastanci.js](../src/state/sastanci.js) (`activeTab`), **
 
 | Servis | Uloga |
 |--------|--------|
-| [sastanci.js](../src/services/sastanci.js) | Sastanci CRUD, učesnici, `loadDashboardStats`, `loadNextPlaniranSastanak`, `loadUcesniciForMany` |
+| [sastanci.js](../src/services/sastanci.js) | CRUD, učesnici, `loadDashboardStats` (RPC), `loadSastanciForUcesnik`, `loadUcesniciForMany` |
 | [sastanciDetalj.js](../src/services/sastanciDetalj.js) | `getSastanakFull()`, presek CRUD, slike upload/signedURL, `saveSnapshot()`, `zakljucajSaSapisanikom()` |
 | [sastanciArhiva.js](../src/services/sastanciArhiva.js) | `uploadSastanakPdf()` → Storage `'sastanci-arhiva'`, `downloadSastanakPdf()` (signed URL), `regenerateSastanakPdf()` |
 | [sastanciPrefs.js](../src/services/sastanciPrefs.js) | `getMyPrefs()` (RPC `sastanci_get_or_create_my_prefs`), `updateMyPrefs(patch)` |
@@ -69,7 +74,7 @@ Status vrednosti `sastanci.status` (baza / UI): `planiran`, `u_toku`, `zavrsen`,
 
 ## Stilovi
 
-[sastanci.css](../src/styles/sastanci.css) — prefiks `sast-*` / Faza A: `sast-fab`, `sast-kpi-compact`, `sastanak-status-*`, kalendar, widgeti Pregleda.
+[sastanci.css](../src/styles/sastanci.css) + [sastanci/_skeleton.css](../src/styles/sastanci/_skeleton.css) — prefiks `sast-*`, kalendar, widgeti, skeleton učitavanja.
 
 ---
 
@@ -212,8 +217,12 @@ Za novu instalaciju, primeniti redom u Supabase SQL Editoru:
 2. `harden_sastanci_rls_phase2.sql` — Model B RLS, helperi `is_sastanak_ucesnik`, `current_user_is_management`
 3. `add_sastanci_templates.sql` — templati (opciono)
 
+**Sprint 2–3 (bezbednost + perf):**
+4. `harden_sastanci_write_rls.sql`, `add_sastanci_locked_guard.sql`, `add_sast_zakljucaj_rpc.sql`
+5. `add_sast_notification_dedup.sql`, `add_sast_email_indexes.sql`, `add_sast_dashboard_stats_rpc.sql`
+
 **Faza C (draft — primeniti posle review-a):**
-4. `add_sastanci_notification_prefs.sql`
+6. `add_sastanci_notification_prefs.sql`
 5. `add_sastanci_notification_outbox.sql`
 6. `add_sastanci_notification_triggers.sql`
 7. `add_sastanci_arhiva_storage.sql`
