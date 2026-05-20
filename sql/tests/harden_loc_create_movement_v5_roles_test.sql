@@ -29,6 +29,7 @@ SET LOCAL row_security = off;
 INSERT INTO public.departments (id, name, sort_order) VALUES
   (2, 'Proizvodnja', 20),
   (3, 'Montaža', 30),
+  (7, 'Marketing', 45),
   (8, 'Infrastruktura, logistika i nabavka', 80)
 ON CONFLICT (id) DO NOTHING;
 

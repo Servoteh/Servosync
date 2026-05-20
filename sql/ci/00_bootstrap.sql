@@ -30,9 +30,10 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ── Ekstenzije ──────────────────────────────────────────────────────────
-CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS pgtap;
+-- Placeholder schema `extensions` (Supabase; pgTAP ostaje u public za CI pg_prove).
+CREATE SCHEMA IF NOT EXISTS extensions;
 
 -- ── auth schema + stub-ovi ──────────────────────────────────────────────
 CREATE SCHEMA IF NOT EXISTS auth;
