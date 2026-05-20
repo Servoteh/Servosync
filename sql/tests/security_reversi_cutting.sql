@@ -144,6 +144,19 @@ SELECT throws_ok(
   'rev_issue_cutting_reversal odbija viewer-a sa 42501'
 );
 
+-- Preduslov za loc_create_movement u issue: placement na izvornoj lokaciji (from_has_no_placement)
+SET LOCAL row_security = off;
+INSERT INTO public.loc_item_placements (item_ref_table, item_ref_id, location_id, placement_status)
+SELECT
+  'rev_cutting_tool_catalog',
+  c.barcode,
+  'c3cccccc-cccc-cccc-cccc-cccccccccccc'::uuid,
+  'ACTIVE'::public.loc_placement_status_enum
+FROM public.rev_cutting_tool_catalog c
+WHERE c.id = '11111111-1111-1111-1111-111111111111'::uuid
+ON CONFLICT (item_ref_table, item_ref_id) DO UPDATE
+  SET location_id = EXCLUDED.location_id, placement_status = 'ACTIVE';
+
 -- =========================================================================
 -- Test 6: rev_issue_cutting_reversal happy path (admin — loc_create_movement zahteva edit ulogu)
 -- =========================================================================
