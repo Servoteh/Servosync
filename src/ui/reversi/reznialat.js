@@ -260,9 +260,9 @@ function renderToolbar() {
             ? `<button type="button" class="rev-btn rev-btn--secondary" id="revRznPrintSel" ${printDisabled ? 'disabled' : ''}><span class="rev-btn-ic" aria-hidden="true">🖨</span>${escHtml(printLabel)}</button>`
             : ''
         }
-        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revRznScanIssue"><span class="rev-btn-ic" aria-hidden="true">📠</span>Zaduženje (skener)</button>` : ''}
+        ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revRznScanIssue"><span class="rev-btn-ic" aria-hidden="true">📷</span>Zaduženje (kamera/skener)</button>` : ''}
         ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--outline-coral" id="revRznQuickIssue">Quick Issue</button>` : ''}
-        <button type="button" class="rev-btn rev-btn--outline-coral" id="revRznScanReturn"><span class="rev-btn-ic" aria-hidden="true">↩</span>Povraćaj (skener)</button>
+        <button type="button" class="rev-btn rev-btn--outline-coral" id="revRznScanReturn"><span class="rev-btn-ic" aria-hidden="true">📷</span>Povraćaj (kamera/skener)</button>
         <span class="rev-rzn-toolbar__spacer"></span>
         <button type="button" class="rev-btn rev-btn--excel" id="revRznExcel"><span class="rev-btn-ic" aria-hidden="true">📗</span>Excel</button>
         ${canManageReversi() ? `<button type="button" class="rev-btn rev-btn--primary" id="revRznNew">+ Nova šifra</button>` : ''}

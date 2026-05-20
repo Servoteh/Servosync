@@ -14,6 +14,7 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
+import { openReversiScanOverlay } from './scanOverlay.js';
 import {
   fetchCuttingToolByBarcode,
   fetchEmployeeByCardBarcode,
@@ -150,26 +151,69 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
 
     body.innerHTML = `
       <div class="rev-scan-grid">
-        <div class="rev-scan-input-row">
-          <label class="rev-field-label">Skeniraj barkod (alat / radnik / mašina)</label>
-          <input type="text" id="revRznScanIn" class="rev-input rev-input--scan" placeholder="Skeniraj ili otkucaj kod… (Enter za potvrdu)" autocomplete="off" autofocus value="${escHtml(state.lastInput)}"/>
-          <p class="rev-muted rev-scan-hint">Prefiksi: <code>RZN-</code> = alat, <code>ZADU-M-</code> = mašina, ostalo = ID kartica radnika.</p>
+        ${compatibleWarning()}
+        <section class="rev-qa-block">
+          <button type="button" class="rev-qa-cta rev-qa-cta--primary" id="revRznQaTool">
+            <span class="rev-qa-ico" aria-hidden="true">📷</span>
+            <span class="rev-qa-txt">
+              <span class="rev-qa-title">SKENIRAJ ALAT</span>
+              <span class="rev-qa-sub">Barkod sa pločice (RZN-…)</span>
+            </span>
+          </button>
+          <div class="rev-qa-row">
+            <button type="button" class="rev-qa-cta rev-qa-cta--secondary" id="revRznQaCard">
+              <span class="rev-qa-ico" aria-hidden="true">🆔</span>
+              <span class="rev-qa-txt">
+                <span class="rev-qa-title">KARTICA OPERATERA</span>
+                <span class="rev-qa-sub">${state.employee ? escHtml(state.employee.full_name) : 'Skeniraj ID'}</span>
+              </span>
+            </button>
+            <button type="button" class="rev-qa-cta rev-qa-cta--secondary" id="revRznQaMachine">
+              <span class="rev-qa-ico" aria-hidden="true">🏭</span>
+              <span class="rev-qa-txt">
+                <span class="rev-qa-title">MAŠINA</span>
+                <span class="rev-qa-sub">${state.machine ? escHtml(state.machine.rj_code) : 'Skeniraj ZADU-M-…'}</span>
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <div class="rev-scan-lines">
+          <h3 class="rev-h3">Stavke za zaduženje</h3>
+          ${linesHtml()}
         </div>
 
-        <div class="rev-scan-summary">
-          <div class="rev-scan-pill ${state.machine ? 'is-on' : ''}">
-            <span class="rev-scan-pill-label">Mašina</span>
-            <span class="rev-scan-pill-val">${state.machine ? `${escHtml(state.machine.rj_code)} <span class="rev-muted">${escHtml(state.machine.name || '')}</span>` : '<em>—</em>'}</span>
-          </div>
-          <div class="rev-scan-pill ${state.employee ? 'is-on' : ''}">
-            <span class="rev-scan-pill-label">Operater</span>
-            <span class="rev-scan-pill-val">${state.employee ? escHtml(state.employee.full_name) : '<em>—</em>'}</span>
-          </div>
-          <div class="rev-scan-pill ${state.lines.length > 0 ? 'is-on' : ''}">
-            <span class="rev-scan-pill-label">Stavki</span>
-            <span class="rev-scan-pill-val">${state.lines.length}</span>
-          </div>
+        <div class="rev-form-grid">
+          <label>Rok povraćaja (opciono)
+            <input type="date" id="revRznExpRet" class="rev-input" value="${escHtml(state.expectedReturnDate || '')}"/>
+          </label>
+          <label>Napomena (opciono)
+            <textarea id="revRznNote" rows="2" class="rev-input">${escHtml(state.napomena || '')}</textarea>
+          </label>
         </div>
+
+        <details class="rev-qa-manual">
+          <summary>Manuelni / HID unos (USB skener, klavijatura)</summary>
+          <div class="rev-scan-input-row">
+            <label class="rev-field-label">Skeniraj barkod (alat / radnik / mašina)</label>
+            <input type="text" id="revRznScanIn" class="rev-input rev-input--scan" placeholder="Skeniraj ili otkucaj kod… (Enter za potvrdu)" autocomplete="off" value="${escHtml(state.lastInput)}"/>
+            <p class="rev-muted rev-scan-hint">Prefiksi: <code>RZN-</code> = alat, <code>ZADU-M-</code> = mašina, ostalo = ID kartica radnika.</p>
+          </div>
+          <div class="rev-scan-summary">
+            <div class="rev-scan-pill ${state.machine ? 'is-on' : ''}">
+              <span class="rev-scan-pill-label">Mašina</span>
+              <span class="rev-scan-pill-val">${state.machine ? `${escHtml(state.machine.rj_code)} <span class="rev-muted">${escHtml(state.machine.name || '')}</span>` : '<em>—</em>'}</span>
+            </div>
+            <div class="rev-scan-pill ${state.employee ? 'is-on' : ''}">
+              <span class="rev-scan-pill-label">Operater</span>
+              <span class="rev-scan-pill-val">${state.employee ? escHtml(state.employee.full_name) : '<em>—</em>'}</span>
+            </div>
+            <div class="rev-scan-pill ${state.lines.length > 0 ? 'is-on' : ''}">
+              <span class="rev-scan-pill-label">Stavki</span>
+              <span class="rev-scan-pill-val">${state.lines.length}</span>
+            </div>
+          </div>
+        </details>
 
         <div class="rev-scan-fallback">
           <details>
@@ -198,25 +242,14 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
                     .join('')}
                 </select>
               </label>
-
-        <div class="rev-scan-lines">
-          <h3 class="rev-h3">Stavke za zaduženje</h3>
-          ${linesHtml()}
-        </div>
-
-        <div class="rev-form-grid">
-          <label>Rok povraćaja (opciono)
-            <input type="date" id="revRznExpRet" class="rev-input" value="${escHtml(state.expectedReturnDate || '')}"/>
-          </label>
-          <label>Napomena (opciono)
-            <textarea id="revRznNote" rows="2" class="rev-input">${escHtml(state.napomena || '')}</textarea>
-          </label>
+            </div>
+          </details>
         </div>
       </div>`;
 
     foot.innerHTML = `
       <button type="button" class="rev-btn" data-rev-close>Otkaži</button>
-      <button type="button" class="rev-btn rev-btn--primary" id="revRznScanSubmit" ${canSubmit() ? '' : 'disabled'}>${state.pending ? 'Čuvam…' : 'POTVRDI ZADUŽENJE'}</button>`;
+      <button type="button" class="rev-btn rev-btn--primary rev-btn--lg rev-qa-submit" id="revRznScanSubmit" ${canSubmit() ? '' : 'disabled'}>${state.pending ? 'Čuvam…' : `POTVRDI ZADUŽENJE (${state.lines.length})`}</button>`;
 
     bindEvents();
   }
@@ -226,9 +259,56 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
   }
 
   function bindEvents() {
+    overlay.querySelector('#revRznQaTool')?.addEventListener('click', () => {
+      openReversiScanOverlay({
+        title: 'Skeniraj rezni alat',
+        hint: 'Barkod RZN-… sa pločice. Skener ostaje otvoren za seriju.',
+        acceptKinds: ['CUTTING'],
+        continuous: true,
+        onResult: async (parsed) => {
+          if (!parsed.data?.id) {
+            showToast('Alat nije u katalogu');
+            return;
+          }
+          addLineFromCatalog(parsed.data, 1);
+          paint();
+          promptEmployeeCardIfNeeded();
+        },
+      });
+    });
+
+    overlay.querySelector('#revRznQaCard')?.addEventListener('click', () => {
+      openReversiScanOverlay({
+        title: 'Skeniraj karticu operatera',
+        hint: 'ID kartica zaposlenog',
+        acceptKinds: ['EMPLOYEE'],
+        continuous: false,
+        onResult: async (parsed) => {
+          const emp = parsed.data;
+          if (!emp?.id) {
+            showToast('Kartica nije prepoznata');
+            return;
+          }
+          state.employee = { id: emp.id, full_name: emp.full_name };
+          paint();
+        },
+      });
+    });
+
+    overlay.querySelector('#revRznQaMachine')?.addEventListener('click', () => {
+      openReversiScanOverlay({
+        title: 'Skeniraj mašinu',
+        hint: 'Nalepnica ZADU-M-… na mašini',
+        acceptUnknown: true,
+        continuous: false,
+        onResult: async (parsed) => {
+          void handleScannedInput(parsed.barcode);
+        },
+      });
+    });
+
     const inp = overlay.querySelector('#revRznScanIn');
     if (inp) {
-      inp.focus();
       inp.addEventListener('keydown', (ev) => {
         if (ev.key === 'Enter') {
           ev.preventDefault();
@@ -333,6 +413,7 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
     if (tr.ok && tr.data?.id) {
       addLineFromCatalog(tr.data, 1);
       paint();
+      promptEmployeeCardIfNeeded();
       return;
     }
 
@@ -348,6 +429,12 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
     showToast(`Nepoznat barkod: ${v}`);
   }
 
+  function promptEmployeeCardIfNeeded() {
+    if (!state.employee && state.lines.length === 1) {
+      setTimeout(() => overlay.querySelector('#revRznQaCard')?.click(), 250);
+    }
+  }
+
   async function tryAddTool(barcode) {
     const r = await fetchCuttingToolByBarcode(barcode);
     if (!r.ok || !r.data?.id) {
@@ -356,6 +443,7 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
     }
     addLineFromCatalog(r.data, 1);
     paint();
+    promptEmployeeCardIfNeeded();
   }
 
   function addLineFromCatalog(catalog, qty) {
@@ -472,27 +560,50 @@ export function openCuttingToolReturnScannerModal(opts = {}) {
 
     body.innerHTML = `
       <div class="rev-scan-grid">
-        <div class="rev-scan-input-row">
-          <label class="rev-field-label">Skeniraj barkod alata za povraćaj</label>
-          <input type="text" id="revRznRetIn" class="rev-input rev-input--scan" placeholder="Skeniraj barkod (RZN-…)" autocomplete="off" autofocus value="${escHtml(state.lastInput)}"/>
-        </div>
+        <section class="rev-qa-block">
+          <button type="button" class="rev-qa-cta rev-qa-cta--primary" id="revRznRetQa">
+            <span class="rev-qa-ico" aria-hidden="true">📷</span>
+            <span class="rev-qa-txt">
+              <span class="rev-qa-title">SKENIRAJ ZA POVRAĆAJ</span>
+              <span class="rev-qa-sub">RZN-… sa pločice — skener radi u seriji</span>
+            </span>
+          </button>
+        </section>
         ${itemsHtml}
         <label>Napomena povraćaja
           <textarea id="revRznRetNote" rows="2" class="rev-input">${escHtml(state.notes)}</textarea>
         </label>
+        <details class="rev-qa-manual">
+          <summary>Manuelni / HID unos (USB skener, klavijatura)</summary>
+          <div class="rev-scan-input-row">
+            <label class="rev-field-label">Skeniraj barkod alata za povraćaj</label>
+            <input type="text" id="revRznRetIn" class="rev-input rev-input--scan" placeholder="Skeniraj barkod (RZN-…)" autocomplete="off" value="${escHtml(state.lastInput)}"/>
+          </div>
+        </details>
       </div>`;
 
     foot.innerHTML = `
       <button type="button" class="rev-btn" data-rev-close>Otkaži</button>
-      <button type="button" class="rev-btn rev-btn--primary" id="revRznRetSubmit" ${state.items.length > 0 && !state.pending ? '' : 'disabled'}>${state.pending ? 'Čuvam…' : 'POTVRDI POVRAĆAJ'}</button>`;
+      <button type="button" class="rev-btn rev-btn--primary rev-btn--lg rev-qa-submit" id="revRznRetSubmit" ${state.items.length > 0 && !state.pending ? '' : 'disabled'}>${state.pending ? 'Čuvam…' : `POTVRDI POVRAĆAJ (${state.items.length})`}</button>`;
 
     bindEvents();
   }
 
   function bindEvents() {
+    overlay.querySelector('#revRznRetQa')?.addEventListener('click', () => {
+      openReversiScanOverlay({
+        title: 'Skeniraj povraćaj',
+        hint: 'RZN-… sa pločice — vraća se sa otvorenog reversa',
+        acceptKinds: ['CUTTING'],
+        continuous: true,
+        onResult: async (parsed) => {
+          await handleReturnScan(parsed.barcode);
+        },
+      });
+    });
+
     const inp = overlay.querySelector('#revRznRetIn');
     if (inp) {
-      inp.focus();
       inp.addEventListener('keydown', (ev) => {
         if (ev.key === 'Enter') {
           ev.preventDefault();

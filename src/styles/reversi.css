@@ -1208,6 +1208,110 @@ html[data-theme='light'] .rev-stat-card--teal .rev-stat-value {
 
 /* ─── Scanner modal (Sprint RZ-3) ──────────────────────────────────── */
 
+/* Quick-action CTA blok (sinhron sa .m-cta iz mobile.css) */
+.rev-qa-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.rev-qa-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .rev-qa-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rev-qa-cta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 84px;
+  padding: 18px 20px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  font-family: inherit;
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 80ms ease, box-shadow 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rev-qa-cta:active {
+  transform: scale(0.98);
+}
+
+.rev-qa-cta:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.rev-qa-cta--primary {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.35);
+}
+
+.rev-qa-cta--secondary {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.rev-qa-ico {
+  font-size: 30px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.rev-qa-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rev-qa-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.rev-qa-sub {
+  font-size: 13px;
+  font-weight: 400;
+  opacity: 0.88;
+}
+
+.rev-qa-manual {
+  margin-top: 6px;
+}
+
+.rev-qa-manual > summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--rev-muted, #6b7b8e);
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.rev-qa-manual[open] > summary {
+  margin-bottom: 10px;
+}
+
+.rev-btn--lg {
+  min-height: 56px;
+  padding: 14px 22px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .rev-modal.rev-modal--scanner {
   max-width: 720px;
 }
