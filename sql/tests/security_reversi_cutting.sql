@@ -145,10 +145,10 @@ SELECT throws_ok(
 );
 
 -- =========================================================================
--- Test 6: rev_issue_cutting_reversal happy path (magacioner)
+-- Test 6: rev_issue_cutting_reversal happy path (admin — loc_create_movement zahteva edit ulogu)
 -- =========================================================================
 SELECT set_config('request.jwt.claims',
-  jsonb_build_object('email','rzn-mag@test.local')::text, true);
+  jsonb_build_object('email','rzn-admin@test.local')::text, true);
 
 SET LOCAL row_security = off;
 SELECT lives_ok(
@@ -163,7 +163,7 @@ SELECT lives_ok(
         )
       )
      ) $$,
-  'rev_issue_cutting_reversal radi sa CUTTING_TOOL payload-om'
+  'rev_issue_cutting_reversal radi sa CUTTING_TOOL payload-om (admin JWT)'
 );
 SET LOCAL row_security = on;
 
@@ -231,7 +231,7 @@ SELECT is(
 -- Test 11: rev_confirm_cutting_return parcijalni povraćaj (vrati 2 od 5)
 -- =========================================================================
 SELECT set_config('request.jwt.claims',
-  jsonb_build_object('email','rzn-mag@test.local')::text, true);
+  jsonb_build_object('email','rzn-admin@test.local')::text, true);
 
 DO $$
 DECLARE
