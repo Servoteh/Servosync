@@ -119,6 +119,32 @@ export function mapDbUcesnik(d) {
  * @param {string|null} filters.projekatId
  * @param {number} [filters.limit=200]
  */
+/**
+ * Sastanci gde je korisnik učesnik (bez učitavanja cele liste).
+ * @param {string} email
+ * @param {{ excludeLocked?: boolean, limit?: number }} [opts]
+ */
+export async function loadSastanciForUcesnik(email, { excludeLocked = true, limit = 50 } = {}) {
+  if (!email || !getIsOnline()) return [];
+  const norm = String(email).toLowerCase().trim();
+  const ucesnici = await sbReq(
+    `sastanak_ucesnici?email=eq.${encodeURIComponent(norm)}&select=sastanak_id&limit=200`,
+  );
+  const ids = [...new Set(
+    (Array.isArray(ucesnici) ? ucesnici : []).map(u => u.sastanak_id).filter(Boolean),
+  )];
+  if (!ids.length) return [];
+  const params = [
+    `id=in.(${ids.join(',')})`,
+    `select=${SASTANCI_COLUMNS}`,
+    'order=datum.desc,vreme.desc.nullslast',
+    `limit=${limit}`,
+  ];
+  if (excludeLocked) params.push('status=neq.zakljucan');
+  const data = await sbReq(`sastanci?${params.join('&')}`);
+  return Array.isArray(data) ? data.map(mapDbSastanak) : [];
+}
+
 export async function loadSastanci(filters = {}) {
   if (!getIsOnline()) return [];
   const orderParam = filters.orderDatum === 'asc'
@@ -282,30 +308,14 @@ export async function updateUcesnikPrisustvo(sastanakId, email, prisutan) {
 export async function loadDashboardStats() {
   if (!getIsOnline()) return null;
 
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  const in14days = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
-  const in14Str = in14days.toISOString().slice(0, 10);
-
-  /* Paralelno: 4 count requesta. PostgREST head=true + Prefer:
-     count=exact ne ide kroz naš sbReq jer on ne čita header-e. Umesto
-     toga čitamo redove sa limit=1 i koristimo `select=id` + odvojen count
-     poziv preko `Prefer: count=exact`. Da ne komplikujemo, vraćamo redove. */
-
-  const [planirani, uToku, akcijeOpen, pmPending] = await Promise.all([
-    sbReq(`sastanci?select=id&status=eq.planiran&datum=gte.${todayStr}&datum=lte.${in14Str}`),
-    sbReq(`sastanci?select=id&status=eq.u_toku`),
-    sbReq(`v_akcioni_plan?select=id,effective_status&effective_status=in.(otvoren,u_toku,kasni)`),
-    sbReq(`pm_teme?select=id&status=eq.predlog`),
-  ]);
-
-  const akcijeRows = Array.isArray(akcijeOpen) ? akcijeOpen : [];
+  const data = await sbReq('rpc/sast_dashboard_stats', 'POST', {});
+  if (!data || typeof data !== 'object') return null;
 
   return {
-    sastancUpcoming: Array.isArray(planirani) ? planirani.length : 0,
-    sastancUToku: Array.isArray(uToku) ? uToku.length : 0,
-    akcijeOtvoreno: akcijeRows.length,
-    akcijeKasni: akcijeRows.filter(r => r.effective_status === 'kasni').length,
-    pmTemeNaCekanju: Array.isArray(pmPending) ? pmPending.length : 0,
+    sastancUpcoming: Number(data.sastanc_upcoming) || 0,
+    sastancUToku: Number(data.sastanc_u_toku) || 0,
+    akcijeOtvoreno: Number(data.akcije_otvoreno) || 0,
+    akcijeKasni: Number(data.akcije_kasni) || 0,
+    pmTemeNaCekanju: Number(data.pm_teme_na_cekanju) || 0,
   };
 }

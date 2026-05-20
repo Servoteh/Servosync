@@ -40,10 +40,10 @@ export async function renderAkcioniPlanTab(host, { canEdit }) {
 
   host.innerHTML = `
     <div class="sast-section">
-      <div class="sst-view-bar">
-        <div class="sst-toggle" role="group" aria-label="Prikaz akcija">
-          <button type="button" class="sst-tgl-btn${view === 'lista' ? ' is-on' : ''}" data-ap-view="lista">☰ Lista</button>
-          <button type="button" class="sst-tgl-btn${view === 'kanban' ? ' is-on' : ''}" data-ap-view="kanban">⬛ Kanban</button>
+      <div class="sast-view-bar">
+        <div class="sast-toggle" role="group" aria-label="Prikaz akcija">
+          <button type="button" class="sast-tgl-btn${view === 'lista' ? ' is-on' : ''}" data-ap-view="lista">☰ Lista</button>
+          <button type="button" class="sast-tgl-btn${view === 'kanban' ? ' is-on' : ''}" data-ap-view="kanban">⬛ Kanban</button>
         </div>
         <div class="sast-toolbar-actions">
           <button type="button" class="btn" id="apExportCsv" title="CSV export">⬇ CSV</button>

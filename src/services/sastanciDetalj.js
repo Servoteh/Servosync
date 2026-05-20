@@ -114,10 +114,10 @@ export async function otvojiPonovo(id) {
 
 /** * → zakljucan + kreira/ažurira arhiva snapshot */
 export async function zakljucajSaSapisanikom(id) {
-  // Zamenjeno sa sast_zakljucaj_sastanak RPC (Sprint 2, H3).
   const result = await zakljucajSastanakRpc(id);
-  if (!result?.ok) return null;
-  return loadSastanak(id);
+  if (!result?.ok) return result;
+  const sastanak = await loadSastanak(id);
+  return { ok: true, sastanak, result: result.result };
 }
 
 async function updateStatus(id, status, extra) {
