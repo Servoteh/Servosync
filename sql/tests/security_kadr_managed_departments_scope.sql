@@ -14,7 +14,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(14);
+SELECT plan(13);
 
 -- Privremeno za seed (isto kao security_has_edit_role.sql)
 SET LOCAL row_security = off;

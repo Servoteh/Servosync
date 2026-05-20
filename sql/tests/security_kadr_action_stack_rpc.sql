@@ -15,7 +15,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT extensions.plan(8);
+SELECT plan(8);
 
 CREATE OR REPLACE FUNCTION test_as_set_jwt_email(p_email text)
 RETURNS void LANGUAGE sql AS $$
@@ -248,5 +248,5 @@ SELECT ok(
   'action stack: opadajući priority'
 );
 
-SELECT * FROM extensions.finish();
+SELECT * FROM finish();
 ROLLBACK;

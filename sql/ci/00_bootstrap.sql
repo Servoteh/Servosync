@@ -30,11 +30,9 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ── Ekstenzije ──────────────────────────────────────────────────────────
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS pgtap;
-
--- Placeholder schema `extensions` (Supabase je koristi za pg_cron; CI preskače).
 CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 -- ── auth schema + stub-ovi ──────────────────────────────────────────────
 CREATE SCHEMA IF NOT EXISTS auth;

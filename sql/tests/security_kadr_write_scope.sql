@@ -92,32 +92,32 @@ $$;
 -- 1–2) menadzment-1 (scope Proizvodnja)
 SELECT test_set_jwt_email('kadr-write-mgr1@test.local');
 SELECT is(
-  (SELECT count(*)::int FROM (
+  (WITH _u AS (
     UPDATE public.absences SET note = 'kwr touch prod'
     WHERE id = 'aaaaaaaa-1111-1111-1111-111111111101'::uuid
     RETURNING 1
-  ) _u),
+  ) SELECT count(*)::int FROM _u),
   1,
   'menadzment-1: UPDATE absences za Proizvodnju → 1 red'
 );
 
 SELECT is(
-  (SELECT count(*)::int FROM (
+  (WITH _u2 AS (
     UPDATE public.absences SET note = 'kwr illegal'
     WHERE id = 'aaaaaaaa-2222-2222-2222-222222222202'::uuid
     RETURNING 1
-  ) _u2),
+  ) SELECT count(*)::int FROM _u2),
   0,
   'menadzment-1: UPDATE absences za Komercijalu → 0 redova'
 );
 
 -- 3) menadzment-1 DELETE vacation_entitlement van scope-a
 SELECT is(
-  (SELECT count(*)::int FROM (
+  (WITH _d1 AS (
     DELETE FROM public.vacation_entitlements
     WHERE id = 'bbbbbbbb-2222-2222-2222-222222222202'::uuid
     RETURNING 1
-  ) _d1),
+  ) SELECT count(*)::int FROM _d1),
   0,
   'menadzment-1: DELETE vacation_entitlement van scope-a → 0 redova'
 );
@@ -134,11 +134,11 @@ SELECT throws_ok(
 );
 
 SELECT is(
-  (SELECT count(*)::int FROM (
+  (WITH _de AS (
     DELETE FROM public.employees
     WHERE id = 'eeeeeeee-2222-2222-2222-222222222202'::uuid
     RETURNING 1
-  ) _de),
+  ) SELECT count(*)::int FROM _de),
   0,
   'menadzment-1: DELETE employees → 0 redova'
 );
@@ -146,11 +146,11 @@ SELECT is(
 -- 6) menadzment-3 (NULL scope legacy) UPDATE Komercijala
 SELECT test_set_jwt_email('kadr-write-mgr3@test.local');
 SELECT is(
-  (SELECT count(*)::int FROM (
+  (WITH _u3 AS (
     UPDATE public.absences SET note = 'kwr null scope'
     WHERE id = 'aaaaaaaa-2222-2222-2222-222222222202'::uuid
     RETURNING 1
-  ) _u3),
+  ) SELECT count(*)::int FROM _u3),
   1,
   'menadzment-3 (NULL scope): UPDATE absences Komercijala → 1 red'
 );
@@ -158,18 +158,18 @@ SELECT is(
 -- 7–8) HR i admin
 SELECT test_set_jwt_email('kadr-write-hr@test.local');
 SELECT is(
-  (SELECT count(*)::int FROM (
+  (WITH _hr AS (
     UPDATE public.absences SET note = 'kwr hr'
     WHERE id = 'aaaaaaaa-2222-2222-2222-222222222202'::uuid
     RETURNING 1
-  ) _hr),
+  ) SELECT count(*)::int FROM _hr),
   1,
   'HR: UPDATE bilo koje odsustvo → 1 red'
 );
 
 SELECT test_set_jwt_email('kadr-write-admin@test.local');
 SELECT is(
-  (SELECT count(*)::int FROM (
+  (WITH _ad AS (
     INSERT INTO public.absences (id, employee_id, type, date_from, date_to, days_count, note)
     VALUES (
       'aaaaaaaa-3333-3333-3333-333333333303',
@@ -181,7 +181,7 @@ SELECT is(
       'admin insert'
     )
     RETURNING 1
-  ) _ad),
+  ) SELECT count(*)::int FROM _ad),
   1,
   'admin: INSERT absences → 1 red'
 );
@@ -189,11 +189,11 @@ SELECT is(
 -- 9) viewer ne menja
 SELECT test_set_jwt_email('kadr-write-viewer-self@test.local');
 SELECT is(
-  (SELECT count(*)::int FROM (
+  (WITH _vw AS (
     UPDATE public.absences SET note = 'kwr viewer'
     WHERE id = 'aaaaaaaa-1111-1111-1111-111111111101'::uuid
     RETURNING 1
-  ) _vw),
+  ) SELECT count(*)::int FROM _vw),
   0,
   'viewer: UPDATE absences → 0 redova'
 );
@@ -213,7 +213,7 @@ SELECT is(public.current_user_is_hr(), true,
 -- 12) vr_insert self-submit (viewer + submitted_by = jwt)
 SELECT test_set_jwt_email('kadr-write-viewer-self@test.local');
 SELECT is(
-  (SELECT count(*)::int FROM (
+  (WITH _vr AS (
     INSERT INTO public.vacation_requests (
       id, employee_id, year, date_from, date_to, days_count, note, status, submitted_by
     )
@@ -229,7 +229,7 @@ SELECT is(
       'kadr-write-viewer-self@test.local'
     )
     RETURNING 1
-  ) _vr),
+  ) SELECT count(*)::int FROM _vr),
   1,
   'vr_insert: self-submit (submitted_by = jwt) za viewer → 1 red'
 );
@@ -246,7 +246,7 @@ SELECT is(
 -- 14) PM: INSERT absence za Komercijala
 SELECT test_set_jwt_email('kadr-write-pm@test.local');
 SELECT is(
-  (SELECT count(*)::int FROM (
+  (WITH _pm AS (
     INSERT INTO public.absences (id, employee_id, type, date_from, date_to, days_count, note)
     VALUES (
       'aaaaaaaa-4444-4444-4444-444444444404',
@@ -258,7 +258,7 @@ SELECT is(
       'pm insert kom'
     )
     RETURNING 1
-  ) _pm),
+  ) SELECT count(*)::int FROM _pm),
   1,
   'pm: INSERT absences za Komercijalu → 1 red'
 );
@@ -286,11 +286,11 @@ SELECT throws_ok(
 -- 16–17) HR INSERT employee; viewer ne INSERT child
 SELECT test_set_jwt_email('kadr-write-hr@test.local');
 SELECT is(
-  (SELECT count(*)::int FROM (
+  (WITH _hei AS (
     INSERT INTO public.employees (id, full_name, department, email)
     VALUES ('eeeeeeee-8888-8888-8888-888888888808', 'HR novi', 'Proizvodnja', 'hr-novi-kwr@test.local')
     RETURNING 1
-  ) _hei),
+  ) SELECT count(*)::int FROM _hei),
   1,
   'HR: INSERT employees → 1 red'
 );

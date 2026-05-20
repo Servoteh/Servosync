@@ -76,6 +76,8 @@ sql/migrations/add_maintenance_module.sql
 sql/migrations/add_reversi_module.sql
 sql/migrations/add_reversi_reversal_pdf_storage.sql
 sql/migrations/add_reversi_cutting_tools.sql
+# Scoped UNIQUE na loc_locations + rev_get_or_create_recipient_location UPSERT (pgTAP reversi cutting)
+sql/migrations/loc_location_code_scope_unique_strip_prefix.sql
 # BigTehn artikli mirror (R_Artikli + lookup tabele) — referenciraju rev_tools / rev_cutting_tool_catalog,
 # pa mora posle add_reversi_cutting_tools.sql.
 sql/migrations/add_bigtehn_artikli_cache.sql

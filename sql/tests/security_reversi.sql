@@ -13,7 +13,6 @@ SELECT plan(11);
 SET LOCAL row_security = off;
 
 INSERT INTO public.user_roles (email, role, project_id, is_active) VALUES
-  ('rev-no-role@test.local',  'user',     NULL, true),
   ('rev-viewer@test.local',  'viewer',   NULL, true),
   ('rev-admin@test.local',   'admin',    NULL, true),
   ('rev-mag@test.local',     'magacioner', NULL, true),

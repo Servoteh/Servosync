@@ -10,7 +10,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(6);
+SELECT plan(7);
 
 -- ─── Seed: user_roles (admin piše posle enable_user_roles_rls_proper) ─────
 SET LOCAL row_security = off;
