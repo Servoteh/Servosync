@@ -266,21 +266,10 @@ SELECT is(
 -- 10) Idempotent replay — admin pozove dvaput sa istim UUID → idempotent
 --     (verifikuje da Härd-2 nije pokvario Härd-1 ponašanje)
 -- =========================================================================
-RESET ROLE;
-SET LOCAL row_security = off;
-INSERT INTO auth.users (id, email) VALUES
-  ('00000000-0000-0000-0000-0000000000a8', 'h2-admin-idemp@test.local')
-ON CONFLICT (id) DO NOTHING;
-INSERT INTO public.user_roles (email, role, is_active) VALUES
-  ('h2-admin-idemp@test.local', 'admin', true)
-ON CONFLICT (email) DO NOTHING;
-SET LOCAL row_security = on;
-SET LOCAL ROLE authenticated;
-
-SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a8', true);
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a1', true);
 SELECT set_config('request.jwt.claims',
-                  jsonb_build_object('sub','00000000-0000-0000-0000-0000000000a8',
-                                     'email','h2-admin-idemp@test.local')::text,
+                  jsonb_build_object('sub','00000000-0000-0000-0000-0000000000a1',
+                                     'email','h2-admin@test.local')::text,
                   true);
 
 DO $t10$
@@ -296,8 +285,8 @@ BEGIN
 END $t10$;
 
 SELECT is(
-  (current_setting('t10.r2')::jsonb->>'idempotent')::boolean,
-  true,
+  current_setting('t10.r2')::jsonb->>'idempotent',
+  'true',
   'H-2 ne ruši H-1 idempotency: drugi poziv vraća idempotent=true'
 );
 SELECT is(
