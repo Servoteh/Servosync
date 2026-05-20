@@ -33,29 +33,11 @@ let _view = 'list';
 /** @type {object|null} */
 let _editorOpts = null;
 
-function findHidraulikaCategoryId(categories) {
-  const c = (categories || []).find(
-    x => x.slug === 'hidraulika' || /hidraulik/i.test(String(x.naziv || '')),
-  );
-  return c?.id || null;
-}
-
-function sectionFilterPatch(section, categories) {
-  const hidId = findHidraulikaCategoryId(categories);
-  if (section === 'hidraulika' && hidId) {
-    return { section: 'hidraulika', categoryIds: [hidId] };
-  }
-  if (section === 'hidraulika') {
-    return { section: 'hidraulika', categoryIds: [] };
-  }
-  return { section: 'all', categoryIds: [] };
-}
-
-function defaultTipForSection(categories) {
-  const snap = snapshotEngTips();
-  if (snap.filter.section !== 'hidraulika') return null;
-  const hidId = findHidraulikaCategoryId(categories);
-  return hidId ? { category_id: hidId } : null;
+/** Ako je tačno jedna kategorija u filteru, predloži je u editoru. */
+function defaultTipFromCategoryFilter() {
+  const ids = snapshotEngTips().filter.categoryIds || [];
+  if (ids.length === 1) return { category_id: ids[0] };
+  return null;
 }
 
 /**
@@ -178,30 +160,17 @@ function renderCategoryChipsHtml(s) {
     ${chips}`;
 }
 
-function renderSectionTabsHtml(s) {
-  const sec = s.filter.section === 'hidraulika' ? 'hidraulika' : 'all';
-  return `
-    <nav class="pb-saveti-section-tabs" role="tablist" aria-label="Oblast saveta">
-      <button type="button" class="pb-saveti-section-tab" role="tab" data-saveti-section="all" aria-selected="${sec === 'all' ? 'true' : 'false'}">Svi saveti</button>
-      <button type="button" class="pb-saveti-section-tab" role="tab" data-saveti-section="hidraulika" aria-selected="${sec === 'hidraulika' ? 'true' : 'false'}">Hidraulika</button>
-    </nav>`;
-}
-
 function savetiTabHtml(s, online) {
   const f = s.filter;
-  const section = f.section === 'hidraulika' ? 'hidraulika' : 'all';
-  const hidMissing = section === 'hidraulika' && !findHidraulikaCategoryId(s.categories);
   return `
     <div class="pb-saveti-root">
       ${!online ? '<div class="pb-readonly-banner" role="status">Saveti zahtevaju internet.</div>' : ''}
-      ${renderSectionTabsHtml(s)}
-      ${hidMissing ? '<div class="pb-readonly-banner" role="status">Kategorija Hidraulika nije u bazi. Admin: Podešavanja → Kategorije saveta.</div>' : ''}
       <div class="pb-saveti-controls">
         <div class="pb-saveti-toolbar">
           <input type="search" class="pb-saveti-search" id="pbSavetiSearch" placeholder="Pretraga saveta..." value="${escHtml(f.search)}" ${online ? '' : 'disabled'} aria-label="Pretraga saveta" />
           <button type="button" class="pb-primary-btn pb-saveti-new-btn" id="pbSavetiNew" ${s.canWrite ? '' : 'hidden'} ${online ? '' : 'disabled'}>+ Novi savet</button>
         </div>
-        <div class="pb-saveti-chips" id="pbSavetiChips" role="group" aria-label="Kategorije" ${section === 'hidraulika' ? 'hidden' : ''}>
+        <div class="pb-saveti-chips" id="pbSavetiChips" role="group" aria-label="Kategorije">
           ${renderCategoryChipsHtml(s)}
         </div>
         <div class="pb-saveti-toggles-row">
@@ -228,10 +197,9 @@ function renderTipsListInner(s) {
     return `<div class="pb-saveti-state pb-saveti-state--error"><p class="pb-muted">${escHtml(String(s.error))}</p></div>`;
   }
   if (!s.tips.length) {
-    const hid = s.filter.section === 'hidraulika';
     return `<div class="pb-saveti-state">
       <p class="pb-saveti-empty-title">Nema saveta</p>
-      <p class="pb-muted">${hid ? 'Nema saveta u oblasti Hidraulika. Dodajte prvi savet sa kategorijom Hidraulika.' : 'Promenite filtere ili pretragu, ili dodajte prvi savet.'}</p>
+      <p class="pb-muted">Promenite filtere ili pretragu, ili dodajte prvi savet.</p>
     </div>`;
   }
   return `<div class="pb-tips-list">${s.tips.map(t => renderTipCard(t)).join('')}</div>`;
@@ -285,14 +253,6 @@ function paintSavetiDom(mountEl, s, online) {
   if (countEl) countEl.textContent = savetiCountLabel(s);
   const search = mountEl.querySelector('#pbSavetiSearch');
   if (search && search.value !== (s.filter.search || '')) search.value = s.filter.search || '';
-  const sec = s.filter.section === 'hidraulika' ? 'hidraulika' : 'all';
-  mountEl.querySelectorAll('[data-saveti-section]').forEach(btn => {
-    const on = btn.getAttribute('data-saveti-section') === sec;
-    btn.setAttribute('aria-selected', on ? 'true' : 'false');
-    btn.classList.toggle('active', on);
-  });
-  const chipsWrap = mountEl.querySelector('#pbSavetiChips');
-  if (chipsWrap) chipsWrap.hidden = sec === 'hidraulika';
   paintSavetiChips(mountEl, s);
   const newBtn = mountEl.querySelector('#pbSavetiNew');
   if (newBtn) {
@@ -306,15 +266,6 @@ function paintSavetiDom(mountEl, s, online) {
 function wireSavetiTab(root, ctx) {
   if (root.dataset.pbSavetiWired === '1') return;
   root.dataset.pbSavetiWired = '1';
-
-  root.querySelectorAll('[data-saveti-section]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const section = btn.getAttribute('data-saveti-section') || 'all';
-      const snap = snapshotEngTips();
-      setEngTipsFilter(sectionFilterPatch(section, snap.categories));
-      void reloadTips();
-    });
-  });
 
   root.querySelector('#pbSavetiSearch')?.addEventListener('input', e => {
     const v = e.target.value || '';
@@ -364,7 +315,7 @@ function wireSavetiTab(root, ctx) {
     e.stopPropagation();
     const m = modalCtx(root, ctx);
     openSavetiTipEditor({
-      tip: defaultTipForSection(m.categories),
+      tip: defaultTipFromCategoryFilter(),
       projects: m.projects,
       categories: m.categories,
       canEdit: true,
@@ -443,10 +394,6 @@ async function loadCategoriesAndTips() {
   try {
     const cats = await listEngTipCategories();
     setEngTipCategories(cats);
-    const snap = snapshotEngTips();
-    if (snap.filter.section === 'hidraulika') {
-      setEngTipsFilter(sectionFilterPatch('hidraulika', cats));
-    }
     if (isAdmin() && !snapshotEngTips().filter.includeDrafts) {
       setEngTipsFilter({ includeDrafts: true });
     }

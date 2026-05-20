@@ -12,7 +12,6 @@ const DEFAULT_FILTER = Object.freeze({
   myOnly: false,
   includeDrafts: false,
   sort: 'recent',
-  section: 'all',
 });
 
 function readPersistedFilter() {
@@ -28,7 +27,6 @@ function readPersistedFilter() {
       myOnly: !!parsed.myOnly,
       includeDrafts: !!parsed.includeDrafts,
       sort: parsed.sort === 'popular' ? 'popular' : 'recent',
-      section: parsed.section === 'hidraulika' ? 'hidraulika' : 'all',
       search: '',
     };
   } catch {
