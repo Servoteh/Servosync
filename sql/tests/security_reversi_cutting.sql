@@ -149,6 +149,11 @@ SELECT throws_ok(
 
 -- Preduslov za loc_create_movement u issue: placement na izvornoj lokaciji (from_has_no_placement)
 SET LOCAL row_security = off;
+DELETE FROM public.loc_item_placements p
+USING public.rev_cutting_tool_catalog c
+WHERE p.item_ref_table = 'rev_cutting_tool_catalog'
+  AND p.item_ref_id = c.barcode
+  AND c.id = '11111111-1111-1111-1111-111111111111'::uuid;
 INSERT INTO public.loc_item_placements (
   item_ref_table, item_ref_id, order_no, location_id, placement_status, quantity
 )
@@ -160,10 +165,7 @@ SELECT
   'ACTIVE'::public.loc_placement_status_enum,
   70::numeric(12, 3)
 FROM public.rev_cutting_tool_catalog c
-WHERE c.id = '11111111-1111-1111-1111-111111111111'::uuid
-ON CONFLICT (item_ref_table, item_ref_id, order_no, location_id) DO UPDATE SET
-  placement_status = EXCLUDED.placement_status,
-  quantity = GREATEST(public.loc_item_placements.quantity, EXCLUDED.quantity);
+WHERE c.id = '11111111-1111-1111-1111-111111111111'::uuid;
 
 -- =========================================================================
 -- Test 6: rev_issue_cutting_reversal happy path (admin — loc_create_movement zahteva edit ulogu)
