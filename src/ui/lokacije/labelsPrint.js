@@ -110,7 +110,8 @@ export const FORMAT_DIMS = {
     gapScreen: '6mm',
     gapPrint: '0',
     rowsPerPage: 6,
-    shelfCodeOnlyPt: 42,
+    /** Visina glifa ~40 mm na nalepnici 48 mm (lepimo na visinu). */
+    shelfCodeOnlyMm: 40,
   },
   /* Dve × 105 mm širine = tačno portrait A4 210 mm; margin 0 u štampačkom @page kada je dostupno. */
   'a4-105x74': {
@@ -165,8 +166,19 @@ function shelfLabelsHtmlShell(count, codeType, format, withBarcode) {
   const pageMarginA4 = !isTsc && dims.pageMargins != null ? dims.pageMargins : '8mm';
   const gapScreen = dims.gapScreen != null ? dims.gapScreen : isLarge ? '5mm' : '4mm';
   const gapPrint = dims.gapPrint != null ? dims.gapPrint : isCompact ? '3mm' : isLarge ? '5mm' : '0';
-  const labelPadPrint = isTwoUp105 ? (withBarcode ? '1.5mm 2mm' : '0') : isLarge ? '2.5mm' : '3mm';
+  const labelPadPrint = isTwoUp105
+    ? withBarcode
+      ? '1.5mm 2mm'
+      : isTopStick48
+        ? '1.5mm 2mm 0'
+        : '0'
+    : isLarge
+      ? '2.5mm'
+      : '3mm';
   const shelfCodePt = dims.shelfCodeOnlyPt != null ? dims.shelfCodeOnlyPt : isTopStick48 ? 42 : 36;
+  const shelfCodeFontSize =
+    dims.shelfCodeOnlyMm != null ? `${dims.shelfCodeOnlyMm}mm` : `${shelfCodePt}pt`;
+  const shelfCodeOnlyTopAlign = dims.shelfCodeOnlyMm != null;
 
   /* TSC put zapravo ide preko TSPL2 mreže — browser je samo backup preview.
    * A4 put = stvarna fizička štampa preko Chrome dijaloga. */
@@ -261,15 +273,18 @@ function shelfLabelsHtmlShell(count, codeType, format, withBarcode) {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     .label.label-code-only {
-      justify-content: center;
+      justify-content: ${shelfCodeOnlyTopAlign ? 'flex-start' : 'center'};
       align-items: center;
-      padding: 0;
+      padding: ${shelfCodeOnlyTopAlign ? '1.5mm 2mm 0' : '0'};
     }
     .label-shelf-code {
-      font-size: ${shelfCodePt}pt;
+      font-size: ${shelfCodeFontSize};
       font-weight: 900;
-      line-height: 1;
-      letter-spacing: 0.03em;
+      line-height: ${shelfCodeOnlyTopAlign ? '0.92' : '1'};
+      letter-spacing: 0.02em;
+      max-width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     @media print {
