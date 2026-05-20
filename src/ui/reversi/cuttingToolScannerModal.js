@@ -249,7 +249,7 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
 
     foot.innerHTML = `
       <button type="button" class="rev-btn" data-rev-close>Otkaži</button>
-      <button type="button" class="rev-btn rev-btn--primary rev-btn--lg rev-qa-submit" id="revRznScanSubmit" ${canSubmit() ? '' : 'disabled'}>${state.pending ? 'Čuvam…' : `POTVRDI ZADUŽENJE (${state.lines.length})`}</button>`;
+      <button type="button" class="rev-btn rev-btn--primary rev-btn--lg rev-qa-submit" id="revRznScanSubmit" ${canSubmit() ? '' : 'disabled'}>${state.pending ? 'Čuvam…' : `POTVRDI ZADUŽENJE${state.lines.length ? ` (${state.lines.length})` : ''}`}</button>`;
 
     bindEvents();
   }
@@ -272,7 +272,6 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
           }
           addLineFromCatalog(parsed.data, 1);
           paint();
-          promptEmployeeCardIfNeeded();
         },
       });
     });
@@ -322,6 +321,11 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
         state.lastInput = ev.target.value;
       });
     }
+
+    const det = overlay.querySelector('.rev-qa-manual');
+    det?.addEventListener('toggle', () => {
+      if (det.open) overlay.querySelector('#revRznScanIn')?.focus();
+    });
 
     overlay.querySelector('#revRznMSel')?.addEventListener('change', (ev) => {
       const code = ev.target.value;
@@ -584,7 +588,7 @@ export function openCuttingToolReturnScannerModal(opts = {}) {
 
     foot.innerHTML = `
       <button type="button" class="rev-btn" data-rev-close>Otkaži</button>
-      <button type="button" class="rev-btn rev-btn--primary rev-btn--lg rev-qa-submit" id="revRznRetSubmit" ${state.items.length > 0 && !state.pending ? '' : 'disabled'}>${state.pending ? 'Čuvam…' : `POTVRDI POVRAĆAJ (${state.items.length})`}</button>`;
+      <button type="button" class="rev-btn rev-btn--primary rev-btn--lg rev-qa-submit" id="revRznRetSubmit" ${state.items.length > 0 && !state.pending ? '' : 'disabled'}>${state.pending ? 'Čuvam…' : `POTVRDI POVRAĆAJ${state.items.length ? ` (${state.items.length})` : ''}`}</button>`;
 
     bindEvents();
   }
@@ -617,6 +621,12 @@ export function openCuttingToolReturnScannerModal(opts = {}) {
         state.lastInput = ev.target.value;
       });
     }
+
+    const retDet = overlay.querySelector('.rev-qa-manual');
+    retDet?.addEventListener('toggle', () => {
+      if (retDet.open) overlay.querySelector('#revRznRetIn')?.focus();
+    });
+
     overlay.querySelector('#revRznRetNote')?.addEventListener('input', (e) => {
       state.notes = e.target.value;
     });
