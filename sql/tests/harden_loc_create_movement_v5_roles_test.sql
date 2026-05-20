@@ -103,6 +103,23 @@ SELECT has_function(
 );
 
 -- =========================================================================
+-- 2) Nije autentifikovan (pre JWT simulacije) → not_authenticated
+-- =========================================================================
+SELECT is(
+  public.loc_create_movement(jsonb_build_object(
+    'item_ref_table',    'bigtehn_rn',
+    'item_ref_id',       'TP-H2-NOAUTH',
+    'order_no',          '9000',
+    'movement_type',     'INITIAL_PLACEMENT',
+    'quantity',          1,
+    'to_location_id',    '77777777-7777-7777-7777-777777777777',
+    'client_event_uuid', 'aaaa0009-0000-0000-0000-000000000009'
+  ))->>'error',
+  'not_authenticated',
+  'authz: bez JWT-a → not_authenticated (Härd-2 ne preteže Härd-1 auth check)'
+);
+
+-- =========================================================================
 -- Helper za test scenarije: pozovi loc_create_movement sa standardnim
 -- payload-om i vrati JSONB rezultat. Različite test grane samo menjaju
 -- jwt.claim.sub + jwt.claims.email pre poziva.
@@ -128,7 +145,7 @@ END;
 $$;
 
 -- =========================================================================
--- 2) Admin uloga → prolazi
+-- 3) Admin uloga → prolazi
 -- =========================================================================
 RESET ROLE;
 SET LOCAL ROLE authenticated;
@@ -145,7 +162,7 @@ SELECT is(
 );
 
 -- =========================================================================
--- 3) Random authenticated (nema ulogu i nije zaposleni) → blokiran
+-- 4) Random authenticated (nema ulogu i nije zaposleni) → blokiran
 -- =========================================================================
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a2', true);
 SELECT set_config('request.jwt.claims',
@@ -165,7 +182,7 @@ SELECT is(
 );
 
 -- =========================================================================
--- 4) Employee u Proizvodnji (dept 2) → prolazi
+-- 5) Employee u Proizvodnji (dept 2) → prolazi
 -- =========================================================================
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a3', true);
 SELECT set_config('request.jwt.claims',
@@ -180,7 +197,7 @@ SELECT is(
 );
 
 -- =========================================================================
--- 5) Employee u „Magacin i logistika" (sub_dept 8030, dept 8) → prolazi
+-- 6) Employee u „Magacin i logistika" (sub_dept 8030, dept 8) → prolazi
 -- =========================================================================
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a4', true);
 SELECT set_config('request.jwt.claims',
@@ -195,7 +212,7 @@ SELECT is(
 );
 
 -- =========================================================================
--- 6) Neaktivan employee u Proizvodnji → blokiran (is_active=false filter)
+-- 7) Neaktivan employee u Proizvodnji → blokiran (is_active=false filter)
 -- =========================================================================
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a5', true);
 SELECT set_config('request.jwt.claims',
@@ -210,7 +227,7 @@ SELECT is(
 );
 
 -- =========================================================================
--- 7) Employee u Marketingu (dept 7, nije u Härd-2 listi) → blokiran
+-- 8) Employee u Marketingu (dept 7, nije u Härd-2 listi) → blokiran
 -- =========================================================================
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a6', true);
 SELECT set_config('request.jwt.claims',
@@ -225,7 +242,7 @@ SELECT is(
 );
 
 -- =========================================================================
--- 8) Viewer uloga (nije u listi) + bez employee zapisa → blokiran
+-- 9) Viewer uloga (nije u listi) + bez employee zapisa → blokiran
 -- =========================================================================
 SET LOCAL row_security = off;
 INSERT INTO auth.users (id, email) VALUES
@@ -243,28 +260,6 @@ SELECT is(
   pg_temp.h2_call_create('aaaa0007-0000-0000-0000-000000000007'::uuid)->>'error',
   'not_authorized',
   'authz: viewer uloga bez employee zapisa → not_authorized'
-);
-
--- =========================================================================
--- 9) Nije autentifikovan (JWT nije postavljen) → not_authenticated
--- =========================================================================
-RESET ROLE;
-/* Prazan string ne briše prethodni sub GUC — nevalidan UUID → auth.uid() NULL. */
-SELECT set_config('request.jwt.claim.sub', 'not-a-valid-uuid', true);
-SELECT set_config('request.jwt.claims', '{}', true);
-
-SELECT is(
-  public.loc_create_movement(jsonb_build_object(
-    'item_ref_table',    'bigtehn_rn',
-    'item_ref_id',       'TP-H2-NOAUTH',
-    'order_no',          '9000',
-    'movement_type',     'INITIAL_PLACEMENT',
-    'quantity',          1,
-    'to_location_id',    '77777777-7777-7777-7777-777777777777',
-    'client_event_uuid', 'aaaa0009-0000-0000-0000-000000000009'
-  ))->>'error',
-  'not_authenticated',
-  'authz: bez JWT-a → not_authenticated (Härd-2 ne preteže Härd-1 auth check)'
 );
 
 -- =========================================================================
