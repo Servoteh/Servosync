@@ -43,14 +43,15 @@ ON CONFLICT (email) DO UPDATE SET
   managed_departments = EXCLUDED.managed_departments,
   managed_sub_department_ids = EXCLUDED.managed_sub_department_ids;
 
-INSERT INTO public.employees (id, full_name, department, email, is_active, sub_department_id)
+INSERT INTO public.employees (id, full_name, department, email, is_active, sub_department_id, department_id)
 VALUES
-  ('eeeeeeee-1111-1111-1111-111111111101', 'Radnik Proizvodnja', 'Proizvodnja', 'emp-prod-kwr@test.local', true, 640001),
-  ('eeeeeeee-2222-2222-2222-222222222202', 'Radnik Komercijala', 'Komercijala', 'emp-kom-kwr@test.local', true, 640002),
-  ('eeeeeeee-3333-3333-3333-333333333303', 'Sam Viewer', 'Proizvodnja', 'kadr-write-viewer-self@test.local', true, 640001)
+  ('eeeeeeee-1111-1111-1111-111111111101', 'Radnik Proizvodnja', 'Proizvodnja', 'emp-prod-kwr@test.local', true, 640001, 5),
+  ('eeeeeeee-2222-2222-2222-222222222202', 'Radnik Komercijala', 'Komercijala', 'emp-kom-kwr@test.local', true, 640002, 5),
+  ('eeeeeeee-3333-3333-3333-333333333303', 'Sam Viewer', 'Proizvodnja', 'kadr-write-viewer-self@test.local', true, 640001, 5)
 ON CONFLICT (id) DO UPDATE SET
   sub_department_id = EXCLUDED.sub_department_id,
   department = EXCLUDED.department,
+  department_id = EXCLUDED.department_id,
   is_active = EXCLUDED.is_active;
 
 INSERT INTO public.absences (id, employee_id, type, date_from, date_to, days_count, note)
@@ -74,6 +75,9 @@ DELETE FROM public.vacation_requests
 WHERE id = 'dddddddd-9999-9999-9999-999999999999';
 
 SET LOCAL row_security = on;
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
 
 CREATE OR REPLACE FUNCTION test_set_jwt_email(p_email text)
 RETURNS void LANGUAGE sql AS $$
@@ -165,7 +169,7 @@ SELECT test_set_jwt_email('kadr-write-admin@test.local');
 WITH _ad AS (
   INSERT INTO public.absences (id, employee_id, type, date_from, date_to, days_count, note)
   VALUES (
-    'aaaaaaaa-3333-3333-3333-333333333303',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaad1',
     'eeeeeeee-2222-2222-2222-222222222202',
     'godisnji',
     '2026-08-01',
@@ -239,7 +243,7 @@ SELECT test_set_jwt_email('kadr-write-pm@test.local');
 WITH _pm AS (
   INSERT INTO public.absences (id, employee_id, type, date_from, date_to, days_count, note)
   VALUES (
-    'aaaaaaaa-4444-4444-4444-444444444404',
+    'aaaaaaaa-bbbb-bbbb-bbbb-bbbbbbbbbb04',
     'eeeeeeee-2222-2222-2222-222222222202',
     'godisnji',
     '2026-09-01',

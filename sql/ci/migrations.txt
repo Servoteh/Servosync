@@ -55,6 +55,7 @@ sql/migrations/harden_kadr_menadzment_write_scope.sql
 sql/migrations/add_kadr_dashboard_kpis_rpc.sql
 sql/migrations/fix_kadr_dashboard_kpis_active_employees_company_wide.sql
 sql/migrations/add_kadr_dashboard_mini_reports_rpc.sql
+sql/migrations/add_kadr_notifications.sql
 sql/migrations/add_kadr_dashboard_action_stack_rpc.sql
 sql/migrations/refactor_managed_to_sub_department_ids.sql
 sql/migrations/update_dashboard_rpcs_for_sub_dept_scope.sql

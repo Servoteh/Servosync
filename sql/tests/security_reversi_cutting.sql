@@ -150,6 +150,7 @@ SELECT throws_ok(
 SELECT set_config('request.jwt.claims',
   jsonb_build_object('email','rzn-mag@test.local')::text, true);
 
+SET LOCAL row_security = off;
 SELECT lives_ok(
   $$ SELECT public.rev_issue_cutting_reversal(
       jsonb_build_object(
@@ -164,6 +165,7 @@ SELECT lives_ok(
      ) $$,
   'rev_issue_cutting_reversal radi sa CUTTING_TOOL payload-om'
 );
+SET LOCAL row_security = on;
 
 -- =========================================================================
 -- Test 7: stock_balance: source = 65 (70 - 5)

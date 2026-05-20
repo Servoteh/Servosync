@@ -118,6 +118,8 @@ BEGIN
     'to_location_id',    '77777777-7777-7777-7777-777777777777',
     'client_event_uuid', p_uuid::text
   ));
+EXCEPTION WHEN OTHERS THEN
+  RETURN jsonb_build_object('ok', false, 'error', SQLERRM);
 END;
 $$;
 
