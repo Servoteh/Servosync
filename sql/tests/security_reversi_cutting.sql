@@ -22,8 +22,11 @@ INSERT INTO public.user_roles (email, role, project_id, is_active) VALUES
   ('rzn-mag@test.local',    'magacioner', NULL, true)
 ON CONFLICT DO NOTHING;
 
-UPDATE auth.users SET email = 'rzn-mag@test.local'
-WHERE id = '00000000-0000-0000-0000-000000000001'::uuid;
+INSERT INTO auth.users (id, email) VALUES
+  ('00000000-0000-0000-0000-000000000001'::uuid, 'rzn-mag@test.local'),
+  ('00000000-0000-0000-0000-000000000002'::uuid, 'rzn-viewer@test.local'),
+  ('00000000-0000-0000-0000-000000000003'::uuid, 'rzn-admin@test.local')
+ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
 
 INSERT INTO public.employees (id, full_name, email, is_active) VALUES
   ('a1aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Rzn Operater A', 'rzn-op-a@ci.local', true),
@@ -146,22 +149,29 @@ SELECT throws_ok(
 
 -- Preduslov za loc_create_movement u issue: placement na izvornoj lokaciji (from_has_no_placement)
 SET LOCAL row_security = off;
-INSERT INTO public.loc_item_placements (item_ref_table, item_ref_id, location_id, placement_status)
+INSERT INTO public.loc_item_placements (
+  item_ref_table, item_ref_id, order_no, location_id, placement_status, quantity
+)
 SELECT
   'rev_cutting_tool_catalog',
   c.barcode,
+  '',
   'c3cccccc-cccc-cccc-cccc-cccccccccccc'::uuid,
-  'ACTIVE'::public.loc_placement_status_enum
+  'ACTIVE'::public.loc_placement_status_enum,
+  70::numeric(12, 3)
 FROM public.rev_cutting_tool_catalog c
 WHERE c.id = '11111111-1111-1111-1111-111111111111'::uuid
-ON CONFLICT (item_ref_table, item_ref_id) DO UPDATE
-  SET location_id = EXCLUDED.location_id, placement_status = 'ACTIVE';
+ON CONFLICT (item_ref_table, item_ref_id, order_no, location_id) DO UPDATE SET
+  placement_status = EXCLUDED.placement_status,
+  quantity = GREATEST(public.loc_item_placements.quantity, EXCLUDED.quantity);
 
 -- =========================================================================
 -- Test 6: rev_issue_cutting_reversal happy path (admin — loc_create_movement zahteva edit ulogu)
 -- =========================================================================
 SELECT set_config('request.jwt.claims',
   jsonb_build_object('email','rzn-admin@test.local')::text, true);
+SELECT set_config('request.jwt.claim.sub',
+  '00000000-0000-0000-0000-000000000003'::text, true);
 
 SET LOCAL row_security = off;
 SELECT lives_ok(

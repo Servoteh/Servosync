@@ -242,6 +242,7 @@ SELECT is(
 -- =========================================================================
 -- 9) Nije autentifikovan (JWT nije postavljen) → not_authenticated
 -- =========================================================================
+RESET ROLE;
 SELECT set_config('request.jwt.claim.sub', '', true);
 SELECT set_config('request.jwt.claims', '', true);
 
@@ -255,6 +256,8 @@ SELECT is(
 -- 10) Idempotent replay — admin pozove dvaput sa istim UUID → idempotent
 --     (verifikuje da Härd-2 nije pokvario Härd-1 ponašanje)
 -- =========================================================================
+RESET ROLE;
+SET LOCAL ROLE authenticated;
 SET LOCAL row_security = off;
 INSERT INTO auth.users (id, email) VALUES
   ('00000000-0000-0000-0000-0000000000a8', 'h2-admin-idemp@test.local')

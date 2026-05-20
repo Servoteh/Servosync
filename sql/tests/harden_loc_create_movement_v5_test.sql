@@ -61,6 +61,13 @@ SELECT set_config('request.jwt.claim.sub',
 -- =========================================================================
 -- 1) Idempotent replay (H15)
 -- =========================================================================
+SET LOCAL row_security = off;
+DELETE FROM public.loc_location_movements
+ WHERE item_ref_table = 'bigtehn_rn' AND item_ref_id = 'TP-IDEMP-1';
+DELETE FROM public.loc_item_placements
+ WHERE item_ref_table = 'bigtehn_rn' AND item_ref_id = 'TP-IDEMP-1';
+SET LOCAL row_security = on;
+
 DO $t1$
 DECLARE
   v_uuid uuid := 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01';
@@ -105,11 +112,14 @@ SELECT is(
   'idempotent replay: drugi poziv vraća isti id kao prvi'
 );
 SELECT is(
-  (SELECT quantity::numeric FROM public.loc_item_placements
-     WHERE item_ref_table = 'bigtehn_rn'
-       AND item_ref_id    = 'TP-IDEMP-1'
-       AND order_no       = '9000'
-       AND location_id    = '33333333-3333-3333-3333-333333333333'),
+  (SELECT lp.quantity::numeric
+     FROM public.loc_item_placements lp
+    WHERE lp.item_ref_table = 'bigtehn_rn'
+      AND lp.item_ref_id    = 'TP-IDEMP-1'
+      AND lp.order_no       = '9000'
+      AND lp.location_id    = '33333333-3333-3333-3333-333333333333'
+    ORDER BY lp.updated_at DESC NULLS LAST
+    LIMIT 1),
   5::numeric,
   'idempotent replay: quantity ostaje 5 (drugi poziv NIJE dodao 99)'
 );
