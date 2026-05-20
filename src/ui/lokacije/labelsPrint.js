@@ -19,9 +19,24 @@ import { escHtml, showToast } from '../../lib/dom.js';
 import { fetchLocations } from '../../services/lokacije.js';
 import { formatBigTehnRnzBarcode, formatBigTehnShortBarcode } from '../../lib/barcodeParse.js';
 import { buildShelfPrintBarcodeParts } from '../../lib/shelfBarcode.js';
+import {
+  compareLocationCodeNatural,
+  shelfBelongsToHall,
+  sortShelvesByHallThenCode,
+} from '../../lib/lokacijeSort.js';
+import { isHallType } from '../../lib/lokacijeTypes.js';
 import { buildTspLabelProgram, buildTspShelfLabelProgram } from '../../lib/tspl2.js';
 
 const SHELF_TYPES = ['SHELF', 'RACK', 'BIN'];
+
+const SHELF_LABEL_FORMATS = [
+  'a4-105x48',
+  'a4-105x74',
+  'wide-200x99',
+  'a4-large',
+  'a4-grid',
+  'tsc',
+];
 
 function removeEl(id) {
   document.getElementById(id)?.remove();
@@ -64,11 +79,12 @@ export async function dispatchOptionalNetworkLabelPrint(args) {
  * Format opcije za nalepnicu police:
  *   - 'wide-200x99' — 200×99 mm (portrait; podrazumevano — kod ima maksimalnu visinu za CODE128 na A4)
  *   - 'tsc'         — TSC ML340P 80×40mm (TSPL2 push, paralelni preview u browser-u)
- *   - 'a4-105x74'   — A4, 105×74,25 mm, 2 nalepnice u redu (puna širina 210 mm)
+ *   - 'a4-105x48'   — A4, TopStick 8715: 105×48 mm, 2×6 = 12 po listu (podrazumevano)
+ *   - 'a4-105x74'   — A4, 105×74,25 mm, 2×4 = 8 po listu
  *   - 'a4-large'    — A4, 80×80mm po nalepnici, 4 po stranici (2×2)
  *   - 'a4-grid'     — A4, kompaktni 3-kolona ~60mm raster (legacy)
  *
- * @typedef {'wide-200x99'|'tsc'|'a4-105x74'|'a4-large'|'a4-grid'} ShelfLabelFormat
+ * @typedef {'wide-200x99'|'tsc'|'a4-105x48'|'a4-105x74'|'a4-large'|'a4-grid'} ShelfLabelFormat
  * @typedef {'barcode'|'qr'} ShelfCodeType
  */
 
@@ -84,22 +100,43 @@ export const FORMAT_DIMS = {
     gapPrint: '2mm',
   },
   tsc:         { w: '80mm',    h: '40mm',    cols: 1, name: 'TSC 80×40mm' },
+  /* TopStick No. 8715 — 105×48 mm, 2 kolone × 6 redova = 12 nalepnica / A4. */
+  'a4-105x48': {
+    w: '105mm',
+    h: '48mm',
+    cols: 2,
+    name: 'A4 TopStick 8715 · 105×48 mm (12 po listu)',
+    pageMargins: '0',
+    gapScreen: '6mm',
+    gapPrint: '0',
+    rowsPerPage: 6,
+    shelfCodeOnlyPt: 42,
+  },
   /* Dve × 105 mm širine = tačno portrait A4 210 mm; margin 0 u štampačkom @page kada je dostupno. */
   'a4-105x74': {
     w: '105mm',
     h: '74.25mm',
     cols: 2,
-    name: 'A4 105×74,25 mm (2 u redu)',
+    name: 'A4 105×74,25 mm (8 po listu)',
     pageMargins: '0',
-    gapScreen: '10mm',
-    gapPrint: '0mm',
+    gapScreen: '8mm',
+    gapPrint: '0',
+    rowsPerPage: 4,
   },
   'a4-large':  { w: '80mm',    h: '80mm',    cols: 2, name: 'A4 80×80mm (2×2)' },
   'a4-grid':   { w: '60mm',    h: '40mm',    cols: 3, name: 'A4 kompakt (3 kol)' },
 };
 
-function shelfLabelHtml(loc, codeType, format) {
-  const cls = `label fmt-${format}`;
+function isA4TwoCol105Format(format) {
+  return format === 'a4-105x74' || format === 'a4-105x48';
+}
+
+function shelfLabelHtml(loc, codeType, format, withBarcode) {
+  const cls = `label fmt-${format}${withBarcode ? '' : ' label-code-only'}`;
+  const shelfCode = escHtml(String(loc.printShelfCode ?? loc.location_code ?? '').trim());
+  if (!withBarcode) {
+    return `<div class="${cls}"><div class="label-shelf-code">${shelfCode}</div></div>`;
+  }
   const footRaw = String(loc.printLabelFootline ?? '').trim();
   const foot =
     footRaw !== ''
@@ -116,39 +153,45 @@ function shelfLabelHtml(loc, codeType, format) {
     </div>`;
 }
 
-function shelfLabelsHtmlShell(count, codeType, format) {
-  const dims = FORMAT_DIMS[format] || FORMAT_DIMS['wide-200x99'];
-  const codeLabel = codeType === 'qr' ? 'QR kod' : 'Barkod';
+function shelfLabelsHtmlShell(count, codeType, format, withBarcode) {
+  const dims = FORMAT_DIMS[format] || FORMAT_DIMS['a4-105x48'];
+  const codeLabel = withBarcode ? (codeType === 'qr' ? 'QR kod' : 'Barkod') : 'samo šifra police';
   const isCompact = format === 'a4-grid';
   const isLarge = format === 'a4-large';
-  const isTwoUp105 = format === 'a4-105x74';
+  const isTwoUp105 = isA4TwoCol105Format(format);
+  const isTopStick48 = format === 'a4-105x48';
   const isWide200 = format === 'wide-200x99';
   const isTsc = format === 'tsc';
   const pageMarginA4 = !isTsc && dims.pageMargins != null ? dims.pageMargins : '8mm';
   const gapScreen = dims.gapScreen != null ? dims.gapScreen : isLarge ? '5mm' : '4mm';
   const gapPrint = dims.gapPrint != null ? dims.gapPrint : isCompact ? '3mm' : isLarge ? '5mm' : '0';
+  const labelPadPrint = isTwoUp105 ? (withBarcode ? '1.5mm 2mm' : '0') : isLarge ? '2.5mm' : '3mm';
+  const shelfCodePt = dims.shelfCodeOnlyPt != null ? dims.shelfCodeOnlyPt : isTopStick48 ? 42 : 36;
 
   /* TSC put zapravo ide preko TSPL2 mreže — browser je samo backup preview.
    * A4 put = stvarna fizička štampa preko Chrome dijaloga. */
   const pageRule = isTsc
     ? `@page { size: ${dims.w} ${dims.h}; margin: 0; }`
-    : `@page { size: A4; margin: ${pageMarginA4}; }`;
+    : `@page { size: A4 portrait; margin: ${pageMarginA4}; }`;
 
   /* Grafika + obavezni natpis HALA_-_POLICA ispod (isti slog kao barkod tekst). */
   const footPx =
     isWide200 ? '19pt'
     : isLarge ? '15pt'
+    : isTopStick48 ? '8pt'
     : isTwoUp105 ? '14pt'
     : isTsc ? '10pt'
     : '12pt';
   const codeBoxH =
     codeType === 'qr'
       ? isWide200 ? '76mm'
-        : isLarge || isTwoUp105 ? '60mm'
+        : isTopStick48 ? '32mm'
+        : isLarge || format === 'a4-105x74' ? '60mm'
         : '26mm'
       : isWide200 ? '74mm'
+        : isTopStick48 ? '30mm'
         : isLarge ? '66mm'
-        : isTwoUp105 ? '56mm'
+        : format === 'a4-105x74' ? '56mm'
         : isTsc ? '26mm'
         : '24mm';
   return `<!DOCTYPE html>
@@ -179,13 +222,14 @@ function shelfLabelsHtmlShell(count, codeType, format) {
       grid-template-columns: repeat(${dims.cols}, ${dims.w});
       gap: ${gapScreen};
       padding: 10px 16px 24px;
-      justify-content: center;
+      justify-content: ${isTwoUp105 ? 'flex-start' : 'center'};
+      ${isTwoUp105 ? 'width: 210mm; max-width: 210mm; margin: 0 auto;' : ''}
     }
     .label {
       width: ${dims.w};
       height: ${dims.h};
       border: 1px dashed #666;
-      border-radius: 2mm;
+      border-radius: ${isTwoUp105 ? '0' : '2mm'};
       padding: 3mm;
       text-align: center;
       page-break-inside: avoid;
@@ -216,14 +260,32 @@ function shelfLabelsHtmlShell(count, codeType, format) {
       letter-spacing: 0.02em;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
+    .label.label-code-only {
+      justify-content: center;
+      align-items: center;
+      padding: 0;
+    }
+    .label-shelf-code {
+      font-size: ${shelfCodePt}pt;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: 0.03em;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
     @media print {
       .toolbar { display: none; }
+      html, body { margin: 0; padding: 0; }
       .grid {
         padding: 0;
         gap: ${gapPrint};
-        ${isTwoUp105 ? 'justify-content: flex-start;' : ''}
+        ${isTwoUp105 ? 'width: 210mm; max-width: 210mm; margin: 0; justify-content: flex-start;' : ''}
       }
-      .label { border: 1px solid #000; }
+      .label {
+        border: ${isTwoUp105 ? '0' : '1px solid #000'};
+        border-radius: 0;
+        padding: ${labelPadPrint};
+      }
+      ${isTwoUp105 ? `.label.fmt-a4-105x74, .label.fmt-a4-105x48 { page-break-inside: avoid; break-inside: avoid; }` : ''}
       ${isWide200 && codeType === 'barcode' ? '.label.fmt-wide-200x99 { overflow: visible; }' : ''}
       ${isWide200 && codeType === 'barcode' ? '.label.fmt-wide-200x99 .label-codebox { min-height: 72mm; }' : ''}
       ${isTsc ? '.label { border: 0; }' : ''}
@@ -233,6 +295,7 @@ function shelfLabelsHtmlShell(count, codeType, format) {
 <body>
   <div class="toolbar">
     Nalepnice polica: <strong>${count}</strong> · format <strong>${escHtml(dims.name)}</strong> · <strong>${escHtml(codeLabel)}</strong>.
+    ${isTwoUp105 ? 'A4: margine <strong>None</strong>, skala <strong>100%</strong>, bez zaglavlja. ' : ''}
     Pritisni <strong>Ctrl + P</strong> za štampu.
     <button onclick="window.print()">Štampaj</button>
     <button onclick="window.close()">Zatvori</button>
@@ -246,7 +309,7 @@ function shelfLabelsHtmlShell(count, codeType, format) {
  * Otvara novi prozor sa jednom ili više nalepnica polica.
  *
  * @param {object[]} locs
- * @param {{ codeType?: ShelfCodeType, format?: ShelfLabelFormat, copies?: number, locById?: Map<string, object> }} [opts]
+ * @param {{ codeType?: ShelfCodeType, format?: ShelfLabelFormat, copies?: number, withBarcode?: boolean, locById?: Map<string, object> }} [opts]
  */
 export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
   if (!Array.isArray(locs) || !locs.length) {
@@ -257,28 +320,38 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
   const locByIdForPrint =
     opts.locById instanceof Map && opts.locById.size ? opts.locById : new Map(locs.map(l => [String(l.id), l]));
 
+  const withBarcode = opts.withBarcode === true;
   const codeType = opts.codeType === 'qr' ? 'qr' : 'barcode';
-  const format = FORMAT_DIMS[opts.format] ? opts.format : 'wide-200x99';
+  const format = FORMAT_DIMS[opts.format] ? opts.format : 'a4-105x48';
   const copies = Math.max(1, Math.floor(Number(opts.copies) || 1));
+
+  const orderedLocs = sortShelvesByHallThenCode(locs, locByIdForPrint);
 
   /* Razvi `copies` u flat listu — N kopija po polici izlazi N puta. */
   const flat = [];
-  for (const l of locs) {
+  for (const l of orderedLocs) {
     const parts = buildShelfPrintBarcodeParts(l, locByIdForPrint);
+    const shelfCode = String(l.location_code ?? '').trim();
     for (let i = 0; i < copies; i++)
       flat.push({
         ...l,
+        printShelfCode: shelfCode,
         printBarcodeValue: parts.barcodeValue,
         printDisplayPrimary: parts.displayPrimary,
         printLabelFootline: parts.displayPrimary,
       });
   }
 
-  const [{ default: JsBarcode }, qrcodeMod] = await Promise.all([
-    import('jsbarcode'),
-    codeType === 'qr' ? import('qrcode') : Promise.resolve(null),
-  ]);
-  const QRCode = qrcodeMod ? (qrcodeMod.default || qrcodeMod) : null;
+  let JsBarcode = null;
+  let QRCode = null;
+  if (withBarcode) {
+    const [barcodeMod, qrcodeMod] = await Promise.all([
+      import('jsbarcode'),
+      codeType === 'qr' ? import('qrcode') : Promise.resolve(null),
+    ]);
+    JsBarcode = barcodeMod.default;
+    QRCode = qrcodeMod ? (qrcodeMod.default || qrcodeMod) : null;
+  }
 
   const w = window.open('', '_blank');
   if (!w) {
@@ -286,7 +359,7 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
     return;
   }
 
-  w.document.write(shelfLabelsHtmlShell(flat.length, codeType, format));
+  w.document.write(shelfLabelsHtmlShell(flat.length, codeType, format, withBarcode));
   w.document.close();
 
   const runWhenReady = async () => {
@@ -294,8 +367,11 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
       const host = w.document.getElementById('labelGrid');
       /* Mali per-render uniqueness suffix da multi-copies imaju jedinstven id u DOM-u. */
       host.innerHTML = flat
-        .map((loc, i) => shelfLabelHtml({ ...loc, id: `${loc.id}_${i}` }, codeType, format))
+        .map((loc, i) =>
+          shelfLabelHtml({ ...loc, id: `${loc.id}_${i}` }, codeType, format, withBarcode),
+        )
         .join('');
+      if (!withBarcode) return;
       for (let i = 0; i < flat.length; i++) {
         const loc = flat[i];
         const code = String(loc.printBarcodeValue || '').trim();
@@ -306,6 +382,8 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
             const qrWidthPx =
               format === 'wide-200x99'
                 ? 880
+                : format === 'a4-105x48'
+                  ? 360
                 : format === 'a4-large' || format === 'a4-105x74'
                   ? 640
                   : format === 'tsc'
@@ -327,10 +405,12 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
             const tall =
               format === 'wide-200x99'
                 ? 148
+                : format === 'a4-105x48'
+                  ? 48
                 : format === 'a4-large'
                   ? 92
                   : format === 'a4-105x74'
-                    ? 86
+                    ? 92
                     : format === 'tsc'
                       ? 72
                       : 58;
@@ -358,11 +438,11 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
   if (w.document.readyState === 'complete') void runWhenReady();
   else w.addEventListener('load', () => void runWhenReady(), { once: true });
 
-  /* TSPL2 paralelno SAMO za TSC format — A4 putevi idu samo kroz browser. */
-  if (format === 'tsc') {
+  /* TSPL2 paralelno SAMO za TSC format sa barkodom — A4 putevi idu samo kroz browser. */
+  if (format === 'tsc' && withBarcode) {
     let tspl2 = '';
     try {
-      tspl2 = locs
+      tspl2 = orderedLocs
         .map(l => {
           const parts = buildShelfPrintBarcodeParts(l, locByIdForPrint);
           return buildTspShelfLabelProgram({
@@ -380,7 +460,7 @@ export async function printShelfLabelsToBrowserWindow(locs, opts = {}) {
     void dispatchOptionalNetworkLabelPrint({
       mode: 'shelf',
       payload: {
-        locations: locs.map(l => {
+        locations: orderedLocs.map(l => {
           const parts = buildShelfPrintBarcodeParts(l, locByIdForPrint);
           return {
             id: l.id,
@@ -415,10 +495,14 @@ export async function openShelfLabelsPrintPicker() {
     return;
   }
 
+  const locById = new Map(locs.map(l => [String(l.id), l]));
+  const halls = locs
+    .filter(l => l.is_active !== false && isHallType(l.location_type))
+    .sort(compareLocationCodeNatural);
+
   const candidates = locs
     .filter(l => l.is_active !== false)
-    .filter(l => SHELF_TYPES.includes(l.location_type))
-    .sort((a, b) => (a.location_code || '').localeCompare(b.location_code || ''));
+    .filter(l => SHELF_TYPES.includes(l.location_type));
 
   if (!candidates.length) {
     showToast('⚠ Nema aktivnih polica (SHELF/RACK/BIN)');
@@ -432,11 +516,17 @@ export async function openShelfLabelsPrintPicker() {
     <div class="kadr-modal-overlay" id="${id}" role="dialog" aria-modal="true">
       <div class="kadr-modal" style="max-width:640px">
         <div class="kadr-modal-title">Štampa nalepnica polica</div>
-        <div class="kadr-modal-subtitle">Štampaju se grafika barkoda ili QR plus <strong>tekst obavezno ispod</strong> (npr. HALA 1 - A1 po šiframa u masteru). Za sken police koristi dugme barkod kao za radne naloge.</div>
+        <div class="kadr-modal-subtitle">Podrazumevano: <strong>krupna šifra police</strong> (npr. A1) na TopStick 8715 (105×48 mm). Opciono uključi barkod za sken (HALA − polica).</div>
         <div class="kadr-modal-body">
           <label class="loc-filter-field" style="display:block;margin-bottom:10px">
+            <span>Hala</span>
+            <select id="locShelfPickHall" class="loc-search-input" aria-label="Filter po hali">
+              <option value="">— izaberi halu —</option>
+            </select>
+          </label>
+          <label class="loc-filter-field" style="display:block;margin-bottom:10px">
             <span>Pretraga police</span>
-            <input type="search" class="loc-search-input" id="locShelfPickQ" autocomplete="off" placeholder="Šifra, naziv ili putanja…" />
+            <input type="search" class="loc-search-input" id="locShelfPickQ" autocomplete="off" placeholder="Šifra, naziv ili putanja…" disabled />
           </label>
 
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -447,25 +537,28 @@ export async function openShelfLabelsPrintPicker() {
 
           <div id="locShelfPickList" class="loc-list" style="max-height:240px;overflow:auto;border:1px solid var(--border2,#ddd);border-radius:6px;padding:4px"></div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
-            <label class="loc-filter-field" style="display:block">
-              <span>Tip koda</span>
-              <select id="locShelfPickCodeType" class="loc-search-input">
-                <option value="barcode" selected>Barkod (CODE128)</option>
-                <option value="qr">QR kod</option>
-              </select>
-            </label>
-            <label class="loc-filter-field" style="display:block">
-              <span>Format</span>
-              <select id="locShelfPickFormat" class="loc-search-input">
-                <option value="wide-200x99" selected>200×99 mm (široka — podrazumevano)</option>
-                <option value="a4-105x74">A4 · 105×74,25 mm (2 u redu)</option>
-                <option value="a4-large">A4 · 80×80 mm (2×2)</option>
-                <option value="a4-grid">A4 kompakt 3-kolona</option>
-                <option value="tsc">TSC 80×40 mm (termalni)</option>
-              </select>
-            </label>
-          </div>
+          <label class="loc-filter-field" style="display:block;margin-top:14px">
+            <span>Format</span>
+            <select id="locShelfPickFormat" class="loc-search-input">
+              <option value="a4-105x48" selected>A4 TopStick 8715 · 105×48 mm (12 po listu — podrazumevano)</option>
+              <option value="a4-105x74">A4 · 105×74,25 mm (8 po listu)</option>
+              <option value="wide-200x99">200×99 mm (široka, 1 po stranici)</option>
+              <option value="a4-large">A4 · 80×80 mm (2×2)</option>
+              <option value="a4-grid">A4 kompakt 3-kolona</option>
+              <option value="tsc">TSC 80×40 mm (termalni)</option>
+            </select>
+          </label>
+          <label class="loc-filter-field" style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer">
+            <input type="checkbox" id="locShelfPickWithBarcode" />
+            <span>Sa barkodom / QR (HALA − polica, za sken)</span>
+          </label>
+          <label class="loc-filter-field loc-shelf-pick-code-type-wrap" style="display:block;margin-top:10px;opacity:0.45">
+            <span>Tip koda (samo sa barkodom)</span>
+            <select id="locShelfPickCodeType" class="loc-search-input" disabled>
+              <option value="barcode" selected>Barkod (CODE128)</option>
+              <option value="qr">QR kod</option>
+            </select>
+          </label>
           <label class="loc-filter-field" style="display:block;margin-top:10px;max-width:160px">
             <span>Kopija po polici</span>
             <input type="number" id="locShelfPickCopies" class="loc-search-input" min="1" max="50" value="1" inputmode="numeric" />
@@ -490,11 +583,32 @@ export async function openShelfLabelsPrintPicker() {
   const codeTypeEl = overlay.querySelector('#locShelfPickCodeType');
   const formatEl = overlay.querySelector('#locShelfPickFormat');
   const copiesEl = overlay.querySelector('#locShelfPickCopies');
+  const hallEl = overlay.querySelector('#locShelfPickHall');
+  const withBarcodeEl = overlay.querySelector('#locShelfPickWithBarcode');
+  const codeTypeWrap = overlay.querySelector('.loc-shelf-pick-code-type-wrap');
+
+  const syncBarcodeOpts = () => {
+    const on = !!withBarcodeEl?.checked;
+    if (codeTypeEl) codeTypeEl.disabled = !on;
+    if (codeTypeWrap) codeTypeWrap.style.opacity = on ? '1' : '0.45';
+  };
+  withBarcodeEl?.addEventListener('change', syncBarcodeOpts);
+  syncBarcodeOpts();
+
+  hallEl.innerHTML =
+    '<option value="">— izaberi halu —</option>' +
+    halls
+      .map(
+        h =>
+          `<option value="${escHtml(String(h.id))}">${escHtml(String(h.location_code || ''))} — ${escHtml(h.name || '')}</option>`,
+      )
+      .join('');
 
   /** @type {Set<string>} */
   const selectedIds = new Set();
   let search = '';
-  let visibleRows = candidates.slice();
+  let hallFilterId = '';
+  let visibleRows = [];
 
   const close = () => {
     unesc();
@@ -516,10 +630,21 @@ export async function openShelfLabelsPrintPicker() {
   };
 
   const renderRows = () => {
+    if (!hallFilterId) {
+      visibleRows = [];
+      listEl.innerHTML =
+        '<p class="loc-muted" style="padding:10px">Izaberi halu — police se listaju A–Z samo unutar izabrane hale.</p>';
+      btnAllVisible.disabled = true;
+      return;
+    }
+    btnAllVisible.disabled = false;
+
+    const inHall = candidates.filter(l => shelfBelongsToHall(l, hallFilterId, locById));
+    const sorted = sortShelvesByHallThenCode(inHall, locById);
     const q = search.trim().toLowerCase();
     visibleRows = !q
-      ? candidates
-      : candidates.filter(
+      ? sorted
+      : sorted.filter(
           l =>
             String(l.location_code || '').toLowerCase().includes(q) ||
             String(l.name || '').toLowerCase().includes(q) ||
@@ -554,6 +679,21 @@ export async function openShelfLabelsPrintPicker() {
     });
   };
 
+  hallEl.addEventListener('change', () => {
+    hallFilterId = hallEl.value.trim();
+    qEl.disabled = !hallFilterId;
+    if (!hallFilterId) {
+      search = '';
+      qEl.value = '';
+    }
+    for (const lid of [...selectedIds]) {
+      const loc = locById.get(lid);
+      if (loc && !shelfBelongsToHall(loc, hallFilterId, locById)) selectedIds.delete(lid);
+    }
+    renderRows();
+    updateCount();
+  });
+
   qEl.addEventListener('input', () => {
     search = qEl.value;
     renderRows();
@@ -580,18 +720,16 @@ export async function openShelfLabelsPrintPicker() {
     if (!selectedIds.size) return;
     const picked = candidates.filter(l => selectedIds.has(String(l.id)));
     if (!picked.length) return;
+    const withBarcode = !!withBarcodeEl?.checked;
     const codeType = codeTypeEl.value === 'barcode' ? 'barcode' : 'qr';
-    const format = ['tsc', 'a4-large', 'a4-grid', 'a4-105x74', 'wide-200x99'].includes(
-      formatEl.value,
-    )
-      ? formatEl.value
-      : 'wide-200x99';
+    const format = SHELF_LABEL_FORMATS.includes(formatEl.value) ? formatEl.value : 'a4-105x48';
     const copies = Math.max(1, Math.floor(Number(copiesEl.value) || 1));
     await printShelfLabelsToBrowserWindow(picked, {
       codeType,
       format,
       copies,
-      locById: new Map(locs.map(l => [String(l.id), l])),
+      withBarcode,
+      locById,
     });
     close();
   });
