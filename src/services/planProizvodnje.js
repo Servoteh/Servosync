@@ -598,10 +598,15 @@ export async function fetchBigtehnOpSnapshotByRnAndTp(rnIdentBroj, operacija, op
       }
     }
   }
-  candidates.push(ident);
-  if (/^\d+$/.test(ident)) {
-    const normalized = String(parseInt(ident, 10));
-    if (normalized !== ident) candidates.push(normalized);
+  /* Kad je TP poznat, ne tražiti samo prvi segment naloga (npr. `9000`): u kešu
+   * to je često drugi RN (manja Komada / drugi crtež) i daje pogrešan komada_total
+   * umesto reda `9000/316`. Prazan TP → i dalje `ident` + normalizacija broja. */
+  if (!opForIdent) {
+    candidates.push(ident);
+    if (/^\d+$/.test(ident)) {
+      const normalized = String(parseInt(ident, 10));
+      if (normalized !== ident) candidates.push(normalized);
+    }
   }
 
   let woRows = [];
