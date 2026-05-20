@@ -2960,35 +2960,96 @@ body.module-settings .set-shell > .set-layout {
 .grid-cell:disabled { color:var(--text3); cursor:not-allowed; background:transparent; }
 .grid-cell::placeholder { color:transparent; }
 
-/* Cell states — subota/nedelja/državni praznik. */
+/* Cell states — subota/nedelja/državni praznik (zaglavlje + sva polja za unos). */
+.grid-table {
+  --grid-wknd-sat-hatch: repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--text3) 8%, transparent) 7px 9px);
+  --grid-wknd-sat-bg: var(--surface3);
+  --grid-wknd-sun-hatch: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--red) 13%, transparent) 6px 9px);
+  --grid-wknd-sun-bg: color-mix(in srgb, var(--red) 8%, var(--surface3));
+  --grid-holiday-hatch: repeating-linear-gradient(45deg, transparent 0 5px, color-mix(in srgb, var(--accent) 18%, transparent) 5px 8px);
+  --grid-holiday-bg: color-mix(in srgb, var(--accent) 10%, var(--surface3));
+}
 .grid-table thead th.col-day.cell-weekend-sat,
 .grid-table thead tr.row-day-letter th.col-day.cell-weekend-sat,
-.grid-table tbody tr:not(.row-totals) td.col-day.cell-weekend-sat:not(.cell-dirty):not(.cell-error),
+.grid-table tbody tr:not(.row-totals) td.col-day.cell-weekend-sat,
 .grid-table tr.row-totals td.col-day.cell-weekend-sat {
-  background:
-    repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--text3) 8%, transparent) 7px 9px),
-    var(--surface3) !important;
+  background: var(--grid-wknd-sat-hatch), var(--grid-wknd-sat-bg) !important;
 }
 .grid-table thead th.col-day.cell-weekend-sun,
 .grid-table thead tr.row-day-letter th.col-day.cell-weekend-sun,
-.grid-table tbody tr:not(.row-totals) td.col-day.cell-weekend-sun:not(.cell-dirty):not(.cell-error),
+.grid-table tbody tr:not(.row-totals) td.col-day.cell-weekend-sun,
 .grid-table tr.row-totals td.col-day.cell-weekend-sun {
-  background:
-    repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--red) 13%, transparent) 6px 9px),
-    color-mix(in srgb, var(--red) 8%, var(--surface3)) !important;
+  background: var(--grid-wknd-sun-hatch), var(--grid-wknd-sun-bg) !important;
 }
 .grid-table thead th.col-day.cell-holiday,
 .grid-table thead tr.row-day-letter th.col-day.cell-holiday,
-.grid-table tbody tr:not(.row-totals) td.col-day.cell-holiday:not(.cell-dirty):not(.cell-error),
+.grid-table tbody tr:not(.row-totals) td.col-day.cell-holiday,
 .grid-table tr.row-totals td.col-day.cell-holiday {
-  background:
-    repeating-linear-gradient(45deg, transparent 0 5px, color-mix(in srgb, var(--accent) 18%, transparent) 5px 8px),
-    color-mix(in srgb, var(--accent) 10%, var(--surface3)) !important;
+  background: var(--grid-holiday-hatch), var(--grid-holiday-bg) !important;
+}
+/* Vikend šraf na input poljima — Redovni red uvek, ostali tipovi kad nema posebne boje. */
+.grid-table tbody tr:not(.row-totals) td.col-day.cell-weekend-sat .grid-cell,
+.grid-table tbody tr:not(.row-totals) td.col-day.cell-weekend-sun .grid-cell {
+  background: transparent;
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sat .grid-cell {
+  background: var(--grid-wknd-sat-hatch), var(--grid-wknd-sat-bg);
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sun .grid-cell {
+  background: var(--grid-wknd-sun-hatch), var(--grid-wknd-sun-bg);
+}
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sat .grid-cell,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sat .grid-cell:not(.is-field-domestic):not(.is-field-foreign),
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sat .grid-cell:not(.is-twomach) {
+  background: var(--grid-wknd-sat-hatch), var(--grid-wknd-sat-bg);
+}
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sun .grid-cell,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sun .grid-cell:not(.is-field-domestic):not(.is-field-foreign),
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sun .grid-cell:not(.is-twomach) {
+  background: var(--grid-wknd-sun-hatch), var(--grid-wknd-sun-bg);
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sat .grid-cell:hover,
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sat .grid-cell:focus,
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sat .grid-cell:hover,
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sat .grid-cell:focus,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sat .grid-cell:not(.is-field-domestic):not(.is-field-foreign):hover,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sat .grid-cell:not(.is-field-domestic):not(.is-field-foreign):focus,
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sat .grid-cell:not(.is-twomach):hover,
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sat .grid-cell:not(.is-twomach):focus {
+  background: var(--grid-wknd-sat-hatch), color-mix(in srgb, var(--accent) 10%, var(--grid-wknd-sat-bg));
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sun .grid-cell:hover,
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sun .grid-cell:focus,
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sun .grid-cell:hover,
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sun .grid-cell:focus,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sun .grid-cell:not(.is-field-domestic):not(.is-field-foreign):hover,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sun .grid-cell:not(.is-field-domestic):not(.is-field-foreign):focus,
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sun .grid-cell:not(.is-twomach):hover,
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sun .grid-cell:not(.is-twomach):focus {
+  background: var(--grid-wknd-sun-hatch), color-mix(in srgb, var(--accent) 10%, var(--grid-wknd-sun-bg));
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sat .grid-cell:disabled {
+  background: var(--grid-wknd-sat-hatch), var(--grid-wknd-sat-bg);
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sun .grid-cell:disabled {
+  background: var(--grid-wknd-sun-hatch), var(--grid-wknd-sun-bg);
 }
 td.col-day.cell-today   { box-shadow:inset 0 0 0 1px var(--accent); }
 td.col-day.cell-dirty   { background:color-mix(in srgb, #F2994A 18%, var(--surface)) !important; }
+td.col-day.cell-weekend-sat.cell-dirty {
+  background: var(--grid-wknd-sat-hatch), color-mix(in srgb, #F2994A 22%, var(--grid-wknd-sat-bg)) !important;
+}
+td.col-day.cell-weekend-sun.cell-dirty {
+  background: var(--grid-wknd-sun-hatch), color-mix(in srgb, #F2994A 22%, var(--grid-wknd-sun-bg)) !important;
+}
 td.col-day.cell-dirty .grid-cell { color:#F2994A; font-weight:600; }
 td.col-day.cell-error   { background:color-mix(in srgb, var(--red) 22%, var(--surface)) !important; }
+td.col-day.cell-weekend-sat.cell-error {
+  background: var(--grid-wknd-sat-hatch), color-mix(in srgb, var(--red) 24%, var(--grid-wknd-sat-bg)) !important;
+}
+td.col-day.cell-weekend-sun.cell-error {
+  background: var(--grid-wknd-sun-hatch), color-mix(in srgb, var(--red) 24%, var(--grid-wknd-sun-bg)) !important;
+}
 td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
 
 /* Absence pill ? used inside cell when value is a code */
@@ -3000,6 +3061,14 @@ td.col-day.cell-error .grid-cell { color:var(--red); font-weight:600; }
 .grid-cell.abs-sl { background:color-mix(in srgb, var(--accent) 18%, transparent); color:var(--accent); }
 .grid-cell.abs-pr  { background:color-mix(in srgb, #9B51E0 18%, transparent); color:#9B51E0; }
 .grid-cell.abs-nop { background:color-mix(in srgb, #78909C 20%, transparent); color:#546E7A; }
+
+/* Vikend šraf u Redovnom redu i kad je uneta šifra odsustva. */
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sat .grid-cell.is-absence {
+  background: var(--grid-wknd-sat-hatch), var(--grid-wknd-sat-bg), color-mix(in srgb, currentColor 18%, transparent);
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sun .grid-cell.is-absence {
+  background: var(--grid-wknd-sun-hatch), var(--grid-wknd-sun-bg), color-mix(in srgb, currentColor 18%, transparent);
+}
 
 /* Teren podtipovi: domaci (?uto-amber) vs inostrani (plavo) */
 .grid-cell.is-field-domestic { background:color-mix(in srgb, #F2C94C 22%, transparent); color:#B07B00; font-weight:600; }

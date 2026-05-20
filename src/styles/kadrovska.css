@@ -707,3 +707,78 @@ li.kadr-dashboard__action-item--empty {
   padding: 8px 0;
   font-style: italic;
 }
+
+/* ── MESEČNI GRID — vikend šraf u poljima za unos (Redovni + ostali tipovi) ── */
+
+.grid-table tbody tr:not(.row-totals) td.col-day.cell-weekend-sat {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--text3) 8%, transparent) 7px 9px),
+    var(--surface3) !important;
+}
+.grid-table tbody tr:not(.row-totals) td.col-day.cell-weekend-sun {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--red) 13%, transparent) 6px 9px),
+    color-mix(in srgb, var(--red) 8%, var(--surface3)) !important;
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sat .grid-cell,
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sat .grid-cell,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sat .grid-cell:not(.is-field-domestic):not(.is-field-foreign),
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sat .grid-cell:not(.is-twomach) {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--text3) 8%, transparent) 7px 9px),
+    var(--surface3) !important;
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sun .grid-cell,
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sun .grid-cell,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sun .grid-cell:not(.is-field-domestic):not(.is-field-foreign),
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sun .grid-cell:not(.is-twomach) {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--red) 13%, transparent) 6px 9px),
+    color-mix(in srgb, var(--red) 8%, var(--surface3)) !important;
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sat .grid-cell:hover,
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sat .grid-cell:focus,
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sat .grid-cell:hover,
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sat .grid-cell:focus,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sat .grid-cell:not(.is-field-domestic):not(.is-field-foreign):hover,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sat .grid-cell:not(.is-field-domestic):not(.is-field-foreign):focus,
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sat .grid-cell:not(.is-twomach):hover,
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sat .grid-cell:not(.is-twomach):focus {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--text3) 8%, transparent) 7px 9px),
+    color-mix(in srgb, var(--accent) 10%, var(--surface3)) !important;
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sun .grid-cell:hover,
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sun .grid-cell:focus,
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sun .grid-cell:hover,
+.grid-table tbody tr.row-emp-2 td.col-day.cell-weekend-sun .grid-cell:focus,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sun .grid-cell:not(.is-field-domestic):not(.is-field-foreign):hover,
+.grid-table tbody tr.row-emp-3 td.col-day.cell-weekend-sun .grid-cell:not(.is-field-domestic):not(.is-field-foreign):focus,
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sun .grid-cell:not(.is-twomach):hover,
+.grid-table tbody tr.row-emp-4 td.col-day.cell-weekend-sun .grid-cell:not(.is-twomach):focus {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--red) 13%, transparent) 6px 9px),
+    color-mix(in srgb, var(--accent) 10%, color-mix(in srgb, var(--red) 8%, var(--surface3))) !important;
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sat .grid-cell.is-absence {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--text3) 8%, transparent) 7px 9px),
+    var(--surface3),
+    color-mix(in srgb, currentColor 18%, transparent) !important;
+}
+.grid-table tbody tr.row-emp-1 td.col-day.cell-weekend-sun .grid-cell.is-absence {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--red) 13%, transparent) 6px 9px),
+    color-mix(in srgb, var(--red) 8%, var(--surface3)),
+    color-mix(in srgb, currentColor 18%, transparent) !important;
+}
+td.col-day.cell-weekend-sat.cell-dirty {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--text3) 8%, transparent) 7px 9px),
+    color-mix(in srgb, #F2994A 22%, var(--surface3)) !important;
+}
+td.col-day.cell-weekend-sun.cell-dirty {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--red) 13%, transparent) 6px 9px),
+    color-mix(in srgb, #F2994A 22%, color-mix(in srgb, var(--red) 8%, var(--surface3))) !important;
+}
