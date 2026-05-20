@@ -403,6 +403,20 @@ export async function updateTemaAdminRang(temaId, adminRang) {
   })) !== null;
 }
 
+/** Aktivni korisnici aplikacije za autocomplete učesnika (RPC + admin fallback). */
+export async function loadSastanciUserDirectory() {
+  if (!getIsOnline()) return [];
+  const rows = await sbReq('rpc/get_sastanci_user_directory', 'POST', {});
+  if (Array.isArray(rows)) {
+    return rows.map(r => ({
+      email: String(r.email || '').toLowerCase().trim(),
+      full_name: String(r.full_name || r.fullName || '').trim(),
+      role: String(r.role || '').toLowerCase(),
+    })).filter(u => u.email);
+  }
+  return [];
+}
+
 export async function reorderPmTeme(items) {
   if (!items?.length || !getIsOnline()) return false;
   const cu = getCurrentUser();

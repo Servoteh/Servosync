@@ -12,13 +12,14 @@ import {
   addUcesnik, removeUcesnik,
   updateUcesnikPozvan, updateUcesnikPrisustvo,
   reorderPmTeme,
+  loadSastanciUserDirectory,
 } from '../../../services/sastanciDetalj.js';
-import { loadUsersFromDb } from '../../../services/users.js';
 import { isAdmin } from '../../../state/auth.js';
 
 let abortFlag = false;
 let debounceTimer = null;
 let dragState = null;
+let userPickerDocHandler = null;
 
 export async function renderPripremiTab(host, { sastanak, canWrite, isReadOnly }) {
   abortFlag = false;
@@ -28,7 +29,7 @@ export async function renderPripremiTab(host, { sastanak, canWrite, isReadOnly }
   try {
     [teme, users] = await Promise.all([
       loadPmTemeForSastanak(sastanak.id),
-      canWrite ? loadUsersFromDb() : Promise.resolve([]),
+      canWrite ? loadSastanciUserDirectory() : Promise.resolve([]),
     ]);
   } catch (e) {
     console.error('[PripremiTab] load error', e);
@@ -62,17 +63,19 @@ function renderContent(host, sastanak, teme, users, { canWrite, isReadOnly }) {
       <section class="sast-pripremi-section">
         <div class="sast-section-header">
           <h3>👥 Učesnici</h3>
-          ${canWrite && !isReadOnly ? `<button type="button" class="btn btn-sm" id="sdAddUcesnik">+ Dodaj učesnika</button>` : ''}
         </div>
         <div id="sdUcesniciTable">${renderUcesniciTable(ucesnici, canWrite, isReadOnly, sastanak.status)}</div>
         ${canWrite && !isReadOnly ? `
-          <div class="sast-add-ucesnik-form" id="sdAddUcesnikForm" style="display:none">
-            <input type="text" class="input input-sm" id="sdUcesnikEmail" placeholder="Email ili ime…" list="sdUsersList" autocomplete="off">
-            <datalist id="sdUsersList">
-              ${users.map(u => `<option value="${escHtml(u.email)}">${escHtml(u.email)}</option>`).join('')}
-            </datalist>
-            <button type="button" class="btn btn-sm btn-primary" id="sdAddUcesnikSave">Dodaj</button>
-            <button type="button" class="btn btn-sm" id="sdAddUcesnikCancel">Otkaži</button>
+          <div class="sast-add-ucesnik-form" id="sdAddUcesnikForm">
+            <div class="sast-user-picker">
+              <label class="sast-user-picker-label" for="sdUcesnikSearch">Dodaj učesnika</label>
+              <div class="sast-user-picker-row">
+                <input type="text" class="input input-sm sast-user-search" id="sdUcesnikSearch"
+                  placeholder="Pretraži po imenu ili emailu…" autocomplete="off" spellcheck="false">
+                <button type="button" class="btn btn-sm btn-primary" id="sdAddUcesnikSave">Dodaj</button>
+              </div>
+              <div id="sdUcesnikDropdown" class="sast-user-dropdown" hidden></div>
+            </div>
           </div>
         ` : ''}
       </section>
@@ -87,12 +90,12 @@ function renderContent(host, sastanak, teme, users, { canWrite, isReadOnly }) {
       </section>
 
       <!-- Beleška organizatora -->
-      <section class="sast-pripremi-section">
+      <section class="sast-pripremi-section sast-pripremi-section--beleska">
         <div class="sast-section-header">
           <h3>📒 Beleška organizatora</h3>
         </div>
         ${canWrite && !isReadOnly
-          ? `<textarea class="sast-napomena-ta" id="sdNapomena" rows="4" placeholder="Interne napomene…">${escHtml(sastanak.napomena || '')}</textarea>
+          ? `<textarea class="sast-pripremi-beleska" id="sdNapomena" rows="4" placeholder="Interne napomene…">${escHtml(sastanak.napomena || '')}</textarea>
              <span class="sast-save-indicator" id="sdNapSave" style="visibility:hidden">✓ Sačuvano</span>`
           : `<div class="sast-napomena-ro">${escHtml(sastanak.napomena || '—')}</div>`
         }
@@ -126,61 +129,58 @@ function renderMetaGrid(s) {
 
 function wireEditMeta(host, sastanak) {
   host.querySelector('#sdEditMeta')?.addEventListener('click', () => {
-    openMetaModal(host, sastanak);
+    showMetaEditForm(host, sastanak);
   });
 }
 
-function openMetaModal(host, sastanak) {
-  const overlay = document.createElement('div');
-  overlay.className = 'sast-modal-overlay';
-  overlay.innerHTML = `
-    <div class="sast-modal" role="dialog" aria-modal="true">
-      <header class="sast-modal-header">
-        <h3>Uredi sastanak</h3>
-        <button type="button" class="sast-modal-close" aria-label="Zatvori">✕</button>
-      </header>
-      <div class="sast-modal-body">
-        <label class="sast-form-label">Naslov
-          <input type="text" class="input" id="editNaslov" value="${escHtml(sastanak.naslov)}">
+function showMetaEditForm(host, sastanak) {
+  const metaEl = host.querySelector('#sdMeta');
+  const editBtn = host.querySelector('#sdEditMeta');
+  if (!metaEl) return;
+  if (editBtn) editBtn.disabled = true;
+
+  metaEl.innerHTML = `
+    <form class="sast-meta-edit-form" id="sdMetaForm">
+      <label class="sast-form-label">Naslov
+        <input type="text" class="input" id="editNaslov" value="${escHtml(sastanak.naslov)}">
+      </label>
+      <div class="sast-form-row2">
+        <label class="sast-form-label">Datum
+          <input type="date" class="input" id="editDatum" value="${escHtml(sastanak.datum || '')}">
         </label>
-        <div class="sast-form-row2">
-          <label class="sast-form-label">Datum
-            <input type="date" class="input" id="editDatum" value="${escHtml(sastanak.datum || '')}">
-          </label>
-          <label class="sast-form-label">Vreme
-            <input type="time" class="input" id="editVreme" value="${escHtml(sastanak.vreme ? sastanak.vreme.slice(0,5) : '')}">
-          </label>
-        </div>
-        <label class="sast-form-label">Mesto
-          <input type="text" class="input" id="editMesto" value="${escHtml(sastanak.mesto || '')}">
+        <label class="sast-form-label">Vreme
+          <input type="time" class="input" id="editVreme" value="${escHtml(sastanak.vreme ? sastanak.vreme.slice(0, 5) : '')}">
         </label>
       </div>
-      <footer class="sast-modal-footer">
-        <button type="button" class="btn btn-primary" id="editMetaSave">Sačuvaj</button>
-        <button type="button" class="btn" data-action="close">Otkaži</button>
-      </footer>
-    </div>
+      <label class="sast-form-label">Mesto
+        <input type="text" class="input" id="editMesto" value="${escHtml(sastanak.mesto || '')}">
+      </label>
+      <div class="sast-meta-edit-actions">
+        <button type="button" class="btn btn-primary btn-sm" id="editMetaSave">Sačuvaj</button>
+        <button type="button" class="btn btn-sm" id="editMetaCancel">Otkaži</button>
+      </div>
+    </form>
   `;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-  overlay.querySelector('.sast-modal-close')?.addEventListener('click', close);
-  overlay.querySelector('[data-action=close]')?.addEventListener('click', close);
 
-  overlay.querySelector('#editMetaSave')?.addEventListener('click', async () => {
+  metaEl.querySelector('#editMetaCancel')?.addEventListener('click', () => {
+    metaEl.innerHTML = renderMetaGrid(sastanak);
+    if (editBtn) editBtn.disabled = false;
+  });
+
+  metaEl.querySelector('#editMetaSave')?.addEventListener('click', async () => {
     const updated = {
       ...sastanak,
-      naslov: overlay.querySelector('#editNaslov').value.trim() || sastanak.naslov,
-      datum: overlay.querySelector('#editDatum').value || sastanak.datum,
-      vreme: overlay.querySelector('#editVreme').value || null,
-      mesto: overlay.querySelector('#editMesto').value.trim(),
+      naslov: metaEl.querySelector('#editNaslov')?.value.trim() || sastanak.naslov,
+      datum: metaEl.querySelector('#editDatum')?.value || sastanak.datum,
+      vreme: metaEl.querySelector('#editVreme')?.value || null,
+      mesto: metaEl.querySelector('#editMesto')?.value.trim() || '',
     };
     const saved = await saveSastanak(updated);
     if (saved) {
       showToast('✅ Sačuvano');
-      host.querySelector('#sdMeta').innerHTML = renderMetaGrid(saved);
       Object.assign(sastanak, saved);
-      close();
+      metaEl.innerHTML = renderMetaGrid(saved);
+      if (editBtn) editBtn.disabled = false;
     } else {
       showToast('⚠ Nije uspelo');
     }
@@ -226,6 +226,32 @@ function renderUcesniciTable(ucesnici, canWrite, isReadOnly, status) {
   `;
 }
 
+function buildAvailableUsers(users, ucesnici) {
+  const existing = new Set((ucesnici || []).map(u => String(u.email || '').toLowerCase()));
+  return (users || [])
+    .filter(u => u.email && u.is_active !== false)
+    .map(u => ({
+      email: String(u.email).toLowerCase().trim(),
+      label: String(u.full_name || u.fullName || u.email).trim() || u.email,
+    }))
+    .filter(u => !existing.has(u.email))
+    .sort((a, b) => a.label.localeCompare(b.label, 'sr'));
+}
+
+function resolveUserFromQuery(query, available) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return null;
+  const exactEmail = available.find(u => u.email === q);
+  if (exactEmail) return exactEmail;
+  const exactLabel = available.find(u => u.label.toLowerCase() === q);
+  if (exactLabel) return exactLabel;
+  const partial = available.filter(u =>
+    u.email.includes(q) || u.label.toLowerCase().includes(q),
+  );
+  if (partial.length === 1) return partial[0];
+  return null;
+}
+
 function wireUcesniciToggles(host, sastanakId, readOnly = false) {
   if (readOnly) return;
 
@@ -261,34 +287,102 @@ function wireUcesniciToggles(host, sastanakId, readOnly = false) {
 }
 
 function wireAddUcesnik(host, sastanak, users) {
-  const btn = host.querySelector('#sdAddUcesnik');
-  const form = host.querySelector('#sdAddUcesnikForm');
-  if (!btn || !form) return;
+  const input = host.querySelector('#sdUcesnikSearch');
+  const dropdown = host.querySelector('#sdUcesnikDropdown');
+  const addBtn = host.querySelector('#sdAddUcesnikSave');
+  const picker = host.querySelector('.sast-user-picker');
+  if (!input || !dropdown || !picker) return;
 
-  btn.addEventListener('click', () => {
-    form.style.display = 'flex';
-    form.querySelector('#sdUcesnikEmail')?.focus();
+  if (userPickerDocHandler) {
+    document.removeEventListener('click', userPickerDocHandler);
+    userPickerDocHandler = null;
+  }
+
+  let selectedUser = null;
+
+  function getAvailable() {
+    return buildAvailableUsers(users, sastanak.ucesnici);
+  }
+
+  function renderDropdown(filter = '') {
+    const available = getAvailable();
+    const q = String(filter || '').trim().toLowerCase();
+    const matches = q
+      ? available.filter(u => u.label.toLowerCase().includes(q) || u.email.includes(q))
+      : available;
+    const shown = matches.slice(0, 60);
+
+    if (!shown.length) {
+      dropdown.innerHTML = `<div class="sast-user-dropdown-empty">${q ? 'Nema rezultata — probaj drugačiji tekst' : 'Svi korisnici su već dodati'}</div>`;
+    } else {
+      dropdown.innerHTML = shown.map(u => `
+        <button type="button" class="sast-user-option" data-email="${escHtml(u.email)}" data-label="${escHtml(u.label)}">
+          <span class="sast-user-option-name">${escHtml(u.label)}</span>
+          <span class="sast-user-option-email">${escHtml(u.email)}</span>
+        </button>
+      `).join('');
+    }
+    dropdown.hidden = false;
+  }
+
+  input.addEventListener('focus', () => {
+    selectedUser = null;
+    renderDropdown(input.value);
   });
 
-  host.querySelector('#sdAddUcesnikCancel')?.addEventListener('click', () => {
-    form.style.display = 'none';
-    host.querySelector('#sdUcesnikEmail').value = '';
+  input.addEventListener('input', () => {
+    selectedUser = null;
+    renderDropdown(input.value);
   });
 
-  host.querySelector('#sdAddUcesnikSave')?.addEventListener('click', async () => {
-    const emailVal = host.querySelector('#sdUcesnikEmail').value.trim().toLowerCase();
-    if (!emailVal) return;
-    const user = users.find(u => u.email.toLowerCase() === emailVal);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void addSelectedUser();
+    }
+    if (e.key === 'Escape') {
+      dropdown.hidden = true;
+      input.blur();
+    }
+  });
+
+  dropdown.addEventListener('click', (e) => {
+    const btn = e.target.closest('.sast-user-option');
+    if (!btn) return;
+    selectedUser = { email: btn.dataset.email, label: btn.dataset.label };
+    input.value = selectedUser.label;
+    dropdown.hidden = true;
+    void addSelectedUser();
+  });
+
+  userPickerDocHandler = (e) => {
+    if (!picker.contains(e.target)) dropdown.hidden = true;
+  };
+  document.addEventListener('click', userPickerDocHandler);
+
+  addBtn?.addEventListener('click', () => void addSelectedUser());
+
+  async function addSelectedUser() {
+    const available = getAvailable();
+    const user = selectedUser || resolveUserFromQuery(input.value, available);
+    if (!user?.email) {
+      showToast('⚠ Izaberi korisnika iz liste');
+      input.focus();
+      renderDropdown(input.value);
+      return;
+    }
+
     const ok = await addUcesnik(sastanak.id, {
-      email: emailVal,
-      label: user?.full_name || user?.email || emailVal,
+      email: user.email,
+      label: user.label || user.email,
     });
     if (ok) {
       showToast(sastanak.status === 'planiran'
         ? `✅ Učesnik dodat. ${SAST_UCESNIK_PLANIRAN_POZIV_HINT}`
         : '✅ Učesnik dodat');
-      form.style.display = 'none';
-      host.querySelector('#sdUcesnikEmail').value = '';
+      input.value = '';
+      selectedUser = null;
+      dropdown.hidden = true;
       const fresh = await loadUcesnici(sastanak.id);
       sastanak.ucesnici = fresh;
       host.querySelector('#sdUcesniciTable').innerHTML =
@@ -298,7 +392,7 @@ function wireAddUcesnik(host, sastanak, users) {
     } else {
       showToast('⚠ Nije uspelo (učesnik već dodat?)');
     }
-  });
+  }
 }
 
 /* ── Dnevni red (pm_teme) ── */
@@ -446,4 +540,8 @@ export function teardownPripremiTab() {
   abortFlag = true;
   clearTimeout(debounceTimer);
   dragState = null;
+  if (userPickerDocHandler) {
+    document.removeEventListener('click', userPickerDocHandler);
+    userPickerDocHandler = null;
+  }
 }
