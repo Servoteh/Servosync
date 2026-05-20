@@ -53,7 +53,13 @@ function modalShell(title, bodyId, footId, id) {
 }
 
 /**
- * @param {{ onSuccess?: () => void, preselectedMachine?: { rj_code: string, name?: string }|null }} opts
+ * @param {{
+ *   onSuccess?: () => void,
+ *   preselectedMachine?: { rj_code: string, name?: string }|null,
+ *   preselectedRecipient?: { type: string, employee_id: string, employee_name: string, department?: string }|null,
+ *   mobileLayout?: boolean,
+ *   onClose?: () => void,
+ * }} opts
  */
 export function openQuickIssueModal(opts = {}) {
   if (!canManageReversi()) {
@@ -63,7 +69,7 @@ export function openQuickIssueModal(opts = {}) {
 
   const id = `revQi_${Date.now()}`;
   const state = {
-    recipient: null,
+    recipient: opts.preselectedRecipient || null,
     lines: [],
     expectedReturnDate: defaultReturnDate(),
     pending: false,
@@ -78,10 +84,12 @@ export function openQuickIssueModal(opts = {}) {
     opts.preselectedMachine?.rj_code || state.machineCode?.trim() || '';
 
   const overlay = modalShell('Quick Issue', 'revQiBody', 'revQiFoot', id);
+  if (opts.mobileLayout) overlay.classList.add('rev-modal--mobile-full');
   document.body.appendChild(overlay);
 
   const close = () => {
     overlay.remove();
+    opts.onClose?.();
   };
   overlay.querySelector('[data-rev-qi-close]')?.addEventListener('click', close);
   overlay.addEventListener('click', (e) => {

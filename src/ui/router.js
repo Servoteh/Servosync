@@ -14,6 +14,7 @@ import {
   buildMaintenanceMachinePath,
 } from '../lib/appPaths.js';
 import { initTheme } from '../lib/theme.js';
+import { shouldPreferMobileShell } from '../lib/mobileClient.js';
 import { renderLoginScreen } from './auth/loginScreen.js';
 import {
   renderResetPasswordScreen,
@@ -58,6 +59,13 @@ import {
 import { renderMobileHistory } from './mobile/mobileHistory.js';
 import { renderMobileBatch } from './mobile/mobileBatch.js';
 import { renderMobileLookup } from './mobile/mobileLookup.js';
+import {
+  renderMobileReversiHub,
+  renderMobileReversiMachine,
+  renderMobileReversiOperator,
+  renderMobileReversiOverview,
+  renderMobileReversiIssue,
+} from './mobile/mobileReversi.js';
 import { installAutoFlush } from '../services/offlineQueue.js';
 import { registerMobilePWA } from '../lib/pwa.js';
 import {
@@ -199,7 +207,7 @@ function showLogin() {
         history.replaceState(null, '', saved);
         applyRouteFromLocation();
       } else {
-        showHub();
+        goAfterLogin();
       }
     },
     onForgotPassword: () => {
@@ -275,6 +283,36 @@ function showSelfService() {
   }
 }
 
+/** Posle prijave: iPhone/Android Safari → /m, inače hub. */
+function goAfterLogin() {
+  if (shouldPreferMobileShell()) {
+    history.replaceState(null, '', '/m');
+    applyRouteFromLocation();
+    return;
+  }
+  showHub();
+}
+
+/**
+ * Desktop modul na mobilu → odgovarajući /m/* ekran.
+ * @param {string} moduleId
+ * @returns {boolean}
+ */
+function redirectModuleToMobileIfNeeded(moduleId) {
+  if (!shouldPreferMobileShell()) return false;
+  if (moduleId === 'reversi' && canAccessReversi()) {
+    syncBrowserUrl('/m/rezni-alat', { replace: true });
+    showMobile('rezni-alat', { skipUrlSync: true });
+    return true;
+  }
+  if (moduleId === 'lokacije-delova' && canAccessLokacije()) {
+    syncBrowserUrl('/m', { replace: true });
+    showMobile('home', { skipUrlSync: true });
+    return true;
+  }
+  return false;
+}
+
 function showHub() {
   const leaving = currentScreen;
   currentScreen = 'hub';
@@ -284,6 +322,7 @@ function showHub() {
   setStoredModule(null);
   const screen = renderModuleHub({
     onModuleSelect: (moduleId) => navigateToModule(moduleId),
+    onNavigatePath: (path) => navigateToAppPath(path),
     onLogout: () => {
       resetKadrovskaState();
       showLogin();
@@ -293,6 +332,8 @@ function showHub() {
 }
 
 function showModulePlaceholder(moduleId, options = {}) {
+  if (redirectModuleToMobileIfNeeded(moduleId)) return;
+
   const leaving = currentScreen;
   currentScreen = moduleId;
   clearMount(leaving);
@@ -712,7 +753,7 @@ function showModulePlaceholder(moduleId, options = {}) {
  * vrati. Za sve ekrane koristi jedan `#app` mount — pojedinačni render-i
  * sami vraćaju teardown funkciju koju čuvamo u `currentMobileTeardown`.
  *
- * @param {'home'|'scan'|'manual'|'history'|'batch'} screen
+ * @param {'home'|'scan'|'manual'|'history'|'batch'|'lookup'|'rezni-alat'|'rezni-alat-scan'|'rezni-alat-masina'|'rezni-alat-operater'|'rezni-alat-pregled'} screen
  * @param {{ skipUrlSync?: boolean }} [opts]
  */
 async function showMobile(screen, opts = {}) {
@@ -721,8 +762,14 @@ async function showMobile(screen, opts = {}) {
   currentScreen = nextScreen;
   clearMount(leaving);
   if (!opts.skipUrlSync) {
-    const path =
-      screen === 'home' ? '/m' : `/m/${screen}`;
+    const revPaths = {
+      'rezni-alat': '/m/rezni-alat',
+      'rezni-alat-scan': '/m/rezni-alat/scan',
+      'rezni-alat-masina': '/m/rezni-alat/masina',
+      'rezni-alat-operater': '/m/rezni-alat/operater',
+      'rezni-alat-pregled': '/m/rezni-alat/pregled',
+    };
+    const path = screen === 'home' ? '/m' : revPaths[screen] || `/m/${screen}`;
     syncBrowserUrl(path);
   }
   setStoredModule(null);
@@ -753,6 +800,16 @@ async function showMobile(screen, opts = {}) {
       result = await renderMobileBatch(mountEl, navCtx);
     } else if (screen === 'lookup') {
       result = await renderMobileLookup(mountEl, navCtx);
+    } else if (screen === 'rezni-alat') {
+      result = renderMobileReversiHub(mountEl, navCtx);
+    } else if (screen === 'rezni-alat-scan') {
+      result = renderMobileReversiIssue(mountEl, navCtx);
+    } else if (screen === 'rezni-alat-masina') {
+      result = renderMobileReversiMachine(mountEl, navCtx);
+    } else if (screen === 'rezni-alat-operater') {
+      result = renderMobileReversiOperator(mountEl, navCtx);
+    } else if (screen === 'rezni-alat-pregled') {
+      result = await renderMobileReversiOverview(mountEl, navCtx);
     } else {
       navigateToAppPath('/m');
       return;
@@ -946,13 +1003,13 @@ function applyRouteFromLocation() {
     return;
   }
 
-  /* `/` uvek prikazuje hub sa svim karticama modula (ne „resume” poslednjeg modula). */
-  if (route.kind === 'session') {
-    showHub();
-    return;
-  }
-
-  if (route.kind === 'hub') {
+  /* `/` — na telefonu Safari ide na mobilni magacin (/m), ne desktop hub. */
+  if (route.kind === 'session' || route.kind === 'hub') {
+    if (shouldPreferMobileShell()) {
+      syncBrowserUrl('/m', { replace: true });
+      showMobile('home', { skipUrlSync: true });
+      return;
+    }
     showHub();
     return;
   }
@@ -979,7 +1036,7 @@ function applyRouteFromLocation() {
   }
 
   if (route.kind === 'mobile') {
-    if (!canAccessLokacije()) {
+    if (!canAccessLokacije() && !canAccessReversi()) {
       showToast('🔒 Za mobilni shell je potrebna prijava.');
       syncBrowserUrl('/', { replace: true });
       showHub();
@@ -1010,6 +1067,7 @@ function navigateToModule(moduleId) {
     return;
   }
   if (!assertModuleAllowed(moduleId)) return;
+  if (redirectModuleToMobileIfNeeded(moduleId)) return;
   syncBrowserUrl(pathForModule(moduleId));
   showModulePlaceholder(moduleId, { skipUrlSync: true });
 }

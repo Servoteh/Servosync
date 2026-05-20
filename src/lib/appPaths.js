@@ -26,7 +26,18 @@ function normalizePathname(pathname) {
  *   section?: 'dashboard' | 'machines' | 'machine' | 'board' | 'notifications' | 'catalog' | 'locations' | 'workorders' | 'assets' | 'assetsMachines' | 'assetsVehicles' | 'assetsIt' | 'assetsFacilities' | 'preventive' | 'calendar' | 'inventory' | 'documents' | 'reports' | 'settings',
  *   redirectTo?: string,
  *   machineCode?: string,
- *   mobileScreen?: 'home' | 'scan' | 'manual' | 'history' | 'batch' | 'lookup'
+ *   mobileScreen?:
+     | 'home'
+     | 'scan'
+     | 'manual'
+     | 'history'
+     | 'batch'
+     | 'lookup'
+     | 'rezni-alat'
+     | 'rezni-alat-scan'
+     | 'rezni-alat-masina'
+     | 'rezni-alat-operater'
+     | 'rezni-alat-pregled'
  * }}
  */
 export function pathnameToRoute(pathname) {
@@ -63,6 +74,21 @@ export function pathnameToRoute(pathname) {
   }
   if (p === '/m/lookup') {
     return { kind: 'mobile', mobileScreen: 'lookup' };
+  }
+  if (p === '/m/rezni-alat' || p === '/m/reversi') {
+    return { kind: 'mobile', mobileScreen: 'rezni-alat' };
+  }
+  if (p === '/m/rezni-alat/scan' || p === '/m/reversi/issue') {
+    return { kind: 'mobile', mobileScreen: 'rezni-alat-scan' };
+  }
+  if (p === '/m/rezni-alat/masina' || p === '/m/reversi/machine') {
+    return { kind: 'mobile', mobileScreen: 'rezni-alat-masina' };
+  }
+  if (p === '/m/rezni-alat/operater' || p === '/m/reversi/operator') {
+    return { kind: 'mobile', mobileScreen: 'rezni-alat-operater' };
+  }
+  if (p === '/m/rezni-alat/pregled' || p === '/m/reversi/overview') {
+    return { kind: 'mobile', mobileScreen: 'rezni-alat-pregled' };
   }
   if (p === '/plan-montaze') {
     return { kind: 'module', moduleId: 'plan-montaze' };

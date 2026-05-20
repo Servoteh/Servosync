@@ -23,6 +23,7 @@ import {
   flushPendingMovements,
 } from '../../services/offlineQueue.js';
 import { openScanMoveModal } from '../lokacije/scanModal.js';
+import { setDesktopForced } from '../../lib/mobileClient.js';
 
 const SHELL_ID = 'mobileShell';
 
@@ -94,18 +95,18 @@ export function renderMobileHome(mountEl, ctx) {
         <!-- 3. Sekundarne akcije — manje vizuelne težine. Pretraga je read-only
              flow (ne premešta komad, samo pokazuje gde je), ručni unos je
              fallback kad nema barkoda. -->
-        <div class="m-section-head">Ostalo</div>
         ${
           canAccessReversi()
-            ? `<button type="button" class="m-cta m-cta-secondary" data-act="reversi">
-          <span class="m-cta-ico">🔁</span>
+            ? `<button type="button" class="m-cta m-cta-rev-entry" data-act="rezniAlat">
+          <span class="m-cta-ico">🔧</span>
           <span class="m-cta-txt">
-            <span class="m-cta-title">REVERSI — ALATI</span>
-            <span class="m-cta-sub">Zaduženja, inventar, povraćaji</span>
+            <span class="m-cta-title">IZDAVANJE REZNOG ALATA</span>
+            <span class="m-cta-sub">Mašina, operater, sken RZN, pregled zaduženja</span>
           </span>
         </button>`
             : ''
         }
+        <div class="m-section-head">Ostalo</div>
         <button type="button" class="m-cta m-cta-secondary" data-act="lookup">
           <span class="m-cta-ico">🔍</span>
           <span class="m-cta-txt">
@@ -134,6 +135,8 @@ export function renderMobileHome(mountEl, ctx) {
         <span>v.${__APP_VERSION__ || '1'}</span>
         <span class="m-dot">·</span>
         <span id="mNetIndicator">${navigator.onLine ? '🟢 online' : '🔴 offline'}</span>
+        <span class="m-dot">·</span>
+        <button type="button" class="m-footer-link" data-act="desktopHub">Desktop hub</button>
       </footer>
     </div>
   `;
@@ -169,8 +172,12 @@ export function renderMobileHome(mountEl, ctx) {
       case 'scanWarehouse':
         ctx.onNavigate('/m/scan?cat=warehouse');
         break;
-      case 'reversi':
-        ctx.onNavigate('/reversi');
+      case 'rezniAlat':
+        ctx.onNavigate('/m/rezni-alat');
+        break;
+      case 'desktopHub':
+        setDesktopForced(true);
+        ctx.onNavigate('/hub?desktop=1');
         break;
       case 'lookup':
         ctx.onNavigate('/m/lookup');
