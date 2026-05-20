@@ -8,7 +8,7 @@ import {
   getSupabaseUrl,
   getSupabaseAnonKey,
 } from './supabase.js';
-import { getCurrentUser, getIsOnline } from '../state/auth.js';
+import { getCurrentUser, getIsOnline, isAdmin } from '../state/auth.js';
 import { getPbEngineers } from './pb.js';
 
 const PB_ENG_TIPS_BUCKET = 'pb-eng-tip-files';
@@ -328,9 +328,11 @@ export async function deleteEngTipFile(fileId, storagePath) {
 
 export async function canCurrentUserWriteEngTip() {
   if (!getIsOnline()) return false;
+  if (isAdmin()) return true;
   try {
     const data = await sbReq('rpc/can_write_pb_eng_tips', 'POST', {}, { upsert: false });
-    if (data === true || data === false) return data;
+    if (data === true) return true;
+    if (data === false) return false;
   } catch {
     /* fallback */
   }
