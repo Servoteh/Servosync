@@ -50,6 +50,7 @@ sql/migrations/enable_user_roles_rls_proper.sql
 # harden za write RLS Sprint 2.2.
 sql/migrations/add_rbac_managed_departments.sql
 sql/migrations/add_kadr_vacation_requests.sql
+sql/ci/kadrovska_grants.sql
 sql/migrations/extend_kadr_managed_departments_scope.sql
 sql/migrations/harden_kadr_menadzment_write_scope.sql
 sql/migrations/add_kadr_dashboard_kpis_rpc.sql

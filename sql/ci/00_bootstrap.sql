@@ -205,10 +205,6 @@ GRANT USAGE ON SCHEMA auth TO authenticated, service_role;
 -- Tabela: RLS odlučuje redove; ipak treba tabelni GRANT (pgTAP kao authenticated).
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_roles TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.employees TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.absences TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.vacation_entitlements TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.vacation_requests TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.employee_children TO authenticated;
 
 -- ── Dummy test korisnici ────────────────────────────────────────────────
 -- Neki pgTAP testovi referenciraju `auth.users(id)` preko FK (npr. moved_by
