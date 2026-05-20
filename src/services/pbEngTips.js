@@ -146,6 +146,16 @@ export async function listEngTipCategories() {
   return Array.isArray(data) ? data : [];
 }
 
+/** Admin: sve kategorije uključujući neaktivne (Podešavanja). */
+export async function listAllEngTipCategoriesAdmin() {
+  if (!getIsOnline()) return [];
+  const data = await sbReqThrow(
+    'pb_eng_tip_categories?select=*&order=redosled.asc,naziv.asc',
+    'GET',
+  );
+  return Array.isArray(data) ? data : [];
+}
+
 export async function upsertEngTipCategory(payload) {
   if (!getIsOnline()) {
     const e = new Error('Saveti zahtevaju internet');

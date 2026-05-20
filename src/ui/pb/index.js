@@ -384,11 +384,14 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
           </div>
         </div>
       </div>
-      ${pbIsCompact(root) ? '' : `<div class="pb-context-row pb-context-row--inline">${contextFields}</div>`}
+      ${pbIsCompact(root) || state.activeTab === 'saveti' ? '' : `<div class="pb-context-row pb-context-row--inline">${contextFields}</div>`}
       </div>`;
 
     const drawerChrome = root.querySelector('#pbFilterDrawerChrome');
-    if (drawerChrome) drawerChrome.innerHTML = pbIsCompact(root) ? contextFields : '';
+    if (drawerChrome) {
+      drawerChrome.innerHTML = pbIsCompact(root) && state.activeTab !== 'saveti' ? contextFields : '';
+    }
+    root.classList.toggle('pb-module--saveti-tab', state.activeTab === 'saveti');
     const planSec = root.querySelector('#pbFilterDrawerPlanSection');
     if (planSec) planSec.hidden = state.activeTab !== 'plan';
     refreshFilterBadge(state.activeTab === 'plan' ? {
@@ -478,6 +481,7 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
     if (!body) return;
     mergeStoredState();
     const tab = state.activeTab || 'plan';
+    body.classList.toggle('pb-tab-body--saveti', tab === 'saveti');
     if (tab !== 'izvestaji') stopPbIzvestajiSpeech();
     if (tab === 'plan') {
       renderPlanTab(body, ctx);
@@ -557,11 +561,12 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       return;
     }
     if (tab === 'saveti') {
-      const { renderSavetiTab } = await import('./savetiTab.js');
+      const { renderSavetiTab, refreshSavetiCategories } = await import('./savetiTab.js');
       renderSavetiTab(body, {
         projects,
         onRefresh: () => loadAll(true),
       });
+      void refreshSavetiCategories();
       return;
     }
     if (tab === 'podesavanja') {
