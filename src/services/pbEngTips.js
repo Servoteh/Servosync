@@ -8,7 +8,7 @@ import {
   getSupabaseUrl,
   getSupabaseAnonKey,
 } from './supabase.js';
-import { getCurrentUser, getIsOnline, isAdmin } from '../state/auth.js';
+import { getCurrentUser, getIsOnline, canEditPbTasks } from '../state/auth.js';
 import { getPbEngineers } from './pb.js';
 
 const PB_ENG_TIPS_BUCKET = 'pb-eng-tip-files';
@@ -326,9 +326,18 @@ export async function deleteEngTipFile(fileId, storagePath) {
   return res;
 }
 
-export async function canCurrentUserWriteEngTip() {
+/** Brza provera (bez RPC) — koristi već učitane inženjere iz PB modula. */
+export function canWriteEngTipLocal(engineers = []) {
   if (!getIsOnline()) return false;
-  if (isAdmin()) return true;
+  if (canEditPbTasks()) return true;
+  const email = actorEmail()?.toLowerCase();
+  if (!email) return false;
+  return engineers.some(e => String(e.email || '').toLowerCase() === email);
+}
+
+export async function canCurrentUserWriteEngTip(engineers = []) {
+  if (!getIsOnline()) return false;
+  if (canWriteEngTipLocal(engineers)) return true;
   try {
     const data = await sbReq('rpc/can_write_pb_eng_tips', 'POST', {}, { upsert: false });
     if (data === true) return true;
@@ -336,8 +345,6 @@ export async function canCurrentUserWriteEngTip() {
   } catch {
     /* fallback */
   }
-  const email = actorEmail();
-  if (!email) return false;
-  const engineers = await getPbEngineers().catch(() => []);
-  return engineers.some(e => String(e.email || '').toLowerCase() === email.toLowerCase());
+  const list = engineers?.length ? engineers : await getPbEngineers().catch(() => []);
+  return canWriteEngTipLocal(list);
 }

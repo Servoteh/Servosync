@@ -564,9 +564,9 @@ export function renderPbModule(root, { onBackToHub, onLogout } = {}) {
       const { renderSavetiTab, refreshSavetiCategories } = await import('./savetiTab.js');
       renderSavetiTab(body, {
         projects,
+        engineers,
         onRefresh: () => loadAll(true),
       });
-      void refreshSavetiCategories();
       return;
     }
     if (tab === 'podesavanja') {

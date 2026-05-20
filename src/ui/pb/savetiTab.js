@@ -3,10 +3,11 @@
  */
 
 import { escHtml, showToast } from '../../lib/dom.js';
-import { getIsOnline, isAdmin } from '../../state/auth.js';
+import { getIsOnline, isAdmin, canEditPbTasks } from '../../state/auth.js';
 import {
   listEngTips,
   listEngTipCategories,
+  canWriteEngTipLocal,
   canCurrentUserWriteEngTip,
   toggleEngTipLike,
 } from '../../services/pbEngTips.js';
@@ -38,7 +39,11 @@ let _editorOpts = null;
  */
 export function renderSavetiTab(mountEl, ctx = {}) {
   _mountEl = mountEl;
-  _listCtx = { ...ctx, projects: ctx.projects || [] };
+  _listCtx = {
+    ...ctx,
+    projects: ctx.projects || [],
+    engineers: ctx.engineers || [],
+  };
   _view = 'list';
   _editorOpts = null;
 
@@ -49,7 +54,7 @@ export function renderSavetiTab(mountEl, ctx = {}) {
 
   registerSavetiEditorOpener(openSavetiTipEditor);
 
-  if (isAdmin()) setEngTipsCanWrite(true);
+  setEngTipsCanWrite(canWriteEngTipLocal(_listCtx.engineers));
 
   paintSavetiView();
 
@@ -66,9 +71,19 @@ export function renderSavetiTab(mountEl, ctx = {}) {
  * @param {object} opts
  */
 export function openSavetiTipEditor(opts) {
-  if (!_mountEl) return;
+  if (!_mountEl) {
+    showToast('Otvorite tab Saveti pa pokušajte ponovo');
+    return;
+  }
+  const engineers = _listCtx?.engineers || [];
+  const canEdit = opts?.canEdit !== false
+    && (canWriteEngTipLocal(engineers) || canEditPbTasks());
+  if (!canEdit) {
+    showToast('Nemate pravo da kreirate ili menjate savete');
+    return;
+  }
   _view = 'editor';
-  _editorOpts = opts || {};
+  _editorOpts = { ...opts, canEdit: true };
   paintSavetiView();
 }
 
@@ -289,8 +304,9 @@ function wireSavetiTab(root, ctx) {
 
   root.addEventListener('click', e => {
     if (!e.target.closest('#pbSavetiNew')) return;
+    e.preventDefault();
+    e.stopPropagation();
     const m = modalCtx(root, ctx);
-    if (!m.canWrite) return;
     openSavetiTipEditor({
       tip: null,
       projects: m.projects,
@@ -364,15 +380,13 @@ async function loadCategoriesAndTips() {
     setEngTips([]);
     return;
   }
+  const engineers = _listCtx?.engineers || [];
+  setEngTipsCanWrite(canWriteEngTipLocal(engineers));
   setEngTipsLoading(true);
   setEngTipsError(null);
   try {
-    const [cats, canWrite] = await Promise.all([
-      listEngTipCategories(),
-      canCurrentUserWriteEngTip(),
-    ]);
+    const cats = await listEngTipCategories();
     setEngTipCategories(cats);
-    setEngTipsCanWrite(canWrite);
     if (isAdmin() && !snapshotEngTips().filter.includeDrafts) {
       setEngTipsFilter({ includeDrafts: true });
     }
@@ -383,6 +397,9 @@ async function loadCategoriesAndTips() {
   } finally {
     setEngTipsLoading(false);
   }
+  void canCurrentUserWriteEngTip(engineers).then(ok => {
+    if (_view === 'list') setEngTipsCanWrite(!!ok);
+  });
 }
 
 async function reloadTips() {
