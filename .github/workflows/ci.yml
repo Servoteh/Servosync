@@ -141,6 +141,7 @@ jobs:
               echo ""
               echo "!!! psql exited with code $rc for: $line"
               echo "!!! FULL LOG ABOVE (last 200 lines of $log_file)"
+              echo "$line" > /tmp/ci-logs/FAILED_MIGRATION.txt
               overall_rc=1
               break
             fi
@@ -161,22 +162,39 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
-          # Sakupi sve log fajlove (1 po migraciji) u jedan tekst.
           body_file=/tmp/ci-comment.md
+          failed_path=""
+          if [ -f /tmp/ci-logs/FAILED_MIGRATION.txt ]; then
+            failed_path="$(cat /tmp/ci-logs/FAILED_MIGRATION.txt)"
+          fi
           {
             echo "## CI failure — SQL migrations + pgTAP"
             echo ""
             echo "Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo ""
-            for f in /tmp/ci-logs/*.log; do
-              [ -f "$f" ] || continue
-              echo "### \`$(basename "$f")\`"
+            if [ -n "$failed_path" ]; then
+              echo "**Failed migration:** \`$failed_path\`"
               echo ""
-              echo '```'
-              tail -n 200 "$f"
-              echo '```'
+              fail_log="/tmp/ci-logs/$(echo "$failed_path" | tr '/' '_').log"
+              if [ -f "$fail_log" ]; then
+                echo "### \`$(basename "$fail_log")\`"
+                echo ""
+                echo '```'
+                tail -n 200 "$fail_log"
+                echo '```'
+              fi
+            else
+              echo "_FAILED_MIGRATION.txt nije pronađen — poslednji log sa ERROR:_"
               echo ""
-            done
+              last_err_log="$(grep -l 'ERROR:' /tmp/ci-logs/*.log 2>/dev/null | tail -n 1 || true)"
+              if [ -n "$last_err_log" ] && [ -f "$last_err_log" ]; then
+                echo "### \`$(basename "$last_err_log")\`"
+                echo ""
+                echo '```'
+                tail -n 200 "$last_err_log"
+                echo '```'
+              fi
+            fi
           } > "$body_file"
           # `gh` CLI je pre-instaliran na ubuntu runner-u; GITHUB_TOKEN ima
           # `repo` scope pa možemo postavljati commit komentare u javnom repo-u.
