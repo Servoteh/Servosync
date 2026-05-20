@@ -72,6 +72,8 @@ export function renderSavetiTab(mountEl, ctx = {}) {
 
   }
 
+  if (isAdmin()) setEngTipsCanWrite(true);
+
   mountEl.innerHTML = savetiTabHtml(snapshotEngTips(), getIsOnline());
 
   _unsub = subscribeEngTips(s => {
@@ -150,14 +152,6 @@ function savetiTabHtml(s, online) {
 
   const f = s.filter;
 
-  const draftsToggle = s.canWrite
-
-    ? `<label class="pb-saveti-toggle"><input type="checkbox" id="pbSavetiDrafts" ${f.includeDrafts ? 'checked' : ''} /> Drafts</label>`
-
-    : '';
-
-
-
   return `
 
     <div class="pb-saveti-root">
@@ -170,7 +164,7 @@ function savetiTabHtml(s, online) {
 
           <input type="search" class="pb-saveti-search" id="pbSavetiSearch" placeholder="Pretraga saveta..." value="${escHtml(f.search)}" ${online ? '' : 'disabled'} aria-label="Pretraga saveta" />
 
-          ${s.canWrite ? `<button type="button" class="pb-primary-btn pb-saveti-new-btn" id="pbSavetiNew" ${online ? '' : 'disabled'}>+ Novi savet</button>` : ''}
+          <button type="button" class="pb-primary-btn pb-saveti-new-btn" id="pbSavetiNew" ${s.canWrite ? '' : 'hidden'} ${online ? '' : 'disabled'}>+ Novi savet</button>
 
         </div>
 
@@ -190,7 +184,7 @@ function savetiTabHtml(s, online) {
 
             <label class="pb-saveti-toggle"><input type="checkbox" id="pbSavetiMyOnly" ${f.myOnly ? 'checked' : ''} /> Samo moji</label>
 
-            ${draftsToggle}
+            <label class="pb-saveti-toggle" id="pbSavetiDraftsWrap" ${s.canWrite ? '' : 'hidden'}><input type="checkbox" id="pbSavetiDrafts" ${f.includeDrafts ? 'checked' : ''} /> Drafts</label>
 
           </div>
 
@@ -344,9 +338,15 @@ function paintSavetiDom(mountEl, s, online) {
 
   const newBtn = mountEl.querySelector('#pbSavetiNew');
 
-  if (newBtn) newBtn.disabled = !online;
+  if (newBtn) {
 
-  const draftsWrap = mountEl.querySelector('#pbSavetiDrafts')?.closest('.pb-saveti-toggle');
+    newBtn.hidden = !s.canWrite;
+
+    newBtn.disabled = !online;
+
+  }
+
+  const draftsWrap = mountEl.querySelector('#pbSavetiDraftsWrap');
 
   if (draftsWrap) draftsWrap.hidden = !s.canWrite;
 
@@ -355,6 +355,10 @@ function paintSavetiDom(mountEl, s, online) {
 
 
 function wireSavetiTab(root, ctx) {
+
+  if (root.dataset.pbSavetiWired === '1') return;
+
+  root.dataset.pbSavetiWired = '1';
 
   root.querySelector('#pbSavetiSearch')?.addEventListener('input', e => {
 
@@ -440,7 +444,9 @@ function wireSavetiTab(root, ctx) {
 
 
 
-  root.querySelector('#pbSavetiNew')?.addEventListener('click', () => {
+  root.addEventListener('click', e => {
+
+    if (!e.target.closest('#pbSavetiNew')) return;
 
     const m = modalCtx(root, ctx);
 
