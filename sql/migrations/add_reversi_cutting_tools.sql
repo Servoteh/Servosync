@@ -479,9 +479,9 @@ BEGIN
   END IF;
 
   INSERT INTO rev_cutting_tool_stock (catalog_id, location_id, on_hand_qty, updated_at)
-  VALUES (p_catalog_id, p_location_id, p_delta, now())
+  VALUES (p_catalog_id, p_location_id, v_old + p_delta, now())
   ON CONFLICT (catalog_id, location_id) DO UPDATE
-    SET on_hand_qty = rev_cutting_tool_stock.on_hand_qty + EXCLUDED.on_hand_qty,
+    SET on_hand_qty = rev_cutting_tool_stock.on_hand_qty + p_delta,
         updated_at  = now()
   RETURNING on_hand_qty INTO v_new;
 

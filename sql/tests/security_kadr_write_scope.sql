@@ -76,9 +76,6 @@ WHERE id = 'dddddddd-9999-9999-9999-999999999999';
 
 SET LOCAL row_security = on;
 
-RESET ROLE;
-SET LOCAL ROLE authenticated;
-
 CREATE OR REPLACE FUNCTION test_set_jwt_email(p_email text)
 RETURNS void LANGUAGE sql AS $$
   SELECT set_config(
@@ -92,6 +89,9 @@ CREATE OR REPLACE FUNCTION test_clear_jwt()
 RETURNS void LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claims', '', true);
 $$;
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
 
 -- 1–2) menadzment-1 (scope Proizvodnja)
 SELECT test_set_jwt_email('kadr-write-mgr1@test.local');
