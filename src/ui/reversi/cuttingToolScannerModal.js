@@ -71,6 +71,8 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
     secondaryIds: [],
     pending: false,
     lastInput: '',
+    empPickQuery: '',
+    empPickRows: null,
   };
 
   const overlay = modalShell(
@@ -176,6 +178,21 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
               </span>
             </button>
           </div>
+          <details class="rev-qa-pick" id="revRznQaEmpDetails">
+            <summary class="rev-qa-cta rev-qa-cta--secondary rev-qa-cta--pick">
+              <span class="rev-qa-ico" aria-hidden="true">✍</span>
+              <span class="rev-qa-txt">
+                <span class="rev-qa-title">UNESI IME RADNIKA</span>
+                <span class="rev-qa-sub">${state.employee ? escHtml(state.employee.full_name) : 'Bez kartice — pretraga po imenu'}</span>
+              </span>
+              <span class="rev-qa-pick-chevron" aria-hidden="true">▾</span>
+            </summary>
+            <div class="rev-qa-pick-body">
+              <input type="search" id="revRznQaEmpSearch" class="rev-input" autocomplete="off"
+                     placeholder="Pretraga: ime, prezime…" value="${escHtml(state.empPickQuery)}"/>
+              <ul class="rev-qa-emp-list" id="revRznQaEmpList"></ul>
+            </div>
+          </details>
         </section>
 
         <div class="rev-scan-lines">
@@ -380,6 +397,70 @@ export function openCuttingToolIssueScannerModal(opts = {}) {
     });
 
     overlay.querySelector('#revRznScanSubmit')?.addEventListener('click', submit);
+
+    const empDet = overlay.querySelector('#revRznQaEmpDetails');
+    const empSearch = overlay.querySelector('#revRznQaEmpSearch');
+
+    if (empDet) {
+      empDet.addEventListener('toggle', () => {
+        if (!empDet.open) return;
+        paintEmpPickList(state.empPickRows);
+        setTimeout(() => empSearch?.focus(), 50);
+      });
+    }
+
+    if (empSearch) {
+      empSearch.addEventListener('input', () => {
+        const q = empSearch.value.trim();
+        state.empPickQuery = q;
+        clearTimeout(bindEvents._empDeb);
+        bindEvents._empDeb = setTimeout(async () => {
+          if (!q) {
+            state.empPickRows = null;
+            paintEmpPickList(state.employees);
+            return;
+          }
+          const r = await fetchEmployeesAny(q);
+          state.empPickRows = r.ok && Array.isArray(r.data) ? r.data : [];
+          paintEmpPickList(state.empPickRows);
+        }, 220);
+      });
+    }
+  }
+
+  function paintEmpPickList(rows) {
+    const ul = overlay.querySelector('#revRznQaEmpList');
+    if (!ul) return;
+    const list = Array.isArray(rows) ? rows : state.employees;
+    const limited = list.slice(0, 8);
+    if (limited.length === 0) {
+      ul.innerHTML = '<li class="rev-qa-emp-empty">Nema rezultata</li>';
+      return;
+    }
+    ul.innerHTML = limited
+      .map(
+        (e) => `<li>
+        <button type="button" class="rev-qa-emp-row" data-rev-emp-pick="${escHtml(e.id)}">
+          <strong>${escHtml(e.full_name)}</strong>
+          ${e.department ? `<span class="rev-muted"> · ${escHtml(e.department)}</span>` : ''}
+        </button>
+      </li>`,
+      )
+      .join('');
+    ul.querySelectorAll('[data-rev-emp-pick]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const eid = btn.getAttribute('data-rev-emp-pick');
+        const emp = (Array.isArray(rows) ? rows : state.employees).find((e) => e.id === eid);
+        if (!emp) return;
+        state.employee = { id: emp.id, full_name: emp.full_name };
+        const det = overlay.querySelector('#revRznQaEmpDetails');
+        if (det) det.open = false;
+        state.empPickQuery = '';
+        state.empPickRows = null;
+        paint();
+        showToast(`Operater: ${emp.full_name}`);
+      });
+    });
   }
 
   async function handleScannedInput(raw) {
