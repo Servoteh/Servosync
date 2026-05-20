@@ -272,34 +272,15 @@ SELECT set_config('request.jwt.claims',
                                      'email','h2-admin@test.local')::text,
                   true);
 
-SELECT set_config('t10.r1', public.loc_create_movement(jsonb_build_object(
-  'item_ref_table',    'bigtehn_rn',
-  'item_ref_id',       'TP-H2-IDEMP10',
-  'order_no',          '9000',
-  'movement_type',     'INITIAL_PLACEMENT',
-  'quantity',          1,
-  'to_location_id',    '77777777-7777-7777-7777-777777777777',
-  'client_event_uuid', 'bbbb0010-0000-0000-0000-000000000010'
-))::text, true);
-SELECT set_config('t10.r2', public.loc_create_movement(jsonb_build_object(
-  'item_ref_table',    'bigtehn_rn',
-  'item_ref_id',       'TP-H2-IDEMP10',
-  'order_no',          '9000',
-  'movement_type',     'INITIAL_PLACEMENT',
-  'quantity',          99,
-  'to_location_id',    '77777777-7777-7777-7777-777777777777',
-  'client_event_uuid', 'bbbb0010-0000-0000-0000-000000000010'
-))::text, true);
-
 SELECT is(
-  current_setting('t10.r2')::jsonb->>'idempotent',
-  'true',
-  'H-2 ne ruši H-1 idempotency: drugi poziv vraća idempotent=true'
+  (pg_temp.h2_call_create('bbbb0010-0000-0000-0000-000000000010'::uuid)->>'ok')::boolean,
+  true,
+  'H-2 ne ruši H-1 idempotency: prvi poziv ok=true'
 );
 SELECT is(
-  current_setting('t10.r1')::jsonb->>'id',
-  current_setting('t10.r2')::jsonb->>'id',
-  'H-2 ne ruši H-1 idempotency: isti id'
+  pg_temp.h2_call_create('bbbb0010-0000-0000-0000-000000000010'::uuid)->>'idempotent',
+  'true',
+  'H-2 ne ruši H-1 idempotency: drugi poziv vraća idempotent=true'
 );
 
 -- ─── Cleanup ─────────────────────────────────────────────────────────────
