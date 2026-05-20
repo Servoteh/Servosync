@@ -19,7 +19,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(11);
+SELECT plan(12);
 
 -- ─── Seed organizacione strukture (CI bootstrap ima samo deo) ────────────
 SET LOCAL row_security = off;
@@ -162,7 +162,21 @@ SELECT is(
 );
 
 -- =========================================================================
--- 4) Random authenticated (nema ulogu i nije zaposleni) → blokiran
+-- 4) Idempotent replay (admin JWT već aktivan)
+-- =========================================================================
+SELECT is(
+  pg_temp.h2_call_create('bbbb0010-0000-0000-0000-000000000010'::uuid)->>'ok',
+  'true',
+  'H-2 ne ruši H-1 idempotency: prvi poziv ok=true'
+);
+SELECT is(
+  pg_temp.h2_call_create('bbbb0010-0000-0000-0000-000000000010'::uuid)->>'idempotent',
+  'true',
+  'H-2 ne ruši H-1 idempotency: drugi poziv vraća idempotent=true'
+);
+
+-- =========================================================================
+-- 5) Random authenticated (nema ulogu i nije zaposleni) → blokiran
 -- =========================================================================
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a2', true);
 SELECT set_config('request.jwt.claims',
@@ -182,7 +196,7 @@ SELECT is(
 );
 
 -- =========================================================================
--- 5) Employee u Proizvodnji (dept 2) → prolazi
+-- 6) Employee u Proizvodnji (dept 2) → prolazi
 -- =========================================================================
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a3', true);
 SELECT set_config('request.jwt.claims',
@@ -197,7 +211,7 @@ SELECT is(
 );
 
 -- =========================================================================
--- 6) Employee u „Magacin i logistika" (sub_dept 8030, dept 8) → prolazi
+-- 7) Employee u „Magacin i logistika" (sub_dept 8030, dept 8) → prolazi
 -- =========================================================================
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a4', true);
 SELECT set_config('request.jwt.claims',
@@ -212,7 +226,7 @@ SELECT is(
 );
 
 -- =========================================================================
--- 7) Neaktivan employee u Proizvodnji → blokiran (is_active=false filter)
+-- 8) Neaktivan employee u Proizvodnji → blokiran (is_active=false filter)
 -- =========================================================================
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a5', true);
 SELECT set_config('request.jwt.claims',
@@ -227,7 +241,7 @@ SELECT is(
 );
 
 -- =========================================================================
--- 8) Employee u Marketingu (dept 7, nije u Härd-2 listi) → blokiran
+-- 9) Employee u Marketingu (dept 7, nije u Härd-2 listi) → blokiran
 -- =========================================================================
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a6', true);
 SELECT set_config('request.jwt.claims',
@@ -242,13 +256,15 @@ SELECT is(
 );
 
 -- =========================================================================
--- 9) Viewer uloga (nije u listi) + bez employee zapisa → blokiran
+-- 10) Viewer uloga (nije u listi) + bez employee zapisa → blokiran
 -- =========================================================================
+RESET ROLE;
 SET LOCAL row_security = off;
 INSERT INTO auth.users (id, email) VALUES
   ('00000000-0000-0000-0000-0000000000a7', 'h2-viewer@test.local')
 ON CONFLICT (id) DO NOTHING;
 SET LOCAL row_security = on;
+SET LOCAL ROLE authenticated;
 
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a7', true);
 SELECT set_config('request.jwt.claims',
@@ -260,27 +276,6 @@ SELECT is(
   pg_temp.h2_call_create('aaaa0007-0000-0000-0000-000000000007'::uuid)->>'error',
   'not_authorized',
   'authz: viewer uloga bez employee zapisa → not_authorized'
-);
-
--- =========================================================================
--- 10) Idempotent replay — admin pozove dvaput sa istim UUID → idempotent
---     (verifikuje da Härd-2 nije pokvario Härd-1 ponašanje)
--- =========================================================================
-SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a1', true);
-SELECT set_config('request.jwt.claims',
-                  jsonb_build_object('sub','00000000-0000-0000-0000-0000000000a1',
-                                     'email','h2-admin@test.local')::text,
-                  true);
-
-SELECT is(
-  (pg_temp.h2_call_create('bbbb0010-0000-0000-0000-000000000010'::uuid)->>'ok')::boolean,
-  true,
-  'H-2 ne ruši H-1 idempotency: prvi poziv ok=true'
-);
-SELECT is(
-  pg_temp.h2_call_create('bbbb0010-0000-0000-0000-000000000010'::uuid)->>'idempotent',
-  'true',
-  'H-2 ne ruši H-1 idempotency: drugi poziv vraća idempotent=true'
 );
 
 -- ─── Cleanup ─────────────────────────────────────────────────────────────
