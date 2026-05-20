@@ -8,7 +8,7 @@ import {
   getSupabaseUrl,
   getSupabaseAnonKey,
 } from './supabase.js';
-import { getCurrentUser, getIsOnline, canEditPbTasks } from '../state/auth.js';
+import { getCurrentUser, getIsOnline, canWritePbEngTips } from '../state/auth.js';
 import { getPbEngineers } from './pb.js';
 
 const PB_ENG_TIPS_BUCKET = 'pb-eng-tip-files';
@@ -329,7 +329,7 @@ export async function deleteEngTipFile(fileId, storagePath) {
 /** Brza provera (bez RPC) — koristi već učitane inženjere iz PB modula. */
 export function canWriteEngTipLocal(engineers = []) {
   if (!getIsOnline()) return false;
-  if (canEditPbTasks()) return true;
+  if (canWritePbEngTips()) return true;
   const email = actorEmail()?.toLowerCase();
   if (!email) return false;
   return engineers.some(e => String(e.email || '').toLowerCase() === email);

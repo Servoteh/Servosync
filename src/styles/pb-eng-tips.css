@@ -107,6 +107,35 @@ body.module-projektni-biro:not(.hub-active) .pb-module > .pb-tab-body--saveti {
   width: 100%;
 }
 
+.pb-saveti-section-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 4px;
+  background: var(--surface2, #f1f5f9);
+  border-radius: 10px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.pb-saveti-section-tab {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text2, #64748b);
+}
+
+.pb-saveti-section-tab[aria-selected="true"],
+.pb-saveti-section-tab.active {
+  background: var(--surface1, #fff);
+  color: var(--text, #0f172a);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
 .pb-saveti-controls {
   position: sticky;
   top: 0;

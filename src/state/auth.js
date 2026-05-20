@@ -280,6 +280,11 @@ export function canEditPbTasks() {
   return canEditKadrovska();
 }
 
+/** PB Saveti — kreiranje/izmena (admin, menadzment, pm, leadpm, hr + inzenjeri liste u servisu). */
+export function canWritePbEngTips() {
+  return canEditPbTasks();
+}
+
 /** @deprecated Koristi canEditPbTasks */
 export function canEditProjektniBiro() {
   return canEditPbTasks();
