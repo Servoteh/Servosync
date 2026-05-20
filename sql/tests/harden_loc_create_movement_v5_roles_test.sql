@@ -223,9 +223,11 @@ SELECT is(
 -- =========================================================================
 -- 8) Viewer uloga (nije u listi) + bez employee zapisa → blokiran
 -- =========================================================================
+SET LOCAL row_security = off;
 INSERT INTO auth.users (id, email) VALUES
   ('00000000-0000-0000-0000-0000000000a7', 'h2-viewer@test.local')
 ON CONFLICT (id) DO NOTHING;
+SET LOCAL row_security = on;
 
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a7', true);
 SELECT set_config('request.jwt.claims',
@@ -246,7 +248,15 @@ SELECT set_config('request.jwt.claim.sub', '', true);
 SELECT set_config('request.jwt.claims', '', true);
 
 SELECT is(
-  pg_temp.h2_call_create('aaaa0009-0000-0000-0000-000000000009'::uuid)->>'error',
+  public.loc_create_movement(jsonb_build_object(
+    'item_ref_table',    'bigtehn_rn',
+    'item_ref_id',       'TP-H2-NOAUTH',
+    'order_no',          '9000',
+    'movement_type',     'INITIAL_PLACEMENT',
+    'quantity',          1,
+    'to_location_id',    '77777777-7777-7777-7777-777777777777',
+    'client_event_uuid', 'aaaa0009-0000-0000-0000-000000000009'
+  ))->>'error',
   'not_authenticated',
   'authz: bez JWT-a → not_authenticated (Härd-2 ne preteže Härd-1 auth check)'
 );

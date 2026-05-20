@@ -11,7 +11,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(13);
+SELECT plan(16);
 
 -- ─── Seed ────────────────────────────────────────────────────────────────────
 SET LOCAL row_security = off;

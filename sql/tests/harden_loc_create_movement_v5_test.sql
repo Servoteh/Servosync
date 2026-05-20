@@ -21,7 +21,7 @@
 BEGIN;
 SET search_path = public, extensions;
 
-SELECT plan(15);
+SELECT plan(16);
 
 -- ─── Seed lokacija (kao postgres, RLS off) ───────────────────────────────
 SET LOCAL row_security = off;
@@ -105,13 +105,17 @@ SELECT is(
   'idempotent replay: drugi poziv vraća isti id kao prvi'
 );
 SELECT is(
-  (SELECT lp.quantity::numeric
-     FROM public.loc_item_placements lp
+  (SELECT count(*)::int FROM public.loc_location_movements
+    WHERE client_event_uuid = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01'::uuid),
+  1,
+  'idempotent replay: samo jedan movement (drugi poziv nije duplirao)'
+);
+SELECT is(
+  (SELECT lp.quantity::numeric FROM public.loc_item_placements lp
     WHERE lp.item_ref_table = 'bigtehn_rn'
       AND lp.item_ref_id    = 'TP-IDEMP-1'
       AND lp.order_no       = '9000'
       AND lp.location_id    = '33333333-3333-3333-3333-333333333333'
-    ORDER BY lp.updated_at DESC NULLS LAST
     LIMIT 1),
   5::numeric,
   'idempotent replay: quantity ostaje 5 (drugi poziv NIJE dodao 99)'
