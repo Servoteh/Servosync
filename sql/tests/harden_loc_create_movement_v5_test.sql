@@ -42,11 +42,18 @@ VALUES
      '22222222-2222-2222-2222-222222222222', true)
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO public.user_roles (email, role, is_active) VALUES
+  ('pgtap-user-1@ci.local', 'admin', true)
+ON CONFLICT (email) DO UPDATE SET role = EXCLUDED.role, is_active = EXCLUDED.is_active;
+
 SET LOCAL row_security = on;
 
 -- ─── Postavi authenticated context ───────────────────────────────────────
 RESET ROLE;
 SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims',
+                  jsonb_build_object('email','pgtap-user-1@ci.local')::text,
+                  true);
 SELECT set_config('request.jwt.claim.sub',
                   '00000000-0000-0000-0000-000000000001',
                   true);

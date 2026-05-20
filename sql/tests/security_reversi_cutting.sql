@@ -111,11 +111,15 @@ SELECT throws_ok(
   'apply_delta odbija negativan rezultujući balance'
 );
 
--- Pripremi balance za issue: vrati na 20
+-- Pripremi balance za issue (dovoljno za oduzimanje 5 u testu 8)
 SELECT public.rev_cts_apply_delta(
   '11111111-1111-1111-1111-111111111111'::uuid,
   'c3cccccc-cccc-cccc-cccc-cccccccccccc'::uuid,
   10::numeric);
+SELECT public.rev_cts_apply_delta(
+  '11111111-1111-1111-1111-111111111111'::uuid,
+  'c3cccccc-cccc-cccc-cccc-cccccccccccc'::uuid,
+  50::numeric);
 
 SET LOCAL row_security = on;
 
@@ -162,14 +166,14 @@ SELECT lives_ok(
 );
 
 -- =========================================================================
--- Test 7: stock_balance: source = 15 (20 - 5)
+-- Test 7: stock_balance: source = 65 (70 - 5)
 -- =========================================================================
 SELECT is(
   (SELECT on_hand_qty FROM public.rev_cutting_tool_stock
      WHERE catalog_id = '11111111-1111-1111-1111-111111111111'::uuid
        AND location_id = 'c3cccccc-cccc-cccc-cccc-cccccccccccc'::uuid),
-  15::numeric(12,3),
-  'source location balance = 15 (20 - 5)'
+  65::numeric(12,3),
+  'source location balance = 65 (70 - 5)'
 );
 
 SELECT cmp_ok(
@@ -248,14 +252,14 @@ END$$;
 SELECT pass('rev_confirm_cutting_return radi parcijalan povraćaj');
 
 -- =========================================================================
--- Test 12: posle parcijalnog povraćaja: source = 17 (15 + 2)
+-- Test 12: posle parcijalnog povraćaja: source = 67 (65 + 2)
 -- =========================================================================
 SELECT is(
   (SELECT on_hand_qty FROM public.rev_cutting_tool_stock
      WHERE catalog_id = '11111111-1111-1111-1111-111111111111'::uuid
        AND location_id = 'c3cccccc-cccc-cccc-cccc-cccccccccccc'::uuid),
-  17::numeric(12,3),
-  'source balance = 17 (15 + 2 vraćeno)'
+  67::numeric(12,3),
+  'source balance = 67 (65 + 2 vraćeno)'
 );
 
 -- =========================================================================

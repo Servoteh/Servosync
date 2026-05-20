@@ -125,11 +125,8 @@ SELECT is(
 -- 6) PM može soft delete (UPDATE deleted_at) aktivnog zadatka
 -- =========================================================================
 SELECT lives_ok(
-  $$ UPDATE public.pb_tasks
-     SET deleted_at = now(), updated_by = 'pb-pm@test.local'
-     WHERE id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
-       AND deleted_at IS NULL $$,
-  'pm MOŽE soft delete pb_tasks (deleted_at IS NOT NULL posle UPDATE)'
+  $$ SELECT public.pb_soft_delete_task('cccccccc-cccc-cccc-cccc-cccccccccccc'::uuid) $$,
+  'pm MOŽE soft delete pb_tasks (RPC pb_soft_delete_task)'
 );
 
 SELECT is(
