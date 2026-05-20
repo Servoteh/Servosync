@@ -121,7 +121,7 @@ DO $$
 BEGIN
   ALTER TABLE public.user_roles DROP CONSTRAINT IF EXISTS user_roles_role_check;
   ALTER TABLE public.user_roles ADD CONSTRAINT user_roles_role_check
-    CHECK (role IN ('admin','leadpm','pm','user','viewer','hr','menadzment','magacioner'));
+    CHECK (role IN ('admin','leadpm','pm','user','viewer','hr','menadzment','magacioner','cnc_operater'));
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
@@ -150,8 +150,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ci_projects_code ON public.projects(projec
 CREATE TABLE IF NOT EXISTS public.employees (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   full_name TEXT NOT NULL DEFAULT '',
+  position TEXT DEFAULT '',
   department TEXT DEFAULT '',
+  phone TEXT DEFAULT '',
   email TEXT DEFAULT '',
+  hire_date DATE,
+  note TEXT DEFAULT '',
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
