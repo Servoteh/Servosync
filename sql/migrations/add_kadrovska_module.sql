@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS employees (
   updated_at  TIMESTAMPTZ DEFAULT now()
 );
 
+-- 1b) CI bootstrap stub employees — dopuni kolone pre indeksa
+ALTER TABLE public.employees
+  ADD COLUMN IF NOT EXISTS position  TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS phone     TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS hire_date DATE,
+  ADD COLUMN IF NOT EXISTS note      TEXT DEFAULT '';
+
 -- 2) Indexes -------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_employees_name       ON employees(lower(full_name));
 CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department);
