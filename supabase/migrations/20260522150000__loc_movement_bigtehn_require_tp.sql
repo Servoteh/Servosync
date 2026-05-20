@@ -1,7 +1,6 @@
--- Lokacije: INITIAL_PLACEMENT na više različitih police — dozvoljeno dok je
--- suma placement-a < komada iz bigtehn_work_orders_cache (isti nalog/TP,
--- opciono crtež). Stari slučaj „samo prvi INITIAL“ ostaje za rev_tools i kad
--- RN nije u kešu.
+-- Posle normalizacije prazan TP je '' (ne NULL) pa je missing_fields prolazio.
+-- bigtehn_rn: obavezni i nalog i TP — bez toga nema premeštanja „celog predmeta".
+-- Koristi kolonu `komada` u kešu (ne `komada_rn`).
 
 CREATE OR REPLACE FUNCTION public.loc_create_movement(payload jsonb)
 RETURNS jsonb
@@ -41,6 +40,9 @@ BEGIN
     INTO v_order, v_item_id
   FROM public.loc_normalize_loc_movement_keys(v_order, v_item_id) n;
 
+  v_item_id := nullif(btrim(v_item_id), '');
+  v_order    := btrim(v_order);
+
   v_qty := coalesce((payload->>'quantity')::numeric, 1);
   IF v_qty IS NULL OR v_qty <= 0 THEN
     RETURN jsonb_build_object('ok', false, 'error', 'bad_quantity');
@@ -65,6 +67,10 @@ BEGIN
   END IF;
 
   IF v_item_table IS NULL OR v_item_id IS NULL OR v_to IS NULL OR v_mtype IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'missing_fields');
+  END IF;
+
+  IF v_item_table = 'bigtehn_rn' AND v_order = '' THEN
     RETURN jsonb_build_object('ok', false, 'error', 'missing_fields');
   END IF;
 
@@ -213,5 +219,5 @@ END;
 $fn_cm$;
 
 COMMENT ON FUNCTION public.loc_create_movement(jsonb) IS
-  'Kreira loc_location_movements red; normalizuje 9400/TP; INITIAL_PLACEMENT za bigtehn_rn '
-  'dozvoljava više police dok sum(placement) <= komada iz keša (inace exceeds_order_quantity).';
+  'Kreira loc_location_movements red; normalizuje 9400/TP; bigtehn_rn zahteva TP i nalog; '
+  'INITIAL_PLACEMENT za bigtehn_rn dozvoljava više police dok sum(placement) <= komada iz keša.';
