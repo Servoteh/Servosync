@@ -26,7 +26,7 @@ function normalizePathname(pathname) {
  *   section?: 'dashboard' | 'machines' | 'machine' | 'board' | 'notifications' | 'catalog' | 'locations' | 'workorders' | 'assets' | 'assetsMachines' | 'assetsVehicles' | 'assetsIt' | 'assetsFacilities' | 'preventive' | 'calendar' | 'inventory' | 'documents' | 'reports' | 'settings',
  *   redirectTo?: string,
  *   machineCode?: string,
- *   mobileScreen?: 'home' | 'scan' | 'manual' | 'history' | 'batch' | 'lookup'
+ *   mobileScreen?: 'home' | 'scan' | 'manual' | 'history' | 'batch' | 'lookup' | 'reversi'
  * }}
  */
 export function pathnameToRoute(pathname) {
@@ -63,6 +63,9 @@ export function pathnameToRoute(pathname) {
   }
   if (p === '/m/lookup') {
     return { kind: 'mobile', mobileScreen: 'lookup' };
+  }
+  if (p === '/m/reversi') {
+    return { kind: 'mobile', mobileScreen: 'reversi' };
   }
   if (p === '/plan-montaze') {
     return { kind: 'module', moduleId: 'plan-montaze' };

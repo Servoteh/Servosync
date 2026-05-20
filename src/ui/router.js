@@ -58,6 +58,8 @@ import {
 import { renderMobileHistory } from './mobile/mobileHistory.js';
 import { renderMobileBatch } from './mobile/mobileBatch.js';
 import { renderMobileLookup } from './mobile/mobileLookup.js';
+import { renderMobileReversi } from './mobile/mobileReversi.js';
+import { consumeMobileBack } from '../lib/mobileBack.js';
 import { installAutoFlush } from '../services/offlineQueue.js';
 import { registerMobilePWA } from '../lib/pwa.js';
 import {
@@ -273,6 +275,15 @@ function showSelfService() {
       </div>`;
     mountEl.querySelector('#mpErrBackBtn')?.addEventListener('click', () => showHub());
   }
+}
+
+/** Nazad iz punog modula: mobilni magacin (/m) ili ERP hub. */
+function backFromModule() {
+  if (consumeMobileBack()) {
+    navigateToAppPath('/m');
+    return;
+  }
+  showHub();
 }
 
 function showHub() {
@@ -511,7 +522,7 @@ function showModulePlaceholder(moduleId, options = {}) {
   if (moduleId === 'lokacije-delova') {
     try {
       renderLokacijeModule(mountEl, {
-        onBackToHub: () => showHub(),
+        onBackToHub: () => backFromModule(),
         onLogout: () => {
           resetKadrovskaState();
           showLogin();
@@ -570,7 +581,7 @@ function showModulePlaceholder(moduleId, options = {}) {
   if (moduleId === 'reversi') {
     try {
       renderReversiModule(mountEl, {
-        onBackToHub: () => showHub(),
+        onBackToHub: () => backFromModule(),
         onLogout: () => {
           resetKadrovskaState();
           showLogin();
@@ -712,7 +723,7 @@ function showModulePlaceholder(moduleId, options = {}) {
  * vrati. Za sve ekrane koristi jedan `#app` mount — pojedinačni render-i
  * sami vraćaju teardown funkciju koju čuvamo u `currentMobileTeardown`.
  *
- * @param {'home'|'scan'|'manual'|'history'|'batch'} screen
+ * @param {'home'|'scan'|'manual'|'history'|'batch'|'lookup'|'reversi'} screen
  * @param {{ skipUrlSync?: boolean }} [opts]
  */
 async function showMobile(screen, opts = {}) {
@@ -721,8 +732,7 @@ async function showMobile(screen, opts = {}) {
   currentScreen = nextScreen;
   clearMount(leaving);
   if (!opts.skipUrlSync) {
-    const path =
-      screen === 'home' ? '/m' : `/m/${screen}`;
+    const path = screen === 'home' ? '/m' : `/m/${screen}`;
     syncBrowserUrl(path);
   }
   setStoredModule(null);
@@ -753,6 +763,8 @@ async function showMobile(screen, opts = {}) {
       result = await renderMobileBatch(mountEl, navCtx);
     } else if (screen === 'lookup') {
       result = await renderMobileLookup(mountEl, navCtx);
+    } else if (screen === 'reversi') {
+      result = renderMobileReversi(mountEl, navCtx);
     } else {
       navigateToAppPath('/m');
       return;

@@ -60,7 +60,9 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/m',
-        scope: '/m',
+        /* Scope ceo origin — magacioner može iz /m ući u Reversi/Lokacije
+         * pun modul bez izlaska iz standalone PWA prozora. */
+        scope: '/',
         /* Kategorije pomažu PWA store-ovima (Play TWA, Microsoft Store). */
         categories: ['business', 'productivity', 'utilities'],
         icons: [
