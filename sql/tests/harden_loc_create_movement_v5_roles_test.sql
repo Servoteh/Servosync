@@ -248,7 +248,8 @@ SELECT is(
 -- =========================================================================
 -- 9) Nije autentifikovan (JWT nije postavljen) → not_authenticated
 -- =========================================================================
-/* Prazan string ne briše prethodni sub GUC — koristimo nevalidan UUID da auth.uid() vrati NULL. */
+RESET ROLE;
+/* Prazan string ne briše prethodni sub GUC — nevalidan UUID → auth.uid() NULL. */
 SELECT set_config('request.jwt.claim.sub', 'not-a-valid-uuid', true);
 SELECT set_config('request.jwt.claims', '{}', true);
 
@@ -270,6 +271,7 @@ SELECT is(
 -- 10) Idempotent replay — admin pozove dvaput sa istim UUID → idempotent
 --     (verifikuje da Härd-2 nije pokvario Härd-1 ponašanje)
 -- =========================================================================
+RESET ROLE;
 SET LOCAL row_security = off;
 INSERT INTO auth.users (id, email) VALUES
   ('00000000-0000-0000-0000-0000000000a8', 'h2-admin-idemp@test.local')
@@ -278,6 +280,7 @@ INSERT INTO public.user_roles (email, role, is_active) VALUES
   ('h2-admin-idemp@test.local', 'admin', true)
 ON CONFLICT (email) DO NOTHING;
 SET LOCAL row_security = on;
+SET LOCAL ROLE authenticated;
 
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a8', true);
 SELECT set_config('request.jwt.claims',

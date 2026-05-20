@@ -258,10 +258,18 @@ SELECT is(
 -- =========================================================================
 -- 5) parent_inactive (M5 — deaktivirana HALA blokira premeštanje)
 -- =========================================================================
+RESET ROLE;
 SET LOCAL row_security = off;
 UPDATE public.loc_locations SET is_active = false
  WHERE id = '22222222-2222-2222-2222-222222222222';
 SET LOCAL row_security = on;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims',
+                  jsonb_build_object('email','pgtap-user-1@ci.local')::text,
+                  true);
+SELECT set_config('request.jwt.claim.sub',
+                  '00000000-0000-0000-0000-000000000001',
+                  true);
 
 DO $t5$
 DECLARE
