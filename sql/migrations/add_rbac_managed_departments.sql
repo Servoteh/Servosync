@@ -49,11 +49,13 @@ RETURNS TEXT[]
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, pg_temp
 AS $$
   SELECT ur.managed_departments
-    FROM user_roles ur
-   WHERE ur.user_id = auth.uid()
+    FROM public.user_roles ur
+   WHERE lower(ur.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+     AND ur.is_active IS TRUE
+   ORDER BY ur.project_id NULLS FIRST
    LIMIT 1;
 $$;
 
