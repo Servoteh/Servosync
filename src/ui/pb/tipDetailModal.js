@@ -6,7 +6,7 @@ import {
   getEngTipFileSignedUrl,
 } from '../../services/pbEngTips.js';
 import { markdownToHtml } from './markdown.js';
-import { openTipEditorModal } from './tipEditorModal.js';
+import { openSavetiTipEditor } from '../../state/pbEngTips.js';
 import {
   pbTipModalShell,
   wirePbTipModal,
@@ -132,7 +132,7 @@ function renderDetail(wrap, tip, ctx) {
 
   wrap.querySelector('#pbTipEditBtn')?.addEventListener('click', () => {
     ctx.close();
-    openTipEditorModal({
+    openSavetiTipEditor({
       tip,
       projects: ctx.projects,
       categories: ctx.categories,

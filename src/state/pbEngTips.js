@@ -123,3 +123,14 @@ export function resetEngTipsState() {
   state.canWrite = false;
   emit();
 }
+
+/** Registrovan iz savetiTab — otvara punostrani editor u tabu. */
+let _openSavetiEditor = null;
+
+export function registerSavetiEditorOpener(fn) {
+  _openSavetiEditor = typeof fn === 'function' ? fn : null;
+}
+
+export function openSavetiTipEditor(opts) {
+  _openSavetiEditor?.(opts);
+}
