@@ -148,6 +148,7 @@ SELECT throws_ok(
 );
 
 -- Preduslov za loc_create_movement u issue: placement na izvornoj lokaciji (from_has_no_placement)
+RESET ROLE;
 SET LOCAL row_security = off;
 DELETE FROM public.loc_item_placements p
 USING public.rev_cutting_tool_catalog c
@@ -166,16 +167,17 @@ SELECT
   70::numeric(12, 3)
 FROM public.rev_cutting_tool_catalog c
 WHERE c.id = '11111111-1111-1111-1111-111111111111'::uuid;
+SET LOCAL row_security = on;
 
 -- =========================================================================
 -- Test 6: rev_issue_cutting_reversal happy path (admin — loc_create_movement zahteva edit ulogu)
 -- =========================================================================
+SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims',
   jsonb_build_object('email','rzn-admin@test.local')::text, true);
 SELECT set_config('request.jwt.claim.sub',
   '00000000-0000-0000-0000-000000000003'::text, true);
 
-SET LOCAL row_security = off;
 SELECT lives_ok(
   $$ SELECT public.rev_issue_cutting_reversal(
       jsonb_build_object(

@@ -61,13 +61,6 @@ SELECT set_config('request.jwt.claim.sub',
 -- =========================================================================
 -- 1) Idempotent replay (H15)
 -- =========================================================================
-SET LOCAL row_security = off;
-DELETE FROM public.loc_item_placements
- WHERE item_ref_table = 'bigtehn_rn' AND item_ref_id = 'TP-IDEMP-1';
-DELETE FROM public.loc_location_movements
- WHERE item_ref_table = 'bigtehn_rn' AND item_ref_id = 'TP-IDEMP-1';
-SET LOCAL row_security = on;
-
 DO $t1$
 DECLARE
   v_uuid uuid := 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01';
