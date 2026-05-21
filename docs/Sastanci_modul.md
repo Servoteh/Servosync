@@ -47,7 +47,7 @@ Aktivni tab je u [state/sastanci.js](../src/state/sastanci.js) (`activeTab`), **
 | Servis | Uloga |
 |--------|--------|
 | [sastanci.js](../src/services/sastanci.js) | CRUD, učesnici, `loadDashboardStats` (RPC), `loadSastanciForUcesnik`, `loadUcesniciForMany` |
-| [sastanciDetalj.js](../src/services/sastanciDetalj.js) | `getSastanakFull()`, presek CRUD, slike upload/signedURL, `saveSnapshot()`, `zakljucajSaSapisanikom()` |
+| [sastanciDetalj.js](../src/services/sastanciDetalj.js) | `getSastanakFull()`, presek CRUD, slike upload/signedURL, `saveSnapshot()`, `zakljucajSaSapisanikom()`, `subscribeSastanakDetalj()` (polling ~30s dok je `u_toku`) |
 | [sastanciArhiva.js](../src/services/sastanciArhiva.js) | `uploadSastanakPdf()` → Storage `'sastanci-arhiva'`, `downloadSastanakPdf()` (signed URL), `regenerateSastanakPdf()` |
 | [sastanciPrefs.js](../src/services/sastanciPrefs.js) | `getMyPrefs()` (RPC `sastanci_get_or_create_my_prefs`), `updateMyPrefs(patch)` |
 | [sastanciTemplates.js](../src/services/sastanciTemplates.js) | Templati + `nextOccurrence`, `instantiateTemplate` |
@@ -125,7 +125,7 @@ PDF se generiše na klijentu (`jsPDF 2.5.1` via CDN) koristeći **Roboto** font 
 | `meeting_invite` | INSERT na `sastanak_ucesnici` dok je parent `status='planiran'` |
 | `meeting_locked` | UPDATE `status='zakljucan'` na `sastanci` |
 | `action_reminder` | pg_cron 07:00 UTC — sve otvorene akcije kojima rok ≤ sutra |
-| `meeting_reminder` | pg_cron svakih 30 min — sastanci koji počinju za 15–45 min |
+| `meeting_reminder` | pg_cron svakih 30 min — sastanci koji počinju za 15–45 min; email subject/body „Uskoro” (ne „Sutra”) |
 
 **Edge function:** [supabase/functions/sastanci-notify-dispatch/](../supabase/functions/sastanci-notify-dispatch/) — `index.ts` + `templates.ts` + README.
 

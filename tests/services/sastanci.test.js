@@ -103,6 +103,25 @@ describe('sastanci service smoke', () => {
     expect(rows[0].naslov).toBe('Moj');
   });
 
+  it('subscribeSastanakDetalj returns unsubscribe and polls', async () => {
+    vi.useFakeTimers();
+    sbReqMock
+      .mockResolvedValueOnce([{ id: 's1', status: 'u_toku', updated_at: '2026-05-20T10:00:00Z' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 's1', status: 'u_toku', updated_at: '2026-05-20T10:05:00Z' }])
+      .mockResolvedValueOnce([{ id: 'a1', updated_at: '2026-05-20T10:05:00Z' }]);
+
+    const { subscribeSastanakDetalj } = await import('../../src/services/sastanciDetalj.js');
+    const onChange = vi.fn();
+    const unsub = subscribeSastanakDetalj('s1', onChange, { intervalMs: 1000 });
+
+    await vi.advanceTimersByTimeAsync(2500);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(onChange).toHaveBeenCalled();
+    unsub();
+    vi.useRealTimers();
+  });
+
   it('loadUcesnici maps ucesnike za sastanak', async () => {
     sbReqMock.mockResolvedValueOnce([{
       sastanak_id: 's1',

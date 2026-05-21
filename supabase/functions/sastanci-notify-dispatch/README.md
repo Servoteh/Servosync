@@ -7,7 +7,7 @@ Edge function koja obradjuje `public.sastanci_notification_log` outbox — šalj
 - `meeting_invite` — pozivnica na novi/zakazani sastanak
 - `meeting_locked` — zapisnik finalizovan, PDF dostupan
 - `action_reminder` — dnevni podsetnik za akcije kojima ističe rok
-- `meeting_reminder` — podsetnik 24h pre sastanka
+- `meeting_reminder` — podsetnik ~30 min pre početka (cron: sastanci koji počinju za 15–45 min)
 
 **WhatsApp kanal:** nije implementiran u Fazi C. Redovi sa `channel='whatsapp'` se automatski označavaju kao `failed` sa porukom "WhatsApp not enabled in this version (Faza C)".
 
@@ -71,7 +71,7 @@ Postavljeni u `add_sastanci_reminder_jobs.sql` — rade direktno u bazi (pg_cron
 | Job | Schedule | Šta radi |
 |-----|----------|----------|
 | `sast_action_reminders_daily` | `0 7 * * *` (07:00 UTC) | enqueue `action_reminder` za otvorene akcije |
-| `sast_meeting_reminders_30min` | `*/30 * * * *` | enqueue `meeting_reminder` za sastanke koji počinju za 15–45 min |
+| `sast_meeting_reminders_30min` | `*/30 * * * *` | enqueue `meeting_reminder` za sastanke koji počinju za 15–45 min (email: „Uskoro”, ne 24h) |
 
 Dispatch cron (ovaj endpoint) procesira ove redove kada stignu u outbox.
 

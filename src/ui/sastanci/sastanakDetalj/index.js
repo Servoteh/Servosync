@@ -23,6 +23,7 @@ import {
   pocniSastanak,
   zakljucajSaSapisanikom,
   otvojiPonovo,
+  subscribeSastanakDetalj,
 } from '../../../services/sastanciDetalj.js';
 import { generateSastanakPdf } from '../../../lib/sastanciPdf.js';
 import { uploadSastanakPdf } from '../../../services/sastanciArhiva.js';
@@ -44,6 +45,7 @@ const INTERNAL_TABS = [
 
 let abortFlag = false;
 let currentTabId = 'pripremi';
+let unsubscribePoll = null;
 
 export async function renderSastanakDetalj(host, { sastanakId, onBack, onNavigate }) {
   abortFlag = false;
@@ -164,6 +166,16 @@ function render(host, sastanak, { onBack, onNavigate }) {
   });
 
   renderCurrentTab(host.querySelector('#sdTabBody'), sastanak, { canWrite, isReadOnly, onNavigate });
+
+  unsubscribePoll?.();
+  unsubscribePoll = null;
+  if (sastanak.status === 'u_toku') {
+    unsubscribePoll = subscribeSastanakDetalj(sastanak.id, () => {
+      if (!abortFlag) {
+        renderSastanakDetalj(host, { sastanakId: sastanak.id, onBack, onNavigate });
+      }
+    });
+  }
 }
 
 function renderCurrentTab(tabHost, sastanak, { canWrite, isReadOnly, onNavigate }) {
@@ -191,6 +203,8 @@ function teardownCurrentTab() {
 
 export function teardownSastanakDetalj() {
   abortFlag = true;
+  unsubscribePoll?.();
+  unsubscribePoll = null;
   teardownCurrentTab();
 }
 

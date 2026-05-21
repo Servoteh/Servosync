@@ -277,14 +277,15 @@ function tMeetingReminder(p: Record<string, unknown>, appUrl: string): EmailCont
   const sastanakId  = String(p.sastanak_id ?? '');
 
   const datumFmt = datum ? datum.split('-').reverse().join('.') : '';
-  const subject  = `Sutra: ${naslov}${vreme ? ' u ' + vreme : ''}`;
-  const preheader = `Podsetnik: sastanak ${datumFmt} u ${vreme}.`;
+  const vremeShort = vreme ? String(vreme).slice(0, 5) : '';
+  const subject  = `Uskoro: ${naslov}${vremeShort ? ' u ' + vremeShort : ''}`;
+  const preheader = `Podsetnik: sastanak ${datumFmt}${vremeShort ? ' u ' + vremeShort : ''} (za ~30 min).`;
 
   const link = sastanakId ? `${appUrl}sastanci/${sastanakId}` : `${appUrl}sastanci`;
 
   const html = `
     <h2 style="margin:0 0 4px;font-size:20px;color:#111827;">Podsetnik za sastanak</h2>
-    <p style="margin:0 0 20px;font-size:14px;color:${GRAY};">Sutra imate zakazan sastanak.</p>
+    <p style="margin:0 0 20px;font-size:14px;color:${GRAY};">Sastanak počinje za oko 15–45 minuta.</p>
     <div style="background:#eff6ff;border-left:4px solid ${PRIMARY};
                 border-radius:4px;padding:16px 20px;margin-bottom:20px;">
       <p style="margin:0 0 8px;font-size:17px;font-weight:bold;color:#111827;">${naslov}</p>
@@ -305,7 +306,7 @@ function tMeetingReminder(p: Record<string, unknown>, appUrl: string): EmailCont
       </a>
     </p>`;
 
-  const text = `Podsetnik: ${naslov}\nDatum: ${datumFmt}${vreme ? '\nVreme: ' + vreme : ''}${mesto ? '\nMesto: ' + mesto : ''}\n${link}`;
+  const text = `Podsetnik (uskoro): ${naslov}\nDatum: ${datumFmt}${vremeShort ? '\nVreme: ' + vremeShort : ''}${mesto ? '\nMesto: ' + mesto : ''}\n${link}`;
 
   return { subject, html, text, replyTo: organizator.includes('@') ? organizator : undefined };
 }

@@ -78,6 +78,54 @@ function mapArhiva(d) {
  * Učitaj jedan sastanak sa svim prateće podacima (učesnici, aktivnosti, slike, arhiva).
  * @param {string} id UUID
  */
+/**
+ * Polling osvežavanje dok je sastanak u toku (L2 audit — bez Supabase Realtime kanala).
+ * @returns {() => void} unsubscribe
+ */
+export function subscribeSastanakDetalj(sastanakId, onChange, { intervalMs = 30000 } = {}) {
+  let stopped = false;
+  let timer = null;
+  let lastSig = '';
+
+  const tick = async () => {
+    if (stopped || !sastanakId || !getIsOnline()) return schedule();
+    try {
+      const rows = await sbReq(
+        `sastanci?id=eq.${encodeURIComponent(sastanakId)}&select=id,status,updated_at&limit=1`,
+      );
+      const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+      if (!row || row.status === 'zakljucan' || row.status === 'zavrsen') {
+        stopped = true;
+        return;
+      }
+      const presek = await sbReq(
+        `presek_aktivnosti?sastanak_id=eq.${encodeURIComponent(sastanakId)}&select=id,updated_at&order=updated_at.desc&limit=5`,
+      );
+      const sig = JSON.stringify({
+        s: row.status,
+        u: row.updated_at,
+        p: (Array.isArray(presek) ? presek : []).map(r => [r.id, r.updated_at]),
+      });
+      if (lastSig && sig !== lastSig) onChange?.();
+      lastSig = sig;
+    } catch (e) {
+      console.warn('[subscribeSastanakDetalj] poll failed', e);
+    } finally {
+      schedule();
+    }
+  };
+
+  const schedule = () => {
+    if (!stopped) timer = setTimeout(tick, intervalMs);
+  };
+
+  timer = setTimeout(tick, 2000);
+  return () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+  };
+}
+
 export async function getSastanakFull(id) {
   if (!id || !getIsOnline()) return null;
   const [sastanak, ucesnici, aktivnosti, slike, arhiva] = await Promise.all([

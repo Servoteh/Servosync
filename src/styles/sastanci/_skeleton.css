@@ -44,3 +44,14 @@
   0% { background-position: 100% 0; }
   100% { background-position: -100% 0; }
 }
+
+.sast-list-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #e5e5e5);
+}

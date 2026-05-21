@@ -30,6 +30,8 @@ let abortFlag = false;
 let cachedTeme = [];
 let cachedProjekti = [];
 let filters = { status: '', oblast: '', vrsta: '', subTab: 'sve' };
+let listLimit = 200;
+const LIST_STEP = 100;
 
 const SUB_TABS = [
   { id: 'sve',          label: 'Sve teme' },
@@ -87,6 +89,7 @@ export async function renderPmTemeTab(host, { canEdit }) {
   host.querySelectorAll('.sast-subtab').forEach(btn => {
     btn.addEventListener('click', () => {
       filters.subTab = btn.dataset.subtab;
+      listLimit = 200;
       host.querySelectorAll('.sast-subtab').forEach(b => b.classList.toggle('is-active', b === btn));
       renderTeme(host, { canEdit, isAdmin });
     });
@@ -96,6 +99,7 @@ export async function renderPmTemeTab(host, { canEdit }) {
     const el = host.querySelector('#' + id);
     el?.addEventListener('change', () => {
       filters[id.replace('filt', '').toLowerCase()] = el.value;
+      listLimit = 200;
       renderTeme(host, { canEdit, isAdmin });
     });
   });
@@ -119,7 +123,7 @@ async function renderTeme(host, { canEdit, isAdmin }) {
   const cu = getCurrentUser();
   const loadFilters = {
     status: filters.status || null,
-    limit: 500,
+    limit: listLimit,
   };
   if (filters.subTab === 'moje' && cu?.email) {
     loadFilters.predlozioEmail = cu.email;
@@ -166,7 +170,18 @@ async function renderTeme(host, { canEdit, isAdmin }) {
         ${rows.map(t => renderTemaRow(t, { canEdit, isAdmin })).join('')}
       </tbody>
     </table>
+    ${cachedTeme.length >= listLimit ? `
+      <div class="sast-list-more">
+        <span class="sast-txt2">Prikazano do ${listLimit} tema.</span>
+        <button type="button" class="btn btn-sm" id="pmLoadMore">Učitaj još</button>
+      </div>
+    ` : ''}
   `;
+
+  body.querySelector('#pmLoadMore')?.addEventListener('click', () => {
+    listLimit += LIST_STEP;
+    void renderTeme(host, { canEdit, isAdmin });
+  });
 
   body.querySelectorAll('[data-action]').forEach(btn => {
     btn.addEventListener('click', (e) => {
