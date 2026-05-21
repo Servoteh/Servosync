@@ -51,6 +51,7 @@ function render(host, prefs) {
         <h2 class="sast-prefs-title">Notifikacije</h2>
         <p class="sast-txt2">
           Izaberi koje notifikacije želiš da primaš putem email-a.
+          Podrazumevano su uključene — isključi one koje ne želiš.
         </p>
       </div>
 
@@ -79,8 +80,8 @@ function render(host, prefs) {
             'Primam email kada me neko pozove na sastanak.', prefs.on_meeting_invite)}
           ${toggle('on_meeting_locked', 'Sastanak zaključan',
             'Primam email kada je zapisnik finalizovan i PDF je dostupan za preuzimanje.', prefs.on_meeting_locked)}
-          ${toggle('on_meeting_reminder', 'Podsetnik 24h pre sastanka',
-            'Primam email dan pre zakazanog sastanka.', prefs.on_meeting_reminder)}
+          ${toggle('on_meeting_reminder', 'Podsetnik pre početka sastanka',
+            'Primam email kada sastanak počinje za oko 15–45 minuta (provera svakih 30 min).', prefs.on_meeting_reminder)}
         </fieldset>
 
         <fieldset class="sast-prefs-fieldset sast-prefs-fieldset--disabled">

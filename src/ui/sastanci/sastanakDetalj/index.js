@@ -23,6 +23,7 @@ import {
   pocniSastanak,
   zakljucajSaSapisanikom,
   otvojiPonovo,
+  subscribeSastanakDetalj,
 } from '../../../services/sastanciDetalj.js';
 import { generateSastanakPdf } from '../../../lib/sastanciPdf.js';
 import { uploadSastanakPdf } from '../../../services/sastanciArhiva.js';
@@ -44,6 +45,7 @@ const INTERNAL_TABS = [
 
 let abortFlag = false;
 let currentTabId = 'pripremi';
+let unsubscribePoll = null;
 
 export async function renderSastanakDetalj(host, { sastanakId, onBack, onNavigate }) {
   abortFlag = false;
@@ -51,7 +53,15 @@ export async function renderSastanakDetalj(host, { sastanakId, onBack, onNavigat
 
   host.innerHTML = `
     <div class="sast-detalj" id="sastDetaljRoot">
-      <div class="sast-detalj-loading">Učitavam sastanak…</div>
+      <div class="sast-skeleton sast-detalj-loading" aria-busy="true" aria-label="Učitavam sastanak">
+        <div class="sast-skeleton-line sast-skeleton-line--lg"></div>
+        <div class="sast-skeleton-line sast-skeleton-line--md"></div>
+        <div class="sast-skeleton-row">
+          <div class="sast-skeleton-avatar"></div>
+          <div class="sast-skeleton-line sast-skeleton-line--sm" style="flex:1"></div>
+        </div>
+        <div class="sast-skeleton-line sast-skeleton-line--md"></div>
+      </div>
     </div>
   `;
 
@@ -156,6 +166,16 @@ function render(host, sastanak, { onBack, onNavigate }) {
   });
 
   renderCurrentTab(host.querySelector('#sdTabBody'), sastanak, { canWrite, isReadOnly, onNavigate });
+
+  unsubscribePoll?.();
+  unsubscribePoll = null;
+  if (sastanak.status === 'u_toku') {
+    unsubscribePoll = subscribeSastanakDetalj(sastanak.id, () => {
+      if (!abortFlag) {
+        renderSastanakDetalj(host, { sastanakId: sastanak.id, onBack, onNavigate });
+      }
+    });
+  }
 }
 
 function renderCurrentTab(tabHost, sastanak, { canWrite, isReadOnly, onNavigate }) {
@@ -183,6 +203,8 @@ function teardownCurrentTab() {
 
 export function teardownSastanakDetalj() {
   abortFlag = true;
+  unsubscribePoll?.();
+  unsubscribePoll = null;
   teardownCurrentTab();
 }
 
@@ -245,8 +267,16 @@ function wireActionButtons(host, sastanak, canWrite, onReload) {
           btn.disabled = false; return;
         }
         // 1) Zaključaj + snapshot
-        const zakljucan = await zakljucajSaSapisanikom(sastanak.id);
-        if (!zakljucan) { showToast('⚠ Zaključavanje nije uspelo'); btn.disabled = false; return; }
+        const lockResult = await zakljucajSaSapisanikom(sastanak.id);
+        if (!lockResult?.ok) {
+          const msg = lockResult?.reason === 'already_locked'
+            ? 'Sastanak je već zaključan — otvori Arhiva tab.'
+            : (lockResult?.error || 'Zaključavanje nije uspelo');
+          showToast(`⚠ ${msg}`);
+          btn.disabled = false;
+          if (lockResult?.reason === 'already_locked') onReload();
+          return;
+        }
 
         showToast('🔒 Zaključano. Generisujem PDF…');
 

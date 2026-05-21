@@ -27,6 +27,8 @@ let abortFlag = false;
 let cachedRows = [];
 let cachedProjekti = [];
 let filters = { status: '', projekatId: '', openOnly: true, mineOnly: false };
+let listLimit = 200;
+const LIST_STEP = 100;
 
 export async function renderAkcioniPlanTab(host, { canEdit }) {
   abortFlag = false;
@@ -40,10 +42,10 @@ export async function renderAkcioniPlanTab(host, { canEdit }) {
 
   host.innerHTML = `
     <div class="sast-section">
-      <div class="sst-view-bar">
-        <div class="sst-toggle" role="group" aria-label="Prikaz akcija">
-          <button type="button" class="sst-tgl-btn${view === 'lista' ? ' is-on' : ''}" data-ap-view="lista">☰ Lista</button>
-          <button type="button" class="sst-tgl-btn${view === 'kanban' ? ' is-on' : ''}" data-ap-view="kanban">⬛ Kanban</button>
+      <div class="sast-view-bar">
+        <div class="sast-toggle" role="group" aria-label="Prikaz akcija">
+          <button type="button" class="sast-tgl-btn${view === 'lista' ? ' is-on' : ''}" data-ap-view="lista">☰ Lista</button>
+          <button type="button" class="sast-tgl-btn${view === 'kanban' ? ' is-on' : ''}" data-ap-view="kanban">⬛ Kanban</button>
         </div>
         <div class="sast-toolbar-actions">
           <button type="button" class="btn" id="apExportCsv" title="CSV export">⬇ CSV</button>
@@ -92,17 +94,26 @@ export async function renderAkcioniPlanTab(host, { canEdit }) {
 
   host.querySelector('#apFiltStatus').value = filters.status;
   host.querySelector('#apFiltProjekat').value = filters.projekatId;
+  const resetListLimit = () => { listLimit = 200; };
   host.querySelector('#apFiltStatus').addEventListener('change', (e) => {
-    filters.status = e.target.value; renderAkcije(host, { canEdit });
+    filters.status = e.target.value;
+    resetListLimit();
+    renderAkcije(host, { canEdit });
   });
   host.querySelector('#apFiltProjekat').addEventListener('change', (e) => {
-    filters.projekatId = e.target.value; renderAkcije(host, { canEdit });
+    filters.projekatId = e.target.value;
+    resetListLimit();
+    renderAkcije(host, { canEdit });
   });
   host.querySelector('#apFiltOpenOnly').addEventListener('change', (e) => {
-    filters.openOnly = e.target.checked; renderAkcije(host, { canEdit });
+    filters.openOnly = e.target.checked;
+    resetListLimit();
+    renderAkcije(host, { canEdit });
   });
   host.querySelector('#apFiltMine').addEventListener('change', (e) => {
-    filters.mineOnly = e.target.checked; renderAkcije(host, { canEdit });
+    filters.mineOnly = e.target.checked;
+    resetListLimit();
+    renderAkcije(host, { canEdit });
   });
 
   await renderAkcije(host, { canEdit });
@@ -120,7 +131,7 @@ async function renderAkcije(host, { canEdit }) {
   const loadOpts = {
     effectiveStatus: filters.status || null,
     projekatId: filters.projekatId || null,
-    limit: 1000,
+    limit: listLimit,
   };
   if (filters.mineOnly && cu?.email) {
     loadOpts.odgovoranEmail = cu.email;
@@ -144,6 +155,7 @@ async function renderAkcije(host, { canEdit }) {
       onRefresh: () => renderAkcije(host, { canEdit }),
       onEdit: (akc) => openAkcijaModal(host, { canEdit, mode: 'edit', akcija: akc }),
     });
+    wireAkcijeLoadMore(body, host, { canEdit });
     return;
   }
 
@@ -193,6 +205,8 @@ async function renderAkcije(host, { canEdit }) {
     </table>
   `;
 
+  wireAkcijeLoadMore(body, host, { canEdit });
+
   body.querySelector('#apChkAll')?.addEventListener('change', (e) => {
     body.querySelectorAll('.ap-chk').forEach(c => { c.checked = e.target.checked; });
   });
@@ -215,6 +229,23 @@ async function renderAkcije(host, { canEdit }) {
       if (!akc) return;
       handleAkcijaAction(host, action, akc, { canEdit });
     });
+  });
+}
+
+function wireAkcijeLoadMore(body, host, { canEdit }) {
+  if (cachedRows.length < listLimit) return;
+  const existing = body.querySelector('.sast-list-more');
+  if (existing) existing.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'sast-list-more';
+  wrap.innerHTML = `
+    <span class="sast-txt2">Prikazano do ${listLimit} akcija.</span>
+    <button type="button" class="btn btn-sm" id="apLoadMore">Učitaj još</button>
+  `;
+  body.appendChild(wrap);
+  wrap.querySelector('#apLoadMore')?.addEventListener('click', () => {
+    listLimit += LIST_STEP;
+    void renderAkcije(host, { canEdit });
   });
 }
 

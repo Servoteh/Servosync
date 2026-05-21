@@ -61,6 +61,67 @@ describe('sastanci service smoke', () => {
     expect(created?.id).toBe('new-id');
   });
 
+  it('loadDashboardStats maps RPC json', async () => {
+    sbReqMock.mockResolvedValueOnce({
+      sastanc_upcoming: 2,
+      sastanc_u_toku: 1,
+      akcije_otvoreno: 5,
+      akcije_kasni: 1,
+      pm_teme_na_cekanju: 3,
+    });
+
+    const { loadDashboardStats } = await import('../../src/services/sastanci.js');
+    const stats = await loadDashboardStats();
+
+    expect(sbReqMock).toHaveBeenCalledWith('rpc/sast_dashboard_stats', 'POST', {});
+    expect(stats).toEqual({
+      sastancUpcoming: 2,
+      sastancUToku: 1,
+      akcijeOtvoreno: 5,
+      akcijeKasni: 1,
+      pmTemeNaCekanju: 3,
+    });
+  });
+
+  it('loadSastanciForUcesnik filters by ucesnik ids', async () => {
+    sbReqMock
+      .mockResolvedValueOnce([{ sastanak_id: 's1' }])
+      .mockResolvedValueOnce([{
+        id: 's1',
+        tip: 'sedmicni',
+        naslov: 'Moj',
+        datum: '2026-05-20',
+        status: 'planiran',
+      }]);
+
+    const { loadSastanciForUcesnik } = await import('../../src/services/sastanci.js');
+    const rows = await loadSastanciForUcesnik('user@test.local');
+
+    expect(sbReqMock).toHaveBeenCalledWith(expect.stringContaining('sastanak_ucesnici'));
+    expect(sbReqMock).toHaveBeenCalledWith(expect.stringContaining('id=in.(s1)'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].naslov).toBe('Moj');
+  });
+
+  it('subscribeSastanakDetalj returns unsubscribe and polls', async () => {
+    vi.useFakeTimers();
+    sbReqMock
+      .mockResolvedValueOnce([{ id: 's1', status: 'u_toku', updated_at: '2026-05-20T10:00:00Z' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 's1', status: 'u_toku', updated_at: '2026-05-20T10:05:00Z' }])
+      .mockResolvedValueOnce([{ id: 'a1', updated_at: '2026-05-20T10:05:00Z' }]);
+
+    const { subscribeSastanakDetalj } = await import('../../src/services/sastanciDetalj.js');
+    const onChange = vi.fn();
+    const unsub = subscribeSastanakDetalj('s1', onChange, { intervalMs: 1000 });
+
+    await vi.advanceTimersByTimeAsync(2500);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(onChange).toHaveBeenCalled();
+    unsub();
+    vi.useRealTimers();
+  });
+
   it('loadUcesnici maps ucesnike za sastanak', async () => {
     sbReqMock.mockResolvedValueOnce([{
       sastanak_id: 's1',

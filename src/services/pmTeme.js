@@ -150,7 +150,7 @@ export async function loadPmTeme(filters = {}) {
   }
   if (filters.hitnoOnly) params.push('hitno=eq.true');
   if (filters.razmatranjeOnly) params.push('za_razmatranje=eq.true');
-  params.push(`limit=${filters.limit || 500}`);
+  params.push(`limit=${filters.limit || 200}`);
 
   const data = await sbReq(`${table}?${params.join('&')}`);
   return Array.isArray(data) ? data.map(mapDbTema) : [];

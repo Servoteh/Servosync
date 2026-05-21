@@ -1,0 +1,57 @@
+/* Sastanci — loading skeletons */
+.sast-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+.sast-skeleton-line {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--surface2, #eee) 0%,
+    var(--border, #e0e0e0) 50%,
+    var(--surface2, #eee) 100%
+  );
+  background-size: 200% 100%;
+  animation: sast-skeleton-shimmer 1.2s ease-in-out infinite;
+}
+.sast-skeleton-line--lg {
+  height: 22px;
+  width: 55%;
+}
+.sast-skeleton-line--md {
+  width: 72%;
+}
+.sast-skeleton-line--sm {
+  width: 40%;
+}
+.sast-skeleton-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.sast-skeleton-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--surface2, #eee);
+  animation: sast-skeleton-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes sast-skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.sast-list-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #e5e5e5);
+}
